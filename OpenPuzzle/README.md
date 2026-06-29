@@ -72,3 +72,11 @@ See:
 docs/GITHUB_SETUP.md
 docs/TESTING.md
 ```
+
+
+## BitCrack parser test
+
+```bash
+./OpenPuzzle parse-bitcrack-line --line "[Info] 1334.62 MKey/s"
+./OpenPuzzle parse-bitcrack-line --line "[Info] Starting at: 0000000000000000000000000000000000000000000000400000000000000000"
+```

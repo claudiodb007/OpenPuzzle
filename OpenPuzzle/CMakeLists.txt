@@ -12,6 +12,7 @@ add_executable(OpenPuzzle
     src/allocator/RangeAllocator.cpp
     src/tools/ToolManager.cpp
     src/hardware/GpuManager.cpp
+    src/adapters/bitcrack/BitCrackOutputParser.cpp
 )
 target_include_directories(OpenPuzzle PRIVATE include)
 target_link_libraries(OpenPuzzle PRIVATE SQLite::SQLite3)

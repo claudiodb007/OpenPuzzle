@@ -2,6 +2,7 @@
 #include "openpuzzle/allocator/RangeAllocator.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
+#include "openpuzzle/adapters/bitcrack/BitCrackOutputParser.hpp"
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -20,7 +21,7 @@ bool Application::ensureDb(Database& db){ return db.open(dbPath()) && db.createS
 bool Application::hasArg(const std::vector<std::string>& a,const std::string& n){ for(auto&s:a) if(s==n) return true; return false; }
 std::string Application::getArg(const std::vector<std::string>& a,const std::string& n,const std::string& d){ for(size_t i=0;i+1<a.size();++i) if(a[i]==n) return a[i+1]; return d; }
 int Application::getIntArg(const std::vector<std::string>& a,const std::string& n,int d){ auto s=getArg(a,n,""); return s.empty()?d:std::stoi(s); }
-int Application::run(int argc,char** argv){ std::vector<std::string> args; for(int i=1;i<argc;++i) args.emplace_back(argv[i]); if(args.empty()){ std::cout<<"OpenPuzzle 0.11.1-dev\n"; return 0;} auto cmd=args[0]; std::vector<std::string> r(args.begin()+1,args.end()); try{ if(cmd=="init")return cmdInit(); if(cmd=="import-puzzle-json")return cmdImportPuzzleJson(r); if(cmd=="list-puzzles")return cmdListPuzzles(); if(cmd=="create-job")return cmdCreateJob(r); if(cmd=="list-ranges")return cmdListRanges(r); if(cmd=="complete-job")return cmdCompleteJob(r); if(cmd=="stats")return cmdStats(r); if(cmd=="configure-tool")return cmdConfigureTool(r); if(cmd=="tools")return cmdTools(); if(cmd=="gpu-list")return cmdGpuList(); if(cmd=="gpu-select")return cmdGpuSelect(r); if(cmd=="bitcrack-command")return cmdBitcrackCommand(r); if(cmd=="start-job")return cmdStartJob(r); if(cmd=="dashboard")return cmdDashboard(r); if(cmd=="audit")return cmdAudit(r);}catch(const std::exception&e){ std::cerr<<"Error: "<<e.what()<<"\n"; return 1;} std::cerr<<"Unknown command\n"; return 1; }
+int Application::run(int argc,char** argv){ std::vector<std::string> args; for(int i=1;i<argc;++i) args.emplace_back(argv[i]); if(args.empty()){ std::cout<<"OpenPuzzle 0.11.1-dev\n"; return 0;} auto cmd=args[0]; std::vector<std::string> r(args.begin()+1,args.end()); try{ if(cmd=="init")return cmdInit(); if(cmd=="import-puzzle-json")return cmdImportPuzzleJson(r); if(cmd=="list-puzzles")return cmdListPuzzles(); if(cmd=="create-job")return cmdCreateJob(r); if(cmd=="list-ranges")return cmdListRanges(r); if(cmd=="complete-job")return cmdCompleteJob(r); if(cmd=="stats")return cmdStats(r); if(cmd=="configure-tool")return cmdConfigureTool(r); if(cmd=="tools")return cmdTools(); if(cmd=="gpu-list")return cmdGpuList(); if(cmd=="gpu-select")return cmdGpuSelect(r); if(cmd=="bitcrack-command")return cmdBitcrackCommand(r); if(cmd=="start-job")return cmdStartJob(r); if(cmd=="parse-bitcrack-line")return cmdParseBitCrackLine(r); if(cmd=="dashboard")return cmdDashboard(r); if(cmd=="audit")return cmdAudit(r);}catch(const std::exception&e){ std::cerr<<"Error: "<<e.what()<<"\n"; return 1;} std::cerr<<"Unknown command\n"; return 1; }
 int Application::cmdInit(){ Database db; if(!ensureDb(db)) return 1; std::cout<<"Database initialized: "<<dbPath()<<"\n"; return 0; }
 static std::string readFile(const std::string& f){ for(auto p:{fs::path(f),fs::current_path()/f,fs::current_path().parent_path()/f,fs::current_path().parent_path()/"resources/puzzles"/f}){ std::ifstream in(p); if(in){ std::stringstream b; b<<in.rdbuf(); return b.str(); }} throw std::runtime_error("Could not open puzzle JSON: "+f); }
 static std::string js(const std::string&t,const std::string&k,const std::string&d=""){ auto p=t.find("\""+k+"\""); if(p==std::string::npos)return d; auto c=t.find(':',p); auto f=t.find('"',c); auto s=t.find('"',f+1); if(f==std::string::npos||s==std::string::npos)return d; return t.substr(f+1,s-f-1);}
@@ -96,5 +97,60 @@ int Application::cmdAudit(const std::vector<std::string>& args) {
     std::cout << "Detailed audit listing will be implemented in the next build.\n";
     return 0;
 }
+
+}
+
+namespace openpuzzle {
+
+int Application::cmdParseBitCrackLine(const std::vector<std::string>& args) {
+    const std::string line = getArg(args, "--line");
+
+    if (line.empty()) {
+        std::cerr << "--line is required\n";
+        return 1;
+    }
+
+    bitcrack::BitCrackOutputParser parser;
+    auto parsed = parser.parse(line);
+
+    std::cout << "Type................. ";
+
+    switch (parsed.type) {
+        case bitcrack::ParsedLineType::Unknown:
+            std::cout << "UNKNOWN\n";
+            break;
+        case bitcrack::ParsedLineType::Speed:
+            std::cout << "SPEED\n";
+            std::cout << "MKey/s............... " << parsed.speedMKeys << "\n";
+            break;
+        case bitcrack::ParsedLineType::StartingKey:
+            std::cout << "STARTING_KEY\n";
+            std::cout << "Value................ " << parsed.value << "\n";
+            break;
+        case bitcrack::ParsedLineType::EndingKey:
+            std::cout << "ENDING_KEY\n";
+            std::cout << "Value................ " << parsed.value << "\n";
+            break;
+        case bitcrack::ParsedLineType::CountingBy:
+            std::cout << "COUNTING_BY\n";
+            std::cout << "Value................ " << parsed.value << "\n";
+            break;
+        case bitcrack::ParsedLineType::Found:
+            std::cout << "FOUND\n";
+            std::cout << "Value................ " << parsed.value << "\n";
+            break;
+        case bitcrack::ParsedLineType::Error:
+            std::cout << "ERROR\n";
+            std::cout << "Value................ " << parsed.value << "\n";
+            break;
+        case bitcrack::ParsedLineType::Finished:
+            std::cout << "FINISHED\n";
+            std::cout << "Value................ " << parsed.value << "\n";
+            break;
+    }
+
+    return 0;
+}
+
 
 }
