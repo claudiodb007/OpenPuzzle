@@ -1,0 +1,12 @@
+build/
+*.o
+*.a
+*.so
+*.db
+*.log
+found.txt
+continue.dat
+.DS_Store
+.cache/
+.vscode/
+.idea/

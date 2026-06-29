@@ -1,0 +1,8 @@
+{
+  "number": 71,
+  "name": "Bitcoin Puzzle 71",
+  "address": "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU",
+  "reward": 7.1,
+  "keyspace": "400000000000000000:7FFFFFFFFFFFFFFFFF",
+  "sharing": "private_external_readonly"
+}
