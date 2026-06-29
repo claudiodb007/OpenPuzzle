@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(SQLite3 REQUIRED)
 add_executable(OpenPuzzle
+src/core/ProcessRunner.cpp
     src/main.cpp
     src/core/Application.cpp
     src/database/Database.cpp
