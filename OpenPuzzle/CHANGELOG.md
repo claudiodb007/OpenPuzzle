@@ -32,3 +32,11 @@
 ## 0.11.2-dev
 
 - Fixed linker error by adding concrete dashboard/audit implementations.
+
+
+## 0.13-dev — BitCrack Output Parser
+
+- Added `BitCrackOutputParser`.
+- Added `parse-bitcrack-line` command.
+- Parser detects speed, start key, end key, count step, found, error and finished lines.
+- Added `docs/BITCRACK_PARSER.md`.
