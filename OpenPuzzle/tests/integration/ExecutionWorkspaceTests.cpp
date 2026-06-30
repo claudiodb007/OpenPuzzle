@@ -46,6 +46,9 @@ int main() {
     auto executionFile = workspaceManager.executionFile(ctx.jobId);
     if (!std::filesystem::exists(executionFile)) return 7;
 
+    auto stateFile = workspaceManager.stateFile(ctx.jobId);
+    if (!std::filesystem::exists(stateFile)) return 8;
+
     std::filesystem::remove_all(temp);
 
     return 0;
