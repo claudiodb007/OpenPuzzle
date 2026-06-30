@@ -39,3 +39,17 @@ add_test(
     NAME BitCrackParserTests
     COMMAND BitCrackParserTests
 )
+
+add_executable(ExecutionSessionTests
+    core/ExecutionSessionTests.cpp
+)
+
+target_link_libraries(ExecutionSessionTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionSessionTests
+    COMMAND ExecutionSessionTests
+)
