@@ -194,3 +194,17 @@ add_test(
     NAME RecoveryStateTests
     COMMAND RecoveryStateTests
 )
+
+add_executable(ResumeCommandTests
+    integration/ResumeCommandTests.cpp
+)
+
+add_dependencies(ResumeCommandTests
+    OpenPuzzle
+)
+
+add_test(
+    NAME ResumeCommandTests
+    COMMAND ResumeCommandTests
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
