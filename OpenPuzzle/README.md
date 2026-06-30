@@ -87,3 +87,10 @@ docs/TESTING.md
 ```bash
 ./OpenPuzzle execution-test
 ```
+
+
+## ExecutionSession test
+
+```bash
+./OpenPuzzle session-test
+```
