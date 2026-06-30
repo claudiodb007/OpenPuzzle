@@ -4,8 +4,16 @@
 
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 using namespace openpuzzle;
+
+static std::string readFile(const std::filesystem::path& path) {
+    std::ifstream in(path);
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    return buffer.str();
+}
 
 int main() {
     auto temp = std::filesystem::temp_directory_path() / "openpuzzle_execution_workspace_test";
@@ -48,6 +56,14 @@ int main() {
 
     auto stateFile = workspaceManager.stateFile(ctx.jobId);
     if (!std::filesystem::exists(stateFile)) return 8;
+
+    auto executionContent = readFile(executionFile);
+    if (executionContent.find("\"success\": true") == std::string::npos) return 9;
+    if (executionContent.find("\"average_speed\": 1334.62") == std::string::npos) return 10;
+
+    auto stateContent = readFile(stateFile);
+    if (stateContent.find("\"status\": \"FINISHED\"") == std::string::npos) return 11;
+    if (stateContent.find("\"average_speed\": 1334.62") == std::string::npos) return 12;
 
     std::filesystem::remove_all(temp);
 
