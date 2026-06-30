@@ -25,3 +25,17 @@ add_test(
     NAME ProcessRunnerTests
     COMMAND ProcessRunnerTests
 )
+
+add_executable(BitCrackParserTests
+    adapters/BitCrackParserTests.cpp
+)
+
+target_link_libraries(BitCrackParserTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME BitCrackParserTests
+    COMMAND BitCrackParserTests
+)
