@@ -17,7 +17,10 @@ int main()
     {
         std::ofstream state(workspace.stateFile(42));
         state << "{\n";
-        state << "  \"status\": \"FINISHED\"\n";
+        state << "  \"status\": \"FINISHED\",\n";
+        state << "  \"exit_code\": 0,\n";
+        state << "  \"lines_read\": 2,\n";
+        state << "  \"average_speed\": 1334.62\n";
         state << "}\n";
     }
 
@@ -27,7 +30,11 @@ int main()
 
     auto state = recovery.load(42);
 
-    if (state.status != RecoveryStatus::Unknown) return 2;
+    if (state.jobId != 42) return 2;
+    if (state.status != RecoveryStatus::Finished) return 3;
+    if (state.exitCode != 0) return 4;
+    if (state.linesRead != 2) return 5;
+    if (state.averageSpeed != 1334.62) return 6;
 
     std::filesystem::remove_all(temp);
 
