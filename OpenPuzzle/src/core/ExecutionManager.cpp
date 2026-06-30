@@ -104,6 +104,19 @@ ExecutionResult ExecutionManager::run(const ExecutionContext& context) const {
         }
     }
 
+    if (!context.workspace.empty()) {
+        std::ofstream stateFile(std::filesystem::path(context.workspace) / "state.json");
+
+        if (stateFile.is_open()) {
+            stateFile << "{\n";
+            stateFile << "  \"status\": \"" << (result.success ? "FINISHED" : "FAILED") << "\",\n";
+            stateFile << "  \"exit_code\": " << result.exitCode << ",\n";
+            stateFile << "  \"lines_read\": " << result.linesRead << ",\n";
+            stateFile << "  \"average_speed\": " << result.averageSpeed << "\n";
+            stateFile << "}\n";
+        }
+    }
+
     return result;
 }
 
