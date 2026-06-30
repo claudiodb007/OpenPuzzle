@@ -43,6 +43,9 @@ int main() {
     if (result.linesRead != 2) return 5;
     if (result.averageSpeed != 1334.62) return 6;
 
+    auto executionFile = workspaceManager.executionFile(ctx.jobId);
+    if (!std::filesystem::exists(executionFile)) return 7;
+
     std::filesystem::remove_all(temp);
 
     return 0;
