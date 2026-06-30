@@ -3,6 +3,7 @@
 #include "openpuzzle/core/WorkspaceManager.hpp"
 
 #include <filesystem>
+#include <fstream>
 
 using namespace openpuzzle;
 
@@ -24,13 +25,23 @@ int main() {
 
     if (!std::filesystem::exists(ctx.workspace)) return 1;
 
+    auto stdoutLog = workspaceManager.stdoutLog(ctx.jobId);
+
+    {
+        std::ofstream out(stdoutLog);
+        out << "[Info] 1334.62 MKey/s\n";
+        out << "Finished\n";
+    }
+
+    if (!std::filesystem::exists(stdoutLog)) return 2;
+
     ExecutionManager manager;
     auto result = manager.run(ctx);
 
-    if (!result.success) return 2;
-    if (result.exitCode != 0) return 3;
-    if (result.linesRead != 2) return 4;
-    if (result.averageSpeed != 1334.62) return 5;
+    if (!result.success) return 3;
+    if (result.exitCode != 0) return 4;
+    if (result.linesRead != 2) return 5;
+    if (result.averageSpeed != 1334.62) return 6;
 
     std::filesystem::remove_all(temp);
 
