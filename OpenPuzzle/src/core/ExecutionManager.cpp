@@ -48,4 +48,18 @@ ExecutionSummary ExecutionManager::runCommand(const std::string& command, bool e
     return summary;
 }
 
+
+ExecutionResult ExecutionManager::run(const ExecutionContext& context) const {
+    auto summary = runCommand(context.command, context.echoOutput);
+
+    ExecutionResult result;
+    result.success = summary.started && summary.exitCode == 0;
+    result.exitCode = summary.exitCode;
+    result.linesRead = static_cast<std::uint64_t>(summary.totalLines);
+    result.averageSpeed = summary.lastSpeedMKeys;
+    result.keyFound = summary.foundEvents > 0;
+
+    return result;
+}
+
 } // namespace openpuzzle
