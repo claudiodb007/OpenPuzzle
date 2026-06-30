@@ -6,7 +6,6 @@
 namespace openpuzzle {
 
 struct ExecutionResult {
-
     bool success = false;
 
     int exitCode = -1;
