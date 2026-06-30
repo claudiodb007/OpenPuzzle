@@ -150,4 +150,50 @@ int Application::cmdResumeTest(const std::vector<std::string> &args) {
   return state.status == RecoveryStatus::Finished ? 0 : 1;
 }
 
+int Application::cmdResume(const std::vector<std::string> &args) {
+  int jobId = getIntArg(args, "--job", 42);
+
+  std::filesystem::path base;
+
+  auto customBase = getArg(args, "--base", "");
+  if (!customBase.empty()) {
+    base = customBase;
+  } else {
+    auto home = std::getenv("HOME");
+    if (!home) {
+      std::cerr << "Error: HOME not set\n";
+      return 1;
+    }
+    base = std::filesystem::path(home) / ".local" / "share" / "OpenPuzzle";
+  }
+
+  WorkspaceManager workspace(base);
+  RecoveryManager recovery(workspace);
+
+  if (!recovery.hasStateFile(jobId)) {
+    std::cerr << "No recovery state found for job " << jobId << "\n";
+    return 1;
+  }
+
+  auto state = recovery.load(jobId);
+
+  std::cout << "====================================\n";
+  std::cout << "        OpenPuzzle Recovery\n";
+  std::cout << "====================================\n\n";
+
+  std::cout << "Job............. " << state.jobId << "\n";
+  std::cout << "Status.......... "
+            << (state.status == RecoveryStatus::Finished  ? "FINISHED"
+                : state.status == RecoveryStatus::Running ? "RUNNING"
+                : state.status == RecoveryStatus::Failed  ? "FAILED"
+                                                          : "UNKNOWN")
+            << "\n";
+  std::cout << "Exit code....... " << state.exitCode << "\n";
+  std::cout << "Lines........... " << state.linesRead << "\n";
+  std::cout << "Speed........... " << state.averageSpeed << " MKey/s\n";
+  std::cout << "Workspace....... " << workspace.jobWorkspace(jobId) << "\n";
+
+  return 0;
+}
+
 } // namespace openpuzzle
