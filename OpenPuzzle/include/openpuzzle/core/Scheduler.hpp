@@ -7,16 +7,19 @@
 namespace openpuzzle {
 
 struct SchedulerResult {
-    bool success = false;
-    int jobId = 0;
-    int rangeId = 0;
-    int exitCode = -1;
+  bool success = false;
+  int jobId = 0;
+  int rangeId = 0;
+  int exitCode = -1;
 };
 
 class Scheduler {
 public:
-    SchedulerResult runOnce(const ExecutionContext& context, const ExecutionResult& executionResult) const;
-    SchedulerResult runOnceWithEvents(const ExecutionContext& context, const ExecutionResult& executionResult, EventBus& bus) const;
+  SchedulerResult runOnce(const ExecutionContext &context,
+                          const ExecutionResult &executionResult) const;
+  SchedulerResult runOnceWithEvents(const ExecutionContext &context,
+                                    const ExecutionResult &executionResult,
+                                    EventBus &bus) const;
 };
 
 } // namespace openpuzzle
