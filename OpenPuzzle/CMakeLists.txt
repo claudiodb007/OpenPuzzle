@@ -14,6 +14,7 @@ add_library(OpenPuzzleCore
     src/core/ExecutionSession.cpp
     src/core/EventBus.cpp
     src/core/Scheduler.cpp
+    src/core/WorkspaceManager.cpp
     src/core/Application.cpp
     src/core/commands/ApplicationTestCommands.cpp
     src/database/Database.cpp

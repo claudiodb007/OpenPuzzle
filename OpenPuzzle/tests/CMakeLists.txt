@@ -137,3 +137,17 @@ add_test(
     NAME SchedulerEventTests
     COMMAND SchedulerEventTests
 )
+
+add_executable(WorkspaceManagerTests
+    core/WorkspaceManagerTests.cpp
+)
+
+target_link_libraries(WorkspaceManagerTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME WorkspaceManagerTests
+    COMMAND WorkspaceManagerTests
+)
