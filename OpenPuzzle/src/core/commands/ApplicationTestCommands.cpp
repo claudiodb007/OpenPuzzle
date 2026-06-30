@@ -3,6 +3,10 @@
 #include "openpuzzle/core/ExecutionManager.hpp"
 #include "openpuzzle/core/ExecutionSession.hpp"
 #include "openpuzzle/core/ProcessRunner.hpp"
+#include "openpuzzle/core/RecoveryManager.hpp"
+#include "openpuzzle/core/WorkspaceManager.hpp"
+#include <filesystem>
+#include <fstream>
 
 #include <iostream>
 #include <string>
@@ -107,6 +111,43 @@ int Application::cmdEventTest(const std::vector<std::string> &args) {
   std::cout << "Events received...... " << received << "\n";
 
   return received == 3 ? 0 : 1;
+}
+
+int Application::cmdResumeTest(const std::vector<std::string> &args) {
+  (void)args;
+
+  auto base = std::filesystem::temp_directory_path() / "openpuzzle_resume_test";
+
+  WorkspaceManager workspace(base);
+  workspace.createJobWorkspace(42);
+
+  {
+    std::ofstream out(workspace.stateFile(42));
+    out << "{\n";
+    out << "  \"status\": \"FINISHED\",\n";
+    out << "  \"exit_code\": 0,\n";
+    out << "  \"lines_read\": 2,\n";
+    out << "  \"average_speed\": 1334.62\n";
+    out << "}\n";
+  }
+
+  RecoveryManager recovery(workspace);
+  auto state = recovery.load(42);
+
+  std::cout << "Job............. " << state.jobId << "\n";
+  std::cout << "Status.......... "
+            << (state.status == RecoveryStatus::Finished  ? "FINISHED"
+                : state.status == RecoveryStatus::Running ? "RUNNING"
+                : state.status == RecoveryStatus::Failed  ? "FAILED"
+                                                          : "UNKNOWN")
+            << "\n";
+  std::cout << "Exit code....... " << state.exitCode << "\n";
+  std::cout << "Lines........... " << state.linesRead << "\n";
+  std::cout << "Speed........... " << state.averageSpeed << " MKey/s\n";
+
+  std::filesystem::remove_all(base);
+
+  return state.status == RecoveryStatus::Finished ? 0 : 1;
 }
 
 } // namespace openpuzzle
