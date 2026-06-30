@@ -49,3 +49,5 @@ target_link_libraries(OpenPuzzle
 
 include(CTest)
 enable_testing()
+
+add_subdirectory(tests)
