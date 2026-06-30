@@ -48,3 +48,11 @@
 - Added `execution-test` command.
 - Added `docs/EXECUTION_MANAGER.md`.
 - ExecutionManager runs commands through ProcessRunner and parses BitCrack-style output.
+
+
+## 0.16-dev — ExecutionSession
+
+- Added `ExecutionSession` model.
+- Added `session-test` command.
+- Added `docs/EXECUTION_SESSION.md`.
+- Prepared the execution lifecycle model for recovery and replay.
