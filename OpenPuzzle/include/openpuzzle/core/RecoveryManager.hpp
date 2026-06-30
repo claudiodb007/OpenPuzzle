@@ -1,5 +1,6 @@
 #pragma once
 
+#include "openpuzzle/core/ExecutionContext.hpp"
 #include "openpuzzle/core/RecoveryState.hpp"
 #include "openpuzzle/core/WorkspaceManager.hpp"
 
@@ -12,6 +13,8 @@ public:
   bool hasStateFile(int jobId) const;
 
   RecoveryState load(int jobId) const;
+
+  ExecutionContext buildExecutionContext(int jobId) const;
 
 private:
   WorkspaceManager workspaceManager_;

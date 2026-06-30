@@ -236,3 +236,18 @@ add_test(
     COMMAND ResumeLatestCommandTests
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
+
+
+add_executable(ExecutionContextRecoveryTests
+    core/ExecutionContextRecoveryTests.cpp
+)
+
+target_link_libraries(ExecutionContextRecoveryTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionContextRecoveryTests
+    COMMAND ExecutionContextRecoveryTests
+)

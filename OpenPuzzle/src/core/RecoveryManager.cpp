@@ -74,6 +74,32 @@ static std::uint64_t extractUInt64(const std::string &text,
   }
 }
 
+static std::string extractString(const std::string &text,
+                                 const std::string &key,
+                                 const std::string &defaultValue) {
+  auto pos = text.find(key);
+
+  if (pos == std::string::npos)
+    return defaultValue;
+
+  pos = text.find(':', pos);
+
+  if (pos == std::string::npos)
+    return defaultValue;
+
+  auto firstQuote = text.find('"', pos + 1);
+
+  if (firstQuote == std::string::npos)
+    return defaultValue;
+
+  auto secondQuote = text.find('"', firstQuote + 1);
+
+  if (secondQuote == std::string::npos)
+    return defaultValue;
+
+  return text.substr(firstQuote + 1, secondQuote - firstQuote - 1);
+}
+
 static double extractDouble(const std::string &text, const std::string &key,
                             double defaultValue) {
   auto pos = text.find(key);
@@ -121,6 +147,29 @@ RecoveryState RecoveryManager::load(int jobId) const {
   state.averageSpeed = extractDouble(content, "\"average_speed\"", 0.0);
 
   return state;
+}
+
+ExecutionContext RecoveryManager::buildExecutionContext(int jobId) const {
+  ExecutionContext ctx;
+
+  ctx.jobId = jobId;
+  ctx.workspace = workspaceManager_.jobWorkspace(jobId).string();
+
+  auto content = readFile(workspaceManager_.executionFile(jobId));
+
+  if (content.empty()) {
+    return ctx;
+  }
+
+  ctx.executionId = extractInt(content, "\"execution_id\"", 0);
+  ctx.puzzleId = extractInt(content, "\"puzzle_id\"", 0);
+  ctx.jobId = extractInt(content, "\"job_id\"", jobId);
+  ctx.rangeId = extractInt(content, "\"range_id\"", 0);
+  ctx.engine = extractString(content, "\"engine\"", "");
+  ctx.command = extractString(content, "\"command\"", "");
+  ctx.workspace = workspaceManager_.jobWorkspace(ctx.jobId).string();
+
+  return ctx;
 }
 
 } // namespace openpuzzle
