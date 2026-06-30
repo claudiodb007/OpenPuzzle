@@ -109,3 +109,17 @@ add_test(
     NAME ExecutionManagerContextTests
     COMMAND ExecutionManagerContextTests
 )
+
+add_executable(SchedulerTests
+    core/SchedulerTests.cpp
+)
+
+target_link_libraries(SchedulerTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME SchedulerTests
+    COMMAND SchedulerTests
+)
