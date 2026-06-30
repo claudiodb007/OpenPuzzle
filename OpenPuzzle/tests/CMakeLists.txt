@@ -95,3 +95,17 @@ add_test(
     NAME ExecutionResultTests
     COMMAND ExecutionResultTests
 )
+
+add_executable(ExecutionManagerContextTests
+    core/ExecutionManagerContextTests.cpp
+)
+
+target_link_libraries(ExecutionManagerContextTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionManagerContextTests
+    COMMAND ExecutionManagerContextTests
+)

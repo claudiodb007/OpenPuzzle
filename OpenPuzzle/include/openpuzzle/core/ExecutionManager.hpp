@@ -1,6 +1,8 @@
 #pragma once
 
 #include "openpuzzle/core/ProcessRunner.hpp"
+#include "openpuzzle/core/ExecutionContext.hpp"
+#include "openpuzzle/core/ExecutionResult.hpp"
 #include "openpuzzle/adapters/bitcrack/BitCrackOutputParser.hpp"
 
 #include <string>
@@ -23,6 +25,7 @@ struct ExecutionSummary {
 class ExecutionManager {
 public:
     ExecutionSummary runCommand(const std::string& command, bool echoOutput = true) const;
+    ExecutionResult run(const ExecutionContext& context) const;
 };
 
 } // namespace openpuzzle
