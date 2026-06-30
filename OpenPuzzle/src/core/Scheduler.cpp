@@ -2,43 +2,35 @@
 
 namespace openpuzzle {
 
-SchedulerResult Scheduler::runOnce(const ExecutionContext& context, const ExecutionResult& executionResult) const {
-    SchedulerResult result;
+SchedulerResult
+Scheduler::runOnce(const ExecutionContext &context,
+                   const ExecutionResult &executionResult) const {
+  SchedulerResult result;
 
-    result.success = executionResult.success;
-    result.jobId = context.jobId;
-    result.rangeId = context.rangeId;
-    result.exitCode = executionResult.exitCode;
+  result.success = executionResult.success;
+  result.jobId = context.jobId;
+  result.rangeId = context.rangeId;
+  result.exitCode = executionResult.exitCode;
 
-    return result;
+  return result;
 }
 
-SchedulerResult Scheduler::runOnceWithEvents(
-    const ExecutionContext& context,
-    const ExecutionResult& executionResult,
-    EventBus& bus
-) const {
-    bus.publish(Event{
-        EventType::ExecutionStarted,
-        context.executionId,
-        context.jobId,
-        "Scheduler cycle started",
-        "",
-        0.0
-    });
+SchedulerResult
+Scheduler::runOnceWithEvents(const ExecutionContext &context,
+                             const ExecutionResult &executionResult,
+                             EventBus &bus) const {
+  bus.publish(Event{EventType::ExecutionStarted, context.executionId,
+                    context.jobId, "Scheduler cycle started", "", 0.0});
 
-    auto result = runOnce(context, executionResult);
+  auto result = runOnce(context, executionResult);
 
-    bus.publish(Event{
-        result.success ? EventType::ExecutionFinished : EventType::Error,
-        context.executionId,
-        context.jobId,
-        result.success ? "Scheduler cycle finished" : "Scheduler cycle failed",
-        "",
-        static_cast<double>(result.exitCode)
-    });
+  bus.publish(Event{
+      result.success ? EventType::ExecutionFinished : EventType::Error,
+      context.executionId, context.jobId,
+      result.success ? "Scheduler cycle finished" : "Scheduler cycle failed",
+      "", static_cast<double>(result.exitCode)});
 
-    return result;
+  return result;
 }
 
 } // namespace openpuzzle
