@@ -53,3 +53,17 @@ add_test(
     NAME ExecutionSessionTests
     COMMAND ExecutionSessionTests
 )
+
+add_executable(ExecutionManagerTests
+    core/ExecutionManagerTests.cpp
+)
+
+target_link_libraries(ExecutionManagerTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionManagerTests
+    COMMAND ExecutionManagerTests
+)
