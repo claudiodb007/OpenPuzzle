@@ -151,3 +151,18 @@ add_test(
     NAME WorkspaceManagerTests
     COMMAND WorkspaceManagerTests
 )
+
+add_executable(ExecutionWorkspaceTests
+    integration/ExecutionWorkspaceTests.cpp
+)
+
+target_link_libraries(ExecutionWorkspaceTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionWorkspaceTests
+    COMMAND ExecutionWorkspaceTests
+)
+
