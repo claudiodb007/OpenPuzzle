@@ -111,6 +111,8 @@ int Application::run(int argc, char **argv) {
       return cmdSessionTest(r);
     if (cmd == "event-test")
       return cmdEventTest(r);
+    if (cmd == "resume")
+      return cmdResume(r);
     if (cmd == "resume-test")
       return cmdResumeTest(r);
     if (cmd == "parse-bitcrack-line")
