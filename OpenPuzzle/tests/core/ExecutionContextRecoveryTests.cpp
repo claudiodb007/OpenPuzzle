@@ -15,6 +15,8 @@ int main() {
   WorkspaceManager workspace(temp);
   workspace.createJobWorkspace(42);
 
+  auto workspacePath = workspace.jobWorkspace(42).string();
+
   {
     std::ofstream execution(workspace.executionFile(42));
     execution << "{\n";
@@ -23,7 +25,9 @@ int main() {
     execution << "  \"job_id\": 42,\n";
     execution << "  \"range_id\": 1001,\n";
     execution << "  \"engine\": \"BitCrack\",\n";
-    execution << "  \"command\": \"printf test\"\n";
+    execution << "  \"command\": \"printf test\",\n";
+    execution << "  \"workspace\": \"" << workspacePath << "\",\n";
+    execution << "  \"echo_output\": false\n";
     execution << "}\n";
   }
 
@@ -44,6 +48,8 @@ int main() {
     return 6;
   if (ctx.workspace.find("00000042") == std::string::npos)
     return 7;
+  if (ctx.echoOutput != false)
+    return 8;
 
   std::filesystem::remove_all(temp);
 
