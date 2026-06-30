@@ -40,3 +40,11 @@
 - Added `parse-bitcrack-line` command.
 - Parser detects speed, start key, end key, count step, found, error and finished lines.
 - Added `docs/BITCRACK_PARSER.md`.
+
+
+## 0.15-dev — ExecutionManager
+
+- Added `ExecutionManager`.
+- Added `execution-test` command.
+- Added `docs/EXECUTION_MANAGER.md`.
+- ExecutionManager runs commands through ProcessRunner and parses BitCrack-style output.

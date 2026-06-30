@@ -80,3 +80,10 @@ docs/TESTING.md
 ./OpenPuzzle parse-bitcrack-line --line "[Info] 1334.62 MKey/s"
 ./OpenPuzzle parse-bitcrack-line --line "[Info] Starting at: 0000000000000000000000000000000000000000000000400000000000000000"
 ```
+
+
+## ExecutionManager test
+
+```bash
+./OpenPuzzle execution-test
+```
