@@ -180,3 +180,17 @@ add_test(
     NAME RecoveryManagerTests
     COMMAND RecoveryManagerTests
 )
+
+add_executable(RecoveryStateTests
+    core/RecoveryStateTests.cpp
+)
+
+target_link_libraries(RecoveryStateTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME RecoveryStateTests
+    COMMAND RecoveryStateTests
+)

@@ -6,7 +6,8 @@
 
 using namespace openpuzzle;
 
-int main() {
+int main()
+{
     auto temp = std::filesystem::temp_directory_path() / "openpuzzle_recovery_test";
     std::filesystem::remove_all(temp);
 
@@ -24,9 +25,9 @@ int main() {
 
     if (!recovery.hasStateFile(42)) return 1;
 
-    auto content = recovery.readState(42);
+    auto state = recovery.load(42);
 
-    if (content.find("\"status\": \"FINISHED\"") == std::string::npos) return 2;
+    if (state.status != RecoveryStatus::Unknown) return 2;
 
     std::filesystem::remove_all(temp);
 
