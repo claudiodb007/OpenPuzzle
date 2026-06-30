@@ -1,5 +1,6 @@
 #pragma once
 
+#include "openpuzzle/core/EventBus.hpp"
 #include "openpuzzle/core/ExecutionContext.hpp"
 #include "openpuzzle/core/ExecutionResult.hpp"
 
@@ -15,6 +16,7 @@ struct SchedulerResult {
 class Scheduler {
 public:
     SchedulerResult runOnce(const ExecutionContext& context, const ExecutionResult& executionResult) const;
+    SchedulerResult runOnceWithEvents(const ExecutionContext& context, const ExecutionResult& executionResult, EventBus& bus) const;
 };
 
 } // namespace openpuzzle

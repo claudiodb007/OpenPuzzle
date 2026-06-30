@@ -123,3 +123,17 @@ add_test(
     NAME SchedulerTests
     COMMAND SchedulerTests
 )
+
+add_executable(SchedulerEventTests
+    core/SchedulerEventTests.cpp
+)
+
+target_link_libraries(SchedulerEventTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME SchedulerEventTests
+    COMMAND SchedulerEventTests
+)
