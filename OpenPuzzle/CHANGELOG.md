@@ -56,3 +56,11 @@
 - Added `session-test` command.
 - Added `docs/EXECUTION_SESSION.md`.
 - Prepared the execution lifecycle model for recovery and replay.
+
+
+## 0.17-dev — EventBus
+
+- Added `EventBus`.
+- Added basic execution-related events.
+- Added `event-test` command.
+- Added `docs/EVENT_BUS.md`.
