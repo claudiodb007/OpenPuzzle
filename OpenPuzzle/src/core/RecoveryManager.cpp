@@ -100,6 +100,26 @@ static std::string extractString(const std::string &text,
   return text.substr(firstQuote + 1, secondQuote - firstQuote - 1);
 }
 
+static bool extractBool(const std::string &text, const std::string &key,
+                        bool defaultValue) {
+  auto pos = text.find(key);
+  if (pos == std::string::npos)
+    return defaultValue;
+
+  pos = text.find(':', pos);
+  if (pos == std::string::npos)
+    return defaultValue;
+
+  auto value = text.substr(pos + 1);
+
+  if (value.find("true") != std::string::npos)
+    return true;
+  if (value.find("false") != std::string::npos)
+    return false;
+
+  return defaultValue;
+}
+
 static double extractDouble(const std::string &text, const std::string &key,
                             double defaultValue) {
   auto pos = text.find(key);
@@ -167,7 +187,10 @@ ExecutionContext RecoveryManager::buildExecutionContext(int jobId) const {
   ctx.rangeId = extractInt(content, "\"range_id\"", 0);
   ctx.engine = extractString(content, "\"engine\"", "");
   ctx.command = extractString(content, "\"command\"", "");
-  ctx.workspace = workspaceManager_.jobWorkspace(ctx.jobId).string();
+  ctx.workspace =
+      extractString(content, "\"workspace\"",
+                    workspaceManager_.jobWorkspace(ctx.jobId).string());
+  ctx.echoOutput = extractBool(content, "\"echo_output\"", true);
 
   return ctx;
 }
