@@ -208,3 +208,17 @@ add_test(
     COMMAND ResumeCommandTests
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
+
+add_executable(ResumeCommandMissingStateTests
+    integration/ResumeCommandMissingStateTests.cpp
+)
+
+add_dependencies(ResumeCommandMissingStateTests
+    OpenPuzzle
+)
+
+add_test(
+    NAME ResumeCommandMissingStateTests
+    COMMAND ResumeCommandMissingStateTests
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
