@@ -94,3 +94,10 @@ docs/TESTING.md
 ```bash
 ./OpenPuzzle session-test
 ```
+
+
+## EventBus test
+
+```bash
+./OpenPuzzle event-test
+```
