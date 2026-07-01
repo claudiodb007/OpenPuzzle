@@ -79,25 +79,64 @@ static std::string extractString(const std::string &text,
                                  const std::string &defaultValue) {
   auto pos = text.find(key);
 
-  if (pos == std::string::npos)
+  if (pos == std::string::npos) {
     return defaultValue;
+  }
 
   pos = text.find(':', pos);
 
-  if (pos == std::string::npos)
+  if (pos == std::string::npos) {
     return defaultValue;
+  }
 
-  auto firstQuote = text.find('"', pos + 1);
+  auto quote = text.find('"', pos + 1);
 
-  if (firstQuote == std::string::npos)
+  if (quote == std::string::npos) {
     return defaultValue;
+  }
 
-  auto secondQuote = text.find('"', firstQuote + 1);
+  std::string value;
+  bool escaped = false;
 
-  if (secondQuote == std::string::npos)
-    return defaultValue;
+  for (std::size_t i = quote + 1; i < text.size(); ++i) {
+    char c = text[i];
 
-  return text.substr(firstQuote + 1, secondQuote - firstQuote - 1);
+    if (escaped) {
+      switch (c) {
+      case 'n':
+        value.push_back('\n');
+        break;
+      case 't':
+        value.push_back('\t');
+        break;
+      case '"':
+        value.push_back('"');
+        break;
+      case '\\':
+        value.push_back('\\');
+        break;
+      default:
+        value.push_back(c);
+        break;
+      }
+
+      escaped = false;
+      continue;
+    }
+
+    if (c == '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (c == '"') {
+      return value;
+    }
+
+    value.push_back(c);
+  }
+
+  return defaultValue;
 }
 
 static bool extractBool(const std::string &text, const std::string &key,

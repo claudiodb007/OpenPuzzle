@@ -251,3 +251,18 @@ add_test(
     NAME ExecutionContextRecoveryTests
     COMMAND ExecutionContextRecoveryTests
 )
+
+
+add_executable(ExecutionContextEscapedCommandTests
+    core/ExecutionContextEscapedCommandTests.cpp
+)
+
+target_link_libraries(ExecutionContextEscapedCommandTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionContextEscapedCommandTests
+    COMMAND ExecutionContextEscapedCommandTests
+)
