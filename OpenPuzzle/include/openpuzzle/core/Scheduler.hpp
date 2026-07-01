@@ -23,6 +23,11 @@ public:
                                     const ExecutionResult &executionResult,
                                     EventBus &bus) const;
 
+  ExecutionContext
+  buildExecutionContext(int executionId, int puzzleId, int jobId, int rangeId,
+                        const std::string &engine, const std::string &workspace,
+                        const std::string &command, bool echoOutput) const;
+
   SchedulerResult runExecution(const ExecutionContext &context,
                                const ExecutionManager &executionManager) const;
 
