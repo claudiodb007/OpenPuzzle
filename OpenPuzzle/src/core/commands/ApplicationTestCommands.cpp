@@ -193,6 +193,21 @@ int Application::cmdResume(const std::vector<std::string> &args) {
   std::cout << "Speed........... " << state.averageSpeed << " MKey/s\n";
   std::cout << "Workspace....... " << workspace.jobWorkspace(jobId) << "\n";
 
+  if (hasArg(args, "--run")) {
+    std::cout << "\n";
+    std::cout << "Rebuilding execution context...\n";
+
+    auto ctx = recovery.buildExecutionContext(jobId);
+
+    ExecutionManager manager;
+    auto result = manager.run(ctx);
+
+    std::cout << "\nExecution finished\n";
+    std::cout << "Exit code....... " << result.exitCode << "\n";
+    std::cout << "Lines........... " << result.linesRead << "\n";
+    std::cout << "Average speed... " << result.averageSpeed << " MKey/s\n";
+  }
+
   return 0;
 }
 
