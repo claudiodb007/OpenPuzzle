@@ -4,6 +4,7 @@
 #include "openpuzzle/core/ExecutionContext.hpp"
 #include "openpuzzle/core/ExecutionManager.hpp"
 #include "openpuzzle/core/ExecutionResult.hpp"
+#include "openpuzzle/database/Database.hpp"
 
 namespace openpuzzle {
 
@@ -24,6 +25,12 @@ public:
 
   SchedulerResult runExecution(const ExecutionContext &context,
                                const ExecutionManager &executionManager) const;
+
+  SchedulerResult runExistingJob(Database &db, const JobRecord &job,
+                                 const RangeRecord &range,
+                                 const ExecutionContext &context,
+                                 const ExecutionManager &executionManager,
+                                 bool dryRun) const;
 };
 
 } // namespace openpuzzle
