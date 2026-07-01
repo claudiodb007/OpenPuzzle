@@ -5,6 +5,7 @@
 #include "openpuzzle/core/ExecutionManager.hpp"
 #include "openpuzzle/core/ExecutionSession.hpp"
 #include "openpuzzle/core/ProcessRunner.hpp"
+#include "openpuzzle/core/Scheduler.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 #include <cstdlib>
@@ -338,43 +339,52 @@ int Application::cmdStartJob(const std::vector<std::string> &a) {
   int n = getIntArg(a, "--puzzle", 71), jid = getIntArg(a, "--job", 0),
       b = getIntArg(a, "--blocks", 256), t = getIntArg(a, "--threads", 256),
       pt = getIntArg(a, "--points", 1024);
+
   bool dry = hasArg(a, "--dry-run");
+
   Database db;
   if (!ensureDb(db))
     return 1;
-  auto p = db.getPuzzleByNumber(n);
-  auto j = db.getJob(jid);
-  if (!p || !j)
+
+  auto puzzle = db.getPuzzleByNumber(n);
+  auto job = db.getJob(jid);
+
+  if (!puzzle || !job)
     throw std::runtime_error("Puzzle/job not found");
-  auto r = db.getRange(j->rangeId);
-  auto bc = ToolManager::bitcrackPath();
-  if (!r || !bc)
+
+  auto range = db.getRange(job->rangeId);
+  auto bitcrack = ToolManager::bitcrackPath();
+
+  if (!range || !bitcrack)
     throw std::runtime_error("Range/BitCrack not found");
-  auto ws = wsFor(jid);
-  auto out = (fs::path(ws) / "found.txt").string();
-  auto log = (fs::path(ws) / "bitcrack.log").string();
-  auto cmd = bcCmd(*bc, *p, *r, GpuManager::selectedGpu(), b, t, pt, out) +
-             " 2>&1 | tee -a " + log;
-  int ex = db.insertExecution(jid, ws, cmd, dry ? "dry-run" : "running");
-  std::cout << "Workspace............ " << ws << "\nExecution ID......... "
-            << ex << "\nCommand.............. " << cmd << "\n";
+
+  Scheduler scheduler;
+
+  auto workspace = scheduler.workspaceForJob(jid);
+  auto output = (fs::path(workspace) / "found.txt").string();
+  auto log = (fs::path(workspace) / "bitcrack.log").string();
+
+  auto command = scheduler.buildBitCrackCommand(*bitcrack, *puzzle, *range,
+                                                GpuManager::selectedGpu(), b, t,
+                                                pt, output) +
+                 " 2>&1 | tee -a " + log;
+
+  auto context = scheduler.buildExecutionContext(
+      0, puzzle->id, job->id, range->id, "BitCrack", workspace, command, true);
+
+  ExecutionManager executionManager;
+  auto result = scheduler.runExistingJob(db, *job, *range, context,
+                                         executionManager, dry);
+
+  std::cout << "Workspace............ " << workspace << "\n";
+  std::cout << "Execution ID......... " << result.executionId << "\n";
+  std::cout << "Command.............. " << command << "\n";
+
   if (dry) {
     std::cout << "Dry run only.\n";
-    return 0;
   }
-  db.updateJobState(jid, JobState::Running);
-  db.updateRangeStatus(r->id, RangeStatus::Running);
-  int rc = std::system(cmd.c_str());
-  int code = WEXITSTATUS(rc);
-  db.finishExecution(ex, code == 0 ? "finished" : "failed", code);
-  if (code == 0) {
-    db.updateJobState(jid, JobState::Completed);
-    db.updateRangeStatus(r->id, RangeStatus::Completed);
-  } else {
-    db.updateJobState(jid, JobState::Failed);
-    db.updateRangeStatus(r->id, RangeStatus::Failed);
-  }
-  return code;
+
+  return result.exitCode;
 }
 
 int Application::cmdDashboard(const std::vector<std::string> &args) {

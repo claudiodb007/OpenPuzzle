@@ -113,6 +113,8 @@ SchedulerResult Scheduler::runExistingJob(
     return schedulerResult;
   }
 
+  schedulerResult.executionId = executionId;
+
   if (dryRun) {
     schedulerResult.success = true;
     schedulerResult.exitCode = 0;
