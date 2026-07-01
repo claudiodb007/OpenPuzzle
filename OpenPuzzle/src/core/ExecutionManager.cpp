@@ -99,6 +99,10 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context) const {
       executionFile << "  \"job_id\": " << context.jobId << ",\n";
       executionFile << "  \"range_id\": " << context.rangeId << ",\n";
       executionFile << "  \"engine\": \"" << context.engine << "\",\n";
+      executionFile << "  \"command\": \"" << context.command << "\",\n";
+      executionFile << "  \"workspace\": \"" << context.workspace << "\",\n";
+      executionFile << "  \"echo_output\": "
+                    << (context.echoOutput ? "true" : "false") << ",\n";
       executionFile << "  \"exit_code\": " << result.exitCode << ",\n";
       executionFile << "  \"success\": " << (result.success ? "true" : "false")
                     << ",\n";
