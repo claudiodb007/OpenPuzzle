@@ -355,3 +355,18 @@ add_test(
     NAME SchedulerStartJobTests
     COMMAND SchedulerStartJobTests
 )
+
+
+add_executable(BitCrackParserTotalTests
+    adapters/BitCrackParserTotalTests.cpp
+)
+
+target_link_libraries(BitCrackParserTotalTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME BitCrackParserTotalTests
+    COMMAND BitCrackParserTotalTests
+)

@@ -33,6 +33,7 @@ struct RangeRecord {
   std::string endKey;
   int blockBits = 0;
   RangeStatus status = RangeStatus::Reserved;
+  std::string keysChecked = "0";
 };
 struct JobRecord {
   int id = 0;

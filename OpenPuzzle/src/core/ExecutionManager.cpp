@@ -119,6 +119,22 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context) const {
   result.exitCode = processResult.exitCode;
   result.success = processResult.started && processResult.exitCode == 0;
 
+  if (result.averageSpeed == 0.0 && !context.workspace.empty()) {
+    std::ifstream logFile(std::filesystem::path(context.workspace) /
+                          "stdout.log");
+    std::string line;
+
+    bitcrack::BitCrackOutputParser fallbackParser;
+
+    while (std::getline(logFile, line)) {
+      auto parsed = fallbackParser.parse(line);
+
+      if (parsed.type == bitcrack::ParsedLineType::Speed) {
+        result.averageSpeed = parsed.speedMKeys;
+      }
+    }
+  }
+
   if (!context.workspace.empty()) {
     std::ofstream stateFile(std::filesystem::path(context.workspace) /
                             "state.json");
