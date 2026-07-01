@@ -33,6 +33,26 @@ Scheduler::runOnceWithEvents(const ExecutionContext &context,
   return result;
 }
 
+ExecutionContext Scheduler::buildExecutionContext(int executionId, int puzzleId,
+                                                  int jobId, int rangeId,
+                                                  const std::string &engine,
+                                                  const std::string &workspace,
+                                                  const std::string &command,
+                                                  bool echoOutput) const {
+  ExecutionContext context;
+
+  context.executionId = executionId;
+  context.puzzleId = puzzleId;
+  context.jobId = jobId;
+  context.rangeId = rangeId;
+  context.engine = engine;
+  context.workspace = workspace;
+  context.command = command;
+  context.echoOutput = echoOutput;
+
+  return context;
+}
+
 SchedulerResult
 Scheduler::runExecution(const ExecutionContext &context,
                         const ExecutionManager &executionManager) const {

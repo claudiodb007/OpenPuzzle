@@ -310,3 +310,18 @@ add_test(
     NAME SchedulerDatabaseTests
     COMMAND SchedulerDatabaseTests
 )
+
+
+add_executable(SchedulerContextBuilderTests
+    core/SchedulerContextBuilderTests.cpp
+)
+
+target_link_libraries(SchedulerContextBuilderTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME SchedulerContextBuilderTests
+    COMMAND SchedulerContextBuilderTests
+)
