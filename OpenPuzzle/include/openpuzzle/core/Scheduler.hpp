@@ -2,6 +2,7 @@
 
 #include "openpuzzle/core/EventBus.hpp"
 #include "openpuzzle/core/ExecutionContext.hpp"
+#include "openpuzzle/core/ExecutionManager.hpp"
 #include "openpuzzle/core/ExecutionResult.hpp"
 
 namespace openpuzzle {
@@ -20,6 +21,9 @@ public:
   SchedulerResult runOnceWithEvents(const ExecutionContext &context,
                                     const ExecutionResult &executionResult,
                                     EventBus &bus) const;
+
+  SchedulerResult runExecution(const ExecutionContext &context,
+                               const ExecutionManager &executionManager) const;
 };
 
 } // namespace openpuzzle

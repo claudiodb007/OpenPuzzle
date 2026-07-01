@@ -33,4 +33,11 @@ Scheduler::runOnceWithEvents(const ExecutionContext &context,
   return result;
 }
 
+SchedulerResult
+Scheduler::runExecution(const ExecutionContext &context,
+                        const ExecutionManager &executionManager) const {
+  auto executionResult = executionManager.run(context);
+  return runOnce(context, executionResult);
+}
+
 } // namespace openpuzzle
