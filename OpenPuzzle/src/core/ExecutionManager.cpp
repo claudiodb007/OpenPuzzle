@@ -54,8 +54,38 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context) const {
 
   if (!context.workspace.empty()) {
     std::filesystem::create_directories(context.workspace);
+
     stdoutLog.open(std::filesystem::path(context.workspace) / "stdout.log",
                    std::ios::app);
+
+    std::ofstream executionFile(std::filesystem::path(context.workspace) /
+                                "execution.json");
+
+    if (executionFile.is_open()) {
+      executionFile << "{\n";
+      executionFile << "  \"execution_id\": " << context.executionId << ",\n";
+      executionFile << "  \"puzzle_id\": " << context.puzzleId << ",\n";
+      executionFile << "  \"job_id\": " << context.jobId << ",\n";
+      executionFile << "  \"range_id\": " << context.rangeId << ",\n";
+      executionFile << "  \"engine\": \"" << context.engine << "\",\n";
+      executionFile << "  \"command\": \"" << context.command << "\",\n";
+      executionFile << "  \"workspace\": \"" << context.workspace << "\",\n";
+      executionFile << "  \"echo_output\": "
+                    << (context.echoOutput ? "true" : "false") << "\n";
+      executionFile << "}\n";
+    }
+
+    std::ofstream stateFile(std::filesystem::path(context.workspace) /
+                            "state.json");
+
+    if (stateFile.is_open()) {
+      stateFile << "{\n";
+      stateFile << "  \"status\": \"RUNNING\",\n";
+      stateFile << "  \"exit_code\": -1,\n";
+      stateFile << "  \"lines_read\": 0,\n";
+      stateFile << "  \"average_speed\": 0\n";
+      stateFile << "}\n";
+    }
   }
 
   ProcessRunner runner;
@@ -71,6 +101,7 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context) const {
 
         if (stdoutLog.is_open()) {
           stdoutLog << line << "\n";
+          stdoutLog.flush();
         }
 
         auto parsed = parser.parse(line);
@@ -87,32 +118,6 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context) const {
 
   result.exitCode = processResult.exitCode;
   result.success = processResult.started && processResult.exitCode == 0;
-
-  if (!context.workspace.empty()) {
-    std::ofstream executionFile(std::filesystem::path(context.workspace) /
-                                "execution.json");
-
-    if (executionFile.is_open()) {
-      executionFile << "{\n";
-      executionFile << "  \"execution_id\": " << context.executionId << ",\n";
-      executionFile << "  \"puzzle_id\": " << context.puzzleId << ",\n";
-      executionFile << "  \"job_id\": " << context.jobId << ",\n";
-      executionFile << "  \"range_id\": " << context.rangeId << ",\n";
-      executionFile << "  \"engine\": \"" << context.engine << "\",\n";
-      executionFile << "  \"command\": \"" << context.command << "\",\n";
-      executionFile << "  \"workspace\": \"" << context.workspace << "\",\n";
-      executionFile << "  \"echo_output\": "
-                    << (context.echoOutput ? "true" : "false") << ",\n";
-      executionFile << "  \"exit_code\": " << result.exitCode << ",\n";
-      executionFile << "  \"success\": " << (result.success ? "true" : "false")
-                    << ",\n";
-      executionFile << "  \"lines_read\": " << result.linesRead << ",\n";
-      executionFile << "  \"average_speed\": " << result.averageSpeed << ",\n";
-      executionFile << "  \"key_found\": "
-                    << (result.keyFound ? "true" : "false") << "\n";
-      executionFile << "}\n";
-    }
-  }
 
   if (!context.workspace.empty()) {
     std::ofstream stateFile(std::filesystem::path(context.workspace) /
