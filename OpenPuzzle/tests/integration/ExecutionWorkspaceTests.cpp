@@ -67,16 +67,20 @@ int main() {
     return 8;
 
   auto executionContent = readFile(executionFile);
-  if (executionContent.find("\"success\": true") == std::string::npos)
+  if (executionContent.find("\"execution_id\": 1") == std::string::npos)
     return 9;
-  if (executionContent.find("\"average_speed\": 1334.62") == std::string::npos)
+  if (executionContent.find("\"command\"") == std::string::npos)
     return 10;
+  if (executionContent.find("\"workspace\"") == std::string::npos)
+    return 11;
+  if (executionContent.find("\"echo_output\": false") == std::string::npos)
+    return 12;
 
   auto stateContent = readFile(stateFile);
   if (stateContent.find("\"status\": \"FINISHED\"") == std::string::npos)
-    return 11;
+    return 13;
   if (stateContent.find("\"average_speed\": 1334.62") == std::string::npos)
-    return 12;
+    return 14;
 
   std::filesystem::remove_all(temp);
 
