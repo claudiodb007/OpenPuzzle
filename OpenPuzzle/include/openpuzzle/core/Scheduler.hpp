@@ -43,6 +43,11 @@ public:
   SchedulerResult runExecution(const ExecutionContext &context,
                                const ExecutionManager &executionManager) const;
 
+  SchedulerResult startJob(Database &db, int puzzleNumber, int jobId,
+                           const std::string &bitcrackPath, int device,
+                           int blocks, int threads, int points,
+                           bool dryRun) const;
+
   SchedulerResult runExistingJob(Database &db, const JobRecord &job,
                                  const RangeRecord &range,
                                  const ExecutionContext &context,

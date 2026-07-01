@@ -95,6 +95,46 @@ Scheduler::runExecution(const ExecutionContext &context,
   return runOnce(context, executionResult);
 }
 
+SchedulerResult Scheduler::startJob(Database &db, int puzzleNumber, int jobId,
+                                    const std::string &bitcrackPath, int device,
+                                    int blocks, int threads, int points,
+                                    bool dryRun) const {
+  auto puzzle = db.getPuzzleByNumber(puzzleNumber);
+  auto job = db.getJob(jobId);
+
+  if (!puzzle || !job) {
+    SchedulerResult result;
+    result.success = false;
+    result.jobId = jobId;
+    result.exitCode = -1;
+    return result;
+  }
+
+  auto range = db.getRange(job->rangeId);
+
+  if (!range) {
+    SchedulerResult result;
+    result.success = false;
+    result.jobId = jobId;
+    result.exitCode = -1;
+    return result;
+  }
+
+  auto workspace = workspaceForJob(jobId);
+  auto outputFile = (std::filesystem::path(workspace) / "found.txt").string();
+  auto logFile = (std::filesystem::path(workspace) / "bitcrack.log").string();
+
+  auto command = buildBitCrackCommand(bitcrackPath, *puzzle, *range, device,
+                                      blocks, threads, points, outputFile) +
+                 " 2>&1 | tee -a " + logFile;
+
+  auto context = buildExecutionContext(0, puzzle->id, job->id, range->id,
+                                       "BitCrack", workspace, command, true);
+
+  ExecutionManager executionManager;
+  return runExistingJob(db, *job, *range, context, executionManager, dryRun);
+}
+
 SchedulerResult Scheduler::runExistingJob(
     Database &db, const JobRecord &job, const RangeRecord &range,
     const ExecutionContext &context, const ExecutionManager &executionManager,
