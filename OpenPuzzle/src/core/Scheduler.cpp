@@ -1,6 +1,61 @@
 #include "openpuzzle/core/Scheduler.hpp"
 
+#include <cstdlib>
+#include <filesystem>
+#include <iomanip>
+#include <sstream>
+
 namespace openpuzzle {
+
+std::string Scheduler::workspaceForJob(int jobId) const {
+  const char *home = std::getenv("HOME");
+  std::filesystem::path path =
+      home ? std::filesystem::path(home) : std::filesystem::current_path();
+
+  std::ostringstream id;
+  id << std::setw(6) << std::setfill('0') << jobId;
+
+  path /= ".local/share/OpenPuzzle/jobs";
+  path /= id.str();
+
+  std::filesystem::create_directories(path);
+
+  return path.string();
+}
+
+std::string Scheduler::buildBitCrackCommand(
+    const std::string &bitcrackPath, const PuzzleRecord &puzzle,
+    const RangeRecord &range, int device, int blocks, int threads, int points,
+    const std::string &outputFile) const {
+  std::ostringstream command;
+
+  command << bitcrackPath << " " << puzzle.address << " --keyspace "
+          << range.startKey << ":" << range.endKey << " --out " << outputFile
+          << " -d " << device << " -b " << blocks << " -t " << threads << " -p "
+          << points;
+
+  return command.str();
+}
+
+ExecutionContext Scheduler::buildExecutionContext(int executionId, int puzzleId,
+                                                  int jobId, int rangeId,
+                                                  const std::string &engine,
+                                                  const std::string &workspace,
+                                                  const std::string &command,
+                                                  bool echoOutput) const {
+  ExecutionContext context;
+
+  context.executionId = executionId;
+  context.puzzleId = puzzleId;
+  context.jobId = jobId;
+  context.rangeId = rangeId;
+  context.engine = engine;
+  context.workspace = workspace;
+  context.command = command;
+  context.echoOutput = echoOutput;
+
+  return context;
+}
 
 SchedulerResult
 Scheduler::runOnce(const ExecutionContext &context,
@@ -31,26 +86,6 @@ Scheduler::runOnceWithEvents(const ExecutionContext &context,
       "", static_cast<double>(result.exitCode)});
 
   return result;
-}
-
-ExecutionContext Scheduler::buildExecutionContext(int executionId, int puzzleId,
-                                                  int jobId, int rangeId,
-                                                  const std::string &engine,
-                                                  const std::string &workspace,
-                                                  const std::string &command,
-                                                  bool echoOutput) const {
-  ExecutionContext context;
-
-  context.executionId = executionId;
-  context.puzzleId = puzzleId;
-  context.jobId = jobId;
-  context.rangeId = rangeId;
-  context.engine = engine;
-  context.workspace = workspace;
-  context.command = command;
-  context.echoOutput = echoOutput;
-
-  return context;
 }
 
 SchedulerResult
