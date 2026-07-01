@@ -280,3 +280,18 @@ add_test(
     COMMAND ResumeRunCommandTests
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
+
+
+add_executable(SchedulerExecutionTests
+    core/SchedulerExecutionTests.cpp
+)
+
+target_link_libraries(SchedulerExecutionTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME SchedulerExecutionTests
+    COMMAND SchedulerExecutionTests
+)
