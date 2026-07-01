@@ -332,39 +332,20 @@ int Application::cmdStartJob(const std::vector<std::string> &a) {
   if (!ensureDb(db))
     return 1;
 
-  auto puzzle = db.getPuzzleByNumber(n);
-  auto job = db.getJob(jid);
-
-  if (!puzzle || !job)
-    throw std::runtime_error("Puzzle/job not found");
-
-  auto range = db.getRange(job->rangeId);
   auto bitcrack = ToolManager::bitcrackPath();
 
-  if (!range || !bitcrack)
-    throw std::runtime_error("Range/BitCrack not found");
+  if (!bitcrack)
+    throw std::runtime_error("BitCrack not found");
 
   Scheduler scheduler;
 
-  auto workspace = scheduler.workspaceForJob(jid);
-  auto output = (fs::path(workspace) / "found.txt").string();
-  auto log = (fs::path(workspace) / "bitcrack.log").string();
+  auto result = scheduler.startJob(db, n, jid, *bitcrack,
+                                   GpuManager::selectedGpu(), b, t, pt, dry);
 
-  auto command = scheduler.buildBitCrackCommand(*bitcrack, *puzzle, *range,
-                                                GpuManager::selectedGpu(), b, t,
-                                                pt, output) +
-                 " 2>&1 | tee -a " + log;
-
-  auto context = scheduler.buildExecutionContext(
-      0, puzzle->id, job->id, range->id, "BitCrack", workspace, command, true);
-
-  ExecutionManager executionManager;
-  auto result = scheduler.runExistingJob(db, *job, *range, context,
-                                         executionManager, dry);
-
-  std::cout << "Workspace............ " << workspace << "\n";
+  std::cout << "Job.................. " << result.jobId << "\n";
+  std::cout << "Range................ " << result.rangeId << "\n";
   std::cout << "Execution ID......... " << result.executionId << "\n";
-  std::cout << "Command.............. " << command << "\n";
+  std::cout << "Exit code............ " << result.exitCode << "\n";
 
   if (dry) {
     std::cout << "Dry run only.\n";
