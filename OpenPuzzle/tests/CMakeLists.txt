@@ -266,3 +266,17 @@ add_test(
     NAME ExecutionContextEscapedCommandTests
     COMMAND ExecutionContextEscapedCommandTests
 )
+
+add_executable(ResumeRunCommandTests
+    integration/ResumeRunCommandTests.cpp
+)
+
+add_dependencies(ResumeRunCommandTests
+    OpenPuzzle
+)
+
+add_test(
+    NAME ResumeRunCommandTests
+    COMMAND ResumeRunCommandTests
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
