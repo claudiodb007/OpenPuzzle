@@ -296,25 +296,7 @@ int Application::cmdGpuSelect(const std::vector<std::string> &a) {
   std::cout << "Selected GPU device... " << d << "\n";
   return 0;
 }
-static std::string wsFor(int job) {
-  const char *h = getenv("HOME");
-  fs::path p = h ? fs::path(h) : fs::current_path();
-  std::ostringstream s;
-  s << std::setw(6) << std::setfill('0') << job;
-  p /= ".local/share/OpenPuzzle/jobs";
-  p /= s.str();
-  fs::create_directories(p);
-  return p.string();
-}
-static std::string bcCmd(const std::string &bc, const PuzzleRecord &p,
-                         const RangeRecord &r, int dev, int b, int t, int pt,
-                         const std::string &out) {
-  std::ostringstream c;
-  c << bc << " " << p.address << " --keyspace " << r.startKey << ":" << r.endKey
-    << " --out " << out << " -d " << dev << " -b " << b << " -t " << t << " -p "
-    << pt;
-  return c.str();
-}
+
 int Application::cmdBitcrackCommand(const std::vector<std::string> &a) {
   int n = getIntArg(a, "--puzzle", 71), jid = getIntArg(a, "--job", 0),
       b = getIntArg(a, "--blocks", 256), t = getIntArg(a, "--threads", 256),
@@ -330,8 +312,12 @@ int Application::cmdBitcrackCommand(const std::vector<std::string> &a) {
   auto bc = ToolManager::bitcrackPath();
   if (!r || !bc)
     throw std::runtime_error("Range/BitCrack not found");
-  auto out = (fs::path(wsFor(jid)) / "found.txt").string();
-  std::cout << bcCmd(*bc, *p, *r, GpuManager::selectedGpu(), b, t, pt, out)
+  Scheduler scheduler;
+  auto workspace = scheduler.workspaceForJob(jid);
+  auto out = (fs::path(workspace) / "found.txt").string();
+
+  std::cout << scheduler.buildBitCrackCommand(
+                   *bc, *p, *r, GpuManager::selectedGpu(), b, t, pt, out)
             << "\n";
   return 0;
 }
