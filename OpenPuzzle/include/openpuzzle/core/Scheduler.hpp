@@ -14,6 +14,7 @@ struct SchedulerResult {
   bool success = false;
   int jobId = 0;
   int rangeId = 0;
+  int executionId = 0;
   int exitCode = -1;
 };
 
