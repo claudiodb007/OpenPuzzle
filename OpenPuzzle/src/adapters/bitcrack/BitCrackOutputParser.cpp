@@ -28,6 +28,16 @@ ParsedLine BitCrackOutputParser::parse(const std::string &line) const {
       result.type = ParsedLineType::Speed;
       result.value = match[1].str();
       result.speedMKeys = std::stod(result.value);
+
+      std::regex totalRegex("\\(([0-9,]+)\\s+total\\)", std::regex::icase);
+      std::smatch totalMatch;
+      if (std::regex_search(line, totalMatch, totalRegex)) {
+        result.totalKeys = totalMatch[1].str();
+        result.totalKeys.erase(
+            std::remove(result.totalKeys.begin(), result.totalKeys.end(), ','),
+            result.totalKeys.end());
+      }
+
       return result;
     }
   }

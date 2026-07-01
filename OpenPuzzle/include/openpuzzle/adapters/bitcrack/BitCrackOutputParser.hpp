@@ -20,6 +20,7 @@ struct ParsedLine {
   ParsedLineType type = ParsedLineType::Unknown;
   std::string value;
   double speedMKeys = 0.0;
+  std::string totalKeys;
 };
 
 class BitCrackOutputParser {

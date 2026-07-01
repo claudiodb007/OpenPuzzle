@@ -25,15 +25,19 @@ bool Database::exec(const std::string &sql) {
   return true;
 }
 bool Database::createSchema() {
-  return exec(R"SQL(
+  bool ok = exec(R"SQL(
 PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS puzzles(id INTEGER PRIMARY KEY AUTOINCREMENT,number INTEGER NOT NULL UNIQUE,name TEXT NOT NULL,address TEXT NOT NULL,range_start TEXT NOT NULL,range_end TEXT NOT NULL,reward REAL DEFAULT 0,sharing TEXT DEFAULT 'private',created_at TEXT DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS ranges(id INTEGER PRIMARY KEY AUTOINCREMENT,puzzle_id INTEGER NOT NULL,start_key TEXT NOT NULL,end_key TEXT NOT NULL,block_bits INTEGER NOT NULL DEFAULT 0,status INTEGER NOT NULL DEFAULT 1,allocator_version TEXT DEFAULT 'foundation',created_at TEXT DEFAULT CURRENT_TIMESTAMP,reserved_at TEXT,started_at TEXT,finished_at TEXT,UNIQUE(puzzle_id,start_key,end_key),FOREIGN KEY(puzzle_id) REFERENCES puzzles(id));
+CREATE TABLE IF NOT EXISTS ranges(id INTEGER PRIMARY KEY AUTOINCREMENT,puzzle_id INTEGER NOT NULL,start_key TEXT NOT NULL,end_key TEXT NOT NULL,block_bits INTEGER NOT NULL DEFAULT 0,status INTEGER NOT NULL DEFAULT 1,keys_checked TEXT DEFAULT '0',allocator_version TEXT DEFAULT 'foundation',created_at TEXT DEFAULT CURRENT_TIMESTAMP,reserved_at TEXT,started_at TEXT,finished_at TEXT,UNIQUE(puzzle_id,start_key,end_key),FOREIGN KEY(puzzle_id) REFERENCES puzzles(id));
 CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY AUTOINCREMENT,puzzle_id INTEGER NOT NULL,range_id INTEGER NOT NULL,state INTEGER NOT NULL DEFAULT 1,created_at TEXT DEFAULT CURRENT_TIMESTAMP,started_at TEXT,finished_at TEXT,FOREIGN KEY(puzzle_id) REFERENCES puzzles(id),FOREIGN KEY(range_id) REFERENCES ranges(id));
 CREATE TABLE IF NOT EXISTS executions(id INTEGER PRIMARY KEY AUTOINCREMENT,job_id INTEGER NOT NULL,workspace TEXT NOT NULL,command TEXT NOT NULL,state TEXT NOT NULL,exit_code INTEGER,started_at TEXT DEFAULT CURRENT_TIMESTAMP,finished_at TEXT,FOREIGN KEY(job_id) REFERENCES jobs(id));
 CREATE TABLE IF NOT EXISTS statistics(id INTEGER PRIMARY KEY AUTOINCREMENT,execution_id INTEGER NOT NULL,timestamp TEXT DEFAULT CURRENT_TIMESTAMP,speed_mkeys REAL,temperature_c REAL,power_w REAL,FOREIGN KEY(execution_id) REFERENCES executions(id));
 CREATE TABLE IF NOT EXISTS external_ranges(id INTEGER PRIMARY KEY AUTOINCREMENT,puzzle_id INTEGER NOT NULL,start_key TEXT NOT NULL,end_key TEXT NOT NULL,source TEXT,confidence TEXT,notes TEXT,imported_at TEXT DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(puzzle_id) REFERENCES puzzles(id));
 )SQL");
+
+  exec("ALTER TABLE ranges ADD COLUMN keys_checked TEXT DEFAULT '0'");
+
+  return ok;
 }
 bool Database::upsertPuzzle(const PuzzleRecord &p) {
   const char *sql =
@@ -103,9 +107,10 @@ std::vector<PuzzleRecord> Database::listPuzzles() {
   return v;
 }
 int Database::insertRange(const RangeRecord &r) {
-  const char *sql = "INSERT OR IGNORE INTO "
-                    "ranges(puzzle_id,start_key,end_key,block_bits,status,"
-                    "reserved_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)";
+  const char *sql =
+      "INSERT OR IGNORE INTO "
+      "ranges(puzzle_id,start_key,end_key,block_bits,status,keys_checked,"
+      "reserved_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP)";
   sqlite3_stmt *s = nullptr;
   sqlite3_prepare_v2(db_, sql, -1, &s, nullptr);
   sqlite3_bind_int(s, 1, r.puzzleId);
@@ -113,6 +118,7 @@ int Database::insertRange(const RangeRecord &r) {
   sqlite3_bind_text(s, 3, r.endKey.c_str(), -1, SQLITE_TRANSIENT);
   sqlite3_bind_int(s, 4, r.blockBits);
   sqlite3_bind_int(s, 5, (int)r.status);
+  sqlite3_bind_text(s, 6, r.keysChecked.c_str(), -1, SQLITE_TRANSIENT);
   bool ok = sqlite3_step(s) == SQLITE_DONE;
   sqlite3_finalize(s);
   return ok ? (int)sqlite3_last_insert_rowid(db_) : 0;
@@ -121,7 +127,9 @@ std::vector<RangeRecord> Database::listRanges(int puzzleId) {
   std::vector<RangeRecord> v;
   sqlite3_stmt *s = nullptr;
   sqlite3_prepare_v2(db_,
-                     "SELECT id,puzzle_id,start_key,end_key,block_bits,status "
+                     "SELECT "
+                     "id,puzzle_id,start_key,end_key,block_bits,status,"
+                     "COALESCE(keys_checked,\'0\') "
                      "FROM ranges WHERE puzzle_id=? ORDER BY start_key",
                      -1, &s, nullptr);
   sqlite3_bind_int(s, 1, puzzleId);
@@ -133,6 +141,9 @@ std::vector<RangeRecord> Database::listRanges(int puzzleId) {
     r.endKey = (const char *)sqlite3_column_text(s, 3);
     r.blockBits = sqlite3_column_int(s, 4);
     r.status = (RangeStatus)sqlite3_column_int(s, 5);
+    if (sqlite3_column_count(s) > 6 && sqlite3_column_text(s, 6)) {
+      r.keysChecked = (const char *)sqlite3_column_text(s, 6);
+    }
     v.push_back(r);
   }
   sqlite3_finalize(s);
@@ -141,7 +152,9 @@ std::vector<RangeRecord> Database::listRanges(int puzzleId) {
 std::optional<RangeRecord> Database::getRange(int id) {
   sqlite3_stmt *s = nullptr;
   sqlite3_prepare_v2(db_,
-                     "SELECT id,puzzle_id,start_key,end_key,block_bits,status "
+                     "SELECT "
+                     "id,puzzle_id,start_key,end_key,block_bits,status,"
+                     "COALESCE(keys_checked,\'0\') "
                      "FROM ranges WHERE id=?",
                      -1, &s, nullptr);
   sqlite3_bind_int(s, 1, id);
@@ -154,6 +167,9 @@ std::optional<RangeRecord> Database::getRange(int id) {
     r.endKey = (const char *)sqlite3_column_text(s, 3);
     r.blockBits = sqlite3_column_int(s, 4);
     r.status = (RangeStatus)sqlite3_column_int(s, 5);
+    if (sqlite3_column_count(s) > 6 && sqlite3_column_text(s, 6)) {
+      r.keysChecked = (const char *)sqlite3_column_text(s, 6);
+    }
     out = r;
   }
   sqlite3_finalize(s);
