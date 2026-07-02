@@ -300,7 +300,7 @@ int Application::cmdGpuSelect(const std::vector<std::string> &a) {
 int Application::cmdBitcrackCommand(const std::vector<std::string> &a) {
   int n = getIntArg(a, "--puzzle", 71), jid = getIntArg(a, "--job", 0),
       b = getIntArg(a, "--blocks", 256), t = getIntArg(a, "--threads", 256),
-      pt = getIntArg(a, "--points", 1024);
+      pt = getIntArg(a, "--points", 256);
   Database db;
   if (!ensureDb(db))
     return 1;
@@ -324,7 +324,7 @@ int Application::cmdBitcrackCommand(const std::vector<std::string> &a) {
 int Application::cmdStartJob(const std::vector<std::string> &a) {
   int n = getIntArg(a, "--puzzle", 71), jid = getIntArg(a, "--job", 0),
       b = getIntArg(a, "--blocks", 256), t = getIntArg(a, "--threads", 256),
-      pt = getIntArg(a, "--points", 1024);
+      pt = getIntArg(a, "--points", 256);
 
   bool dry = hasArg(a, "--dry-run");
 

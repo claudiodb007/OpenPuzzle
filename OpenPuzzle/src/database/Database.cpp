@@ -35,7 +35,14 @@ CREATE TABLE IF NOT EXISTS statistics(id INTEGER PRIMARY KEY AUTOINCREMENT,execu
 CREATE TABLE IF NOT EXISTS external_ranges(id INTEGER PRIMARY KEY AUTOINCREMENT,puzzle_id INTEGER NOT NULL,start_key TEXT NOT NULL,end_key TEXT NOT NULL,source TEXT,confidence TEXT,notes TEXT,imported_at TEXT DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(puzzle_id) REFERENCES puzzles(id));
 )SQL");
 
-  exec("ALTER TABLE ranges ADD COLUMN keys_checked TEXT DEFAULT '0'");
+  char *migrationError = nullptr;
+  sqlite3_exec(db_,
+               "ALTER TABLE ranges ADD COLUMN keys_checked TEXT DEFAULT '0'",
+               nullptr, nullptr, &migrationError);
+
+  if (migrationError) {
+    sqlite3_free(migrationError);
+  }
 
   return ok;
 }
