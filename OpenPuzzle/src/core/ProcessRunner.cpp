@@ -1,4 +1,4 @@
-#include "openpuzzle/core/ProcessRunner.hpp"
+#include "openpuzzle/core/PopenProcessRunner.hpp"
 
 #include <array>
 #include <chrono>
@@ -8,9 +8,9 @@
 
 namespace openpuzzle {
 
-ProcessResult ProcessRunner::run(const std::string &command,
-                                 const LineCallback &onLine,
-                                 int maxSeconds) const {
+ProcessResult PopenProcessRunner::run(const std::string &command,
+                                      const LineCallback &onLine,
+                                      int maxSeconds) const {
   ProcessResult result;
   FILE *pipe = popen(command.c_str(), "r");
 
