@@ -50,7 +50,7 @@ public:
 
   SchedulerResult runExistingJob(Database &db, const JobRecord &job,
                                  const RangeRecord &range,
-                                 const ExecutionContext &context,
+                                 ExecutionContext context,
                                  const ExecutionManager &executionManager,
                                  bool dryRun) const;
 };

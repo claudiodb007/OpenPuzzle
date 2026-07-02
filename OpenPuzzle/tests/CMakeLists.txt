@@ -385,3 +385,18 @@ add_test(
     NAME ExecutionProgressPersistenceTests
     COMMAND ExecutionProgressPersistenceTests
 )
+
+
+add_executable(ExecutionLiveProgressTests
+    core/ExecutionLiveProgressTests.cpp
+)
+
+target_link_libraries(ExecutionLiveProgressTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionLiveProgressTests
+    COMMAND ExecutionLiveProgressTests
+)
