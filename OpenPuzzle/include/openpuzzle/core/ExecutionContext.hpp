@@ -1,8 +1,11 @@
 #pragma once
 
+#include <functional>
 #include <string>
 
 namespace openpuzzle {
+
+struct ExecutionResult;
 
 struct ExecutionContext {
   int executionId = 0;
@@ -16,6 +19,8 @@ struct ExecutionContext {
   std::string command;
 
   bool echoOutput = true;
+
+  std::function<void(const ExecutionResult &)> onProgress;
 };
 
 } // namespace openpuzzle

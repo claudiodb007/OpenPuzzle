@@ -135,10 +135,11 @@ SchedulerResult Scheduler::startJob(Database &db, int puzzleNumber, int jobId,
   return runExistingJob(db, *job, *range, context, executionManager, dryRun);
 }
 
-SchedulerResult Scheduler::runExistingJob(
-    Database &db, const JobRecord &job, const RangeRecord &range,
-    const ExecutionContext &context, const ExecutionManager &executionManager,
-    bool dryRun) const {
+SchedulerResult
+Scheduler::runExistingJob(Database &db, const JobRecord &job,
+                          const RangeRecord &range, ExecutionContext context,
+                          const ExecutionManager &executionManager,
+                          bool dryRun) const {
   SchedulerResult schedulerResult;
   schedulerResult.jobId = job.id;
   schedulerResult.rangeId = range.id;
@@ -163,6 +164,12 @@ SchedulerResult Scheduler::runExistingJob(
 
   db.updateJobState(job.id, JobState::Running);
   db.updateRangeStatus(range.id, RangeStatus::Running);
+
+  context.onProgress = [&](const ExecutionResult &progress) {
+    if (!progress.keysChecked.empty()) {
+      db.updateRangeKeysChecked(range.id, progress.keysChecked);
+    }
+  };
 
   auto executionResult = executionManager.run(context);
 
