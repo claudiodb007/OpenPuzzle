@@ -1,6 +1,8 @@
 #include "openpuzzle/core/PosixProcessRunner.hpp"
 
 #include <array>
+#include <chrono>
+#include <csignal>
 #include <cstdio>
 #include <string>
 #include <sys/wait.h>
@@ -11,8 +13,6 @@ namespace openpuzzle {
 ProcessResult PosixProcessRunner::run(const std::string &command,
                                       const LineCallback &onLine,
                                       int maxSeconds) const {
-  (void)maxSeconds;
-
   ProcessResult result;
 
   int pipefd[2];
@@ -52,8 +52,20 @@ ProcessResult PosixProcessRunner::run(const std::string &command,
   }
 
   std::array<char, 4096> buffer{};
+  const auto startedAt = std::chrono::steady_clock::now();
+  bool timedOut = false;
 
   while (fgets(buffer.data(), buffer.size(), stream) != nullptr) {
+    if (maxSeconds > 0) {
+      const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+          std::chrono::steady_clock::now() - startedAt);
+
+      if (elapsed.count() >= maxSeconds) {
+        timedOut = true;
+        kill(pid, SIGTERM);
+        break;
+      }
+    }
     std::string line(buffer.data());
 
     while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) {
@@ -70,7 +82,9 @@ ProcessResult PosixProcessRunner::run(const std::string &command,
   int status = 0;
   waitpid(pid, &status, 0);
 
-  if (WIFEXITED(status)) {
+  if (timedOut) {
+    result.exitCode = 124;
+  } else if (WIFEXITED(status)) {
     result.exitCode = WEXITSTATUS(status);
   } else {
     result.exitCode = status;
