@@ -428,3 +428,18 @@ add_test(
     NAME BenchmarkRunnerTests
     COMMAND BenchmarkRunnerTests
 )
+
+
+add_executable(BenchmarkRunnerExecutionTests
+    performance/BenchmarkRunnerExecutionTests.cpp
+)
+
+target_link_libraries(BenchmarkRunnerExecutionTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME BenchmarkRunnerExecutionTests
+    COMMAND BenchmarkRunnerExecutionTests
+)
