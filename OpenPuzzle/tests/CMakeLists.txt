@@ -488,3 +488,18 @@ add_test(
     NAME ProcessHandleTests
     COMMAND ProcessHandleTests
 )
+
+
+add_executable(ManagedExecutionSessionTests
+    core/ManagedExecutionSessionTests.cpp
+)
+
+target_link_libraries(ManagedExecutionSessionTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ManagedExecutionSessionTests
+    COMMAND ManagedExecutionSessionTests
+)
