@@ -1,4 +1,5 @@
 #include "openpuzzle/core/ExecutionManager.hpp"
+#include "openpuzzle/core/ProcessRunnerFactory.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -33,10 +34,10 @@ ExecutionSummary ExecutionManager::runCommand(const std::string &command,
                                               bool echoOutput) const {
   ExecutionSummary summary;
 
-  ProcessRunner runner;
+  auto runner = ProcessRunnerFactory::create();
   bitcrack::BitCrackOutputParser parser;
 
-  auto result = runner.run(command, [&](const std::string &line) {
+  auto result = runner->run(command, [&](const std::string &line) {
     summary.totalLines++;
 
     if (echoOutput) {
@@ -105,10 +106,10 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
     writeStateFile(context, "RUNNING", result);
   }
 
-  ProcessRunner runner;
+  auto runner = ProcessRunnerFactory::create();
   bitcrack::BitCrackOutputParser parser;
 
-  auto processResult = runner.run(
+  auto processResult = runner->run(
       context.command,
       [&](const std::string &line) {
         result.linesRead++;
