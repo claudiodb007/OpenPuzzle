@@ -12,6 +12,9 @@ public:
   const ExecutionContext &context() const;
   const ProcessHandle &handle() const;
 
+  bool start();
+  void finish(int exitCode);
+
   bool running() const;
 
 private:
