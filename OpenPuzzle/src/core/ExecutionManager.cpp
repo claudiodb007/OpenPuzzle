@@ -70,7 +70,9 @@ ExecutionSummary ExecutionManager::runCommand(const std::string &command,
   return summary;
 }
 
-ExecutionResult ExecutionManager::run(const ExecutionContext &context) const {
+ExecutionResult ExecutionManager::run(const ExecutionContext &context,
+                                      int maxSeconds) const {
+  (void)maxSeconds;
   ExecutionResult result;
   result.exitCode = -1;
   result.keysChecked = "0";
