@@ -83,7 +83,8 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context) const {
       stateFile << "  \"status\": \"RUNNING\",\n";
       stateFile << "  \"exit_code\": -1,\n";
       stateFile << "  \"lines_read\": 0,\n";
-      stateFile << "  \"average_speed\": 0\n";
+      stateFile << "  \"average_speed\": 0,\n";
+      stateFile << "  \"keys_checked\": \"0\"\n";
       stateFile << "}\n";
     }
   }
@@ -108,6 +109,10 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context) const {
 
         if (parsed.type == bitcrack::ParsedLineType::Speed) {
           result.averageSpeed = parsed.speedMKeys;
+
+          if (!parsed.totalKeys.empty()) {
+            result.keysChecked = parsed.totalKeys;
+          }
         }
 
         if (parsed.type == bitcrack::ParsedLineType::Found) {
@@ -145,7 +150,8 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context) const {
                 << (result.success ? "FINISHED" : "FAILED") << "\",\n";
       stateFile << "  \"exit_code\": " << result.exitCode << ",\n";
       stateFile << "  \"lines_read\": " << result.linesRead << ",\n";
-      stateFile << "  \"average_speed\": " << result.averageSpeed << "\n";
+      stateFile << "  \"average_speed\": " << result.averageSpeed << ",\n";
+      stateFile << "  \"keys_checked\": \"" << result.keysChecked << "\"\n";
       stateFile << "}\n";
     }
   }

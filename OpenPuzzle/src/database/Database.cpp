@@ -285,6 +285,24 @@ int Database::insertStatistic(int executionId, double speed, double temp,
   sqlite3_finalize(s);
   return ok ? (int)sqlite3_last_insert_rowid(db_) : 0;
 }
+
+bool Database::updateRangeKeysChecked(int rangeId,
+                                      const std::string &keysChecked) {
+  sqlite3_stmt *s = nullptr;
+
+  sqlite3_prepare_v2(db_, "UPDATE ranges SET keys_checked=? WHERE id=?", -1, &s,
+                     nullptr);
+
+  sqlite3_bind_text(s, 1, keysChecked.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_int(s, 2, rangeId);
+
+  bool ok = sqlite3_step(s) == SQLITE_DONE;
+
+  sqlite3_finalize(s);
+
+  return ok;
+}
+
 bool Database::insertExternalRange(int puzzleId, const std::string &start,
                                    const std::string &end,
                                    const std::string &source,
