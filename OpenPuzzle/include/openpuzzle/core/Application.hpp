@@ -37,6 +37,7 @@ private:
   int cmdParseBitCrackLine(const std::vector<std::string> &);
   int cmdDashboard(const std::vector<std::string> &);
   int cmdAudit(const std::vector<std::string> &);
+  int cmdBenchmark(const std::vector<std::string> &);
   int cmdResumeTest(const std::vector<std::string> &);
   int cmdResume(const std::vector<std::string> &);
 };

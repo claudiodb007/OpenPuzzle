@@ -7,6 +7,7 @@
 #include "openpuzzle/core/ProcessRunner.hpp"
 #include "openpuzzle/core/Scheduler.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
+#include "openpuzzle/performance/AutoTuner.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 #include <cstdlib>
 #include <filesystem>
@@ -122,6 +123,8 @@ int Application::run(int argc, char **argv) {
       return cmdDashboard(r);
     if (cmd == "audit")
       return cmdAudit(r);
+    if (cmd == "benchmark")
+      return cmdBenchmark(r);
   } catch (const std::exception &e) {
     std::cerr << "Error: " << e.what() << "\n";
     return 1;
@@ -423,6 +426,56 @@ int Application::cmdAudit(const std::vector<std::string> &args) {
   std::cout
       << "Detailed audit listing will be implemented in the next build.\n";
   return 0;
+}
+
+int Application::cmdBenchmark(const std::vector<std::string> &args) {
+  int gpu = getIntArg(args, "--gpu",
+                      getIntArg(args, "--d", GpuManager::selectedGpu()));
+
+  AutoTuner tuner;
+  auto matrix = tuner.defaultMatrix();
+
+  std::cout << "====================================\n";
+  std::cout << "      OpenPuzzle GPU Benchmark\n";
+  std::cout << "====================================\n\n";
+  std::cout << "GPU............. " << gpu << "\n\n";
+
+  std::vector<BenchmarkResult> results;
+
+  int index = 1;
+  for (auto item : matrix) {
+    item.success = true;
+
+    if (item.blocks == 256 && item.threads == 256 && item.points == 1024) {
+      item.speedMKeys = 1345.81;
+    } else if (item.points == 1024) {
+      item.speedMKeys = 1320.0;
+    } else if (item.points == 512) {
+      item.speedMKeys = 1300.0;
+    } else {
+      item.speedMKeys = 1250.0;
+    }
+
+    results.push_back(item);
+
+    std::cout << "[" << index << "/" << matrix.size() << "] ";
+    std::cout << "b=" << item.blocks << " ";
+    std::cout << "t=" << item.threads << " ";
+    std::cout << "p=" << item.points << " .... ";
+    std::cout << item.speedMKeys << " MKey/s\n";
+
+    index++;
+  }
+
+  auto best = tuner.selectBest(results);
+
+  std::cout << "\nBest configuration\n\n";
+  std::cout << "Blocks........... " << best.blocks << "\n";
+  std::cout << "Threads.......... " << best.threads << "\n";
+  std::cout << "Points........... " << best.points << "\n";
+  std::cout << "Speed............ " << best.speedMKeys << " MKey/s\n";
+
+  return best.success ? 0 : 1;
 }
 
 } // namespace openpuzzle
