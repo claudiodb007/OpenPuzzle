@@ -400,3 +400,18 @@ add_test(
     NAME ExecutionLiveProgressTests
     COMMAND ExecutionLiveProgressTests
 )
+
+
+add_executable(AutoTunerTests
+    performance/AutoTunerTests.cpp
+)
+
+target_link_libraries(AutoTunerTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME AutoTunerTests
+    COMMAND AutoTunerTests
+)
