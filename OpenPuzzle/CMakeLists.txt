@@ -14,6 +14,7 @@ add_library(OpenPuzzleCore
     src/core/ProcessRunnerFactory.cpp
     src/core/ExecutionManager.cpp
     src/core/ExecutionSession.cpp
+    src/core/ExecutionRecord.cpp
     src/core/ManagedExecutionSession.cpp
     src/core/EventBus.cpp
     src/core/Scheduler.cpp
