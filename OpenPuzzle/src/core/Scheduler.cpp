@@ -166,6 +166,10 @@ SchedulerResult Scheduler::runExistingJob(
 
   auto executionResult = executionManager.run(context);
 
+  if (!executionResult.keysChecked.empty()) {
+    db.updateRangeKeysChecked(range.id, executionResult.keysChecked);
+  }
+
   db.finishExecution(executionId,
                      executionResult.success ? "finished" : "failed",
                      executionResult.exitCode);

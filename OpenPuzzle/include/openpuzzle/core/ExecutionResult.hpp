@@ -13,6 +13,7 @@ struct ExecutionResult {
   std::uint64_t linesRead = 0;
 
   double averageSpeed = 0.0;
+  std::string keysChecked = "0";
 
   bool keyFound = false;
 

@@ -370,3 +370,18 @@ add_test(
     NAME BitCrackParserTotalTests
     COMMAND BitCrackParserTotalTests
 )
+
+
+add_executable(ExecutionProgressPersistenceTests
+    core/ExecutionProgressPersistenceTests.cpp
+)
+
+target_link_libraries(ExecutionProgressPersistenceTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionProgressPersistenceTests
+    COMMAND ExecutionProgressPersistenceTests
+)
