@@ -503,3 +503,18 @@ add_test(
     NAME ManagedExecutionSessionTests
     COMMAND ManagedExecutionSessionTests
 )
+
+
+add_executable(ExecutionRecordTests
+    core/ExecutionRecordTests.cpp
+)
+
+target_link_libraries(ExecutionRecordTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionRecordTests
+    COMMAND ExecutionRecordTests
+)
