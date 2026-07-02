@@ -9,13 +9,13 @@ int main() {
 
   if (matrix.size() != 12)
     return 1;
-  if (matrix[0].blocks != 128)
+  if (matrix[0].configuration.blocks != 128)
     return 2;
-  if (matrix[7].blocks != 256)
+  if (matrix[7].configuration.blocks != 256)
     return 3;
-  if (matrix[7].threads != 256)
+  if (matrix[7].configuration.threads != 256)
     return 4;
-  if (matrix[7].points != 1024)
+  if (matrix[7].configuration.points != 1024)
     return 5;
 
   std::vector<BenchmarkResult> results = {{128, 256, 256, 1200.0, true},
@@ -26,9 +26,9 @@ int main() {
 
   if (!best.success)
     return 6;
-  if (best.blocks != 256)
+  if (best.configuration.blocks != 256)
     return 7;
-  if (best.points != 1024)
+  if (best.configuration.points != 1024)
     return 8;
   if (best.speedMKeys != 1345.81)
     return 9;

@@ -415,3 +415,16 @@ add_test(
     NAME AutoTunerTests
     COMMAND AutoTunerTests
 )
+add_executable(BenchmarkRunnerTests
+    performance/BenchmarkRunnerTests.cpp
+)
+
+target_link_libraries(BenchmarkRunnerTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME BenchmarkRunnerTests
+    COMMAND BenchmarkRunnerTests
+)
