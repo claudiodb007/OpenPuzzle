@@ -299,8 +299,11 @@ int Application::cmdGpuSelect(const std::vector<std::string> &a) {
 
 int Application::cmdBitcrackCommand(const std::vector<std::string> &a) {
   int n = getIntArg(a, "--puzzle", 71), jid = getIntArg(a, "--job", 0),
-      b = getIntArg(a, "--blocks", 256), t = getIntArg(a, "--threads", 256),
-      pt = getIntArg(a, "--points", 256);
+      b = getIntArg(a, "--blocks", getIntArg(a, "--b", 256)),
+      t = getIntArg(a, "--threads", getIntArg(a, "--t", 256)),
+      pt = getIntArg(a, "--points", getIntArg(a, "--p", 256)),
+      dev = getIntArg(a, "--device",
+                      getIntArg(a, "--d", GpuManager::selectedGpu()));
   Database db;
   if (!ensureDb(db))
     return 1;
@@ -323,8 +326,11 @@ int Application::cmdBitcrackCommand(const std::vector<std::string> &a) {
 }
 int Application::cmdStartJob(const std::vector<std::string> &a) {
   int n = getIntArg(a, "--puzzle", 71), jid = getIntArg(a, "--job", 0),
-      b = getIntArg(a, "--blocks", 256), t = getIntArg(a, "--threads", 256),
-      pt = getIntArg(a, "--points", 256);
+      b = getIntArg(a, "--blocks", getIntArg(a, "--b", 256)),
+      t = getIntArg(a, "--threads", getIntArg(a, "--t", 256)),
+      pt = getIntArg(a, "--points", getIntArg(a, "--p", 256)),
+      dev = getIntArg(a, "--device",
+                      getIntArg(a, "--d", GpuManager::selectedGpu()));
 
   bool dry = hasArg(a, "--dry-run");
 
@@ -339,8 +345,7 @@ int Application::cmdStartJob(const std::vector<std::string> &a) {
 
   Scheduler scheduler;
 
-  auto result = scheduler.startJob(db, n, jid, *bitcrack,
-                                   GpuManager::selectedGpu(), b, t, pt, dry);
+  auto result = scheduler.startJob(db, n, jid, *bitcrack, dev, b, t, pt, dry);
 
   std::cout << "Job.................. " << result.jobId << "\n";
   std::cout << "Range................ " << result.rangeId << "\n";
