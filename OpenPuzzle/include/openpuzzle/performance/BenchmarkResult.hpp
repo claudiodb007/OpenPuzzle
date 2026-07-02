@@ -1,11 +1,11 @@
 #pragma once
 
+#include "openpuzzle/performance/BenchmarkConfiguration.hpp"
+
 namespace openpuzzle {
 
 struct BenchmarkResult {
-  int blocks = 0;
-  int threads = 0;
-  int points = 0;
+  BenchmarkConfiguration configuration;
 
   double speedMKeys = 0.0;
   bool success = false;

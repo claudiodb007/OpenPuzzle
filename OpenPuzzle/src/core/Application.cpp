@@ -322,8 +322,7 @@ int Application::cmdBitcrackCommand(const std::vector<std::string> &a) {
   auto workspace = scheduler.workspaceForJob(jid);
   auto out = (fs::path(workspace) / "found.txt").string();
 
-  std::cout << scheduler.buildBitCrackCommand(
-                   *bc, *p, *r, GpuManager::selectedGpu(), b, t, pt, out)
+  std::cout << scheduler.buildBitCrackCommand(*bc, *p, *r, dev, b, t, pt, out)
             << "\n";
   return 0;
 }
@@ -446,11 +445,12 @@ int Application::cmdBenchmark(const std::vector<std::string> &args) {
   for (auto item : matrix) {
     item.success = true;
 
-    if (item.blocks == 256 && item.threads == 256 && item.points == 1024) {
+    if (item.configuration.blocks == 256 && item.configuration.threads == 256 &&
+        item.configuration.points == 1024) {
       item.speedMKeys = 1345.81;
-    } else if (item.points == 1024) {
+    } else if (item.configuration.points == 1024) {
       item.speedMKeys = 1320.0;
-    } else if (item.points == 512) {
+    } else if (item.configuration.points == 512) {
       item.speedMKeys = 1300.0;
     } else {
       item.speedMKeys = 1250.0;
@@ -459,9 +459,9 @@ int Application::cmdBenchmark(const std::vector<std::string> &args) {
     results.push_back(item);
 
     std::cout << "[" << index << "/" << matrix.size() << "] ";
-    std::cout << "b=" << item.blocks << " ";
-    std::cout << "t=" << item.threads << " ";
-    std::cout << "p=" << item.points << " .... ";
+    std::cout << "b=" << item.configuration.blocks << " ";
+    std::cout << "t=" << item.configuration.threads << " ";
+    std::cout << "p=" << item.configuration.points << " .... ";
     std::cout << item.speedMKeys << " MKey/s\n";
 
     index++;
@@ -470,9 +470,9 @@ int Application::cmdBenchmark(const std::vector<std::string> &args) {
   auto best = tuner.selectBest(results);
 
   std::cout << "\nBest configuration\n\n";
-  std::cout << "Blocks........... " << best.blocks << "\n";
-  std::cout << "Threads.......... " << best.threads << "\n";
-  std::cout << "Points........... " << best.points << "\n";
+  std::cout << "Blocks........... " << best.configuration.blocks << "\n";
+  std::cout << "Threads.......... " << best.configuration.threads << "\n";
+  std::cout << "Points........... " << best.configuration.points << "\n";
   std::cout << "Speed............ " << best.speedMKeys << " MKey/s\n";
 
   return best.success ? 0 : 1;
