@@ -443,3 +443,18 @@ add_test(
     NAME BenchmarkRunnerExecutionTests
     COMMAND BenchmarkRunnerExecutionTests
 )
+
+
+add_executable(PosixProcessRunnerTests
+    core/PosixProcessRunnerTests.cpp
+)
+
+target_link_libraries(PosixProcessRunnerTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME PosixProcessRunnerTests
+    COMMAND PosixProcessRunnerTests
+)
