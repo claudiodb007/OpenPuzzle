@@ -1,21 +1,13 @@
 #pragma once
 
-#include <functional>
-#include <string>
+#include "openpuzzle/core/IProcessRunner.hpp"
 
 namespace openpuzzle {
 
-struct ProcessResult {
-  int exitCode = -1;
-  bool started = false;
-};
-
-class ProcessRunner {
+class ProcessRunner : public IProcessRunner {
 public:
-  using LineCallback = std::function<void(const std::string &)>;
-
   ProcessResult run(const std::string &command, const LineCallback &onLine,
-                    int maxSeconds = 0) const;
+                    int maxSeconds = 0) const override;
 };
 
 } // namespace openpuzzle
