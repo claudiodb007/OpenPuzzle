@@ -14,8 +14,8 @@ class ProcessRunner {
 public:
   using LineCallback = std::function<void(const std::string &)>;
 
-  ProcessResult run(const std::string &command,
-                    const LineCallback &onLine) const;
+  ProcessResult run(const std::string &command, const LineCallback &onLine,
+                    int maxSeconds = 0) const;
 };
 
 } // namespace openpuzzle
