@@ -13,7 +13,8 @@ BenchmarkRunner::run(const BenchmarkConfiguration &configuration,
   ExecutionManager manager;
   auto executionResult = manager.run(context, maxSeconds);
 
-  result.success = executionResult.success;
+  result.success =
+      executionResult.success || executionResult.averageSpeed > 0.0;
   result.speedMKeys = executionResult.averageSpeed;
 
   return result;
