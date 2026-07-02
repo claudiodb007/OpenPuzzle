@@ -473,3 +473,18 @@ add_test(
     NAME PosixProcessRunnerTimeoutTests
     COMMAND PosixProcessRunnerTimeoutTests
 )
+
+
+add_executable(ProcessHandleTests
+    core/ProcessHandleTests.cpp
+)
+
+target_link_libraries(ProcessHandleTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ProcessHandleTests
+    COMMAND ProcessHandleTests
+)
