@@ -18,9 +18,10 @@ int main() {
   if (matrix[7].configuration.points != 1024)
     return 5;
 
-  std::vector<BenchmarkResult> results = {{128, 256, 256, 1200.0, true},
-                                          {256, 256, 1024, 1345.81, true},
-                                          {512, 512, 1024, 1300.0, true}};
+  std::vector<BenchmarkResult> results = {
+      {{128, 256, 256}, 1200.0, 0.0, 0.0, 0.0, 0, true},
+      {{256, 256, 1024}, 1345.81, 0.0, 0.0, 0.0, 0, true},
+      {{512, 512, 1024}, 1300.0, 0.0, 0.0, 0.0, 0, true}};
 
   auto best = tuner.selectBest(results);
 
