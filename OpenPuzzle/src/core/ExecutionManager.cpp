@@ -108,8 +108,9 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
   ProcessRunner runner;
   bitcrack::BitCrackOutputParser parser;
 
-  auto processResult =
-      runner.run(context.command, [&](const std::string &line) {
+  auto processResult = runner.run(
+      context.command,
+      [&](const std::string &line) {
         result.linesRead++;
 
         if (context.echoOutput) {
@@ -141,7 +142,8 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
           result.keyFound = true;
           result.privateKey = parsed.value;
         }
-      });
+      },
+      maxSeconds);
 
   result.exitCode = processResult.exitCode;
   result.success = processResult.started && processResult.exitCode == 0;
