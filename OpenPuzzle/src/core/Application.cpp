@@ -433,6 +433,7 @@ int Application::cmdBenchmark(const std::vector<std::string> &args) {
                       getIntArg(args, "--d", GpuManager::selectedGpu()));
 
   bool real = hasArg(args, "--real");
+  bool autoMode = hasArg(args, "--auto");
 
   int seconds = getIntArg(args, "--seconds", 0);
   int samples = getIntArg(args, "--samples", 6);
@@ -491,6 +492,58 @@ int Application::cmdBenchmark(const std::vector<std::string> &args) {
     ctx.echoOutput = true;
 
     BenchmarkRunner runner;
+
+    if (autoMode) {
+      std::vector<BenchmarkConfiguration> configs;
+
+      for (int threadsValue : {256, 512}) {
+        for (int pointsValue : {512, 1024, 2048}) {
+          BenchmarkConfiguration config;
+          config.blocks = 256;
+          config.threads = threadsValue;
+          config.points = pointsValue;
+          configs.push_back(config);
+        }
+      }
+
+      std::vector<BenchmarkResult> results;
+
+      int index = 1;
+      for (const auto &config : configs) {
+        auto configCommand = scheduler.buildBitCrackCommand(
+            *bitcrack, *puzzle, *range, gpu, config.blocks, config.threads,
+            config.points, output);
+
+        ctx.command = configCommand;
+
+        std::cout << "\n[" << index << "/" << configs.size() << "] ";
+        std::cout << "b=" << config.blocks << " ";
+        std::cout << "t=" << config.threads << " ";
+        std::cout << "p=" << config.points << "\n";
+
+        auto item = runner.run(config, ctx, seconds, samples);
+        results.push_back(item);
+
+        std::cout << "Average.......... " << item.averageSpeed << " MKey/s\n";
+        std::cout << "Minimum.......... " << item.minimumSpeed << " MKey/s\n";
+        std::cout << "Maximum.......... " << item.maximumSpeed << " MKey/s\n";
+        std::cout << "Samples.......... " << item.samples << "\n";
+
+        index++;
+      }
+
+      AutoTuner tuner;
+      auto best = tuner.selectBest(results);
+
+      std::cout << "\nBest configuration\n\n";
+      std::cout << "Blocks........... " << best.configuration.blocks << "\n";
+      std::cout << "Threads.......... " << best.configuration.threads << "\n";
+      std::cout << "Points........... " << best.configuration.points << "\n";
+      std::cout << "Average.......... " << best.averageSpeed << " MKey/s\n";
+
+      return best.success ? 0 : 1;
+    }
+
     auto result = runner.run(cfg, ctx, seconds, samples);
 
     std::cout << "\nBenchmark result\n\n";
