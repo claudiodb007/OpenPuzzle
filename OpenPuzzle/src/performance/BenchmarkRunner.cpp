@@ -2,6 +2,8 @@
 
 #include "openpuzzle/core/ExecutionManager.hpp"
 
+#include <cstddef>
+
 namespace openpuzzle {
 
 BenchmarkResult
@@ -18,12 +20,19 @@ BenchmarkRunner::run(const BenchmarkConfiguration &configuration,
       executionResult.success || executionResult.averageSpeed > 0.0;
 
   if (!executionResult.speedSamples.empty()) {
+    const auto startIndex = executionResult.speedSamples.size() > 1
+                                ? std::size_t{1}
+                                : std::size_t{0};
+
     double sum = 0.0;
 
-    result.minimumSpeed = executionResult.speedSamples.front();
-    result.maximumSpeed = executionResult.speedSamples.front();
+    result.minimumSpeed = executionResult.speedSamples[startIndex];
+    result.maximumSpeed = executionResult.speedSamples[startIndex];
 
-    for (double speed : executionResult.speedSamples) {
+    for (std::size_t i = startIndex; i < executionResult.speedSamples.size();
+         ++i) {
+      const double speed = executionResult.speedSamples[i];
+
       sum += speed;
 
       if (speed < result.minimumSpeed)
@@ -33,7 +42,8 @@ BenchmarkRunner::run(const BenchmarkConfiguration &configuration,
         result.maximumSpeed = speed;
     }
 
-    result.samples = static_cast<int>(executionResult.speedSamples.size());
+    result.samples =
+        static_cast<int>(executionResult.speedSamples.size() - startIndex);
     result.averageSpeed = sum / result.samples;
     result.speedMKeys = result.averageSpeed;
   } else {
