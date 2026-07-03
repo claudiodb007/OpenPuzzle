@@ -15,7 +15,15 @@ BenchmarkRunner::run(const BenchmarkConfiguration &configuration,
 
   result.success =
       executionResult.success || executionResult.averageSpeed > 0.0;
+
   result.speedMKeys = executionResult.averageSpeed;
+  result.averageSpeed = executionResult.averageSpeed;
+
+  if (executionResult.averageSpeed > 0.0) {
+    result.minimumSpeed = executionResult.averageSpeed;
+    result.maximumSpeed = executionResult.averageSpeed;
+    result.samples = 1;
+  }
 
   return result;
 }
