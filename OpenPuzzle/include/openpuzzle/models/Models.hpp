@@ -41,4 +41,21 @@ struct JobRecord {
   int rangeId = 0;
   JobState state = JobState::Reserved;
 };
+struct GpuProfileRecord {
+  int id = 0;
+  std::string gpuName;
+  std::string backend;
+  std::string engine;
+
+  int blocks = 0;
+  int threads = 0;
+  int points = 0;
+
+  double averageSpeed = 0.0;
+  double minimumSpeed = 0.0;
+  double maximumSpeed = 0.0;
+
+  int samples = 0;
+};
+
 } // namespace openpuzzle
