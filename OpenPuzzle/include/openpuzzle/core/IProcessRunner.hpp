@@ -13,12 +13,13 @@ struct ProcessResult {
 class IProcessRunner {
 public:
   using LineCallback = std::function<void(const std::string &)>;
+  using StopPredicate = std::function<bool()>;
 
   virtual ~IProcessRunner() = default;
 
   virtual ProcessResult run(const std::string &command,
-                            const LineCallback &onLine,
-                            int maxSeconds = 0) const = 0;
+                            const LineCallback &onLine, int maxSeconds = 0,
+                            const StopPredicate &stop = nullptr) const = 0;
 };
 
 } // namespace openpuzzle

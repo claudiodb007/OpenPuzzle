@@ -10,7 +10,10 @@ namespace openpuzzle {
 
 ProcessResult PopenProcessRunner::run(const std::string &command,
                                       const LineCallback &onLine,
-                                      int maxSeconds) const {
+                                      int maxSeconds,
+                                      const StopPredicate &stop) const {
+  (void)stop;
+
   ProcessResult result;
   FILE *pipe = popen(command.c_str(), "r");
 

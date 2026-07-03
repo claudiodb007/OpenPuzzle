@@ -26,8 +26,8 @@ class ExecutionManager {
 public:
   ExecutionSummary runCommand(const std::string &command,
                               bool echoOutput = true) const;
-  ExecutionResult run(const ExecutionContext &context,
-                      int maxSeconds = 0) const;
+  ExecutionResult run(const ExecutionContext &context, int maxSeconds = 0,
+                      int maxSamples = 0) const;
 };
 
 } // namespace openpuzzle

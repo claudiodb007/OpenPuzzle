@@ -9,8 +9,8 @@ namespace openpuzzle {
 class BenchmarkRunner {
 public:
   BenchmarkResult run(const BenchmarkConfiguration &configuration,
-                      const ExecutionContext &context,
-                      int maxSeconds = 0) const;
+                      const ExecutionContext &context, int maxSeconds = 0,
+                      int maxSamples = 0) const;
 };
 
 } // namespace openpuzzle

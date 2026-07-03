@@ -6,12 +6,13 @@ namespace openpuzzle {
 
 BenchmarkResult
 BenchmarkRunner::run(const BenchmarkConfiguration &configuration,
-                     const ExecutionContext &context, int maxSeconds) const {
+                     const ExecutionContext &context, int maxSeconds,
+                     int maxSamples) const {
   BenchmarkResult result;
   result.configuration = configuration;
 
   ExecutionManager manager;
-  auto executionResult = manager.run(context, maxSeconds);
+  auto executionResult = manager.run(context, maxSeconds, maxSamples);
 
   result.success =
       executionResult.success || executionResult.averageSpeed > 0.0;

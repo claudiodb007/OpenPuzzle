@@ -72,7 +72,7 @@ ExecutionSummary ExecutionManager::runCommand(const std::string &command,
 }
 
 ExecutionResult ExecutionManager::run(const ExecutionContext &context,
-                                      int maxSeconds) const {
+                                      int maxSeconds, int maxSamples) const {
   (void)maxSeconds;
   ExecutionResult result;
   result.exitCode = -1;
@@ -146,7 +146,11 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
           result.privateKey = parsed.value;
         }
       },
-      maxSeconds);
+      maxSeconds,
+      [&]() {
+        return maxSamples > 0 &&
+               static_cast<int>(result.speedSamples.size()) >= maxSamples;
+      });
 
   result.exitCode = processResult.exitCode;
   result.success = processResult.started && processResult.exitCode == 0;

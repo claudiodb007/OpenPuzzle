@@ -12,7 +12,8 @@ namespace openpuzzle {
 
 ProcessResult PosixProcessRunner::run(const std::string &command,
                                       const LineCallback &onLine,
-                                      int maxSeconds) const {
+                                      int maxSeconds,
+                                      const StopPredicate &stop) const {
   ProcessResult result;
 
   int pipefd[2];
@@ -74,6 +75,12 @@ ProcessResult PosixProcessRunner::run(const std::string &command,
 
     if (onLine) {
       onLine(line);
+    }
+
+    if (stop && stop()) {
+      timedOut = true;
+      kill(pid, SIGTERM);
+      break;
     }
   }
 
