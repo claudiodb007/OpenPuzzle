@@ -434,7 +434,8 @@ int Application::cmdBenchmark(const std::vector<std::string> &args) {
 
   bool real = hasArg(args, "--real");
 
-  int seconds = getIntArg(args, "--seconds", 5);
+  int seconds = getIntArg(args, "--seconds", 0);
+  int samples = getIntArg(args, "--samples", 6);
   int blocks = getIntArg(args, "--blocks", getIntArg(args, "--b", 256));
   int threads = getIntArg(args, "--threads", getIntArg(args, "--t", 256));
   int points = getIntArg(args, "--points", getIntArg(args, "--p", 256));
@@ -490,13 +491,16 @@ int Application::cmdBenchmark(const std::vector<std::string> &args) {
     ctx.echoOutput = true;
 
     BenchmarkRunner runner;
-    auto result = runner.run(cfg, ctx, seconds);
+    auto result = runner.run(cfg, ctx, seconds, samples);
 
     std::cout << "\nBenchmark result\n\n";
     std::cout << "Blocks........... " << result.configuration.blocks << "\n";
     std::cout << "Threads.......... " << result.configuration.threads << "\n";
     std::cout << "Points........... " << result.configuration.points << "\n";
-    std::cout << "Speed............ " << result.speedMKeys << " MKey/s\n";
+    std::cout << "Average.......... " << result.averageSpeed << " MKey/s\n";
+    std::cout << "Minimum.......... " << result.minimumSpeed << " MKey/s\n";
+    std::cout << "Maximum.......... " << result.maximumSpeed << " MKey/s\n";
+    std::cout << "Samples.......... " << result.samples << "\n";
     std::cout << "Success.......... " << (result.success ? "yes" : "no")
               << "\n";
 

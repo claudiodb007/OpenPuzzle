@@ -33,6 +33,9 @@ BenchmarkRunner::run(const BenchmarkConfiguration &configuration,
          ++i) {
       const double speed = executionResult.speedSamples[i];
 
+      if (speed <= 0.0)
+        continue;
+
       sum += speed;
 
       if (speed < result.minimumSpeed)
@@ -42,9 +45,16 @@ BenchmarkRunner::run(const BenchmarkConfiguration &configuration,
         result.maximumSpeed = speed;
     }
 
-    result.samples =
-        static_cast<int>(executionResult.speedSamples.size() - startIndex);
-    result.averageSpeed = sum / result.samples;
+    result.samples = 0;
+    for (std::size_t i = startIndex; i < executionResult.speedSamples.size();
+         ++i) {
+      if (executionResult.speedSamples[i] > 0.0)
+        result.samples++;
+    }
+
+    if (result.samples > 0) {
+      result.averageSpeed = sum / result.samples;
+    }
     result.speedMKeys = result.averageSpeed;
   } else {
     result.speedMKeys = executionResult.averageSpeed;
