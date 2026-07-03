@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace openpuzzle {
 
@@ -13,6 +14,7 @@ struct ExecutionResult {
   std::uint64_t linesRead = 0;
 
   double averageSpeed = 0.0;
+  std::vector<double> speedSamples;
   std::string keysChecked = "0";
 
   bool keyFound = false;

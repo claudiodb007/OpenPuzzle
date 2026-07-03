@@ -128,6 +128,8 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
         if (parsed.type == bitcrack::ParsedLineType::Speed) {
           result.averageSpeed = parsed.speedMKeys;
 
+          result.speedSamples.push_back(parsed.speedMKeys);
+
           if (!parsed.totalKeys.empty()) {
             result.keysChecked = parsed.totalKeys;
           }
