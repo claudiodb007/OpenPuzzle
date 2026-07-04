@@ -8,6 +8,7 @@
 #include "openpuzzle/core/Scheduler.hpp"
 #include "openpuzzle/core/commands/BenchmarkCommand.hpp"
 #include "openpuzzle/core/commands/ProfileCommand.hpp"
+#include "openpuzzle/core/commands/StartJobCommand.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/performance/AutoTuner.hpp"
 #include "openpuzzle/performance/BenchmarkRunner.hpp"
@@ -108,7 +109,7 @@ int Application::run(int argc, char **argv) {
     if (cmd == "bitcrack-command")
       return cmdBitcrackCommand(r);
     if (cmd == "start-job")
-      return cmdStartJob(r);
+      return StartJobCommand().run(r);
     if (cmd == "process-test")
       return cmdProcessTest(r);
     if (cmd == "execution-test")
@@ -331,66 +332,6 @@ int Application::cmdBitcrackCommand(const std::vector<std::string> &a) {
   std::cout << scheduler.buildBitCrackCommand(*bc, *p, *r, dev, b, t, pt, out)
             << "\n";
   return 0;
-}
-int Application::cmdStartJob(const std::vector<std::string> &a) {
-  int n = getIntArg(a, "--puzzle", 71), jid = getIntArg(a, "--job", 0),
-      b = getIntArg(a, "--blocks", getIntArg(a, "--b", 256)),
-      t = getIntArg(a, "--threads", getIntArg(a, "--t", 256)),
-      pt = getIntArg(a, "--points", getIntArg(a, "--p", 256)),
-      dev = getIntArg(a, "--device",
-                      getIntArg(a, "--d", GpuManager::selectedGpu()));
-
-  bool dry = hasArg(a, "--dry-run");
-
-  Database db;
-  if (!ensureDb(db))
-    return 1;
-
-  const bool manualTuning = hasArg(a, "--blocks") || hasArg(a, "--b") ||
-                            hasArg(a, "--threads") || hasArg(a, "--t") ||
-                            hasArg(a, "--points") || hasArg(a, "--p");
-
-  if (!manualTuning) {
-    GpuProfileManager profileManager(db);
-    auto gpuInfo = GpuManager::currentGpu();
-
-    auto profile = profileManager.chooseBest(gpuInfo.name, "CUDA", "BitCrack");
-
-    if (profile) {
-      b = profile->blocks;
-      t = profile->threads;
-      pt = profile->points;
-
-      std::cout << "GPU profile......... yes\n";
-      std::cout << "Profile b/t/p....... " << b << "/" << t << "/" << pt
-                << "\n";
-    } else {
-      std::cout << "GPU profile......... no\n";
-      std::cout << "Tip................. run: OpenPuzzle benchmark --real "
-                   "--auto --gpu "
-                << dev << "\n";
-    }
-  }
-
-  auto bitcrack = ToolManager::bitcrackPath();
-
-  if (!bitcrack)
-    throw std::runtime_error("BitCrack not found");
-
-  Scheduler scheduler;
-
-  auto result = scheduler.startJob(db, n, jid, *bitcrack, dev, b, t, pt, dry);
-
-  std::cout << "Job.................. " << result.jobId << "\n";
-  std::cout << "Range................ " << result.rangeId << "\n";
-  std::cout << "Execution ID......... " << result.executionId << "\n";
-  std::cout << "Exit code............ " << result.exitCode << "\n";
-
-  if (dry) {
-    std::cout << "Dry run only.\n";
-  }
-
-  return result.exitCode;
 }
 
 int Application::cmdDashboard(const std::vector<std::string> &args) {

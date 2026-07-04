@@ -29,7 +29,6 @@ private:
   int cmdGpuList();
   int cmdGpuSelect(const std::vector<std::string> &);
   int cmdBitcrackCommand(const std::vector<std::string> &);
-  int cmdStartJob(const std::vector<std::string> &);
   int cmdProcessTest(const std::vector<std::string> &);
   int cmdExecutionTest(const std::vector<std::string> &);
   int cmdSessionTest(const std::vector<std::string> &);
