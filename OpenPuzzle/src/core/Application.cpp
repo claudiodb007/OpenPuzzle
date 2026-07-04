@@ -344,6 +344,31 @@ int Application::cmdStartJob(const std::vector<std::string> &a) {
   if (!ensureDb(db))
     return 1;
 
+  const bool manualTuning = hasArg(a, "--blocks") || hasArg(a, "--b") ||
+                            hasArg(a, "--threads") || hasArg(a, "--t") ||
+                            hasArg(a, "--points") || hasArg(a, "--p");
+
+  if (!manualTuning) {
+    GpuProfileManager profileManager(db);
+    auto profile = profileManager.chooseBest("GPU " + std::to_string(dev),
+                                             "CUDA", "BitCrack");
+
+    if (profile) {
+      b = profile->blocks;
+      t = profile->threads;
+      pt = profile->points;
+
+      std::cout << "GPU profile......... yes\n";
+      std::cout << "Profile b/t/p....... " << b << "/" << t << "/" << pt
+                << "\n";
+    } else {
+      std::cout << "GPU profile......... no\n";
+      std::cout << "Tip................. run: OpenPuzzle benchmark --real "
+                   "--auto --gpu "
+                << dev << "\n";
+    }
+  }
+
   auto bitcrack = ToolManager::bitcrackPath();
 
   if (!bitcrack)
