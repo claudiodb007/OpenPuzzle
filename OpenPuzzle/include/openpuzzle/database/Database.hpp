@@ -37,6 +37,12 @@ public:
                            const std::string &confidence,
                            const std::string &notes);
   std::vector<RangeRecord> listExternalRanges(int puzzleId);
+
+  bool saveGpuProfile(const GpuProfileRecord &profile);
+  std::optional<GpuProfileRecord> getGpuProfile(const std::string &gpuName,
+                                                const std::string &backend,
+                                                const std::string &engine);
+  std::vector<GpuProfileRecord> listGpuProfiles();
   long long countRangesByStatus(int puzzleId, RangeStatus status);
   long long countJobsByState(int puzzleId, JobState state);
 

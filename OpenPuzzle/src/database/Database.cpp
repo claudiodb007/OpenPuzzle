@@ -379,3 +379,126 @@ long long Database::countJobsByState(int puzzleId, JobState state) {
   return c;
 }
 } // namespace openpuzzle
+
+namespace openpuzzle {
+
+bool Database::saveGpuProfile(const GpuProfileRecord &profile) {
+  const char *sql =
+      "INSERT INTO gpu_profiles(gpu_name,backend,engine,blocks,threads,points,"
+      "average_speed,minimum_speed,maximum_speed,samples) "
+      "VALUES(?,?,?,?,?,?,?,?,?,?) "
+      "ON CONFLICT(gpu_name,backend,engine) DO UPDATE SET "
+      "blocks=excluded.blocks,"
+      "threads=excluded.threads,"
+      "points=excluded.points,"
+      "average_speed=excluded.average_speed,"
+      "minimum_speed=excluded.minimum_speed,"
+      "maximum_speed=excluded.maximum_speed,"
+      "samples=excluded.samples,"
+      "created_at=CURRENT_TIMESTAMP;";
+
+  sqlite3_stmt *stmt = nullptr;
+
+  if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    return false;
+
+  sqlite3_bind_text(stmt, 1, profile.gpuName.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, profile.backend.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 3, profile.engine.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_int(stmt, 4, profile.blocks);
+  sqlite3_bind_int(stmt, 5, profile.threads);
+  sqlite3_bind_int(stmt, 6, profile.points);
+  sqlite3_bind_double(stmt, 7, profile.averageSpeed);
+  sqlite3_bind_double(stmt, 8, profile.minimumSpeed);
+  sqlite3_bind_double(stmt, 9, profile.maximumSpeed);
+  sqlite3_bind_int(stmt, 10, profile.samples);
+
+  bool ok = sqlite3_step(stmt) == SQLITE_DONE;
+  sqlite3_finalize(stmt);
+
+  return ok;
+}
+
+std::optional<GpuProfileRecord>
+Database::getGpuProfile(const std::string &gpuName, const std::string &backend,
+                        const std::string &engine) {
+  const char *sql =
+      "SELECT id,gpu_name,backend,engine,blocks,threads,points,average_speed,"
+      "minimum_speed,maximum_speed,samples "
+      "FROM gpu_profiles WHERE gpu_name=? AND backend=? AND engine=?;";
+
+  sqlite3_stmt *stmt = nullptr;
+
+  if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    return std::nullopt;
+
+  sqlite3_bind_text(stmt, 1, gpuName.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, backend.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 3, engine.c_str(), -1, SQLITE_TRANSIENT);
+
+  std::optional<GpuProfileRecord> out;
+
+  if (sqlite3_step(stmt) == SQLITE_ROW) {
+    GpuProfileRecord profile;
+
+    profile.id = sqlite3_column_int(stmt, 0);
+    profile.gpuName = (const char *)sqlite3_column_text(stmt, 1);
+    profile.backend = (const char *)sqlite3_column_text(stmt, 2);
+    profile.engine = (const char *)sqlite3_column_text(stmt, 3);
+    profile.blocks = sqlite3_column_int(stmt, 4);
+    profile.threads = sqlite3_column_int(stmt, 5);
+    profile.points = sqlite3_column_int(stmt, 6);
+    profile.averageSpeed = sqlite3_column_double(stmt, 7);
+    profile.minimumSpeed = sqlite3_column_double(stmt, 8);
+    profile.maximumSpeed = sqlite3_column_double(stmt, 9);
+    profile.samples = sqlite3_column_int(stmt, 10);
+
+    out = profile;
+  }
+
+  sqlite3_finalize(stmt);
+
+  return out;
+}
+
+} // namespace openpuzzle
+
+namespace openpuzzle {
+
+std::vector<GpuProfileRecord> Database::listGpuProfiles() {
+  std::vector<GpuProfileRecord> profiles;
+
+  const char *sql =
+      "SELECT id,gpu_name,backend,engine,blocks,threads,points,average_speed,"
+      "minimum_speed,maximum_speed,samples "
+      "FROM gpu_profiles ORDER BY average_speed DESC;";
+
+  sqlite3_stmt *stmt = nullptr;
+
+  if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    return profiles;
+
+  while (sqlite3_step(stmt) == SQLITE_ROW) {
+    GpuProfileRecord profile;
+
+    profile.id = sqlite3_column_int(stmt, 0);
+    profile.gpuName = (const char *)sqlite3_column_text(stmt, 1);
+    profile.backend = (const char *)sqlite3_column_text(stmt, 2);
+    profile.engine = (const char *)sqlite3_column_text(stmt, 3);
+    profile.blocks = sqlite3_column_int(stmt, 4);
+    profile.threads = sqlite3_column_int(stmt, 5);
+    profile.points = sqlite3_column_int(stmt, 6);
+    profile.averageSpeed = sqlite3_column_double(stmt, 7);
+    profile.minimumSpeed = sqlite3_column_double(stmt, 8);
+    profile.maximumSpeed = sqlite3_column_double(stmt, 9);
+    profile.samples = sqlite3_column_int(stmt, 10);
+
+    profiles.push_back(profile);
+  }
+
+  sqlite3_finalize(stmt);
+
+  return profiles;
+}
+
+} // namespace openpuzzle
