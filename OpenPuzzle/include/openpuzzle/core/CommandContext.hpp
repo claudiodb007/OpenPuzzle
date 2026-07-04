@@ -16,12 +16,12 @@ public:
   int gpu = 0;
   std::optional<std::string> bitcrack;
 
-private:
-  std::string lastError_;
-
   bool initialize();
 
   const std::string &lastError() const;
+
+private:
+  std::string lastError_;
 };
 
 } // namespace openpuzzle

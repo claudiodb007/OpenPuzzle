@@ -1,5 +1,6 @@
 #include "openpuzzle/core/commands/BenchmarkCommand.hpp"
 
+#include "openpuzzle/core/CommandContext.hpp"
 #include "openpuzzle/core/ExecutionContext.hpp"
 #include "openpuzzle/core/Scheduler.hpp"
 #include "openpuzzle/database/Database.hpp"
@@ -39,22 +40,15 @@ static int getIntArg(const std::vector<std::string> &args,
   return fallback;
 }
 
-static std::string dbPath() {
-  const char *home = std::getenv("HOME");
-
-  if (!home)
-    throw std::runtime_error("HOME not set");
-
-  return std::string(home) + "/.local/share/OpenPuzzle/openpuzzle.db";
-}
-
-static bool openDb(Database &db) {
-  return db.open(dbPath()) && db.createSchema();
-}
-
 int BenchmarkCommand::run(const std::vector<std::string> &args) const {
-  int gpu = getIntArg(args, "--gpu",
-                      getIntArg(args, "--d", GpuManager::selectedGpu()));
+  CommandContext context;
+
+  if (!context.initialize()) {
+    std::cerr << context.lastError() << "\n";
+    return 1;
+  }
+
+  int gpu = getIntArg(args, "--gpu", getIntArg(args, "--d", context.gpu));
 
   bool real = hasArg(args, "--real");
   bool autoMode = hasArg(args, "--auto");
@@ -76,14 +70,12 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
     return 0;
   }
 
-  auto bitcrack = ToolManager::bitcrackPath();
+  auto bitcrack = context.bitcrack;
 
   if (!bitcrack)
     throw std::runtime_error("Engine not configured");
 
-  Database db;
-  if (!openDb(db))
-    return 1;
+  Database &db = context.db;
 
   auto puzzle = db.getPuzzleByNumber(getIntArg(args, "--puzzle", 71));
   auto job = db.getJob(getIntArg(args, "--job", 1));
@@ -96,7 +88,7 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
   if (!range)
     throw std::runtime_error("Range not found");
 
-  Scheduler scheduler;
+  Scheduler &scheduler = context.scheduler;
 
   auto workspace = scheduler.workspaceForJob(job->id);
   auto output = (fs::path(workspace) / "benchmark-found.txt").string();
