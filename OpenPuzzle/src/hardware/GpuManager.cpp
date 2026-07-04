@@ -76,4 +76,22 @@ int GpuManager::selectedGpu() {
   auto c = t.find(':', k);
   return std::stoi(t.substr(c + 1));
 }
+GpuInfo GpuManager::currentGpu() {
+  const int selected = selectedGpu();
+
+  for (const auto &gpu : listGpus()) {
+    if (gpu.device == selected) {
+      return gpu;
+    }
+  }
+
+  GpuInfo fallback;
+  fallback.device = selected;
+  fallback.name = "GPU " + std::to_string(selected);
+  fallback.uuid = "";
+  fallback.memory = "";
+
+  return fallback;
+}
+
 } // namespace openpuzzle
