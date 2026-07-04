@@ -518,3 +518,18 @@ add_test(
     NAME ExecutionRecordTests
     COMMAND ExecutionRecordTests
 )
+
+
+add_executable(GpuInfoTests
+    core/GpuInfoTests.cpp
+)
+
+target_link_libraries(GpuInfoTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME GpuInfoTests
+    COMMAND GpuInfoTests
+)
