@@ -1,5 +1,6 @@
 #include "openpuzzle/core/commands/StartJobCommand.hpp"
 
+#include "openpuzzle/core/CommandContext.hpp"
 #include "openpuzzle/core/Scheduler.hpp"
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
@@ -30,20 +31,13 @@ static int getIntArg(const std::vector<std::string> &args,
   return fallback;
 }
 
-static std::string dbPath() {
-  const char *home = std::getenv("HOME");
-
-  if (!home)
-    throw std::runtime_error("HOME not set");
-
-  return std::string(home) + "/.local/share/OpenPuzzle/openpuzzle.db";
-}
-
-static bool openDb(Database &db) {
-  return db.open(dbPath()) && db.createSchema();
-}
-
 int StartJobCommand::run(const std::vector<std::string> &args) const {
+  CommandContext context;
+
+  if (!context.initialize()) {
+    std::cerr << context.lastError() << "\n";
+    return 1;
+  }
 
   int puzzle = getIntArg(args, "--puzzle", 71);
 
@@ -55,8 +49,7 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
 
   int points = getIntArg(args, "--points", getIntArg(args, "--p", 256));
 
-  int device = getIntArg(args, "--device",
-                         getIntArg(args, "--d", GpuManager::selectedGpu()));
+  int device = getIntArg(args, "--device", getIntArg(args, "--d", context.gpu));
 
   bool dryRun = hasArg(args, "--dry-run");
 
@@ -68,10 +61,8 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
   std::cout << "Points............ " << points << "\n";
   std::cout << "Dry run........... " << (dryRun ? "yes" : "no") << "\n";
 
-  Database db;
-
-  if (!openDb(db))
-    return 1;
+  Database &db = context.db;
+  Scheduler &scheduler = context.scheduler;
 
   const bool manual = hasArg(args, "--blocks") || hasArg(args, "--b") ||
                       hasArg(args, "--threads") || hasArg(args, "--t") ||
@@ -101,12 +92,10 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
     }
   }
 
-  auto bitcrack = ToolManager::bitcrackPath();
+  auto bitcrack = context.bitcrack;
 
   if (!bitcrack)
     throw std::runtime_error("BitCrack not found");
-
-  Scheduler scheduler;
 
   auto result = scheduler.startJob(db, puzzle, job, *bitcrack, device, blocks,
                                    threads, points, dryRun);
