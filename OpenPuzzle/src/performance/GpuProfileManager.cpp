@@ -15,4 +15,11 @@ GpuProfileManager::load(const std::string &gpuName, const std::string &backend,
   return database_.getGpuProfile(gpuName, backend, engine);
 }
 
+std::optional<GpuProfileRecord>
+GpuProfileManager::chooseBest(const std::string &gpuName,
+                              const std::string &backend,
+                              const std::string &engine) {
+  return load(gpuName, backend, engine);
+}
+
 } // namespace openpuzzle

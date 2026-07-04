@@ -14,6 +14,10 @@ public:
                                        const std::string &backend,
                                        const std::string &engine);
 
+  std::optional<GpuProfileRecord> chooseBest(const std::string &gpuName,
+                                             const std::string &backend,
+                                             const std::string &engine);
+
 private:
   Database &database_;
 };
