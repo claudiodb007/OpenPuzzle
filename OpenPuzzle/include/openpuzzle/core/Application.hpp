@@ -38,7 +38,6 @@ private:
   int cmdDashboard(const std::vector<std::string> &);
   int cmdAudit(const std::vector<std::string> &);
   int cmdBenchmark(const std::vector<std::string> &);
-  int cmdProfile(const std::vector<std::string> &);
   int cmdResumeTest(const std::vector<std::string> &);
   int cmdResume(const std::vector<std::string> &);
 };

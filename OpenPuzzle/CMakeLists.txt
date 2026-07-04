@@ -22,6 +22,7 @@ add_library(OpenPuzzleCore
     src/core/RecoveryManager.cpp
     src/core/Application.cpp
     src/core/commands/ApplicationTestCommands.cpp
+    src/core/commands/ProfileCommand.cpp
     src/database/Database.cpp
     src/models/KeySpace.cpp
     src/allocator/RangeAllocator.cpp

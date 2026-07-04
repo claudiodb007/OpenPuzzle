@@ -6,6 +6,7 @@
 #include "openpuzzle/core/ExecutionSession.hpp"
 #include "openpuzzle/core/ProcessRunner.hpp"
 #include "openpuzzle/core/Scheduler.hpp"
+#include "openpuzzle/core/commands/ProfileCommand.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/performance/AutoTuner.hpp"
 #include "openpuzzle/performance/BenchmarkRunner.hpp"
@@ -128,7 +129,7 @@ int Application::run(int argc, char **argv) {
     if (cmd == "benchmark")
       return cmdBenchmark(r);
     if (cmd == "profile")
-      return cmdProfile(r);
+      return ProfileCommand().run(r);
   } catch (const std::exception &e) {
     std::cerr << "Error: " << e.what() << "\n";
     return 1;
@@ -350,8 +351,9 @@ int Application::cmdStartJob(const std::vector<std::string> &a) {
 
   if (!manualTuning) {
     GpuProfileManager profileManager(db);
-    auto profile = profileManager.chooseBest("GPU " + std::to_string(dev),
-                                             "CUDA", "BitCrack");
+    auto gpuInfo = GpuManager::currentGpu();
+
+    auto profile = profileManager.chooseBest(gpuInfo.name, "CUDA", "BitCrack");
 
     if (profile) {
       b = profile->blocks;
@@ -453,46 +455,6 @@ int Application::cmdAudit(const std::vector<std::string> &args) {
   std::cout << "Audit log is stored in SQLite table: audit_log\n";
   std::cout
       << "Detailed audit listing will be implemented in the next build.\n";
-  return 0;
-}
-
-int Application::cmdProfile(const std::vector<std::string> &args) {
-  std::string subcommand = args.empty() ? "list" : args[0];
-
-  if (subcommand != "list") {
-    std::cerr << "Usage: OpenPuzzle profile list\n";
-    return 1;
-  }
-
-  Database db;
-  if (!ensureDb(db))
-    return 1;
-
-  auto profiles = db.listGpuProfiles();
-
-  std::cout << "====================================\n";
-  std::cout << "      OpenPuzzle GPU Profiles\n";
-  std::cout << "====================================\n\n";
-
-  if (profiles.empty()) {
-    std::cout << "No GPU profiles found.\n";
-    return 0;
-  }
-
-  for (const auto &profile : profiles) {
-    std::cout << "ID................ " << profile.id << "\n";
-    std::cout << "GPU............... " << profile.gpuName << "\n";
-    std::cout << "Backend........... " << profile.backend << "\n";
-    std::cout << "Engine............ " << profile.engine << "\n";
-    std::cout << "Blocks............ " << profile.blocks << "\n";
-    std::cout << "Threads........... " << profile.threads << "\n";
-    std::cout << "Points............ " << profile.points << "\n";
-    std::cout << "Average........... " << profile.averageSpeed << " MKey/s\n";
-    std::cout << "Minimum........... " << profile.minimumSpeed << " MKey/s\n";
-    std::cout << "Maximum........... " << profile.maximumSpeed << " MKey/s\n";
-    std::cout << "Samples........... " << profile.samples << "\n\n";
-  }
-
   return 0;
 }
 
@@ -611,7 +573,9 @@ int Application::cmdBenchmark(const std::vector<std::string> &args) {
 
       if (best.success) {
         GpuProfileRecord profile;
-        profile.gpuName = "GPU " + std::to_string(gpu);
+        auto gpuInfo = GpuManager::currentGpu();
+
+        profile.gpuName = gpuInfo.name;
         profile.backend = "CUDA";
         profile.engine = "BitCrack";
         profile.blocks = best.configuration.blocks;
