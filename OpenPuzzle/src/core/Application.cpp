@@ -584,6 +584,25 @@ int Application::cmdBenchmark(const std::vector<std::string> &args) {
       std::cout << "Points........... " << best.configuration.points << "\n";
       std::cout << "Average.......... " << best.averageSpeed << " MKey/s\n";
 
+      if (best.success) {
+        GpuProfileRecord profile;
+        profile.gpuName = "GPU " + std::to_string(gpu);
+        profile.backend = "CUDA";
+        profile.engine = "BitCrack";
+        profile.blocks = best.configuration.blocks;
+        profile.threads = best.configuration.threads;
+        profile.points = best.configuration.points;
+        profile.averageSpeed = best.averageSpeed;
+        profile.minimumSpeed = best.minimumSpeed;
+        profile.maximumSpeed = best.maximumSpeed;
+        profile.samples = best.samples;
+
+        GpuProfileManager profileManager(db);
+        const bool saved = profileManager.save(profile);
+
+        std::cout << "Saved profile..... " << (saved ? "yes" : "no") << "\n";
+      }
+
       return best.success ? 0 : 1;
     }
 

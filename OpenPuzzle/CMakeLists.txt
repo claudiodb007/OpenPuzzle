@@ -30,6 +30,7 @@ add_library(OpenPuzzleCore
     src/adapters/bitcrack/BitCrackOutputParser.cpp
     src/performance/AutoTuner.cpp
 src/performance/BenchmarkRunner.cpp
+    src/performance/GpuProfileManager.cpp
 )
 
 target_include_directories(OpenPuzzleCore
