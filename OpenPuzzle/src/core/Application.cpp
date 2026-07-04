@@ -6,6 +6,7 @@
 #include "openpuzzle/core/ExecutionSession.hpp"
 #include "openpuzzle/core/ProcessRunner.hpp"
 #include "openpuzzle/core/Scheduler.hpp"
+#include "openpuzzle/core/commands/BenchmarkCommand.hpp"
 #include "openpuzzle/core/commands/ProfileCommand.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/performance/AutoTuner.hpp"
@@ -127,7 +128,7 @@ int Application::run(int argc, char **argv) {
     if (cmd == "audit")
       return cmdAudit(r);
     if (cmd == "benchmark")
-      return cmdBenchmark(r);
+      return BenchmarkCommand().run(r);
     if (cmd == "profile")
       return ProfileCommand().run(r);
   } catch (const std::exception &e) {
