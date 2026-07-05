@@ -14,6 +14,7 @@
 #include "openpuzzle/performance/BenchmarkRunner.hpp"
 #include "openpuzzle/performance/GpuProfileManager.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
+#include "openpuzzle/services/PuzzleService.hpp"
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -508,62 +509,14 @@ int Application::cmdWorker(const std::vector<std::string> &a) {
 }
 
 int Application::cmdPuzzle(const std::vector<std::string> &a) {
-  if (a.empty()) {
-    std::cerr << "Usage: OpenPuzzle puzzle list | show <number>\n";
-    return 1;
-  }
-
   Database db;
   if (!ensureDb(db))
     return 1;
 
-  if (a[0] == "list") {
-    std::cout << "ID   STATUS   ADDRESS\n";
-    std::cout << "--------------------------------------------------\n";
-    for (auto &p : db.listPuzzles()) {
-      std::cout << std::setw(3) << p.number << "  "
-                << (p.solved ? "solved " : "open   ") << "  "
-                << p.address << "\n";
-    }
-    return 0;
-  }
-
-  if (a[0] == "show") {
-    if (a.size() < 2)
-      throw std::runtime_error("Missing puzzle number");
-
-    int number = std::stoi(a[1]);
-    auto p = db.getPuzzleByNumber(number);
-
-    if (!p)
-      throw std::runtime_error("Puzzle not found");
-
-    std::cout << "Puzzle............. " << p->number << "\n";
-    std::cout << "Name............... " << p->name << "\n";
-    std::cout << "Reward............. " << p->reward << " BTC\n";
-    std::cout << "Status............. " << (p->solved ? "SOLVED" : "OPEN") << "\n";
-    std::cout << "Address............ " << p->address << "\n";
-    std::cout << "Hash160............ " << p->hash160 << "\n";
-    std::cout << "Range Start........ " << p->rangeStart << "\n";
-    std::cout << "Range End.......... " << p->rangeEnd << "\n";
-
-    auto reserved = db.countRangesByStatus(p->id, RangeStatus::Reserved);
-    auto running = db.countRangesByStatus(p->id, RangeStatus::Running);
-    auto completed = db.countRangesByStatus(p->id, RangeStatus::Completed);
-    auto failed = db.countRangesByStatus(p->id, RangeStatus::Failed);
-
-    std::cout << "\n";
-    std::cout << "Ranges reserved.... " << reserved << "\n";
-    std::cout << "Ranges running..... " << running << "\n";
-    std::cout << "Ranges completed... " << completed << "\n";
-    std::cout << "Ranges failed...... " << failed << "\n";
-
-    return 0;
-  }
-
-  std::cerr << "Unknown puzzle command\n";
-  return 1;
+  PuzzleService service(db);
+  return service.execute(a);
 }
+
 int Application::cmdCreateJob(const std::vector<std::string> &a) {
   int n = getIntArg(a, "--puzzle", 71), bits = getIntArg(a, "--block-bits", 40);
   Database db;

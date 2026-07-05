@@ -26,6 +26,7 @@ add_library(OpenPuzzleCore
     src/core/commands/ProfileCommand.cpp
     src/core/commands/BenchmarkCommand.cpp
     src/core/commands/StartJobCommand.cpp
+    src/services/PuzzleService.cpp
     src/database/Database.cpp
     src/models/KeySpace.cpp
     src/allocator/RangeAllocator.cpp
