@@ -1,20 +1,17 @@
 #pragma once
 
+#include "openpuzzle/services/Service.hpp"
+
 #include <string>
 #include <vector>
 
 namespace openpuzzle {
 
-class Database;
-
-class PuzzleService {
+class PuzzleService : public Service {
 public:
-    explicit PuzzleService(Database& database);
+    using Service::Service;
 
     int execute(const std::vector<std::string>& args);
-
-private:
-    Database& database_;
 };
 
 } // namespace openpuzzle

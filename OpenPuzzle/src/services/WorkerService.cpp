@@ -8,8 +8,6 @@
 
 namespace openpuzzle {
 
-WorkerService::WorkerService(Database& database) : database_(database) {}
-
 
 int WorkerService::execute(const std::vector<std::string>& args) {
     using namespace openpuzzle::services;

@@ -9,8 +9,6 @@
 
 namespace openpuzzle {
 
-QueueService::QueueService(Database& database) : database_(database) {}
-
 
 int QueueService::execute(const std::vector<std::string>& args) {
     using namespace openpuzzle::services;

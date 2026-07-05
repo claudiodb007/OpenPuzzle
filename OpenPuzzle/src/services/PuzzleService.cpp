@@ -7,8 +7,6 @@
 
 namespace openpuzzle {
 
-PuzzleService::PuzzleService(Database& database) : database_(database) {}
-
 int PuzzleService::execute(const std::vector<std::string>& args) {
     if (args.empty()) {
         std::cerr << "Usage: OpenPuzzle puzzle list | show <number>\n";
