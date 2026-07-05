@@ -21,9 +21,13 @@ struct PuzzleRecord {
   int number = 0;
   std::string name;
   std::string address;
+  std::string hash160;
   std::string rangeStart;
   std::string rangeEnd;
   double reward = 0.0;
+  bool solved = false;
+  std::string solvedKey;
+  std::string solvedAddress;
   std::string sharing;
 };
 struct RangeRecord {

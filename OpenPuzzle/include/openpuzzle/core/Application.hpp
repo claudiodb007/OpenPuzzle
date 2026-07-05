@@ -20,6 +20,8 @@ private:
   int cmdInit();
   int cmdImportPuzzleJson(const std::vector<std::string> &);
   int cmdListPuzzles();
+  int cmdSyncData(const std::vector<std::string> &);
+  int cmdPuzzle(const std::vector<std::string> &);
   int cmdCreateJob(const std::vector<std::string> &);
   int cmdListRanges(const std::vector<std::string> &);
   int cmdCompleteJob(const std::vector<std::string> &);

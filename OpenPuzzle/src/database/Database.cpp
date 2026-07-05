@@ -27,7 +27,7 @@ bool Database::exec(const std::string &sql) {
 bool Database::createSchema() {
   bool ok = exec(R"SQL(
 PRAGMA foreign_keys=ON;
-CREATE TABLE IF NOT EXISTS puzzles(id INTEGER PRIMARY KEY AUTOINCREMENT,number INTEGER NOT NULL UNIQUE,name TEXT NOT NULL,address TEXT NOT NULL,range_start TEXT NOT NULL,range_end TEXT NOT NULL,reward REAL DEFAULT 0,sharing TEXT DEFAULT 'private',created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS puzzles(id INTEGER PRIMARY KEY AUTOINCREMENT,number INTEGER NOT NULL UNIQUE,name TEXT NOT NULL,address TEXT NOT NULL,hash160 TEXT DEFAULT '',range_start TEXT NOT NULL,range_end TEXT NOT NULL,reward REAL DEFAULT 0,solved INTEGER DEFAULT 0,solved_key TEXT DEFAULT '',solved_address TEXT DEFAULT '',sharing TEXT DEFAULT 'private',created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS ranges(id INTEGER PRIMARY KEY AUTOINCREMENT,puzzle_id INTEGER NOT NULL,start_key TEXT NOT NULL,end_key TEXT NOT NULL,block_bits INTEGER NOT NULL DEFAULT 0,status INTEGER NOT NULL DEFAULT 1,keys_checked TEXT DEFAULT '0',allocator_version TEXT DEFAULT 'foundation',created_at TEXT DEFAULT CURRENT_TIMESTAMP,reserved_at TEXT,started_at TEXT,finished_at TEXT,UNIQUE(puzzle_id,start_key,end_key),FOREIGN KEY(puzzle_id) REFERENCES puzzles(id));
 CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY AUTOINCREMENT,puzzle_id INTEGER NOT NULL,range_id INTEGER NOT NULL,state INTEGER NOT NULL DEFAULT 1,created_at TEXT DEFAULT CURRENT_TIMESTAMP,started_at TEXT,finished_at TEXT,FOREIGN KEY(puzzle_id) REFERENCES puzzles(id),FOREIGN KEY(range_id) REFERENCES ranges(id));
 CREATE TABLE IF NOT EXISTS executions(id INTEGER PRIMARY KEY AUTOINCREMENT,job_id INTEGER NOT NULL,workspace TEXT NOT NULL,command TEXT NOT NULL,state TEXT NOT NULL,exit_code INTEGER,started_at TEXT DEFAULT CURRENT_TIMESTAMP,finished_at TEXT,FOREIGN KEY(job_id) REFERENCES jobs(id));
@@ -45,33 +45,77 @@ CREATE TABLE IF NOT EXISTS gpu_profiles(id INTEGER PRIMARY KEY AUTOINCREMENT,gpu
     sqlite3_free(migrationError);
   }
 
+  migrationError = nullptr;
+  sqlite3_exec(db_, "ALTER TABLE puzzles ADD COLUMN hash160 TEXT DEFAULT ''",
+               nullptr, nullptr, &migrationError);
+  if (migrationError) sqlite3_free(migrationError);
+
+  migrationError = nullptr;
+  sqlite3_exec(db_, "ALTER TABLE puzzles ADD COLUMN solved INTEGER DEFAULT 0",
+               nullptr, nullptr, &migrationError);
+  if (migrationError) sqlite3_free(migrationError);
+
+  migrationError = nullptr;
+  sqlite3_exec(db_, "ALTER TABLE puzzles ADD COLUMN solved_key TEXT DEFAULT ''",
+               nullptr, nullptr, &migrationError);
+  if (migrationError) sqlite3_free(migrationError);
+
+  migrationError = nullptr;
+  sqlite3_exec(db_, "ALTER TABLE puzzles ADD COLUMN solved_address TEXT DEFAULT ''",
+               nullptr, nullptr, &migrationError);
+  if (migrationError) sqlite3_free(migrationError);
+
   return ok;
 }
 bool Database::upsertPuzzle(const PuzzleRecord &p) {
   const char *sql =
       "INSERT INTO "
-      "puzzles(number,name,address,range_start,range_end,reward,sharing) "
-      "VALUES(?,?,?,?,?,?,?) ON CONFLICT(number) DO UPDATE SET "
-      "name=excluded.name,address=excluded.address,range_start=excluded.range_"
-      "start,range_end=excluded.range_end,reward=excluded.reward,sharing="
-      "excluded.sharing;";
+      "puzzles(number,name,address,hash160,range_start,range_end,reward,solved,"
+      "solved_key,solved_address,sharing) "
+      "VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(number) DO UPDATE SET "
+      "name=excluded.name,"
+      "address=excluded.address,"
+      "hash160=excluded.hash160,"
+      "range_start=excluded.range_start,"
+      "range_end=excluded.range_end,"
+      "reward=excluded.reward,"
+      "solved=excluded.solved,"
+      "solved_key=excluded.solved_key,"
+      "solved_address=excluded.solved_address,"
+      "sharing=excluded.sharing;";
   sqlite3_stmt *s = nullptr;
   sqlite3_prepare_v2(db_, sql, -1, &s, nullptr);
   sqlite3_bind_int(s, 1, p.number);
   sqlite3_bind_text(s, 2, p.name.c_str(), -1, SQLITE_TRANSIENT);
   sqlite3_bind_text(s, 3, p.address.c_str(), -1, SQLITE_TRANSIENT);
-  sqlite3_bind_text(s, 4, p.rangeStart.c_str(), -1, SQLITE_TRANSIENT);
-  sqlite3_bind_text(s, 5, p.rangeEnd.c_str(), -1, SQLITE_TRANSIENT);
-  sqlite3_bind_double(s, 6, p.reward);
-  sqlite3_bind_text(s, 7, p.sharing.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(s, 4, p.hash160.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(s, 5, p.rangeStart.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(s, 6, p.rangeEnd.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_double(s, 7, p.reward);
+  sqlite3_bind_int(s, 8, p.solved ? 1 : 0);
+  sqlite3_bind_text(s, 9, p.solvedKey.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(s, 10, p.solvedAddress.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(s, 11, p.sharing.c_str(), -1, SQLITE_TRANSIENT);
+  bool ok = sqlite3_step(s) == SQLITE_DONE;
+  sqlite3_finalize(s);
+  return ok;
+}
+
+bool Database::updatePuzzleHash160(int number, const std::string &hash160) {
+  sqlite3_stmt *s = nullptr;
+  sqlite3_prepare_v2(db_, "UPDATE puzzles SET hash160=? WHERE number=?", -1, &s,
+                     nullptr);
+  sqlite3_bind_text(s, 1, hash160.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_int(s, 2, number);
   bool ok = sqlite3_step(s) == SQLITE_DONE;
   sqlite3_finalize(s);
   return ok;
 }
 std::optional<PuzzleRecord> Database::getPuzzleByNumber(int number) {
   const char *sql =
-      "SELECT id,number,name,address,range_start,range_end,reward,sharing FROM "
-      "puzzles WHERE number=?";
+      "SELECT id,number,name,address,COALESCE(hash160,''),range_start,range_end,"
+      "reward,COALESCE(solved,0),COALESCE(solved_key,''),"
+      "COALESCE(solved_address,''),sharing FROM puzzles WHERE number=?";
   sqlite3_stmt *s = nullptr;
   sqlite3_prepare_v2(db_, sql, -1, &s, nullptr);
   sqlite3_bind_int(s, 1, number);
@@ -82,10 +126,14 @@ std::optional<PuzzleRecord> Database::getPuzzleByNumber(int number) {
     p.number = sqlite3_column_int(s, 1);
     p.name = (const char *)sqlite3_column_text(s, 2);
     p.address = (const char *)sqlite3_column_text(s, 3);
-    p.rangeStart = (const char *)sqlite3_column_text(s, 4);
-    p.rangeEnd = (const char *)sqlite3_column_text(s, 5);
-    p.reward = sqlite3_column_double(s, 6);
-    p.sharing = (const char *)sqlite3_column_text(s, 7);
+    p.hash160 = (const char *)sqlite3_column_text(s, 4);
+    p.rangeStart = (const char *)sqlite3_column_text(s, 5);
+    p.rangeEnd = (const char *)sqlite3_column_text(s, 6);
+    p.reward = sqlite3_column_double(s, 7);
+    p.solved = sqlite3_column_int(s, 8) != 0;
+    p.solvedKey = (const char *)sqlite3_column_text(s, 9);
+    p.solvedAddress = (const char *)sqlite3_column_text(s, 10);
+    p.sharing = (const char *)sqlite3_column_text(s, 11);
     out = p;
   }
   sqlite3_finalize(s);
@@ -96,8 +144,9 @@ std::vector<PuzzleRecord> Database::listPuzzles() {
   sqlite3_stmt *s = nullptr;
   sqlite3_prepare_v2(
       db_,
-      "SELECT id,number,name,address,range_start,range_end,reward,sharing FROM "
-      "puzzles ORDER BY number",
+      "SELECT id,number,name,address,COALESCE(hash160,''),range_start,range_end,"
+      "reward,COALESCE(solved,0),COALESCE(solved_key,''),"
+      "COALESCE(solved_address,''),sharing FROM puzzles ORDER BY number",
       -1, &s, nullptr);
   while (sqlite3_step(s) == SQLITE_ROW) {
     PuzzleRecord p;
@@ -105,10 +154,14 @@ std::vector<PuzzleRecord> Database::listPuzzles() {
     p.number = sqlite3_column_int(s, 1);
     p.name = (const char *)sqlite3_column_text(s, 2);
     p.address = (const char *)sqlite3_column_text(s, 3);
-    p.rangeStart = (const char *)sqlite3_column_text(s, 4);
-    p.rangeEnd = (const char *)sqlite3_column_text(s, 5);
-    p.reward = sqlite3_column_double(s, 6);
-    p.sharing = (const char *)sqlite3_column_text(s, 7);
+    p.hash160 = (const char *)sqlite3_column_text(s, 4);
+    p.rangeStart = (const char *)sqlite3_column_text(s, 5);
+    p.rangeEnd = (const char *)sqlite3_column_text(s, 6);
+    p.reward = sqlite3_column_double(s, 7);
+    p.solved = sqlite3_column_int(s, 8) != 0;
+    p.solvedKey = (const char *)sqlite3_column_text(s, 9);
+    p.solvedAddress = (const char *)sqlite3_column_text(s, 10);
+    p.sharing = (const char *)sqlite3_column_text(s, 11);
     v.push_back(p);
   }
   sqlite3_finalize(s);

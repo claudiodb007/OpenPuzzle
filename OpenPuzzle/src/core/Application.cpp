@@ -90,6 +90,10 @@ int Application::run(int argc, char **argv) {
       return cmdImportPuzzleJson(r);
     if (cmd == "list-puzzles")
       return cmdListPuzzles();
+    if (cmd == "sync-data")
+      return cmdSyncData(r);
+    if (cmd == "puzzle")
+      return cmdPuzzle(r);
     if (cmd == "create-job")
       return cmdCreateJob(r);
     if (cmd == "list-ranges")
@@ -209,6 +213,163 @@ int Application::cmdListPuzzles() {
     std::cout << "#" << p.number << " " << p.name << " " << p.rangeStart << ":"
               << p.rangeEnd << "\n";
   return 0;
+}
+
+static std::vector<std::string> extractJsonStringsArray(const std::string &txt,
+                                                        const std::string &key) {
+  std::vector<std::string> out;
+  auto p = txt.find("\"" + key + "\"");
+  if (p == std::string::npos)
+    return out;
+  auto a = txt.find('[', p);
+  auto b = txt.find(']', a);
+  if (a == std::string::npos || b == std::string::npos)
+    return out;
+
+  std::regex re("\"([^\"]*)\"");
+  auto begin = std::sregex_iterator(txt.begin() + a, txt.begin() + b, re);
+  auto end = std::sregex_iterator();
+
+  for (auto it = begin; it != end; ++it)
+    out.push_back((*it)[1]);
+
+  return out;
+}
+
+struct ImportedRangeItem {
+  std::string min;
+  std::string max;
+  int status = 0;
+};
+
+static std::vector<ImportedRangeItem> extractRangesArray(const std::string &txt) {
+  std::vector<ImportedRangeItem> out;
+  std::regex re(
+      R"JSON(\{\s*"min"\s*:\s*"([^"]+)"\s*,\s*"max"\s*:\s*"([^"]+)"\s*,\s*"status"\s*:\s*([0-9]+)\s*\})JSON");
+
+  auto begin = std::sregex_iterator(txt.begin(), txt.end(), re);
+  auto end = std::sregex_iterator();
+
+  for (auto it = begin; it != end; ++it) {
+    ImportedRangeItem r;
+    r.min = (*it)[1];
+    r.max = (*it)[2];
+    r.status = std::stoi((*it)[3]);
+    out.push_back(r);
+  }
+
+  return out;
+}
+
+static std::string strip0x(std::string v) {
+  if (v.size() > 1 && v[0] == '0' && (v[1] == 'x' || v[1] == 'X'))
+    return v.substr(2);
+  return v;
+}
+
+int Application::cmdSyncData(const std::vector<std::string> &a) {
+  auto dir = getArg(a, "--dir", "data");
+
+  auto wallets = extractJsonStringsArray(readFile((fs::path(dir) / "wallets.json").string()), "wallets");
+  auto hash160s = extractJsonStringsArray(readFile((fs::path(dir) / "hash160s.json").string()), "hash160s");
+  auto ranges = extractRangesArray(readFile((fs::path(dir) / "ranges.json").string()));
+
+  if (wallets.empty())
+    throw std::runtime_error("wallets.json has no wallets");
+  if (ranges.empty())
+    throw std::runtime_error("ranges.json has no ranges");
+  if (hash160s.empty())
+    throw std::runtime_error("hash160s.json has no hash160s");
+
+  size_t count = std::min<size_t>(160, std::min(wallets.size(), std::min(hash160s.size(), ranges.size())));
+
+  Database db;
+  if (!ensureDb(db))
+    return 1;
+
+  for (size_t i = 0; i < count; ++i) {
+    PuzzleRecord p;
+    p.number = static_cast<int>(i + 1);
+    p.name = "Puzzle " + std::to_string(i + 1);
+    p.address = wallets[i];
+    p.hash160 = hash160s[i];
+    p.rangeStart = strip0x(ranges[i].min);
+    p.rangeEnd = strip0x(ranges[i].max);
+    p.reward = static_cast<double>(i + 1);
+    p.solved = ranges[i].status != 0;
+    p.sharing = "public";
+    db.upsertPuzzle(p);
+  }
+
+  std::cout << "Wallets imported..... " << wallets.size() << "\n";
+  std::cout << "Ranges imported...... " << ranges.size() << "\n";
+  std::cout << "Hash160 imported..... " << hash160s.size() << "\n";
+  std::cout << "Puzzles synchronized. " << count << "\n";
+
+  if (wallets.size() != ranges.size() || wallets.size() != hash160s.size()) {
+    std::cout << "Warning.............. input counts differ; synchronized first "
+              << count << " puzzles only\n";
+  }
+
+  return 0;
+}
+
+int Application::cmdPuzzle(const std::vector<std::string> &a) {
+  if (a.empty()) {
+    std::cerr << "Usage: OpenPuzzle puzzle list | show <number>\n";
+    return 1;
+  }
+
+  Database db;
+  if (!ensureDb(db))
+    return 1;
+
+  if (a[0] == "list") {
+    std::cout << "ID   STATUS   ADDRESS\n";
+    std::cout << "--------------------------------------------------\n";
+    for (auto &p : db.listPuzzles()) {
+      std::cout << std::setw(3) << p.number << "  "
+                << (p.solved ? "solved " : "open   ") << "  "
+                << p.address << "\n";
+    }
+    return 0;
+  }
+
+  if (a[0] == "show") {
+    if (a.size() < 2)
+      throw std::runtime_error("Missing puzzle number");
+
+    int number = std::stoi(a[1]);
+    auto p = db.getPuzzleByNumber(number);
+
+    if (!p)
+      throw std::runtime_error("Puzzle not found");
+
+    std::cout << "Puzzle............. " << p->number << "\n";
+    std::cout << "Name............... " << p->name << "\n";
+    std::cout << "Reward............. " << p->reward << " BTC\n";
+    std::cout << "Status............. " << (p->solved ? "SOLVED" : "OPEN") << "\n";
+    std::cout << "Address............ " << p->address << "\n";
+    std::cout << "Hash160............ " << p->hash160 << "\n";
+    std::cout << "Range Start........ " << p->rangeStart << "\n";
+    std::cout << "Range End.......... " << p->rangeEnd << "\n";
+
+    auto reserved = db.countRangesByStatus(p->id, RangeStatus::Reserved);
+    auto running = db.countRangesByStatus(p->id, RangeStatus::Running);
+    auto completed = db.countRangesByStatus(p->id, RangeStatus::Completed);
+    auto failed = db.countRangesByStatus(p->id, RangeStatus::Failed);
+
+    std::cout << "\n";
+    std::cout << "Ranges reserved.... " << reserved << "\n";
+    std::cout << "Ranges running..... " << running << "\n";
+    std::cout << "Ranges completed... " << completed << "\n";
+    std::cout << "Ranges failed...... " << failed << "\n";
+
+    return 0;
+  }
+
+  std::cerr << "Unknown puzzle command\n";
+  return 1;
 }
 int Application::cmdCreateJob(const std::vector<std::string> &a) {
   int n = getIntArg(a, "--puzzle", 71), bits = getIntArg(a, "--block-bits", 40);

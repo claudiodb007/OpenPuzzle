@@ -12,6 +12,7 @@ public:
   void close();
   bool createSchema();
   bool upsertPuzzle(const PuzzleRecord &puzzle);
+  bool updatePuzzleHash160(int number, const std::string &hash160);
   std::optional<PuzzleRecord> getPuzzleByNumber(int number);
   std::vector<PuzzleRecord> listPuzzles();
   int insertRange(const RangeRecord &range);
