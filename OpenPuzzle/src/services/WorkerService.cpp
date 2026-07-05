@@ -1,4 +1,5 @@
 #include "openpuzzle/services/WorkerService.hpp"
+#include "openpuzzle/services/ServiceUtils.hpp"
 #include "openpuzzle/database/Database.hpp"
 
 #include <iomanip>
@@ -9,18 +10,9 @@ namespace openpuzzle {
 
 WorkerService::WorkerService(Database& database) : database_(database) {}
 
-static std::string getArgLocal(const std::vector<std::string>& args,
-                               const std::string& name,
-                               const std::string& def = {}) {
-    for (size_t i = 0; i + 1 < args.size(); ++i) {
-        if (args[i] == name) {
-            return args[i + 1];
-        }
-    }
-    return def;
-}
 
 int WorkerService::execute(const std::vector<std::string>& args) {
+    using namespace openpuzzle::services;
     if (args.empty()) {
         std::cerr << "Usage: OpenPuzzle worker register|list|show|enable|disable|drain\n";
         return 1;
@@ -28,11 +20,11 @@ int WorkerService::execute(const std::vector<std::string>& args) {
 
     if (args[0] == "register") {
         WorkerRecord w;
-        w.machine = getArgLocal(args, "--machine", "local");
-        w.gpuName = getArgLocal(args, "--gpu", "unknown");
-        w.backend = getArgLocal(args, "--backend", "unknown");
-        w.engine = getArgLocal(args, "--engine", "bitcrack");
-        w.status = getArgLocal(args, "--status", "idle");
+        w.machine = getArg(args, "--machine", "local");
+        w.gpuName = getArg(args, "--gpu", "unknown");
+        w.backend = getArg(args, "--backend", "unknown");
+        w.engine = getArg(args, "--engine", "bitcrack");
+        w.status = getArg(args, "--status", "idle");
 
         int id = database_.upsertWorker(w);
 

@@ -1,4 +1,5 @@
 #include "openpuzzle/services/QueueService.hpp"
+#include "openpuzzle/services/ServiceUtils.hpp"
 #include "openpuzzle/allocator/RangeAllocator.hpp"
 #include "openpuzzle/database/Database.hpp"
 
@@ -10,45 +11,17 @@ namespace openpuzzle {
 
 QueueService::QueueService(Database& database) : database_(database) {}
 
-static int getIntArgLocal(const std::vector<std::string>& args,
-                          const std::string& name,
-                          int def) {
-    for (size_t i = 0; i + 1 < args.size(); ++i) {
-        if (args[i] == name) {
-            return std::stoi(args[i + 1]);
-        }
-    }
-    return def;
-}
-
-static std::string statusText(RangeStatus status) {
-    switch (status) {
-    case RangeStatus::Reserved:
-        return "RESERVED";
-    case RangeStatus::Running:
-        return "RUNNING";
-    case RangeStatus::Completed:
-        return "COMPLETED";
-    case RangeStatus::Failed:
-        return "FAILED";
-    case RangeStatus::Cancelled:
-        return "CANCELLED";
-    case RangeStatus::External:
-        return "EXTERNAL";
-    }
-
-    return "UNKNOWN";
-}
 
 int QueueService::execute(const std::vector<std::string>& args) {
+    using namespace openpuzzle::services;
     if (args.empty()) {
         std::cerr << "Usage: OpenPuzzle queue add|list|show\n";
         return 1;
     }
 
     if (args[0] == "add") {
-        int puzzleNumber = getIntArgLocal(args, "--puzzle", 71);
-        int blockBits = getIntArgLocal(args, "--block-bits", 40);
+        int puzzleNumber = getIntArg(args, "--puzzle", 71);
+        int blockBits = getIntArg(args, "--block-bits", 40);
 
         auto puzzle = database_.getPuzzleByNumber(puzzleNumber);
         if (!puzzle) {
@@ -79,7 +52,7 @@ int QueueService::execute(const std::vector<std::string>& args) {
     }
 
     if (args[0] == "list") {
-        int puzzleNumber = getIntArgLocal(args, "--puzzle", 71);
+        int puzzleNumber = getIntArg(args, "--puzzle", 71);
 
         auto puzzle = database_.getPuzzleByNumber(puzzleNumber);
         if (!puzzle) {
@@ -92,7 +65,7 @@ int QueueService::execute(const std::vector<std::string>& args) {
 
         for (auto& range : database_.listRanges(puzzle->id)) {
             std::cout << std::setw(3) << range.id << "  "
-                      << std::setw(10) << statusText(range.status) << "  "
+                      << std::setw(10) << rangeStatusToString(range.status) << "  "
                       << std::setw(34) << range.startKey << "  "
                       << range.endKey << "\n";
         }
@@ -114,7 +87,7 @@ int QueueService::execute(const std::vector<std::string>& args) {
 
         std::cout << "Range............... " << range->id << "\n";
         std::cout << "Puzzle ID........... " << range->puzzleId << "\n";
-        std::cout << "Status.............. " << statusText(range->status) << "\n";
+        std::cout << "Status.............. " << rangeStatusToString(range->status) << "\n";
         std::cout << "Start............... " << range->startKey << "\n";
         std::cout << "End................. " << range->endKey << "\n";
         std::cout << "Block bits.......... " << range->blockBits << "\n";

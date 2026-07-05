@@ -29,6 +29,7 @@ add_library(OpenPuzzleCore
     src/services/PuzzleService.cpp
     src/services/WorkerService.cpp
     src/services/QueueService.cpp
+    src/services/ServiceUtils.cpp
     src/database/Database.cpp
     src/models/KeySpace.cpp
     src/allocator/RangeAllocator.cpp
