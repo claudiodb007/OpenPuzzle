@@ -15,6 +15,7 @@
 #include "openpuzzle/performance/GpuProfileManager.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 #include "openpuzzle/services/PuzzleService.hpp"
+#include "openpuzzle/services/WorkerService.hpp"
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -408,104 +409,12 @@ int Application::cmdQueue(const std::vector<std::string> &a) {
 }
 
 int Application::cmdWorker(const std::vector<std::string> &a) {
-  if (a.empty()) {
-    std::cerr << "Usage: OpenPuzzle worker register|list|show\n";
-    return 1;
-  }
-
   Database db;
   if (!ensureDb(db))
     return 1;
 
-  if (a[0] == "register") {
-    WorkerRecord w;
-    w.machine = getArg(a, "--machine", "local");
-    w.gpuName = getArg(a, "--gpu", "unknown");
-    w.backend = getArg(a, "--backend", "unknown");
-    w.engine = getArg(a, "--engine", "bitcrack");
-    w.status = getArg(a, "--status", "idle");
-
-    int id = db.upsertWorker(w);
-
-    std::cout << "Worker registered\n";
-    std::cout << "Machine............ " << w.machine << "\n";
-    std::cout << "GPU................ " << w.gpuName << "\n";
-    std::cout << "Backend............ " << w.backend << "\n";
-    std::cout << "Engine............. " << w.engine << "\n";
-    std::cout << "Status............. " << w.status << "\n";
-
-    if (id > 0)
-      std::cout << "ID................. " << id << "\n";
-
-    return 0;
-  }
-
-  if (a[0] == "list") {
-    std::cout << "ID   MACHINE        GPU                    BACKEND   ENGINE      STATUS\n";
-    std::cout << "----------------------------------------------------------------------------\n";
-
-    for (auto &w : db.listWorkers()) {
-      std::cout << std::setw(3) << w.id << "  "
-                << std::setw(13) << w.machine << "  "
-                << std::setw(22) << w.gpuName << "  "
-                << std::setw(7) << w.backend << "  "
-                << std::setw(10) << w.engine << "  "
-                << w.status << "\n";
-    }
-
-    return 0;
-  }
-
-  if (a[0] == "show") {
-    if (a.size() < 2)
-      throw std::runtime_error("Missing worker id");
-
-    int id = std::stoi(a[1]);
-    auto w = db.getWorker(id);
-
-    if (!w)
-      throw std::runtime_error("Worker not found");
-
-    std::cout << "Worker............. " << w->id << "\n";
-    std::cout << "Machine............ " << w->machine << "\n";
-    std::cout << "GPU................ " << w->gpuName << "\n";
-    std::cout << "Backend............ " << w->backend << "\n";
-    std::cout << "Engine............. " << w->engine << "\n";
-    std::cout << "Status............. " << w->status << "\n";
-    std::cout << "Speed.............. " << w->speedMkeys << " MKey/s\n";
-    std::cout << "Temperature........ " << w->temperature << " C\n";
-    std::cout << "Power.............. " << w->power << " W\n";
-
-    return 0;
-  }
-
-  if (a[0] == "enable" || a[0] == "disable" || a[0] == "drain") {
-    if (a.size() < 2)
-      throw std::runtime_error("Missing worker id");
-
-    int id = std::stoi(a[1]);
-    auto w = db.getWorker(id);
-
-    if (!w)
-      throw std::runtime_error("Worker not found");
-
-    if (a[0] == "enable")
-      w->status = "idle";
-    else if (a[0] == "disable")
-      w->status = "disabled";
-    else
-      w->status = "draining";
-
-    db.upsertWorker(*w);
-
-    std::cout << "Worker............. " << w->id << "\n";
-    std::cout << "Status............. " << w->status << "\n";
-
-    return 0;
-  }
-
-  std::cerr << "Unknown worker command\n";
-  return 1;
+  WorkerService service(db);
+  return service.execute(a);
 }
 
 int Application::cmdPuzzle(const std::vector<std::string> &a) {
