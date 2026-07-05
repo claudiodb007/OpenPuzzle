@@ -1,103 +1,36 @@
 # OpenPuzzle
 
-**Measure everything. Assume nothing.**
+OpenPuzzle is an open-source orchestration platform for distributed cryptographic keyspace exploration.
 
-OpenPuzzle is a Linux-first research platform for managing Bitcoin Puzzle keyspace exploration.
+It is not a search engine. OpenPuzzle coordinates work and delegates execution to external engines such as BitCrack, KeyHunt, Kangaroo, VanitySearch or future plugins.
 
-It is not a solver. It coordinates ranges, jobs, executions, tools, GPU selection, statistics and future community sync.
+## Current Features
 
-## Current milestone: Foundation/Core
+- SQLite persistence
+- Bitcoin puzzle metadata synchronization
+- Puzzle CLI
+- Worker management
+- Worker maintenance states
+- Range allocation
+- Execution queue
+- Job and execution tracking
+- GPU profile management
+- Benchmark foundation
+- BitCrack output parsing
+- Recovery support
+- Architecture documentation
 
-This development build introduces the permanent execution model:
-
-```text
-Puzzle -> Range -> Job -> Execution -> Statistics
-```
-
-## Ubuntu dependencies
-
-```bash
-sudo apt update
-sudo apt install build-essential cmake libsqlite3-dev libboost-all-dev nvidia-utils
-```
-
-## Build
-
-```bash
-mkdir build
-cd build
-cmake ..
-cmake --build .
-```
-
-## Quick start
+## Core Commands
 
 ```bash
-./OpenPuzzle init
-./OpenPuzzle import-puzzle-json --file ../resources/puzzles/71.json
-./OpenPuzzle configure-tool --bitcrack /home/claudiodb/BitCrack/bin/cuBitCrack
-./OpenPuzzle gpu-list
-./OpenPuzzle gpu-select --device 0
-./OpenPuzzle create-job --puzzle 71 --block-bits 40
-./OpenPuzzle list-ranges --puzzle 71
-./OpenPuzzle start-job --puzzle 71 --job 1 --dry-run
-```
+OpenPuzzle sync-data --dir data
+OpenPuzzle puzzle list
+OpenPuzzle puzzle show 71
 
-Automatic community upload is intentionally disabled. For Puzzle 71, external ranges can be imported read-only, but local ranges are not shared automatically.
+OpenPuzzle worker register --machine escritorio --gpu "RTX 4070 Super" --backend cuda --engine bitcrack
+OpenPuzzle worker list
+OpenPuzzle worker drain 1
+OpenPuzzle worker enable 1
 
-
-## v0.11-dev commands
-
-```bash
-./OpenPuzzle dashboard --puzzle 71
-./OpenPuzzle start-job --puzzle 71 --job 1 --dry-run --simulate-progress
-```
-
-This build adds the first execution progress/audit foundation. Real-time BitCrack parsing is the next step.
-
-
-## GitHub-ready
-
-This package includes:
-
-- MIT license
-- `.gitignore`
-- GitHub Actions build workflow
-- smoke test script
-- initial architecture docs
-
-See:
-
-```text
-docs/GITHUB_SETUP.md
-docs/TESTING.md
-```
-
-
-## BitCrack parser test
-
-```bash
-./OpenPuzzle parse-bitcrack-line --line "[Info] 1334.62 MKey/s"
-./OpenPuzzle parse-bitcrack-line --line "[Info] Starting at: 0000000000000000000000000000000000000000000000400000000000000000"
-```
-
-
-## ExecutionManager test
-
-```bash
-./OpenPuzzle execution-test
-```
-
-
-## ExecutionSession test
-
-```bash
-./OpenPuzzle session-test
-```
-
-
-## EventBus test
-
-```bash
-./OpenPuzzle event-test
-```
+OpenPuzzle queue add --puzzle 71 --block-bits 40
+OpenPuzzle queue list --puzzle 71
