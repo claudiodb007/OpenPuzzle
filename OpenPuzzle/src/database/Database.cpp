@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY AUTOINCREMENT,puzzle_id I
 CREATE TABLE IF NOT EXISTS executions(id INTEGER PRIMARY KEY AUTOINCREMENT,job_id INTEGER NOT NULL,workspace TEXT NOT NULL,command TEXT NOT NULL,state TEXT NOT NULL,exit_code INTEGER,started_at TEXT DEFAULT CURRENT_TIMESTAMP,finished_at TEXT,FOREIGN KEY(job_id) REFERENCES jobs(id));
 CREATE TABLE IF NOT EXISTS statistics(id INTEGER PRIMARY KEY AUTOINCREMENT,execution_id INTEGER NOT NULL,timestamp TEXT DEFAULT CURRENT_TIMESTAMP,speed_mkeys REAL,temperature_c REAL,power_w REAL,FOREIGN KEY(execution_id) REFERENCES executions(id));
 CREATE TABLE IF NOT EXISTS external_ranges(id INTEGER PRIMARY KEY AUTOINCREMENT,puzzle_id INTEGER NOT NULL,start_key TEXT NOT NULL,end_key TEXT NOT NULL,source TEXT,confidence TEXT,notes TEXT,imported_at TEXT DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(puzzle_id) REFERENCES puzzles(id));
+CREATE TABLE IF NOT EXISTS workers(id INTEGER PRIMARY KEY AUTOINCREMENT,machine TEXT NOT NULL,gpu_name TEXT NOT NULL,backend TEXT NOT NULL,engine TEXT NOT NULL,status TEXT DEFAULT 'idle',speed_mkeys REAL DEFAULT 0,temperature_c REAL DEFAULT 0,power_w REAL DEFAULT 0,last_seen TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(machine,gpu_name,backend,engine));
 CREATE TABLE IF NOT EXISTS gpu_profiles(id INTEGER PRIMARY KEY AUTOINCREMENT,gpu_name TEXT NOT NULL,backend TEXT NOT NULL,engine TEXT NOT NULL,blocks INTEGER NOT NULL,threads INTEGER NOT NULL,points INTEGER NOT NULL,average_speed REAL NOT NULL,minimum_speed REAL DEFAULT 0,maximum_speed REAL DEFAULT 0,samples INTEGER DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(gpu_name,backend,engine));
 )SQL");
 
@@ -552,6 +553,98 @@ std::vector<GpuProfileRecord> Database::listGpuProfiles() {
   sqlite3_finalize(stmt);
 
   return profiles;
+}
+
+} // namespace openpuzzle
+
+namespace openpuzzle {
+
+int Database::upsertWorker(const WorkerRecord &w) {
+  const char *sql =
+      "INSERT INTO workers(machine,gpu_name,backend,engine,status,speed_mkeys,"
+      "temperature_c,power_w,last_seen) "
+      "VALUES(?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP) "
+      "ON CONFLICT(machine,gpu_name,backend,engine) DO UPDATE SET "
+      "status=excluded.status,"
+      "speed_mkeys=excluded.speed_mkeys,"
+      "temperature_c=excluded.temperature_c,"
+      "power_w=excluded.power_w,"
+      "last_seen=CURRENT_TIMESTAMP;";
+
+  sqlite3_stmt *s = nullptr;
+  sqlite3_prepare_v2(db_, sql, -1, &s, nullptr);
+
+  sqlite3_bind_text(s, 1, w.machine.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(s, 2, w.gpuName.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(s, 3, w.backend.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(s, 4, w.engine.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(s, 5, w.status.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_double(s, 6, w.speedMkeys);
+  sqlite3_bind_double(s, 7, w.temperature);
+  sqlite3_bind_double(s, 8, w.power);
+
+  bool ok = sqlite3_step(s) == SQLITE_DONE;
+  sqlite3_finalize(s);
+
+  return ok ? (int)sqlite3_last_insert_rowid(db_) : 0;
+}
+
+std::vector<WorkerRecord> Database::listWorkers() {
+  std::vector<WorkerRecord> out;
+
+  sqlite3_stmt *s = nullptr;
+  sqlite3_prepare_v2(
+      db_,
+      "SELECT id,machine,gpu_name,backend,engine,status,speed_mkeys,"
+      "temperature_c,power_w FROM workers ORDER BY id",
+      -1, &s, nullptr);
+
+  while (sqlite3_step(s) == SQLITE_ROW) {
+    WorkerRecord w;
+    w.id = sqlite3_column_int(s, 0);
+    w.machine = (const char *)sqlite3_column_text(s, 1);
+    w.gpuName = (const char *)sqlite3_column_text(s, 2);
+    w.backend = (const char *)sqlite3_column_text(s, 3);
+    w.engine = (const char *)sqlite3_column_text(s, 4);
+    w.status = (const char *)sqlite3_column_text(s, 5);
+    w.speedMkeys = sqlite3_column_double(s, 6);
+    w.temperature = sqlite3_column_double(s, 7);
+    w.power = sqlite3_column_double(s, 8);
+    out.push_back(w);
+  }
+
+  sqlite3_finalize(s);
+  return out;
+}
+
+std::optional<WorkerRecord> Database::getWorker(int workerId) {
+  sqlite3_stmt *s = nullptr;
+  sqlite3_prepare_v2(
+      db_,
+      "SELECT id,machine,gpu_name,backend,engine,status,speed_mkeys,"
+      "temperature_c,power_w FROM workers WHERE id=?",
+      -1, &s, nullptr);
+
+  sqlite3_bind_int(s, 1, workerId);
+
+  std::optional<WorkerRecord> out;
+
+  if (sqlite3_step(s) == SQLITE_ROW) {
+    WorkerRecord w;
+    w.id = sqlite3_column_int(s, 0);
+    w.machine = (const char *)sqlite3_column_text(s, 1);
+    w.gpuName = (const char *)sqlite3_column_text(s, 2);
+    w.backend = (const char *)sqlite3_column_text(s, 3);
+    w.engine = (const char *)sqlite3_column_text(s, 4);
+    w.status = (const char *)sqlite3_column_text(s, 5);
+    w.speedMkeys = sqlite3_column_double(s, 6);
+    w.temperature = sqlite3_column_double(s, 7);
+    w.power = sqlite3_column_double(s, 8);
+    out = w;
+  }
+
+  sqlite3_finalize(s);
+  return out;
 }
 
 } // namespace openpuzzle

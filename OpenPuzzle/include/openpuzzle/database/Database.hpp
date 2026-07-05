@@ -47,6 +47,10 @@ public:
   long long countRangesByStatus(int puzzleId, RangeStatus status);
   long long countJobsByState(int puzzleId, JobState state);
 
+  int upsertWorker(const WorkerRecord &worker);
+  std::vector<WorkerRecord> listWorkers();
+  std::optional<WorkerRecord> getWorker(int workerId);
+
 private:
   sqlite3 *db_ = nullptr;
   bool exec(const std::string &sql);

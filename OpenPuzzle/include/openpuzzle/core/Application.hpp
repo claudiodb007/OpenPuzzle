@@ -22,6 +22,7 @@ private:
   int cmdListPuzzles();
   int cmdSyncData(const std::vector<std::string> &);
   int cmdPuzzle(const std::vector<std::string> &);
+  int cmdWorker(const std::vector<std::string> &);
   int cmdCreateJob(const std::vector<std::string> &);
   int cmdListRanges(const std::vector<std::string> &);
   int cmdCompleteJob(const std::vector<std::string> &);

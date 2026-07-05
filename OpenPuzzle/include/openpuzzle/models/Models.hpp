@@ -62,4 +62,16 @@ struct GpuProfileRecord {
   int samples = 0;
 };
 
+struct WorkerRecord {
+  int id = 0;
+  std::string machine;
+  std::string gpuName;
+  std::string backend;
+  std::string engine;
+  std::string status = "idle";
+  double speedMkeys = 0.0;
+  double temperature = 0.0;
+  double power = 0.0;
+};
+
 } // namespace openpuzzle
