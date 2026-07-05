@@ -1,36 +1,71 @@
 # OpenPuzzle
 
-OpenPuzzle is an open-source orchestration platform for distributed cryptographic keyspace exploration.
+**OpenPuzzle** is an open-source orchestration platform for distributed cryptographic keyspace exploration.
 
-It is not a search engine. OpenPuzzle coordinates work and delegates execution to external engines such as BitCrack, KeyHunt, Kangaroo, VanitySearch or future plugins.
+OpenPuzzle is not a search engine. It coordinates workers, GPUs, ranges, jobs and external engines such as BitCrack, KeyHunt, Kangaroo and future plugins.
 
 ## Current Features
 
 - SQLite persistence
-- Bitcoin puzzle metadata synchronization
-- Puzzle CLI
+- Bitcoin Puzzle database (1–160)
+- Wallet, Range and Hash160 synchronization
 - Worker management
 - Worker maintenance states
-- Range allocation
 - Execution queue
-- Job and execution tracking
+- Automatic range allocation
 - GPU profile management
 - Benchmark foundation
-- BitCrack output parsing
 - Recovery support
 - Architecture documentation
 
-## Core Commands
+## Architecture
 
-```bash
-OpenPuzzle sync-data --dir data
-OpenPuzzle puzzle list
-OpenPuzzle puzzle show 71
+CLI
+  -> Services
+  -> Scheduler / Queue / Worker / Puzzle
+  -> Dispatcher
+  -> Engine Manager
+  -> External Engines
+  -> GPU / CPU
 
-OpenPuzzle worker register --machine escritorio --gpu "RTX 4070 Super" --backend cuda --engine bitcrack
-OpenPuzzle worker list
-OpenPuzzle worker drain 1
-OpenPuzzle worker enable 1
+Architecture documentation is available in:
 
-OpenPuzzle queue add --puzzle 71 --block-bits 40
-OpenPuzzle queue list --puzzle 71
+docs/architecture/
+
+## Roadmap
+
+- Dispatcher
+- Worker Agent
+- Heartbeats
+- Autonomous Scheduler
+- Console Dashboard
+- REST API
+- Multi-PC Cluster
+- Web Dashboard
+- Plugin Engine System
+
+## Build
+
+    ./scripts/build.sh
+
+## Tests
+
+    ./scripts/test.sh
+
+## Support OpenPuzzle
+
+If OpenPuzzle has been useful to you and would like to support its development, you can make a Bitcoin donation.
+
+Bitcoin (Bech32):
+
+bc1qs946xs860jpqd5jv8fcv3jzkpwwydmz44w25h6
+
+Thank you for supporting OpenPuzzle.
+
+## Contributing
+
+See CONTRIBUTING.md
+
+## License
+
+MIT License
