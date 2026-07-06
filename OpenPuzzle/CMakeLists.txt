@@ -20,11 +20,13 @@ add_library(OpenPuzzleCore
     src/core/Scheduler.cpp
     src/core/WorkspaceManager.cpp
     src/core/CommandContext.cpp
+    src/dispatcher/Dispatcher.cpp
     src/core/RecoveryManager.cpp
     src/core/Application.cpp
     src/core/commands/ApplicationTestCommands.cpp
     src/core/commands/ProfileCommand.cpp
     src/core/commands/BenchmarkCommand.cpp
+    src/core/commands/CommandRegistry.cpp
     src/core/commands/StartJobCommand.cpp
     src/services/PuzzleService.cpp
     src/services/WorkerService.cpp
@@ -33,6 +35,7 @@ add_library(OpenPuzzleCore
     src/services/BenchmarkService.cpp
     src/services/SchedulerService.cpp
     src/services/EngineService.cpp
+    src/services/DoctorService.cpp
     src/engines/bitcrack/BitCrackEngine.cpp
     src/engines/EngineManager.cpp
     src/engines/common/EngineRegistry.cpp

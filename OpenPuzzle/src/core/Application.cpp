@@ -19,6 +19,7 @@
 #include "openpuzzle/services/QueueService.hpp"
 #include "openpuzzle/services/BenchmarkService.hpp"
 #include "openpuzzle/services/EngineService.hpp"
+#include "openpuzzle/services/DoctorService.hpp"
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -143,6 +144,14 @@ int Application::run(int argc, char **argv) {
       return cmdAudit(r);
     if (cmd == "benchmark")
       return BenchmarkCommand().run(r);
+    if (cmd == "doctor") {
+      Database db;
+      if (!ensureDb(db))
+        return 1;
+
+      DoctorService service(db);
+      return service.execute(r);
+    }
     if (cmd == "engine") {
       Database db;
       if (!ensureDb(db))
