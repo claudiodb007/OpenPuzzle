@@ -30,6 +30,14 @@ add_library(OpenPuzzleCore
     src/services/WorkerService.cpp
     src/services/QueueService.cpp
     src/services/ServiceUtils.cpp
+    src/services/BenchmarkService.cpp
+    src/services/SchedulerService.cpp
+    src/services/EngineService.cpp
+    src/engines/bitcrack/BitCrackEngine.cpp
+    src/engines/EngineManager.cpp
+    src/engines/common/EngineRegistry.cpp
+    src/engines/common/EngineFactory.cpp
+    src/engines/common/EngineDiscovery.cpp
     src/database/Database.cpp
     src/models/KeySpace.cpp
     src/allocator/RangeAllocator.cpp

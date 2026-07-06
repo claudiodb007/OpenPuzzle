@@ -17,6 +17,8 @@
 #include "openpuzzle/services/PuzzleService.hpp"
 #include "openpuzzle/services/WorkerService.hpp"
 #include "openpuzzle/services/QueueService.hpp"
+#include "openpuzzle/services/BenchmarkService.hpp"
+#include "openpuzzle/services/EngineService.hpp"
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -141,6 +143,14 @@ int Application::run(int argc, char **argv) {
       return cmdAudit(r);
     if (cmd == "benchmark")
       return BenchmarkCommand().run(r);
+    if (cmd == "engine") {
+      Database db;
+      if (!ensureDb(db))
+        return 1;
+
+      EngineService service(db);
+      return service.execute(r);
+    }
     if (cmd == "profile")
       return ProfileCommand().run(r);
   } catch (const std::exception &e) {
