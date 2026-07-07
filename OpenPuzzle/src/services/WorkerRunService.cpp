@@ -1,6 +1,8 @@
+#include "openpuzzle/services/HeartbeatService.hpp"
 #include "openpuzzle/services/WorkerRunService.hpp"
 
 #include "openpuzzle/core/CommandContext.hpp"
+#include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/services/DispatchService.hpp"
 
 #include <chrono>
@@ -19,13 +21,28 @@ int WorkerRunService::run(bool dryRun, bool once) const {
 
     DispatchService dispatcher;
 
+    HeartbeatService heartbeat(context.db);
+
     std::cout << "OpenPuzzle Worker\n";
     std::cout << "=============================\n";
     std::cout << "Mode............... " << (once ? "once" : "daemon") << '\n';
     std::cout << "Dry run............ " << (dryRun ? "yes" : "no") << "\n\n";
 
     do {
+
         auto result = dispatcher.dispatch(context, dryRun);
+
+
+
+        heartbeat.update(
+            "escritorio",
+            GpuManager::currentGpu().name,
+            "CUDA",
+            "BitCrack",
+            "idle",
+            0.0,
+            0.0,
+            0.0);
 
         if (once)
             return result.success ? 0 : 1;
