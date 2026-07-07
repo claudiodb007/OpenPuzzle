@@ -20,6 +20,7 @@ add_library(OpenPuzzleCore
     src/core/Scheduler.cpp
     src/core/WorkspaceManager.cpp
     src/core/CommandContext.cpp
+    src/core/SignalHandler.cpp
     src/dispatcher/Dispatcher.cpp
     src/dispatcher/WorkerSelector.cpp
     src/dispatcher/ProfileSelector.cpp

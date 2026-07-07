@@ -2,6 +2,7 @@
 #include "openpuzzle/services/WorkerRunService.hpp"
 
 #include "openpuzzle/core/CommandContext.hpp"
+#include "openpuzzle/core/SignalHandler.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/services/DispatchService.hpp"
 
@@ -19,6 +20,9 @@ int WorkerRunService::run(bool dryRun, bool once) const {
         return 1;
     }
 
+    SignalHandler::reset();
+    SignalHandler::install();
+
     DispatchService dispatcher;
 
     HeartbeatService heartbeat(context.db);
@@ -28,7 +32,7 @@ int WorkerRunService::run(bool dryRun, bool once) const {
     std::cout << "Mode............... " << (once ? "once" : "daemon") << '\n';
     std::cout << "Dry run............ " << (dryRun ? "yes" : "no") << "\n\n";
 
-    do {
+    while (!SignalHandler::stopRequested()) {
 
         auto result = dispatcher.dispatch(context, dryRun);
 
@@ -54,7 +58,9 @@ int WorkerRunService::run(bool dryRun, bool once) const {
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    } while (true);
+    }
+
+    std::cout << "\nShutdown requested.\n";
 
     return 0;
 }
