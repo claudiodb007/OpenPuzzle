@@ -1,5 +1,6 @@
 #include "openpuzzle/services/WorkerService.hpp"
 #include "openpuzzle/services/ServiceUtils.hpp"
+
 #include "openpuzzle/database/Database.hpp"
 
 #include <iomanip>
@@ -8,9 +9,9 @@
 
 namespace openpuzzle {
 
-
 int WorkerService::execute(const std::vector<std::string>& args) {
     using namespace openpuzzle::services;
+
     if (args.empty()) {
         std::cerr << "Usage: OpenPuzzle worker register|list|show|enable|disable|drain\n";
         return 1;
