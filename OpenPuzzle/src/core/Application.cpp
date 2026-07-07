@@ -22,6 +22,7 @@
 #include "openpuzzle/services/BenchmarkService.hpp"
 #include "openpuzzle/services/EngineService.hpp"
 #include "openpuzzle/services/DoctorService.hpp"
+#include "openpuzzle/services/DashboardService.hpp"
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -140,8 +141,14 @@ int Application::run(int argc, char **argv) {
       return cmdResumeTest(r);
     if (cmd == "parse-bitcrack-line")
       return cmdParseBitCrackLine(r);
-    if (cmd == "dashboard")
-      return cmdDashboard(r);
+    if (cmd == "dashboard") {
+      Database db;
+      if (!ensureDb(db))
+        return 1;
+
+      DashboardService service(db);
+      return service.execute(r);
+    }
     if (cmd == "audit")
       return cmdAudit(r);
     if (cmd == "benchmark")
@@ -499,64 +506,6 @@ int Application::cmdBitcrackCommand(const std::vector<std::string> &a) {
 
   std::cout << scheduler.buildBitCrackCommand(*bc, *p, *r, dev, b, t, pt, out)
             << "\n";
-  return 0;
-}
-
-int Application::cmdDashboard(const std::vector<std::string> &args) {
-  int number = getIntArg(args, "--puzzle", 71);
-
-  Database db;
-  if (!ensureDb(db)) {
-    std::cerr << "Database error\n";
-    return 1;
-  }
-
-  auto puzzle = db.getPuzzleByNumber(number);
-  if (!puzzle) {
-    std::cerr << "Puzzle not found\n";
-    return 1;
-  }
-
-  std::cout << "======================================\n";
-  std::cout << "        OpenPuzzle Dashboard\n";
-  std::cout << "======================================\n\n";
-  std::cout << "Puzzle............... " << puzzle->name << "\n";
-  std::cout << "Address.............. " << puzzle->address << "\n";
-  std::cout << "Keyspace............. " << puzzle->rangeStart << ":"
-            << puzzle->rangeEnd << "\n\n";
-
-  std::cout << "Ranges RESERVED...... "
-            << db.countRangesByStatus(puzzle->id, RangeStatus::Reserved)
-            << "\n";
-  std::cout << "Ranges RUNNING....... "
-            << db.countRangesByStatus(puzzle->id, RangeStatus::Running) << "\n";
-  std::cout << "Ranges COMPLETED..... "
-            << db.countRangesByStatus(puzzle->id, RangeStatus::Completed)
-            << "\n";
-  std::cout << "Jobs RESERVED........ "
-            << db.countJobsByState(puzzle->id, JobState::Reserved) << "\n";
-  std::cout << "Jobs RUNNING......... "
-            << db.countJobsByState(puzzle->id, JobState::Running) << "\n";
-  std::cout << "Jobs COMPLETED....... "
-            << db.countJobsByState(puzzle->id, JobState::Completed) << "\n\n";
-
-  std::cout << "Recent ranges:\n";
-  auto ranges = db.listRanges(puzzle->id);
-  int shown = 0;
-  for (const auto &range : ranges) {
-    std::cout << "  #" << range.id << " " << range.startKey << ":"
-              << range.endKey << " " << st(range.status)
-              << " block_bits=" << range.blockBits << "\n";
-    if (++shown >= 10) {
-      break;
-    }
-  }
-
-  auto bitcrack = ToolManager::bitcrackPath();
-  std::cout << "\nBitCrack............. "
-            << (bitcrack ? *bitcrack : "(not configured)") << "\n";
-  std::cout << "Selected GPU......... " << GpuManager::selectedGpu() << "\n";
-
   return 0;
 }
 
