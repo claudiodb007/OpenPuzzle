@@ -1,8 +1,10 @@
 #include "openpuzzle/services/DispatchService.hpp"
+#include "openpuzzle/services/HeartbeatService.hpp"
 
 #include "openpuzzle/core/CommandContext.hpp"
 #include "openpuzzle/core/ExecutionManager.hpp"
 #include "openpuzzle/dispatcher/Dispatcher.hpp"
+#include "openpuzzle/hardware/GpuManager.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -47,6 +49,20 @@ DispatchServiceResult DispatchService::dispatch(CommandContext& context,
     std::cout << "Workspace.......... " << execution->workspace << "\n";
     std::cout << "Dry run............ " << (dryRun ? "yes" : "no") << "\n\n";
     std::cout << execution->command << "\n";
+
+    HeartbeatService heartbeat(context.db);
+
+    execution->onProgress = [&](const ExecutionResult& progress) {
+        heartbeat.update(
+            "escritorio",
+            GpuManager::currentGpu().name,
+            "CUDA",
+            "BitCrack",
+            "running",
+            progress.averageSpeed,
+            0.0,
+            0.0);
+    };
 
     ExecutionManager manager;
 

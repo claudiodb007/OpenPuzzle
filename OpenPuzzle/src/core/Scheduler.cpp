@@ -165,9 +165,15 @@ Scheduler::runExistingJob(Database &db, const JobRecord &job,
   db.updateJobState(job.id, JobState::Running);
   db.updateRangeStatus(range.id, RangeStatus::Running);
 
+  auto previousProgressHandler = context.onProgress;
+
   context.onProgress = [&](const ExecutionResult &progress) {
     if (!progress.keysChecked.empty()) {
       db.updateRangeKeysChecked(range.id, progress.keysChecked);
+    }
+
+    if (previousProgressHandler) {
+      previousProgressHandler(progress);
     }
   };
 
