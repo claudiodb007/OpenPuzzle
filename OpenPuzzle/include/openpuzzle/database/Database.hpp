@@ -14,6 +14,7 @@ public:
   bool upsertPuzzle(const PuzzleRecord &puzzle);
   bool updatePuzzleHash160(int number, const std::string &hash160);
   std::optional<PuzzleRecord> getPuzzleByNumber(int number);
+  std::optional<PuzzleRecord> getPuzzleById(int id);
   std::vector<PuzzleRecord> listPuzzles();
   int insertRange(const RangeRecord &range);
   std::vector<RangeRecord> listRanges(int puzzleId);
@@ -21,6 +22,7 @@ public:
   bool updateRangeStatus(int rangeId, RangeStatus status);
   int insertJob(const JobRecord &job);
   std::optional<JobRecord> getJob(int jobId);
+  std::optional<JobRecord> nextReservedJob();
   bool updateJobState(int jobId, JobState state);
   int insertExecution(int jobId, const std::string &workspace,
                       const std::string &command, const std::string &state);

@@ -21,11 +21,14 @@ add_library(OpenPuzzleCore
     src/core/WorkspaceManager.cpp
     src/core/CommandContext.cpp
     src/dispatcher/Dispatcher.cpp
+    src/dispatcher/WorkerSelector.cpp
+    src/dispatcher/ProfileSelector.cpp
     src/core/RecoveryManager.cpp
     src/core/Application.cpp
     src/core/commands/ApplicationTestCommands.cpp
     src/core/commands/ProfileCommand.cpp
     src/core/commands/BenchmarkCommand.cpp
+    src/core/commands/DispatchCommand.cpp
     src/core/commands/CommandRegistry.cpp
     src/core/commands/StartJobCommand.cpp
     src/services/PuzzleService.cpp

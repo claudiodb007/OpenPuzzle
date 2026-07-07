@@ -533,3 +533,31 @@ add_test(
     NAME GpuInfoTests
     COMMAND GpuInfoTests
 )
+
+add_executable(DispatcherTests
+    dispatcher/DispatcherTests.cpp
+)
+
+target_link_libraries(DispatcherTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME DispatcherTests
+    COMMAND DispatcherTests
+)
+
+add_executable(DispatcherExecutionTests
+    dispatcher/DispatcherExecutionTests.cpp
+)
+
+target_link_libraries(DispatcherExecutionTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME DispatcherExecutionTests
+    COMMAND DispatcherExecutionTests
+)

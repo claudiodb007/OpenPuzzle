@@ -140,6 +140,35 @@ std::optional<PuzzleRecord> Database::getPuzzleByNumber(int number) {
   sqlite3_finalize(s);
   return out;
 }
+
+std::optional<PuzzleRecord> Database::getPuzzleById(int id) {
+  const char *sql =
+      "SELECT id,number,name,address,COALESCE(hash160,''),range_start,range_end,"
+      "reward,COALESCE(solved,0),COALESCE(solved_key,''),"
+      "COALESCE(solved_address,''),sharing FROM puzzles WHERE id=?";
+  sqlite3_stmt *s = nullptr;
+  sqlite3_prepare_v2(db_, sql, -1, &s, nullptr);
+  sqlite3_bind_int(s, 1, id);
+  std::optional<PuzzleRecord> out;
+  if (sqlite3_step(s) == SQLITE_ROW) {
+    PuzzleRecord p;
+    p.id = sqlite3_column_int(s, 0);
+    p.number = sqlite3_column_int(s, 1);
+    p.name = (const char *)sqlite3_column_text(s, 2);
+    p.address = (const char *)sqlite3_column_text(s, 3);
+    p.hash160 = (const char *)sqlite3_column_text(s, 4);
+    p.rangeStart = (const char *)sqlite3_column_text(s, 5);
+    p.rangeEnd = (const char *)sqlite3_column_text(s, 6);
+    p.reward = sqlite3_column_double(s, 7);
+    p.solved = sqlite3_column_int(s, 8) != 0;
+    p.solvedKey = (const char *)sqlite3_column_text(s, 9);
+    p.solvedAddress = (const char *)sqlite3_column_text(s, 10);
+    p.sharing = (const char *)sqlite3_column_text(s, 11);
+    out = p;
+  }
+  sqlite3_finalize(s);
+  return out;
+}
 std::vector<PuzzleRecord> Database::listPuzzles() {
   std::vector<PuzzleRecord> v;
   sqlite3_stmt *s = nullptr;
@@ -281,6 +310,30 @@ std::optional<JobRecord> Database::getJob(int id) {
     j.state = (JobState)sqlite3_column_int(s, 3);
     out = j;
   }
+  sqlite3_finalize(s);
+  return out;
+}
+
+std::optional<JobRecord> Database::nextReservedJob() {
+  sqlite3_stmt *s = nullptr;
+  sqlite3_prepare_v2(
+      db_,
+      "SELECT id,puzzle_id,range_id,state FROM jobs WHERE state=? ORDER BY id LIMIT 1",
+      -1, &s, nullptr);
+
+  sqlite3_bind_int(s, 1, (int)JobState::Reserved);
+
+  std::optional<JobRecord> out;
+
+  if (sqlite3_step(s) == SQLITE_ROW) {
+    JobRecord j;
+    j.id = sqlite3_column_int(s, 0);
+    j.puzzleId = sqlite3_column_int(s, 1);
+    j.rangeId = sqlite3_column_int(s, 2);
+    j.state = (JobState)sqlite3_column_int(s, 3);
+    out = j;
+  }
+
   sqlite3_finalize(s);
   return out;
 }

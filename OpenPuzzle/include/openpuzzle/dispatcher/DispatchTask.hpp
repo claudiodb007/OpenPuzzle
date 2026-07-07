@@ -1,5 +1,7 @@
 #pragma once
 
+#include "openpuzzle/models/Models.hpp"
+
 #include <string>
 
 namespace openpuzzle {
@@ -15,6 +17,9 @@ struct DispatchTask {
 
     std::string rangeStart;
     std::string rangeEnd;
+
+    bool hasProfile = false;
+    GpuProfileRecord profile;
 
     bool valid = false;
 };
