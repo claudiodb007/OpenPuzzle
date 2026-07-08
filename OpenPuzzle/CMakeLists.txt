@@ -16,6 +16,7 @@ add_library(OpenPuzzleCore
     src/runtime/ExecutionLauncher.cpp
     src/runtime/Execution.cpp
     src/runtime/ExecutionRepository.cpp
+    src/runtime/ExecutionMonitor.cpp
     src/workers/Worker.cpp
     src/workers/WorkerRegistry.cpp
     src/core/ProcessRunner.cpp
@@ -67,6 +68,7 @@ add_library(OpenPuzzleCore
     src/tools/ToolManager.cpp
     src/hardware/GpuManager.cpp
     src/adapters/bitcrack/BitCrackOutputParser.cpp
+    src/adapters/bitcrack/BitCrackProgressParser.cpp
     src/performance/AutoTuner.cpp
 src/performance/BenchmarkRunner.cpp
     src/performance/GpuProfileManager.cpp

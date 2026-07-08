@@ -2,6 +2,7 @@
 
 #include "openpuzzle/core/ExecutionResult.hpp"
 #include "openpuzzle/runtime/ExecutionState.hpp"
+#include "openpuzzle/runtime/ExecutionProgress.hpp"
 
 namespace openpuzzle {
 
@@ -13,6 +14,7 @@ public:
   ExecutionState& state();
 
   void start();
+  void updateProgress(const ExecutionProgress& progress);
   void finish(const ExecutionResult& result);
   void fail(const ExecutionResult& result);
   void stop();

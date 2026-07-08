@@ -17,6 +17,23 @@ void Execution::start() {
   state_.status = RuntimeExecutionStatus::Running;
 }
 
+
+void Execution::updateProgress(const ExecutionProgress& progress) {
+  if (progress.speedMKeys > 0.0) {
+    state_.currentSpeed = progress.speedMKeys;
+    state_.averageSpeed = progress.speedMKeys;
+  }
+
+  if (!progress.keysChecked.empty()) {
+    state_.keysChecked = progress.keysChecked;
+  }
+
+  if (progress.keyFound) {
+    state_.keyFound = true;
+    state_.privateKey = progress.privateKey;
+  }
+}
+
 void Execution::finish(const ExecutionResult& result) {
   state_.status = RuntimeExecutionStatus::Finished;
   state_.averageSpeed = result.averageSpeed;
