@@ -342,6 +342,21 @@ add_test(
 )
 
 
+add_executable(BitCrackEngineCommandTests
+    engines/BitCrackEngineCommandTests.cpp
+)
+
+target_link_libraries(BitCrackEngineCommandTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME BitCrackEngineCommandTests
+    COMMAND BitCrackEngineCommandTests
+)
+
+
 add_executable(SchedulerStartJobTests
     core/SchedulerStartJobTests.cpp
 )
