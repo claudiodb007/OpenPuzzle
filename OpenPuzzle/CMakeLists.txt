@@ -9,6 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(SQLite3 REQUIRED)
 
 add_library(OpenPuzzleCore
+    src/config/ConfigurationManager.cpp
     src/core/ProcessRunner.cpp
     src/core/PosixProcessRunner.cpp
     src/core/ProcessRunnerFactory.cpp
