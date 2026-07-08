@@ -16,6 +16,7 @@ add_library(OpenPuzzleCore
     src/runtime/ExecutionLauncher.cpp
     src/runtime/Execution.cpp
     src/runtime/ExecutionRepository.cpp
+    src/runtime/ExecutionPersistence.cpp
     src/runtime/ExecutionMonitor.cpp
     src/workers/Worker.cpp
     src/workers/WorkerRegistry.cpp
@@ -49,6 +50,7 @@ add_library(OpenPuzzleCore
     src/services/BenchmarkService.cpp
     src/services/SchedulerService.cpp
     src/services/EngineService.cpp
+    src/services/ExecutionService.cpp
     src/services/DoctorService.cpp
     src/services/DashboardService.cpp
     src/services/DispatchService.cpp

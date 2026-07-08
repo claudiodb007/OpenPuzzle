@@ -21,6 +21,7 @@
 #include "openpuzzle/services/QueueService.hpp"
 #include "openpuzzle/services/BenchmarkService.hpp"
 #include "openpuzzle/services/EngineService.hpp"
+#include "openpuzzle/services/ExecutionService.hpp"
 #include "openpuzzle/services/DoctorService.hpp"
 #include "openpuzzle/services/DashboardService.hpp"
 #include <cstdlib>
@@ -174,6 +175,15 @@ int Application::run(int argc, char **argv) {
         return 1;
 
       EngineService service(db);
+      return service.execute(r);
+    }
+
+    if (cmd == "execution") {
+      Database db;
+      if (!ensureDb(db))
+        return 1;
+
+      ExecutionService service(db);
       return service.execute(r);
     }
     if (cmd == "profile")
