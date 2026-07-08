@@ -17,24 +17,29 @@ ExecutionResult RuntimeManager::run(const ExecutionContext& context,
   state.command = context.command;
   state.status = RuntimeExecutionStatus::Running;
 
-  activeExecutions_.push_back(state);
+  registry_.add(state);
 
   auto result = executionManager_.run(context, maxSeconds, maxSamples);
 
-  activeExecutions_.back().status =
-      result.success ? RuntimeExecutionStatus::Finished
-                     : RuntimeExecutionStatus::Failed;
-  activeExecutions_.back().averageSpeed = result.averageSpeed;
-  activeExecutions_.back().keysChecked = result.keysChecked;
-  activeExecutions_.back().keyFound = result.keyFound;
-  activeExecutions_.back().privateKey = result.privateKey;
-  activeExecutions_.back().exitCode = result.exitCode;
+  state.status = result.success ? RuntimeExecutionStatus::Finished
+                                : RuntimeExecutionStatus::Failed;
+  state.averageSpeed = result.averageSpeed;
+  state.keysChecked = result.keysChecked;
+  state.keyFound = result.keyFound;
+  state.privateKey = result.privateKey;
+  state.exitCode = result.exitCode;
+
+  registry_.update(state);
 
   return result;
 }
 
-const std::vector<ExecutionState>& RuntimeManager::activeExecutions() const {
-  return activeExecutions_;
+std::vector<ExecutionState> RuntimeManager::activeExecutions() const {
+  return registry_.active();
+}
+
+const ExecutionRegistry& RuntimeManager::registry() const {
+  return registry_;
 }
 
 } // namespace openpuzzle

@@ -3,6 +3,7 @@
 #include "openpuzzle/core/ExecutionContext.hpp"
 #include "openpuzzle/core/ExecutionManager.hpp"
 #include "openpuzzle/core/ExecutionResult.hpp"
+#include "openpuzzle/runtime/ExecutionRegistry.hpp"
 #include "openpuzzle/runtime/ExecutionState.hpp"
 
 #include <vector>
@@ -17,11 +18,12 @@ public:
                       int maxSeconds = 0,
                       int maxSamples = 0);
 
-  const std::vector<ExecutionState>& activeExecutions() const;
+  std::vector<ExecutionState> activeExecutions() const;
+  const ExecutionRegistry& registry() const;
 
 private:
   ExecutionManager executionManager_;
-  std::vector<ExecutionState> activeExecutions_;
+  ExecutionRegistry registry_;
 };
 
 } // namespace openpuzzle
