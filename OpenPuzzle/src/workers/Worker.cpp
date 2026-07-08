@@ -41,4 +41,17 @@ bool Worker::isOffline() const {
   return state_.status == WorkerStatus::Offline;
 }
 
+
+bool Worker::supportsCuda() const {
+  return state_.capabilities.cuda;
+}
+
+bool Worker::supportsOpenCL() const {
+  return state_.capabilities.opencl;
+}
+
+bool Worker::supportsCpu() const {
+  return state_.capabilities.cpu;
+}
+
 } // namespace openpuzzle

@@ -20,6 +20,11 @@ public:
   bool isBusy() const;
   bool isOffline() const;
 
+  bool supportsCuda() const;
+  bool supportsOpenCL() const;
+  bool supportsCpu() const;
+
+
 private:
   WorkerState state_;
 };

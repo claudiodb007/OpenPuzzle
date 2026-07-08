@@ -1,5 +1,7 @@
 #pragma once
 
+#include "openpuzzle/workers/WorkerCapabilities.hpp"
+
 #include <string>
 
 namespace openpuzzle {
@@ -21,6 +23,9 @@ struct WorkerState {
 
   std::string engine;
   std::string backend;
+
+  WorkerCapabilities capabilities;
+
 
   int gpuDevice = 0;
 
