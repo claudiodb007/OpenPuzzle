@@ -1,5 +1,7 @@
 #pragma once
 
+#include "openpuzzle/engines/EngineLaunchRequest.hpp"
+
 #include <memory>
 #include <string>
 
@@ -20,6 +22,8 @@ public:
     virtual EngineInfo info() const = 0;
 
     virtual bool prepare() = 0;
+
+    virtual std::string buildCommand(const EngineLaunchRequest& request) const = 0;
 
     virtual bool launch() = 0;
 

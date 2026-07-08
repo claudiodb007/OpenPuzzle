@@ -1,5 +1,8 @@
 #include "openpuzzle/core/Scheduler.hpp"
 
+#include "openpuzzle/engines/EngineManager.hpp"
+#include "openpuzzle/engines/EngineLaunchRequest.hpp"
+
 #include <cstdlib>
 #include <filesystem>
 #include <iomanip>
@@ -124,12 +127,34 @@ SchedulerResult Scheduler::startJob(Database &db, int puzzleNumber, int jobId,
   auto outputFile = (std::filesystem::path(workspace) / "found.txt").string();
   auto logFile = (std::filesystem::path(workspace) / "bitcrack.log").string();
 
-  auto command = buildBitCrackCommand(bitcrackPath, *puzzle, *range, device,
-                                      blocks, threads, points, outputFile) +
-                 " 2>&1 | tee -a " + logFile;
+  EngineLaunchRequest request;
+  request.puzzle = *puzzle;
+  request.range = *range;
+  request.device = device;
+  request.blocks = blocks;
+  request.threads = threads;
+  request.points = points;
+  request.workspace = workspace;
+  request.outputFile = outputFile;
+  request.logFile = logFile;
+
+  EngineManager engineManager;
+  auto engine = engineManager.create("bitcrack", bitcrackPath);
+
+  if (!engine) {
+    SchedulerResult result;
+    result.success = false;
+    result.jobId = jobId;
+    result.rangeId = range->id;
+    result.exitCode = -1;
+    return result;
+  }
+
+  auto command = engine->buildCommand(request);
 
   auto context = buildExecutionContext(0, puzzle->id, job->id, range->id,
-                                       "BitCrack", workspace, command, true);
+                                       engine->info().name, workspace, command,
+                                       true);
 
   ExecutionManager executionManager;
   return runExistingJob(db, *job, *range, context, executionManager, dryRun);

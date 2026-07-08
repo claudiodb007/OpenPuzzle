@@ -1,5 +1,7 @@
 #include "openpuzzle/engines/bitcrack/BitCrackEngine.hpp"
 
+#include <sstream>
+
 namespace openpuzzle {
 
 BitCrackEngine::BitCrackEngine(std::string executable)
@@ -17,6 +19,32 @@ EngineInfo BitCrackEngine::info() const {
 
 bool BitCrackEngine::prepare() {
     return true;
+}
+
+
+std::string BitCrackEngine::buildCommand(const EngineLaunchRequest& request) const {
+    std::ostringstream command;
+
+    command << executable_ << " "
+            << request.puzzle.address
+            << " --keyspace "
+            << request.range.startKey
+            << ":"
+            << request.range.endKey
+            << " --out "
+            << request.outputFile
+            << " -d "
+            << request.device
+            << " -b "
+            << request.blocks
+            << " -t "
+            << request.threads
+            << " -p "
+            << request.points
+            << " 2>&1 | tee -a "
+            << request.logFile;
+
+    return command.str();
 }
 
 bool BitCrackEngine::launch() {
