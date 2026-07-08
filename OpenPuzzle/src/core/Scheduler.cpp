@@ -2,6 +2,7 @@
 
 #include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/engines/EngineLaunchRequest.hpp"
+#include "openpuzzle/runtime/ExecutionRepository.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -170,9 +171,11 @@ Scheduler::runExistingJob(Database &db, const JobRecord &job,
   schedulerResult.jobId = job.id;
   schedulerResult.rangeId = range.id;
 
+  ExecutionRepository executionRepository(db);
+
   int executionId =
-      db.insertExecution(job.id, context.workspace, context.command,
-                         dryRun ? "dry-run" : "running");
+      executionRepository.create(job.id, context.workspace, context.command,
+                                 dryRun ? "dry-run" : "running");
 
   if (executionId <= 0) {
     schedulerResult.success = false;
@@ -209,9 +212,24 @@ Scheduler::runExistingJob(Database &db, const JobRecord &job,
     db.updateRangeKeysChecked(range.id, executionResult.keysChecked);
   }
 
-  db.finishExecution(executionId,
-                     executionResult.success ? "finished" : "failed",
-                     executionResult.exitCode);
+  ExecutionState executionState;
+  executionState.executionId = executionId;
+  executionState.jobId = job.id;
+  executionState.rangeId = range.id;
+  executionState.workspace = context.workspace;
+  executionState.command = context.command;
+  executionState.engine = context.engine;
+  executionState.exitCode = executionResult.exitCode;
+
+  Execution execution(executionState);
+
+  if (executionResult.success) {
+    execution.finish(executionResult);
+  } else {
+    execution.fail(executionResult);
+  }
+
+  executionRepository.finish(execution);
 
   if (executionResult.success) {
     db.updateJobState(job.id, JobState::Completed);
