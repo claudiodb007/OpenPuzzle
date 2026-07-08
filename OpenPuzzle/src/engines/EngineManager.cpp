@@ -1,6 +1,7 @@
 #include "openpuzzle/engines/EngineManager.hpp"
 
 #include "openpuzzle/engines/bitcrack/BitCrackEngine.hpp"
+#include "openpuzzle/engines/keyhunt/KeyHuntEngine.hpp"
 #include "openpuzzle/engines/common/EngineDiscovery.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 
@@ -30,6 +31,30 @@ EngineManager::EngineManager() {
 
     factory_.registerFactory("bitcrack", [](const std::string& executable) {
         return std::make_unique<BitCrackEngine>(executable);
+    });
+
+
+    EngineDescriptor keyhunt;
+    keyhunt.id = "keyhunt";
+    keyhunt.name = "KeyHunt";
+    keyhunt.version = "unknown";
+    keyhunt.backend = "CPU";
+
+    keyhunt.runtime = discovery.discover("keyhunt");
+
+    keyhunt.capabilities.cpu = true;
+    keyhunt.capabilities.cuda = false;
+    keyhunt.capabilities.opencl = false;
+    keyhunt.capabilities.supportsCompressed = true;
+    keyhunt.capabilities.supportsUncompressed = true;
+    keyhunt.capabilities.supportsResume = false;
+    keyhunt.capabilities.supportsCheckpoint = false;
+    keyhunt.capabilities.supportsBenchmark = false;
+
+    registry_.registerEngine(keyhunt);
+
+    factory_.registerFactory("keyhunt", [](const std::string& executable) {
+        return std::make_unique<KeyHuntEngine>(executable);
     });
 }
 

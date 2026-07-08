@@ -46,6 +46,7 @@ add_library(OpenPuzzleCore
     src/services/WorkerRunService.cpp
     src/services/HeartbeatService.cpp
     src/engines/bitcrack/BitCrackEngine.cpp
+    src/engines/keyhunt/KeyHuntEngine.cpp
     src/engines/EngineManager.cpp
     src/engines/EngineMonitor.cpp
     src/engines/common/EngineRegistry.cpp
