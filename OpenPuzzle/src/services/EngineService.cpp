@@ -16,15 +16,16 @@ int EngineService::execute(const std::vector<std::string>& args) {
     if (args[0] == "list") {
         EngineManager manager;
 
-        std::cout << "ID          NAME        BACKEND      INSTALLED\n";
-        std::cout << "------------------------------------------------\n";
+        std::cout << "ID          NAME        BACKEND       INSTALLED   EXECUTABLE\n";
+        std::cout << "--------------------------------------------------------------------------\n";
 
         for (const auto& engine : manager.registry().engines()) {
             std::cout << std::left
-                      << std::setw(11) << engine.id
+                      << std::setw(12) << engine.id
                       << std::setw(12) << engine.name
-                      << std::setw(13) << engine.backend
-                      << (engine.runtime.installed ? "yes" : "no")
+                      << std::setw(14) << engine.backend
+                      << std::setw(12) << (engine.runtime.installed ? "yes" : "no")
+                      << (engine.runtime.executable.empty() ? "-" : engine.runtime.executable)
                       << "\n";
         }
 
