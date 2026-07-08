@@ -14,6 +14,7 @@ add_library(OpenPuzzleCore
     src/runtime/RuntimeManager.cpp
     src/runtime/ExecutionRegistry.cpp
     src/runtime/ExecutionLauncher.cpp
+    src/runtime/Execution.cpp
     src/core/ProcessRunner.cpp
     src/core/PosixProcessRunner.cpp
     src/core/ProcessRunnerFactory.cpp

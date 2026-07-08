@@ -3,13 +3,13 @@
 namespace openpuzzle {
 
 void ExecutionRegistry::add(const ExecutionState& state) {
-  executions_.push_back(state);
+  executions_.emplace_back(state);
 }
 
 std::optional<ExecutionState> ExecutionRegistry::find(int executionId) const {
   for (const auto& execution : executions_) {
-    if (execution.executionId == executionId) {
-      return execution;
+    if (execution.state().executionId == executionId) {
+      return execution.state();
     }
   }
 
@@ -17,16 +17,21 @@ std::optional<ExecutionState> ExecutionRegistry::find(int executionId) const {
 }
 
 std::vector<ExecutionState> ExecutionRegistry::all() const {
-  return executions_;
+  std::vector<ExecutionState> result;
+
+  for (const auto& execution : executions_) {
+    result.push_back(execution.state());
+  }
+
+  return result;
 }
 
 std::vector<ExecutionState> ExecutionRegistry::active() const {
   std::vector<ExecutionState> result;
 
   for (const auto& execution : executions_) {
-    if (execution.status == RuntimeExecutionStatus::Pending ||
-        execution.status == RuntimeExecutionStatus::Running) {
-      result.push_back(execution);
+    if (execution.isPending() || execution.isRunning()) {
+      result.push_back(execution.state());
     }
   }
 
@@ -37,8 +42,8 @@ std::vector<ExecutionState> ExecutionRegistry::finished() const {
   std::vector<ExecutionState> result;
 
   for (const auto& execution : executions_) {
-    if (execution.status == RuntimeExecutionStatus::Finished) {
-      result.push_back(execution);
+    if (execution.isFinished()) {
+      result.push_back(execution.state());
     }
   }
 
@@ -49,8 +54,8 @@ std::vector<ExecutionState> ExecutionRegistry::failed() const {
   std::vector<ExecutionState> result;
 
   for (const auto& execution : executions_) {
-    if (execution.status == RuntimeExecutionStatus::Failed) {
-      result.push_back(execution);
+    if (execution.isFailed()) {
+      result.push_back(execution.state());
     }
   }
 
@@ -59,8 +64,8 @@ std::vector<ExecutionState> ExecutionRegistry::failed() const {
 
 bool ExecutionRegistry::update(const ExecutionState& state) {
   for (auto& execution : executions_) {
-    if (execution.executionId == state.executionId) {
-      execution = state;
+    if (execution.state().executionId == state.executionId) {
+      execution.state() = state;
       return true;
     }
   }

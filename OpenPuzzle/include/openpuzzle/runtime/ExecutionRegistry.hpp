@@ -1,5 +1,6 @@
 #pragma once
 
+#include "openpuzzle/runtime/Execution.hpp"
 #include "openpuzzle/runtime/ExecutionState.hpp"
 
 #include <optional>
@@ -24,7 +25,7 @@ public:
   void clear();
 
 private:
-  std::vector<ExecutionState> executions_;
+  std::vector<Execution> executions_;
 };
 
 } // namespace openpuzzle
