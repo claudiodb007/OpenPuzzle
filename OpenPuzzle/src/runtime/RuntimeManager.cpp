@@ -1,5 +1,7 @@
 #include "openpuzzle/runtime/RuntimeManager.hpp"
 
+#include "openpuzzle/runtime/StartExecutionRequest.hpp"
+
 namespace openpuzzle {
 
 RuntimeManager::RuntimeManager() = default;
@@ -19,7 +21,17 @@ ExecutionResult RuntimeManager::run(const ExecutionContext& context,
 
   registry_.add(state);
 
-  auto result = executionManager_.run(context, maxSeconds, maxSamples);
+  StartExecutionRequest request;
+  request.executionId = context.executionId;
+  request.puzzleId = context.puzzleId;
+  request.jobId = context.jobId;
+  request.rangeId = context.rangeId;
+  request.engine = context.engine;
+  request.workspace = context.workspace;
+  request.command = context.command;
+  request.echoOutput = context.echoOutput;
+
+  auto result = launcher_.launch(request, maxSeconds, maxSamples);
 
   state.status = result.success ? RuntimeExecutionStatus::Finished
                                 : RuntimeExecutionStatus::Failed;

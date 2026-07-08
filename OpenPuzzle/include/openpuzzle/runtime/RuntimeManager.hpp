@@ -4,6 +4,7 @@
 #include "openpuzzle/core/ExecutionManager.hpp"
 #include "openpuzzle/core/ExecutionResult.hpp"
 #include "openpuzzle/runtime/ExecutionRegistry.hpp"
+#include "openpuzzle/runtime/ExecutionLauncher.hpp"
 #include "openpuzzle/runtime/ExecutionState.hpp"
 
 #include <vector>
@@ -22,7 +23,7 @@ public:
   const ExecutionRegistry& registry() const;
 
 private:
-  ExecutionManager executionManager_;
+  ExecutionLauncher launcher_;
   ExecutionRegistry registry_;
 };
 
