@@ -1,6 +1,7 @@
 #include "openpuzzle/runtime/RuntimeManager.hpp"
 
 #include "openpuzzle/runtime/StartExecutionRequest.hpp"
+#include "openpuzzle/runtime/Execution.hpp"
 
 namespace openpuzzle {
 
@@ -19,7 +20,10 @@ ExecutionResult RuntimeManager::run(const ExecutionContext& context,
   state.command = context.command;
   state.status = RuntimeExecutionStatus::Running;
 
-  registry_.add(state);
+  Execution execution(state);
+  execution.start();
+
+  registry_.add(execution.state());
 
   StartExecutionRequest request;
   request.executionId = context.executionId;
@@ -33,15 +37,13 @@ ExecutionResult RuntimeManager::run(const ExecutionContext& context,
 
   auto result = launcher_.launch(request, maxSeconds, maxSamples);
 
-  state.status = result.success ? RuntimeExecutionStatus::Finished
-                                : RuntimeExecutionStatus::Failed;
-  state.averageSpeed = result.averageSpeed;
-  state.keysChecked = result.keysChecked;
-  state.keyFound = result.keyFound;
-  state.privateKey = result.privateKey;
-  state.exitCode = result.exitCode;
+  if (result.success) {
+    execution.finish(result);
+  } else {
+    execution.fail(result);
+  }
 
-  registry_.update(state);
+  registry_.update(execution.state());
 
   return result;
 }
