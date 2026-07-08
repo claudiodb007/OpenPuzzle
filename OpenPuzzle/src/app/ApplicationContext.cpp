@@ -23,6 +23,10 @@ EngineManager& ApplicationContext::engineManager() {
   return engineManager_;
 }
 
+RuntimeManager& ApplicationContext::runtimeManager() {
+  return runtimeManager_;
+}
+
 EventBus& ApplicationContext::eventBus() {
   return eventBus_;
 }

@@ -4,6 +4,7 @@
 #include "openpuzzle/core/EventBus.hpp"
 #include "openpuzzle/core/Scheduler.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
+#include "openpuzzle/runtime/RuntimeManager.hpp"
 
 namespace openpuzzle {
 
@@ -16,12 +17,14 @@ public:
 
   Scheduler& scheduler();
   EngineManager& engineManager();
+  RuntimeManager& runtimeManager();
   EventBus& eventBus();
 
 private:
   Configuration configuration_;
   Scheduler scheduler_;
   EngineManager engineManager_;
+  RuntimeManager runtimeManager_;
   EventBus eventBus_;
 };
 
