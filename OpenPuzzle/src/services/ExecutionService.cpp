@@ -1,5 +1,9 @@
 #include "openpuzzle/services/ExecutionService.hpp"
 
+#include "openpuzzle/core/ExecutionRecord.hpp"
+#include "openpuzzle/database/Database.hpp"
+
+#include <iomanip>
 #include <iostream>
 
 namespace openpuzzle {
@@ -11,9 +15,27 @@ int ExecutionService::execute(const std::vector<std::string>& args) {
   }
 
   if (args[0] == "list") {
-    std::cout << "ID   JOB   RANGE   ENGINE   STATUS\n";
-    std::cout << "-----------------------------------\n";
-    std::cout << "(no runtime executions loaded)\n";
+    auto executions = database_.listExecutions();
+
+    std::cout << "ID   JOB   PUZZLE   RANGE   STATUS\n";
+    std::cout << "-------------------------------------------\n";
+
+    if (executions.empty()) {
+      std::cout << "(no executions)\n";
+      return 0;
+    }
+
+    for (const auto& execution : executions) {
+      std::cout
+          << std::left
+          << std::setw(5) << execution.executionId
+          << std::setw(6) << execution.jobId
+          << std::setw(8) << execution.puzzleId
+          << std::setw(8) << execution.rangeId
+          << ExecutionRecord::statusToString(execution.status)
+          << "\n";
+    }
+
     return 0;
   }
 

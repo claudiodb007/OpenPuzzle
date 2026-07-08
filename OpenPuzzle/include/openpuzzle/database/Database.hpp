@@ -1,5 +1,6 @@
 #pragma once
 #include "openpuzzle/models/Models.hpp"
+#include "openpuzzle/core/ExecutionRecord.hpp"
 #include <optional>
 #include <sqlite3.h>
 #include <string>
@@ -27,6 +28,7 @@ public:
   int insertExecution(int jobId, const std::string &workspace,
                       const std::string &command, const std::string &state);
   bool finishExecution(int executionId, const std::string &state, int exitCode);
+  std::vector<ExecutionRecord> listExecutions();
   int insertStatistic(int executionId, double speedMkeys, double temperature,
                       double power);
   int insertProgress(int executionId, const std::string &currentKey,
