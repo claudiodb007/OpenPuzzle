@@ -8,7 +8,6 @@
 #include "openpuzzle/tools/ToolManager.hpp"
 
 #include <cstdlib>
-#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -127,14 +126,12 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
   std::string executable = *bitcrack;
 
   if (backend == "opencl") {
-    std::filesystem::path cudaPath(*bitcrack);
-    auto openclPath = cudaPath.parent_path() / "clBitCrack";
+    auto opencl = ToolManager::bitcrackOpenCLPath();
 
-    if (std::filesystem::exists(openclPath)) {
-      executable = openclPath.string();
-    } else {
-      executable = "clBitCrack";
-    }
+    if (!opencl)
+      throw std::runtime_error("BitCrack OpenCL executable not configured");
+
+    executable = *opencl;
   }
 
   auto result = scheduler.startJob(db, puzzle, job, engine, executable, device,
