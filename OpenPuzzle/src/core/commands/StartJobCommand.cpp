@@ -8,6 +8,7 @@
 #include "openpuzzle/tools/ToolManager.hpp"
 
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -62,6 +63,7 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
   int device = getIntArg(args, "--device", getIntArg(args, "--d", context.gpu));
 
   std::string engine = getStringArg(args, "--engine", "bitcrack");
+  std::string backend = getStringArg(args, "--backend", "cuda");
 
   bool dryRun = hasArg(args, "--dry-run");
 
@@ -69,6 +71,7 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
   std::cout << "Job............... " << job << "\n";
   std::cout << "Device............ " << device << "\n";
   std::cout << "Engine............ " << engine << "\n";
+  std::cout << "Backend........... " << backend << "\n";
   std::cout << "Blocks............ " << blocks << "\n";
   std::cout << "Threads........... " << threads << "\n";
   std::cout << "Points............ " << points << "\n";
@@ -87,7 +90,10 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
 
     GpuProfileManager profiles(db);
 
-    auto profile = profiles.chooseBest(gpu.name, "CUDA", "BitCrack");
+    auto profile = profiles.chooseBest(
+        gpu.name,
+        backend == "opencl" ? "OpenCL" : "CUDA",
+        "BitCrack");
 
     if (profile) {
       blocks = profile->blocks;
@@ -106,16 +112,33 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
   }
 
   if (engine != "bitcrack") {
-    throw std::runtime_error("Unsupported engine: " + engine);
+    throw std::runtime_error("Unsupported engine for job execution: " + engine);
+  }
+
+  if (backend != "cuda" && backend != "opencl") {
+    throw std::runtime_error("Unsupported BitCrack backend: " + backend);
   }
 
   auto bitcrack = context.bitcrack;
 
   if (!bitcrack)
-    throw std::runtime_error("BitCrack not found");
+    throw std::runtime_error("BitCrack CUDA executable not configured");
 
-  auto result = scheduler.startJob(db, puzzle, job, *bitcrack, device, blocks,
-                                   threads, points, dryRun);
+  std::string executable = *bitcrack;
+
+  if (backend == "opencl") {
+    std::filesystem::path cudaPath(*bitcrack);
+    auto openclPath = cudaPath.parent_path() / "clBitCrack";
+
+    if (std::filesystem::exists(openclPath)) {
+      executable = openclPath.string();
+    } else {
+      executable = "clBitCrack";
+    }
+  }
+
+  auto result = scheduler.startJob(db, puzzle, job, engine, executable, device,
+                                   blocks, threads, points, dryRun);
 
   std::cout << "\nJob................ " << result.jobId << "\n";
   std::cout << "Range.............. " << result.rangeId << "\n";

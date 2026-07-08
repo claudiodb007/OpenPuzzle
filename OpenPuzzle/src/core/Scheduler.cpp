@@ -99,9 +99,10 @@ Scheduler::runExecution(const ExecutionContext &context,
 }
 
 SchedulerResult Scheduler::startJob(Database &db, int puzzleNumber, int jobId,
-                                    const std::string &bitcrackPath, int device,
-                                    int blocks, int threads, int points,
-                                    bool dryRun) const {
+                                    const std::string &engineId,
+                                    const std::string &engineExecutable,
+                                    int device, int blocks, int threads,
+                                    int points, bool dryRun) const {
   auto puzzle = db.getPuzzleByNumber(puzzleNumber);
   auto job = db.getJob(jobId);
 
@@ -125,7 +126,7 @@ SchedulerResult Scheduler::startJob(Database &db, int puzzleNumber, int jobId,
 
   auto workspace = workspaceForJob(jobId);
   auto outputFile = (std::filesystem::path(workspace) / "found.txt").string();
-  auto logFile = (std::filesystem::path(workspace) / "bitcrack.log").string();
+  auto logFile = (std::filesystem::path(workspace) / (engineId + ".log")).string();
 
   EngineLaunchRequest request;
   request.puzzle = *puzzle;
@@ -139,7 +140,7 @@ SchedulerResult Scheduler::startJob(Database &db, int puzzleNumber, int jobId,
   request.logFile = logFile;
 
   EngineManager engineManager;
-  auto engine = engineManager.create("bitcrack", bitcrackPath);
+  auto engine = engineManager.create(engineId, engineExecutable);
 
   if (!engine) {
     SchedulerResult result;

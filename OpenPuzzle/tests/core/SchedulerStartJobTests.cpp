@@ -50,7 +50,7 @@ int main() {
   Scheduler scheduler;
 
   auto result =
-      scheduler.startJob(db, 71, job.id, "printf", 0, 256, 256, 1024, true);
+      scheduler.startJob(db, 71, job.id, "bitcrack", "printf", 0, 256, 256, 1024, true);
 
   if (!result.success)
     return 7;
