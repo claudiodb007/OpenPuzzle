@@ -11,6 +11,7 @@ find_package(SQLite3 REQUIRED)
 add_library(OpenPuzzleCore
     src/config/ConfigurationManager.cpp
     src/app/ApplicationContext.cpp
+    src/runtime/RuntimeManager.cpp
     src/core/ProcessRunner.cpp
     src/core/PosixProcessRunner.cpp
     src/core/ProcessRunnerFactory.cpp
