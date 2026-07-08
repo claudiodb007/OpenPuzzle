@@ -16,6 +16,15 @@ void ExecutionMonitor::processLine(
     return;
 
   execution.updateProgress(*progress);
+
+  if (callback_) {
+    callback_(*progress);
+  }
+}
+
+void ExecutionMonitor::setCallback(
+    ProgressCallback callback) {
+  callback_ = std::move(callback);
 }
 
 } // namespace openpuzzle

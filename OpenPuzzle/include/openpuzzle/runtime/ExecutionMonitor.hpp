@@ -4,9 +4,14 @@
 #include "openpuzzle/runtime/Execution.hpp"
 
 #include <memory>
+#include <functional>
 #include <string>
 
 namespace openpuzzle {
+
+using ProgressCallback =
+    std::function<void(const ExecutionProgress&)>;
+
 
 class ExecutionMonitor {
 public:
@@ -14,7 +19,11 @@ public:
 
   void processLine(Execution& execution, const std::string& line);
 
+  void setCallback(ProgressCallback callback);
+
 private:
+
+  ProgressCallback callback_;
   std::unique_ptr<EngineOutputParser> parser_;
 };
 
