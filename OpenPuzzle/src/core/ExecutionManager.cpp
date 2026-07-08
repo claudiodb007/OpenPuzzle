@@ -1,5 +1,6 @@
 #include "openpuzzle/core/ExecutionManager.hpp"
 #include "openpuzzle/core/ProcessRunnerFactory.hpp"
+#include "openpuzzle/engines/EngineMonitor.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -107,7 +108,7 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
   }
 
   auto runner = ProcessRunnerFactory::create();
-  bitcrack::BitCrackOutputParser parser;
+  EngineMonitor monitor;
 
   auto processResult = runner->run(
       context.command,
@@ -123,30 +124,13 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
           stdoutLog.flush();
         }
 
-        auto parsed = parser.parse(line);
-
-        if (parsed.type == bitcrack::ParsedLineType::Speed) {
-          result.averageSpeed = parsed.speedMKeys;
-
-          if (parsed.speedMKeys >= 100.0) {
-            result.speedSamples.push_back(parsed.speedMKeys);
-          }
-
-          if (!parsed.totalKeys.empty()) {
-            result.keysChecked = parsed.totalKeys;
-          }
-
-          writeStateFile(context, "RUNNING", result);
+        monitor.consumeLine(line, result, [&](const ExecutionResult &progress) {
+          writeStateFile(context, "RUNNING", progress);
 
           if (context.onProgress) {
-            context.onProgress(result);
+            context.onProgress(progress);
           }
-        }
-
-        if (parsed.type == bitcrack::ParsedLineType::Found) {
-          result.keyFound = true;
-          result.privateKey = parsed.value;
-        }
+        });
       },
       maxSeconds,
       [&]() {
