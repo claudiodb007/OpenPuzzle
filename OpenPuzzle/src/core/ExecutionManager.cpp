@@ -1,6 +1,8 @@
 #include "openpuzzle/core/ExecutionManager.hpp"
 #include "openpuzzle/core/ProcessRunnerFactory.hpp"
-#include "openpuzzle/engines/EngineMonitor.hpp"
+#include "openpuzzle/adapters/bitcrack/BitCrackProgressParser.hpp"
+#include "openpuzzle/runtime/Execution.hpp"
+#include "openpuzzle/runtime/ExecutionMonitor.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -107,8 +109,46 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
     writeStateFile(context, "RUNNING", result);
   }
 
+  ExecutionState executionState;
+  executionState.executionId = context.executionId;
+  executionState.puzzleId = context.puzzleId;
+  executionState.jobId = context.jobId;
+  executionState.rangeId = context.rangeId;
+  executionState.engine = context.engine;
+  executionState.workspace = context.workspace;
+  executionState.command = context.command;
+  executionState.status = RuntimeExecutionStatus::Running;
+
+  Execution execution(executionState);
+
   auto runner = ProcessRunnerFactory::create();
-  EngineMonitor monitor;
+  ExecutionMonitor monitor(
+      std::make_unique<bitcrack::BitCrackProgressParser>());
+
+  monitor.setCallback([&](const ExecutionProgress &progress) {
+    if (progress.speedMKeys > 0.0) {
+      result.averageSpeed = progress.speedMKeys;
+
+      if (progress.speedMKeys >= 100.0) {
+        result.speedSamples.push_back(progress.speedMKeys);
+      }
+    }
+
+    if (!progress.keysChecked.empty()) {
+      result.keysChecked = progress.keysChecked;
+    }
+
+    if (progress.keyFound) {
+      result.keyFound = true;
+      result.privateKey = progress.privateKey;
+    }
+
+    writeStateFile(context, "RUNNING", result);
+
+    if (context.onProgress) {
+      context.onProgress(result);
+    }
+  });
 
   auto processResult = runner->run(
       context.command,
@@ -124,13 +164,7 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
           stdoutLog.flush();
         }
 
-        monitor.consumeLine(line, result, [&](const ExecutionResult &progress) {
-          writeStateFile(context, "RUNNING", progress);
-
-          if (context.onProgress) {
-            context.onProgress(progress);
-          }
-        });
+        monitor.processLine(execution, line);
       },
       maxSeconds,
       [&]() {
