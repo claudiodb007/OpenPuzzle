@@ -31,6 +31,16 @@ static int getIntArg(const std::vector<std::string> &args,
   return fallback;
 }
 
+static std::string getStringArg(const std::vector<std::string> &args,
+                                const std::string &name,
+                                const std::string &fallback) {
+  for (std::size_t i = 0; i + 1 < args.size(); ++i)
+    if (args[i] == name)
+      return args[i + 1];
+
+  return fallback;
+}
+
 int StartJobCommand::run(const std::vector<std::string> &args) const {
   CommandContext context;
 
@@ -51,11 +61,14 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
 
   int device = getIntArg(args, "--device", getIntArg(args, "--d", context.gpu));
 
+  std::string engine = getStringArg(args, "--engine", "bitcrack");
+
   bool dryRun = hasArg(args, "--dry-run");
 
   std::cout << "Puzzle............ " << puzzle << "\n";
   std::cout << "Job............... " << job << "\n";
   std::cout << "Device............ " << device << "\n";
+  std::cout << "Engine............ " << engine << "\n";
   std::cout << "Blocks............ " << blocks << "\n";
   std::cout << "Threads........... " << threads << "\n";
   std::cout << "Points............ " << points << "\n";
@@ -90,6 +103,10 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
           << "Tip............... run: OpenPuzzle benchmark --real --auto --gpu "
           << device << "\n";
     }
+  }
+
+  if (engine != "bitcrack") {
+    throw std::runtime_error("Unsupported engine: " + engine);
   }
 
   auto bitcrack = context.bitcrack;
