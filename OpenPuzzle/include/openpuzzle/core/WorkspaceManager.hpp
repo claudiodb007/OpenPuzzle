@@ -16,6 +16,8 @@ public:
   std::filesystem::path createJobWorkspace(int jobId) const;
 
   std::filesystem::path bitcrackLog(int jobId) const;
+  std::filesystem::path engineLog(int jobId, const std::string& engineId) const;
+  std::filesystem::path foundFile(int jobId) const;
   std::filesystem::path stdoutLog(int jobId) const;
   std::filesystem::path stderrLog(int jobId) const;
   std::filesystem::path executionFile(int jobId) const;

@@ -1,4 +1,5 @@
 #include "openpuzzle/core/Scheduler.hpp"
+#include "openpuzzle/core/WorkspaceManager.hpp"
 
 #include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/engines/EngineLaunchRequest.hpp"
@@ -125,9 +126,11 @@ SchedulerResult Scheduler::startJob(Database &db, int puzzleNumber, int jobId,
     return result;
   }
 
-  auto workspace = workspaceForJob(jobId);
-  auto outputFile = (std::filesystem::path(workspace) / "found.txt").string();
-  auto logFile = (std::filesystem::path(workspace) / (engineId + ".log")).string();
+  WorkspaceManager workspaceManager(std::filesystem::path(workspaceForJob(0)).parent_path().parent_path());
+
+  auto workspace = workspaceManager.createJobWorkspace(jobId).string();
+  auto outputFile = workspaceManager.foundFile(jobId).string();
+  auto logFile = workspaceManager.engineLog(jobId, engineId).string();
 
   EngineLaunchRequest request;
   request.puzzle = *puzzle;
