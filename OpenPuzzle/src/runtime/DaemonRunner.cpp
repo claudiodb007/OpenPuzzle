@@ -3,6 +3,7 @@
 #include "openpuzzle/runtime/DaemonStatusCollector.hpp"
 #include "openpuzzle/runtime/SchedulerTick.hpp"
 #include "openpuzzle/runtime/RuntimeDispatcher.hpp"
+#include "openpuzzle/runtime/ExecutionProcessMonitor.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -67,6 +68,24 @@ void DaemonRunner::tick() {
     std::cout << "Exit code......... " << result.exitCode << "\n";
   } else {
     std::cout << "Decision.......... idle\n";
+  }
+
+  ExecutionProcessMonitor monitor(database_);
+
+  auto summary = monitor.poll();
+
+  if (summary.finished ||
+      summary.failed ||
+      summary.cancelled) {
+
+    std::cout
+        << "Monitor........... "
+        << summary.finished
+        << " finished, "
+        << summary.failed
+        << " failed, "
+        << summary.cancelled
+        << " cancelled\n";
   }
 }
 
