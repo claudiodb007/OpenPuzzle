@@ -20,6 +20,7 @@ add_library(OpenPuzzleCore
     src/runtime/ExecutionRegistry.cpp
     src/runtime/ExecutionLauncher.cpp
     src/runtime/BackgroundExecutionLauncher.cpp
+    src/runtime/ExecutionStopper.cpp
     src/runtime/Execution.cpp
     src/runtime/ExecutionRepository.cpp
     src/runtime/ExecutionPersistence.cpp

@@ -2,6 +2,7 @@
 
 #include "openpuzzle/core/ExecutionRecord.hpp"
 #include "openpuzzle/database/Database.hpp"
+#include "openpuzzle/runtime/ExecutionStopper.hpp"
 
 #include <iomanip>
 #include <iostream>
@@ -97,6 +98,42 @@ int ExecutionService::execute(const std::vector<std::string>& args) {
 
     return 0;
 }
+
+
+  if (args[0] == "stop") {
+
+    if (args.size() < 2) {
+      std::cerr << "Usage: OpenPuzzle execution stop <id>\n";
+      return 1;
+    }
+
+    int executionId = std::stoi(args[1]);
+
+    auto execution = database_.getExecution(executionId);
+
+    if (!execution) {
+      std::cerr << "Execution not found: "
+                << executionId << "\n";
+      return 1;
+    }
+
+    ExecutionStopper stopper;
+
+    if (!stopper.stop(execution->workspace)) {
+      std::cerr << "Unable to stop execution\n";
+      return 1;
+    }
+
+    database_.finishExecution(
+        executionId,
+        "cancelled",
+        -2);
+
+    std::cout << "Execution stopped: "
+              << executionId << "\n";
+
+    return 0;
+  }
 
   std::cerr << "Unknown execution command\n";
   return 1;
