@@ -1,30 +1,28 @@
 #pragma once
 
 #include "openpuzzle/engines/EngineOutputParser.hpp"
-#include "openpuzzle/runtime/Execution.hpp"
+#include "openpuzzle/runtime/ExecutionProgress.hpp"
 
-#include <memory>
 #include <functional>
+#include <memory>
 #include <string>
 
 namespace openpuzzle {
 
-using ProgressCallback =
-    std::function<void(const ExecutionProgress&)>;
-
+class Execution;
 
 class ExecutionMonitor {
 public:
+  using Callback = std::function<void(const ExecutionProgress&)>;
+
   explicit ExecutionMonitor(std::unique_ptr<EngineOutputParser> parser);
 
+  void setCallback(Callback callback);
   void processLine(Execution& execution, const std::string& line);
 
-  void setCallback(ProgressCallback callback);
-
 private:
-
-  ProgressCallback callback_;
   std::unique_ptr<EngineOutputParser> parser_;
+  Callback callback_;
 };
 
 } // namespace openpuzzle

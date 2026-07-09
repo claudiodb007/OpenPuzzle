@@ -1,30 +1,33 @@
 #include "openpuzzle/runtime/ExecutionMonitor.hpp"
 
+#include "openpuzzle/runtime/Execution.hpp"
+
 namespace openpuzzle {
 
-ExecutionMonitor::ExecutionMonitor(
-    std::unique_ptr<EngineOutputParser> parser)
+ExecutionMonitor::ExecutionMonitor(std::unique_ptr<EngineOutputParser> parser)
     : parser_(std::move(parser)) {}
 
-void ExecutionMonitor::processLine(
-    Execution& execution,
-    const std::string& line) {
+void ExecutionMonitor::setCallback(Callback callback) {
+  callback_ = std::move(callback);
+}
+
+void ExecutionMonitor::processLine(Execution& execution,
+                                   const std::string& line) {
+  if (!parser_) {
+    return;
+  }
 
   auto progress = parser_->parseLine(line);
 
-  if (!progress)
+  if (!progress) {
     return;
+  }
 
   execution.updateProgress(*progress);
 
   if (callback_) {
     callback_(*progress);
   }
-}
-
-void ExecutionMonitor::setCallback(
-    ProgressCallback callback) {
-  callback_ = std::move(callback);
 }
 
 } // namespace openpuzzle

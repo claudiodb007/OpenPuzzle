@@ -20,12 +20,17 @@ ExecutionHandle BackgroundExecutionLauncher::start(
     std::filesystem::create_directories(request.workspace);
   }
 
-  auto pidFile =
-      (std::filesystem::path(request.workspace) / "process.pid").string();
+  auto workspacePath = std::filesystem::path(request.workspace);
+
+  auto pidFile = (workspacePath / "process.pid").string();
+  auto exitFile = (workspacePath / "exit.code").string();
 
   std::ostringstream shell;
   shell << "setsid sh -c '"
         << request.command
+        << "; rc=$?; echo $rc > "
+        << exitFile
+        << "; exit $rc"
         << "' >/dev/null 2>&1 & echo $!";
 
   FILE* pipe = popen(shell.str().c_str(), "r");

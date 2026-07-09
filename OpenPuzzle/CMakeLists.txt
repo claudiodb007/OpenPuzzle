@@ -19,12 +19,13 @@ add_library(OpenPuzzleCore
     src/runtime/ExecutionRequestBuilder.cpp
     src/runtime/ExecutionRegistry.cpp
     src/runtime/ExecutionLauncher.cpp
+    src/runtime/ExecutionMonitor.cpp
     src/runtime/BackgroundExecutionLauncher.cpp
     src/runtime/ExecutionStopper.cpp
     src/runtime/Execution.cpp
     src/runtime/ExecutionRepository.cpp
     src/runtime/ExecutionPersistence.cpp
-    src/runtime/ExecutionMonitor.cpp
+    src/runtime/ExecutionProcessMonitor.cpp
     src/workers/Worker.cpp
     src/workers/WorkerRegistry.cpp
     src/core/ProcessRunner.cpp
