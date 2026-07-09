@@ -3,6 +3,7 @@
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
+#include "openpuzzle/runtime/ExecutionRepository.hpp"
 #include "openpuzzle/core/WorkspaceManager.hpp"
 
 #include <filesystem>
@@ -96,8 +97,20 @@ StartExecutionRequest RuntimeDispatcher::prepare(
     throw std::runtime_error("Could not create BitCrack engine");
   }
 
+  ExecutionRepository executionRepository(database_);
+
+  int executionId = executionRepository.create(
+      job->id,
+      workspace,
+      engine->buildCommand(launchRequest),
+      "running");
+
+  if (executionId <= 0) {
+    throw std::runtime_error("Could not create execution");
+  }
+
   StartExecutionRequest request;
-  request.executionId = 0;
+  request.executionId = executionId;
   request.puzzleId = puzzle->id;
   request.jobId = job->id;
   request.rangeId = range->id;
