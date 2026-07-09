@@ -590,3 +590,17 @@ add_test(
     NAME ExecutionStopperTests
     COMMAND ExecutionStopperTests
 )
+
+add_executable(ExecutionProcessMonitorTests
+    runtime/ExecutionProcessMonitorTests.cpp
+)
+
+target_link_libraries(ExecutionProcessMonitorTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionProcessMonitorTests
+    COMMAND ExecutionProcessMonitorTests
+)
