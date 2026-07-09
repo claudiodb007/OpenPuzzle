@@ -3,6 +3,7 @@
 #include "openpuzzle/core/WorkspaceManager.hpp"
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/runtime/ExecutionRepository.hpp"
+#include "openpuzzle/runtime/ExecutionLauncher.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 
@@ -104,6 +105,15 @@ StartExecutionRequest RuntimeDispatcher::prepare(
   request.executionId = executionId;
 
   return request;
+}
+
+
+ExecutionResult RuntimeDispatcher::dispatchAndLaunch(
+    const SchedulerDecision& decision) const {
+  auto request = prepare(decision);
+
+  ExecutionLauncher launcher;
+  return launcher.launch(request);
 }
 
 } // namespace openpuzzle
