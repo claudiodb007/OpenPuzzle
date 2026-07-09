@@ -24,7 +24,7 @@ ExecutionHandle BackgroundExecutionLauncher::start(
       (std::filesystem::path(request.workspace) / "process.pid").string();
 
   std::ostringstream shell;
-  shell << "nohup sh -c '"
+  shell << "setsid sh -c '"
         << request.command
         << "' >/dev/null 2>&1 & echo $!";
 

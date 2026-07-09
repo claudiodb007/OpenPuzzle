@@ -576,3 +576,17 @@ add_test(
     NAME DispatcherExecutionTests
     COMMAND DispatcherExecutionTests
 )
+
+add_executable(ExecutionStopperTests
+    runtime/ExecutionStopperTests.cpp
+)
+
+target_link_libraries(ExecutionStopperTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionStopperTests
+    COMMAND ExecutionStopperTests
+)
