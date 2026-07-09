@@ -15,7 +15,7 @@ int DaemonService::execute(const std::vector<std::string>& args) {
     }
   }
 
-  DaemonRunner runner;
+  DaemonRunner runner(database_);
   return runner.run(ticks);
 }
 

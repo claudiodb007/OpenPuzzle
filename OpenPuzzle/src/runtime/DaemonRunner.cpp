@@ -1,12 +1,16 @@
 #include "openpuzzle/runtime/DaemonRunner.hpp"
 
+#include "openpuzzle/runtime/DaemonStatusCollector.hpp"
+#include "openpuzzle/runtime/SchedulerTick.hpp"
+
 #include <chrono>
 #include <iostream>
 #include <thread>
 
 namespace openpuzzle {
 
-DaemonRunner::DaemonRunner() = default;
+DaemonRunner::DaemonRunner(Database& database)
+    : database_(database) {}
 
 int DaemonRunner::run(int ticks) {
   running_ = true;
@@ -32,7 +36,28 @@ void DaemonRunner::stop() {
 
 void DaemonRunner::tick() {
   ++tickCount_;
+
+  DaemonStatusCollector collector(database_);
+  auto status = collector.collect();
+
   std::cout << "Tick.............. " << tickCount_ << "\n";
+  std::cout << "Reserved jobs..... " << status.reservedJobs << "\n";
+  std::cout << "Running jobs...... " << status.runningJobs << "\n";
+  std::cout << "Running executions " << status.runningExecutions << "\n";
+  std::cout << "Workers........... " << status.workers << "\n";
+
+  SchedulerTick scheduler(database_);
+  auto decision = scheduler.execute();
+
+  if (decision.shouldDispatch) {
+    std::cout << "Decision.......... dispatch job "
+              << decision.jobId
+              << " to worker "
+              << decision.workerId
+              << "\n";
+  } else {
+    std::cout << "Decision.......... idle\n";
+  }
 }
 
 } // namespace openpuzzle

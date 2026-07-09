@@ -2,9 +2,11 @@
 
 namespace openpuzzle {
 
+class Database;
+
 class DaemonRunner {
 public:
-  DaemonRunner();
+  explicit DaemonRunner(Database& database);
 
   int run(int ticks = 3);
 
@@ -13,6 +15,7 @@ public:
 private:
   void tick();
 
+  Database& database_;
   bool running_ = false;
   int tickCount_ = 0;
 };
