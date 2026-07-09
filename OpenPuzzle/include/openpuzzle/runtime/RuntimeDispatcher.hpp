@@ -4,11 +4,16 @@
 
 namespace openpuzzle {
 
-class Dispatcher {
+class Database;
+
+class RuntimeDispatcher {
 public:
-  Dispatcher() = default;
+  explicit RuntimeDispatcher(Database& database);
 
   bool dispatch(const SchedulerDecision& decision) const;
+
+private:
+  Database& database_;
 };
 
 } // namespace openpuzzle

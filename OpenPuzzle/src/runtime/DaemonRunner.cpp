@@ -2,7 +2,7 @@
 
 #include "openpuzzle/runtime/DaemonStatusCollector.hpp"
 #include "openpuzzle/runtime/SchedulerTick.hpp"
-#include "openpuzzle/runtime/Dispatcher.hpp"
+#include "openpuzzle/runtime/RuntimeDispatcher.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -50,7 +50,7 @@ void DaemonRunner::tick() {
   SchedulerTick scheduler(database_);
   auto decision = scheduler.execute();
 
-  Dispatcher dispatcher;
+  RuntimeDispatcher dispatcher(database_);
 
   if (dispatcher.dispatch(decision)) {
     std::cout << "Decision.......... dispatch job "

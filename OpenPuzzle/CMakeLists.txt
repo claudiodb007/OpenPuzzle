@@ -15,7 +15,7 @@ add_library(OpenPuzzleCore
     src/runtime/DaemonRunner.cpp
     src/runtime/DaemonStatusCollector.cpp
     src/runtime/SchedulerTick.cpp
-    src/runtime/Dispatcher.cpp
+    src/runtime/RuntimeDispatcher.cpp
     src/runtime/ExecutionRegistry.cpp
     src/runtime/ExecutionLauncher.cpp
     src/runtime/Execution.cpp
