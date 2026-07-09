@@ -1,6 +1,7 @@
 #pragma once
 
 #include "openpuzzle/runtime/SchedulerDecision.hpp"
+#include "openpuzzle/runtime/StartExecutionRequest.hpp"
 
 namespace openpuzzle {
 
@@ -11,6 +12,7 @@ public:
   explicit RuntimeDispatcher(Database& database);
 
   bool dispatch(const SchedulerDecision& decision) const;
+  StartExecutionRequest prepare(const SchedulerDecision& decision) const;
 
 private:
   Database& database_;

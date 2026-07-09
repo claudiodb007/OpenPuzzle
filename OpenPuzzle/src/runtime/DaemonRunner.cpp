@@ -58,6 +58,13 @@ void DaemonRunner::tick() {
               << " to worker "
               << decision.workerId
               << "\n";
+
+    auto request = dispatcher.prepare(decision);
+
+    std::cout << "Prepared job...... " << request.jobId << "\n";
+    std::cout << "Prepared engine... " << request.engine << "\n";
+    std::cout << "Prepared backend.. " << request.backend << "\n";
+    std::cout << "Prepared command.. " << request.command << "\n";
   } else {
     std::cout << "Decision.......... idle\n";
   }
