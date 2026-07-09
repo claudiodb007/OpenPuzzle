@@ -23,6 +23,10 @@ struct ExecutionRecord {
   std::string workspace;
   std::string command;
 
+  int exitCode = -1;
+  std::string startedAt;
+  std::string finishedAt;
+
   ExecutionRecordStatus status = ExecutionRecordStatus::Created;
 
   static std::string statusToString(ExecutionRecordStatus status);

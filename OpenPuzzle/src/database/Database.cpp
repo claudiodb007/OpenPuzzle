@@ -709,7 +709,7 @@ std::optional<ExecutionRecord> Database::getExecution(int executionId) {
   sqlite3_stmt *stmt = nullptr;
 
   const char *sql =
-      "SELECT e.id,e.job_id,j.puzzle_id,j.range_id,e.workspace,e.command,e.state "
+      "SELECT e.id,e.job_id,j.puzzle_id,j.range_id,e.workspace,e.command,e.state,COALESCE(e.exit_code,-1),COALESCE(e.started_at,''),COALESCE(e.finished_at,'') "
       "FROM executions e "
       "LEFT JOIN jobs j ON j.id=e.job_id "
       "WHERE e.id=?";
@@ -730,9 +730,14 @@ std::optional<ExecutionRecord> Database::getExecution(int executionId) {
     const unsigned char *workspace = sqlite3_column_text(stmt, 4);
     const unsigned char *command = sqlite3_column_text(stmt, 5);
     const unsigned char *state = sqlite3_column_text(stmt, 6);
+    const unsigned char *startedAt = sqlite3_column_text(stmt, 8);
+    const unsigned char *finishedAt = sqlite3_column_text(stmt, 9);
 
     record.workspace = workspace ? reinterpret_cast<const char *>(workspace) : "";
     record.command = command ? reinterpret_cast<const char *>(command) : "";
+    record.exitCode = sqlite3_column_int(stmt, 7);
+    record.startedAt = startedAt ? reinterpret_cast<const char *>(startedAt) : "";
+    record.finishedAt = finishedAt ? reinterpret_cast<const char *>(finishedAt) : "";
 
     std::string status = state ? reinterpret_cast<const char *>(state) : "";
 
@@ -763,7 +768,7 @@ std::vector<ExecutionRecord> Database::listExecutions() {
   sqlite3_stmt *stmt = nullptr;
 
   const char *sql =
-      "SELECT e.id,e.job_id,j.puzzle_id,j.range_id,e.workspace,e.command,e.state "
+      "SELECT e.id,e.job_id,j.puzzle_id,j.range_id,e.workspace,e.command,e.state,COALESCE(e.exit_code,-1),COALESCE(e.started_at,''),COALESCE(e.finished_at,'') "
       "FROM executions e "
       "LEFT JOIN jobs j ON j.id=e.job_id "
       "ORDER BY e.id DESC";
@@ -783,9 +788,14 @@ std::vector<ExecutionRecord> Database::listExecutions() {
     const unsigned char *workspace = sqlite3_column_text(stmt, 4);
     const unsigned char *command = sqlite3_column_text(stmt, 5);
     const unsigned char *state = sqlite3_column_text(stmt, 6);
+    const unsigned char *startedAt = sqlite3_column_text(stmt, 8);
+    const unsigned char *finishedAt = sqlite3_column_text(stmt, 9);
 
     record.workspace = workspace ? reinterpret_cast<const char *>(workspace) : "";
     record.command = command ? reinterpret_cast<const char *>(command) : "";
+    record.exitCode = sqlite3_column_int(stmt, 7);
+    record.startedAt = startedAt ? reinterpret_cast<const char *>(startedAt) : "";
+    record.finishedAt = finishedAt ? reinterpret_cast<const char *>(finishedAt) : "";
 
     std::string status = state ? reinterpret_cast<const char *>(state) : "";
 

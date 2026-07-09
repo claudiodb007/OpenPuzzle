@@ -75,6 +75,18 @@ int ExecutionService::execute(const std::vector<std::string>& args) {
               << ExecutionRecord::statusToString(execution->status)
               << "\n";
 
+    std::cout << "Exit code.......... "
+              << (execution->exitCode >= 0 ? std::to_string(execution->exitCode) : "-")
+              << "\n";
+
+    std::cout << "Started............ "
+              << (execution->startedAt.empty() ? "-" : execution->startedAt)
+              << "\n";
+
+    std::cout << "Finished........... "
+              << (execution->finishedAt.empty() ? "-" : execution->finishedAt)
+              << "\n";
+
     std::cout << "Workspace.......... "
               << execution->workspace << "\n";
 
