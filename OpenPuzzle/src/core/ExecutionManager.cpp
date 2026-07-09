@@ -3,6 +3,7 @@
 #include "openpuzzle/adapters/bitcrack/BitCrackProgressParser.hpp"
 #include "openpuzzle/runtime/Execution.hpp"
 #include "openpuzzle/runtime/ExecutionMonitor.hpp"
+#include "openpuzzle/runtime/ExecutionPersistence.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -10,28 +11,6 @@
 
 namespace openpuzzle {
 
-static void writeStateFile(const ExecutionContext &context,
-                           const std::string &status,
-                           const ExecutionResult &result) {
-  if (context.workspace.empty()) {
-    return;
-  }
-
-  std::ofstream stateFile(std::filesystem::path(context.workspace) /
-                          "state.json");
-
-  if (!stateFile.is_open()) {
-    return;
-  }
-
-  stateFile << "{\n";
-  stateFile << "  \"status\": \"" << status << "\",\n";
-  stateFile << "  \"exit_code\": " << result.exitCode << ",\n";
-  stateFile << "  \"lines_read\": " << result.linesRead << ",\n";
-  stateFile << "  \"average_speed\": " << result.averageSpeed << ",\n";
-  stateFile << "  \"keys_checked\": \"" << result.keysChecked << "\"\n";
-  stateFile << "}\n";
-}
 
 ExecutionSummary ExecutionManager::runCommand(const std::string &command,
                                               bool echoOutput) const {
@@ -82,6 +61,7 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
   result.keysChecked = "0";
 
   std::ofstream stdoutLog;
+  ExecutionPersistence persistence;
 
   if (!context.workspace.empty()) {
     std::filesystem::create_directories(context.workspace);
@@ -89,24 +69,8 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
     stdoutLog.open(std::filesystem::path(context.workspace) / "stdout.log",
                    std::ios::app);
 
-    std::ofstream executionFile(std::filesystem::path(context.workspace) /
-                                "execution.json");
-
-    if (executionFile.is_open()) {
-      executionFile << "{\n";
-      executionFile << "  \"execution_id\": " << context.executionId << ",\n";
-      executionFile << "  \"puzzle_id\": " << context.puzzleId << ",\n";
-      executionFile << "  \"job_id\": " << context.jobId << ",\n";
-      executionFile << "  \"range_id\": " << context.rangeId << ",\n";
-      executionFile << "  \"engine\": \"" << context.engine << "\",\n";
-      executionFile << "  \"command\": \"" << context.command << "\",\n";
-      executionFile << "  \"workspace\": \"" << context.workspace << "\",\n";
-      executionFile << "  \"echo_output\": "
-                    << (context.echoOutput ? "true" : "false") << "\n";
-      executionFile << "}\n";
-    }
-
-    writeStateFile(context, "RUNNING", result);
+    persistence.writeExecutionFile(context);
+    persistence.writeStateFile(context, "RUNNING", result);
   }
 
   ExecutionState executionState;
@@ -143,7 +107,7 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
       result.privateKey = progress.privateKey;
     }
 
-    writeStateFile(context, "RUNNING", result);
+    persistence.writeStateFile(context, "RUNNING", result);
 
     if (context.onProgress) {
       context.onProgress(result);
@@ -175,7 +139,7 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
   result.exitCode = processResult.exitCode;
   result.success = processResult.started && processResult.exitCode == 0;
 
-  writeStateFile(context, result.success ? "FINISHED" : "FAILED", result);
+  persistence.writeStateFile(context, result.success ? "FINISHED" : "FAILED", result);
 
   return result;
 }
