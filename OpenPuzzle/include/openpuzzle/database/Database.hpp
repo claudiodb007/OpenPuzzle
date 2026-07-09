@@ -30,6 +30,7 @@ public:
   bool finishExecution(int executionId, const std::string &state, int exitCode);
   std::optional<ExecutionRecord> getExecution(int executionId);
   std::vector<ExecutionRecord> listExecutions();
+  std::vector<ExecutionRecord> listRunningExecutions();
   int insertStatistic(int executionId, double speedMkeys, double temperature,
                       double power);
   int insertProgress(int executionId, const std::string &currentKey,

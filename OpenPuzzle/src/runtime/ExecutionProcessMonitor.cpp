@@ -60,7 +60,7 @@ bool ExecutionProcessMonitor::processExists(int pid) {
 ExecutionProcessMonitorSummary ExecutionProcessMonitor::poll() {
   ExecutionProcessMonitorSummary summary;
 
-  auto executions = database_.listExecutions();
+  auto executions = database_.listRunningExecutions();
 
   for (const auto& execution : executions) {
     if (execution.status != ExecutionRecordStatus::Running) {
