@@ -1,8 +1,8 @@
 #include "openpuzzle/services/DaemonService.hpp"
 
-#include <chrono>
+#include "openpuzzle/runtime/DaemonRunner.hpp"
+
 #include <iostream>
-#include <thread>
 
 namespace openpuzzle {
 
@@ -15,18 +15,8 @@ int DaemonService::execute(const std::vector<std::string>& args) {
     }
   }
 
-  std::cout << "OpenPuzzle Daemon\n";
-  std::cout << "-----------------\n";
-  std::cout << "Status............ starting\n";
-
-  for (int tick = 1; tick <= ticks; ++tick) {
-    std::cout << "Tick.............. " << tick << "\n";
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  }
-
-  std::cout << "Status............ stopped\n";
-
-  return 0;
+  DaemonRunner runner;
+  return runner.run(ticks);
 }
 
 } // namespace openpuzzle

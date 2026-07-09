@@ -12,6 +12,7 @@ add_library(OpenPuzzleCore
     src/config/ConfigurationManager.cpp
     src/app/ApplicationContext.cpp
     src/runtime/RuntimeManager.cpp
+    src/runtime/DaemonRunner.cpp
     src/runtime/ExecutionRegistry.cpp
     src/runtime/ExecutionLauncher.cpp
     src/runtime/Execution.cpp
