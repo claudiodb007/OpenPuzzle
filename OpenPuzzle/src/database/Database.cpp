@@ -736,7 +736,9 @@ std::optional<ExecutionRecord> Database::getExecution(int executionId) {
 
     std::string status = state ? reinterpret_cast<const char *>(state) : "";
 
-    if (status == "running") {
+    if (status == "dry-run") {
+      record.status = ExecutionRecordStatus::DryRun;
+    } else if (status == "running") {
       record.status = ExecutionRecordStatus::Running;
     } else if (status == "finished") {
       record.status = ExecutionRecordStatus::Finished;
@@ -787,7 +789,9 @@ std::vector<ExecutionRecord> Database::listExecutions() {
 
     std::string status = state ? reinterpret_cast<const char *>(state) : "";
 
-    if (status == "running") {
+    if (status == "dry-run") {
+      record.status = ExecutionRecordStatus::DryRun;
+    } else if (status == "running") {
       record.status = ExecutionRecordStatus::Running;
     } else if (status == "finished") {
       record.status = ExecutionRecordStatus::Finished;

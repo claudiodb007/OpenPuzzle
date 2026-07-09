@@ -6,6 +6,7 @@ namespace openpuzzle {
 
 enum class ExecutionRecordStatus {
   Created,
+  DryRun,
   Running,
   Finished,
   Failed,

@@ -6,6 +6,8 @@ std::string ExecutionRecord::statusToString(ExecutionRecordStatus status) {
   switch (status) {
   case ExecutionRecordStatus::Created:
     return "CREATED";
+  case ExecutionRecordStatus::DryRun:
+    return "DRY-RUN";
   case ExecutionRecordStatus::Running:
     return "RUNNING";
   case ExecutionRecordStatus::Finished:
