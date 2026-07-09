@@ -704,6 +704,57 @@ std::optional<WorkerRecord> Database::getWorker(int workerId) {
 
 namespace openpuzzle {
 
+
+std::optional<ExecutionRecord> Database::getExecution(int executionId) {
+  sqlite3_stmt *stmt = nullptr;
+
+  const char *sql =
+      "SELECT e.id,e.job_id,j.puzzle_id,j.range_id,e.workspace,e.command,e.state "
+      "FROM executions e "
+      "LEFT JOIN jobs j ON j.id=e.job_id "
+      "WHERE e.id=?";
+
+  sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
+  sqlite3_bind_int(stmt, 1, executionId);
+
+  std::optional<ExecutionRecord> out;
+
+  if (sqlite3_step(stmt) == SQLITE_ROW) {
+    ExecutionRecord record;
+
+    record.executionId = sqlite3_column_int(stmt, 0);
+    record.jobId = sqlite3_column_int(stmt, 1);
+    record.puzzleId = sqlite3_column_int(stmt, 2);
+    record.rangeId = sqlite3_column_int(stmt, 3);
+
+    const unsigned char *workspace = sqlite3_column_text(stmt, 4);
+    const unsigned char *command = sqlite3_column_text(stmt, 5);
+    const unsigned char *state = sqlite3_column_text(stmt, 6);
+
+    record.workspace = workspace ? reinterpret_cast<const char *>(workspace) : "";
+    record.command = command ? reinterpret_cast<const char *>(command) : "";
+
+    std::string status = state ? reinterpret_cast<const char *>(state) : "";
+
+    if (status == "running") {
+      record.status = ExecutionRecordStatus::Running;
+    } else if (status == "finished") {
+      record.status = ExecutionRecordStatus::Finished;
+    } else if (status == "failed") {
+      record.status = ExecutionRecordStatus::Failed;
+    } else if (status == "cancelled") {
+      record.status = ExecutionRecordStatus::Cancelled;
+    } else {
+      record.status = ExecutionRecordStatus::Created;
+    }
+
+    out = record;
+  }
+
+  sqlite3_finalize(stmt);
+  return out;
+}
+
 std::vector<ExecutionRecord> Database::listExecutions() {
   std::vector<ExecutionRecord> result;
 

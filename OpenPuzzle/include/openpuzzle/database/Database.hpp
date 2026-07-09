@@ -28,6 +28,7 @@ public:
   int insertExecution(int jobId, const std::string &workspace,
                       const std::string &command, const std::string &state);
   bool finishExecution(int executionId, const std::string &state, int exitCode);
+  std::optional<ExecutionRecord> getExecution(int executionId);
   std::vector<ExecutionRecord> listExecutions();
   int insertStatistic(int executionId, double speedMkeys, double temperature,
                       double power);

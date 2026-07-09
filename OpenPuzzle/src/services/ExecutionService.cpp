@@ -40,15 +40,51 @@ int ExecutionService::execute(const std::vector<std::string>& args) {
   }
 
   if (args[0] == "show") {
+
     if (args.size() < 2) {
-      std::cerr << "Usage: OpenPuzzle execution show <id>\n";
-      return 1;
+        std::cerr << "Usage: OpenPuzzle execution show <id>\n";
+        return 1;
     }
 
-    std::cout << "Execution " << args[1] << "\n";
-    std::cout << "Not loaded in runtime yet.\n";
+    int executionId = std::stoi(args[1]);
+
+    auto execution = database_.getExecution(executionId);
+
+    if (!execution) {
+        std::cerr << "Execution not found: "
+                  << executionId << "\n";
+        return 1;
+    }
+
+    std::cout << "Execution\n";
+    std::cout << "---------\n";
+
+    std::cout << "ID................. "
+              << execution->executionId << "\n";
+
+    std::cout << "Job................ "
+              << execution->jobId << "\n";
+
+    std::cout << "Puzzle............. "
+              << execution->puzzleId << "\n";
+
+    std::cout << "Range.............. "
+              << execution->rangeId << "\n";
+
+    std::cout << "Status............. "
+              << ExecutionRecord::statusToString(execution->status)
+              << "\n";
+
+    std::cout << "Workspace.......... "
+              << execution->workspace << "\n";
+
+    std::cout << "\nCommand\n";
+    std::cout << "-------\n";
+
+    std::cout << execution->command << "\n";
+
     return 0;
-  }
+}
 
   std::cerr << "Unknown execution command\n";
   return 1;
