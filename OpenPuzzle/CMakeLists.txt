@@ -53,6 +53,7 @@ add_library(OpenPuzzleCore
     src/services/ExecutionService.cpp
     src/services/DoctorService.cpp
     src/services/DashboardService.cpp
+    src/services/DaemonService.cpp
     src/services/DispatchService.cpp
     src/services/WorkerService.cpp
     src/services/WorkerRunService.cpp

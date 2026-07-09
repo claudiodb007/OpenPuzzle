@@ -24,6 +24,7 @@
 #include "openpuzzle/services/ExecutionService.hpp"
 #include "openpuzzle/services/DoctorService.hpp"
 #include "openpuzzle/services/DashboardService.hpp"
+#include "openpuzzle/services/DaemonService.hpp"
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -148,6 +149,15 @@ int Application::run(int argc, char **argv) {
         return 1;
 
       DashboardService service(db);
+      return service.execute(r);
+    }
+
+    if (cmd == "daemon") {
+      Database db;
+      if (!ensureDb(db))
+        return 1;
+
+      DaemonService service(db);
       return service.execute(r);
     }
     if (cmd == "audit")
