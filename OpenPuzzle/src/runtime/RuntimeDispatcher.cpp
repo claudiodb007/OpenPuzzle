@@ -3,7 +3,7 @@
 #include "openpuzzle/core/WorkspaceManager.hpp"
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/runtime/ExecutionRepository.hpp"
-#include "openpuzzle/runtime/ExecutionLauncher.hpp"
+#include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 
@@ -108,12 +108,20 @@ StartExecutionRequest RuntimeDispatcher::prepare(
 }
 
 
+
 ExecutionResult RuntimeDispatcher::dispatchAndLaunch(
     const SchedulerDecision& decision) const {
+
   auto request = prepare(decision);
 
-  ExecutionLauncher launcher;
-  return launcher.launch(request);
+  BackgroundExecutionLauncher launcher;
+  auto handle = launcher.start(request);
+
+  ExecutionResult result;
+  result.success = true;
+  result.exitCode = 0;
+
+  return result;
 }
 
 } // namespace openpuzzle
