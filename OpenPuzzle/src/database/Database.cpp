@@ -474,14 +474,29 @@ long long Database::countRangesByStatus(int puzzleId, RangeStatus status) {
 }
 long long Database::countJobsByState(int puzzleId, JobState state) {
   sqlite3_stmt *s = nullptr;
-  sqlite3_prepare_v2(db_,
-                     "SELECT COUNT(*) FROM jobs WHERE puzzle_id=? AND state=?",
-                     -1, &s, nullptr);
-  sqlite3_bind_int(s, 1, puzzleId);
-  sqlite3_bind_int(s, 2, (int)state);
+
+  if (puzzleId > 0) {
+    sqlite3_prepare_v2(
+        db_,
+        "SELECT COUNT(*) FROM jobs WHERE puzzle_id=? AND state=?",
+        -1, &s, nullptr);
+
+    sqlite3_bind_int(s, 1, puzzleId);
+    sqlite3_bind_int(s, 2, (int)state);
+  } else {
+    sqlite3_prepare_v2(
+        db_,
+        "SELECT COUNT(*) FROM jobs WHERE state=?",
+        -1, &s, nullptr);
+
+    sqlite3_bind_int(s, 1, (int)state);
+  }
+
   long long c = 0;
+
   if (sqlite3_step(s) == SQLITE_ROW)
     c = sqlite3_column_int64(s, 0);
+
   sqlite3_finalize(s);
   return c;
 }

@@ -109,6 +109,9 @@ StartExecutionRequest RuntimeDispatcher::prepare(
     throw std::runtime_error("Could not create execution");
   }
 
+  database_.updateJobState(job->id, JobState::Running);
+  database_.updateRangeStatus(range->id, RangeStatus::Running);
+
   StartExecutionRequest request;
   request.executionId = executionId;
   request.puzzleId = puzzle->id;
