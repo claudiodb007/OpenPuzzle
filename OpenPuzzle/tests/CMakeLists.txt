@@ -646,3 +646,17 @@ add_test(
     NAME WorkerSelectorTests
     COMMAND WorkerSelectorTests
 )
+
+add_executable(DefaultSchedulingPolicyTests
+    scheduler/DefaultSchedulingPolicyTests.cpp
+)
+
+target_link_libraries(DefaultSchedulingPolicyTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME DefaultSchedulingPolicyTests
+    COMMAND DefaultSchedulingPolicyTests
+)
