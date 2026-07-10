@@ -632,3 +632,17 @@ add_test(
     NAME WorkerAgentRegistryTests
     COMMAND WorkerAgentRegistryTests
 )
+
+add_executable(WorkerSelectorTests
+    dispatcher/WorkerSelectorTests.cpp
+)
+
+target_link_libraries(WorkerSelectorTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME WorkerSelectorTests
+    COMMAND WorkerSelectorTests
+)

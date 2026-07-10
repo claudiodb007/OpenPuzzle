@@ -1,6 +1,7 @@
 #include "openpuzzle/runtime/SchedulerTick.hpp"
 
 #include "openpuzzle/database/Database.hpp"
+#include "openpuzzle/dispatcher/WorkerSelector.hpp"
 
 namespace openpuzzle {
 
@@ -16,18 +17,16 @@ SchedulerDecision SchedulerTick::execute() const {
     return decision;
   }
 
-  auto workers = database_.listWorkers();
+  WorkerSelector selector(database_);
+  auto worker = selector.selectIdleWorker();
 
-  for (const auto& worker : workers) {
-    if (worker.status != "idle") {
-      continue;
-    }
-
-    decision.shouldDispatch = true;
-    decision.jobId = job->id;
-    decision.workerId = worker.id;
+  if (!worker) {
     return decision;
   }
+
+  decision.shouldDispatch = true;
+  decision.jobId = job->id;
+  decision.workerId = worker->id;
 
   return decision;
 }
