@@ -6,7 +6,7 @@
 namespace openpuzzle {
 
 SchedulerDecision
-DefaultSchedulingPolicy::decide(Database& database) {
+DefaultSchedulingPolicy::decide(Database& database) const {
   SchedulerDecision decision;
 
   auto job = database.nextReservedJob();

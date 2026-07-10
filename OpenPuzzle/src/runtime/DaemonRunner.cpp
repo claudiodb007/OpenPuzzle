@@ -104,7 +104,7 @@ void DaemonRunner::tick() {
   std::cout << "Running executions " << status.runningExecutions << "\n";
   std::cout << "Workers........... " << status.workers << "\n";
 
-  SchedulerTick scheduler(database_);
+  SchedulerTick scheduler(database_, schedulingPolicy_);
   auto decision = scheduler.execute();
 
   RuntimeDispatcher dispatcher(database_, workers_);

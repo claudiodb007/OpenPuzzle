@@ -10,7 +10,7 @@ class SchedulingPolicy {
 public:
   virtual ~SchedulingPolicy() = default;
 
-  virtual SchedulerDecision decide(Database& database) = 0;
+  virtual SchedulerDecision decide(Database& database) const = 0;
 };
 
 } // namespace openpuzzle

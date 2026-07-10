@@ -660,3 +660,17 @@ add_test(
     NAME DefaultSchedulingPolicyTests
     COMMAND DefaultSchedulingPolicyTests
 )
+
+add_executable(SchedulerPolicyInjectionTests
+    scheduler/SchedulerPolicyInjectionTests.cpp
+)
+
+target_link_libraries(SchedulerPolicyInjectionTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME SchedulerPolicyInjectionTests
+    COMMAND SchedulerPolicyInjectionTests
+)

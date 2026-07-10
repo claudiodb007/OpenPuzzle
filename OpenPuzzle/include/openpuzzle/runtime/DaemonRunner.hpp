@@ -1,6 +1,7 @@
 #pragma once
 
 #include "openpuzzle/workers/WorkerAgentRegistry.hpp"
+#include "openpuzzle/scheduler/DefaultSchedulingPolicy.hpp"
 
 namespace openpuzzle {
 
@@ -20,6 +21,7 @@ private:
 
   Database& database_;
   WorkerAgentRegistry workers_;
+  DefaultSchedulingPolicy schedulingPolicy_;
 
   bool running_ = false;
   int tickCount_ = 0;

@@ -6,7 +6,7 @@ namespace openpuzzle {
 
 class DefaultSchedulingPolicy : public SchedulingPolicy {
 public:
-  SchedulerDecision decide(Database& database) override;
+  SchedulerDecision decide(Database& database) const override;
 };
 
 } // namespace openpuzzle
