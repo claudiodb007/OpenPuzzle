@@ -85,7 +85,10 @@ void DaemonRunner::synchronizeWorkers() {
     }
 
     worker->completeExecution();
-    database_.upsertWorker(worker->toRecord());
+
+    database_.updateWorkerStatus(
+        worker->info().workerId,
+        WorkerAgent::stateToString(worker->state()));
   }
 }
 

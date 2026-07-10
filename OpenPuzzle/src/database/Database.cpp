@@ -714,6 +714,36 @@ int Database::upsertWorker(const WorkerRecord &w) {
   return ok ? (int)sqlite3_last_insert_rowid(db_) : 0;
 }
 
+bool Database::updateWorkerStatus(
+    int workerId,
+    const std::string& status) {
+  sqlite3_stmt *stmt = nullptr;
+
+  const char *sql =
+      "UPDATE workers "
+      "SET status=?, last_seen=CURRENT_TIMESTAMP "
+      "WHERE id=?";
+
+  if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+    return false;
+  }
+
+  sqlite3_bind_text(
+      stmt,
+      1,
+      status.c_str(),
+      -1,
+      SQLITE_TRANSIENT);
+
+  sqlite3_bind_int(stmt, 2, workerId);
+
+  bool ok = sqlite3_step(stmt) == SQLITE_DONE &&
+            sqlite3_changes(db_) > 0;
+
+  sqlite3_finalize(stmt);
+  return ok;
+}
+
 std::vector<WorkerRecord> Database::listWorkers() {
   std::vector<WorkerRecord> out;
 

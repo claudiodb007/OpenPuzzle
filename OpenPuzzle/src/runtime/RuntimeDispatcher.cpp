@@ -127,7 +127,9 @@ ExecutionResult RuntimeDispatcher::dispatchAndLaunch(
   BackgroundExecutionLauncher launcher;
   auto handle = worker->execute(launcher, request);
 
-  if (!database_.upsertWorker(worker->toRecord())) {
+  if (!database_.updateWorkerStatus(
+          worker->info().workerId,
+          WorkerAgent::stateToString(worker->state()))) {
     throw std::runtime_error("Could not update worker state");
   }
 

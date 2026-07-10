@@ -54,6 +54,7 @@ public:
   long long countJobsByState(int puzzleId, JobState state);
 
   int upsertWorker(const WorkerRecord &worker);
+  bool updateWorkerStatus(int workerId, const std::string& status);
   std::vector<WorkerRecord> listWorkers();
   std::optional<WorkerRecord> getWorker(int workerId);
 
