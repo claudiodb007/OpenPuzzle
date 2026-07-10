@@ -127,6 +127,10 @@ ExecutionResult RuntimeDispatcher::dispatchAndLaunch(
   BackgroundExecutionLauncher launcher;
   auto handle = worker->execute(launcher, request);
 
+  if (!database_.upsertWorker(worker->toRecord())) {
+    throw std::runtime_error("Could not update worker state");
+  }
+
   ExecutionResult result;
   result.success = handle.pid > 0;
   result.exitCode = result.success ? 0 : -1;

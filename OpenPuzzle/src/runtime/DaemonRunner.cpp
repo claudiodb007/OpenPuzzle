@@ -61,6 +61,34 @@ void DaemonRunner::stop() {
   running_ = false;
 }
 
+void DaemonRunner::synchronizeWorkers() {
+  for (auto* worker : workers_.all()) {
+    if (!worker || !worker->hasExecution()) {
+      continue;
+    }
+
+    const auto& handle = worker->currentExecution();
+
+    if (!handle) {
+      continue;
+    }
+
+    auto execution =
+        database_.getExecution(handle->executionId);
+
+    if (!execution) {
+      continue;
+    }
+
+    if (execution->status == ExecutionRecordStatus::Running) {
+      continue;
+    }
+
+    worker->completeExecution();
+    database_.upsertWorker(worker->toRecord());
+  }
+}
+
 void DaemonRunner::tick() {
   ++tickCount_;
 
@@ -98,6 +126,8 @@ void DaemonRunner::tick() {
   ExecutionProcessMonitor monitor(database_);
 
   auto summary = monitor.poll();
+
+  synchronizeWorkers();
 
   if (summary.finished ||
       summary.failed ||

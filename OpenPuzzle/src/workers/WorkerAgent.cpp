@@ -97,6 +97,17 @@ bool WorkerAgent::stop(ExecutionStopper& stopper) {
   return true;
 }
 
+bool WorkerAgent::completeExecution() {
+  if (!currentExecution_) {
+    return false;
+  }
+
+  currentExecution_.reset();
+  markIdle();
+
+  return true;
+}
+
 WorkerRecord WorkerAgent::toRecord() const {
   WorkerRecord record;
 

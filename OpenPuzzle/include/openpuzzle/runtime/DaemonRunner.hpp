@@ -15,6 +15,7 @@ public:
 
 private:
   void loadWorkers();
+  void synchronizeWorkers();
   void tick();
 
   Database& database_;

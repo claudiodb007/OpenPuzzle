@@ -59,6 +59,7 @@ public:
       const StartExecutionRequest& request);
 
   bool stop(ExecutionStopper& stopper);
+  bool completeExecution();
 
   WorkerRecord toRecord() const;
 

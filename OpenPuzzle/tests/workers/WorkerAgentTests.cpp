@@ -64,6 +64,19 @@ int main() {
   assert(!agent.hasExecution());
 
   assert(!agent.stop(stopper));
+  assert(!agent.completeExecution());
+
+  request.executionId = 2;
+  request.command = "exit 0";
+
+  auto completedHandle = agent.execute(launcher, request);
+  assert(completedHandle.pid > 0);
+  assert(agent.hasExecution());
+  assert(agent.busy());
+
+  assert(agent.completeExecution());
+  assert(!agent.hasExecution());
+  assert(agent.idle());
 
   agent.markOffline();
 
