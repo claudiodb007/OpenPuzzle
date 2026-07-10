@@ -8,6 +8,7 @@
 #include "openpuzzle/runtime/ExecutionProcessMonitor.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
 #include "openpuzzle/services/HeartbeatService.hpp"
+#include "openpuzzle/performance/GpuProfileManager.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -35,6 +36,33 @@ void DaemonRunner::loadWorkers() {
     info.speedMkeys = record.speedMkeys;
     info.temperature = record.temperature;
     info.power = record.power;
+
+    WorkerEngineCapability capability;
+    capability.engine = record.engine;
+    capability.backend = record.backend;
+    capability.device = 0;
+    capability.benchmarkSpeedMkeys =
+        record.speedMkeys;
+
+    GpuProfileManager profiles(database_);
+
+    auto profile = profiles.chooseBest(
+        record.gpuName,
+        record.backend,
+        record.engine);
+
+    if (profile) {
+      capability.blocks = profile->blocks;
+      capability.threads = profile->threads;
+      capability.points = profile->points;
+
+      if (capability.benchmarkSpeedMkeys <= 0.0) {
+        capability.benchmarkSpeedMkeys =
+            profile->averageSpeed;
+      }
+    }
+
+    info.capabilities.push_back(capability);
 
     workers_.add(WorkerAgent(info));
   }

@@ -11,6 +11,10 @@ struct WorkerEngineCapability {
   int device = 0;
   int vramMb = 0;
 
+  int blocks = 0;
+  int threads = 0;
+  int points = 0;
+
   double benchmarkSpeedMkeys = 0.0;
 
   bool available = true;
@@ -32,6 +36,12 @@ struct WorkerEngineCapability {
     }
 
     return true;
+  }
+
+  bool hasLaunchProfile() const {
+    return blocks > 0 &&
+           threads > 0 &&
+           points > 0;
   }
 };
 

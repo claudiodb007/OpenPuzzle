@@ -2,6 +2,7 @@
 
 #include "openpuzzle/core/WorkspaceManager.hpp"
 #include "openpuzzle/database/Database.hpp"
+#include "openpuzzle/dispatcher/ProfileSelector.hpp"
 #include "openpuzzle/runtime/ExecutionRepository.hpp"
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
@@ -71,6 +72,48 @@ StartExecutionRequest RuntimeDispatcher::prepare(
     throw std::runtime_error("Puzzle not found");
   }
 
+  auto* worker = workers_.find(decision.workerId);
+
+  if (!worker) {
+    throw std::runtime_error("Worker agent not found");
+  }
+
+  WorkerEngineCapability capability;
+
+  if (const auto* registered =
+          worker->bestCapability(
+              worker->info().engine,
+              worker->info().backend)) {
+    capability = *registered;
+  } else {
+    capability.engine = worker->info().engine;
+    capability.backend = worker->info().backend;
+    capability.device = 0;
+    capability.benchmarkSpeedMkeys =
+        worker->info().speedMkeys;
+  }
+
+  WorkerRecord workerRecord = worker->toRecord();
+
+  ProfileSelector profileSelector(database_);
+  auto profile = profileSelector.select(workerRecord);
+
+  if (profile) {
+    capability.blocks = profile->blocks;
+    capability.threads = profile->threads;
+    capability.points = profile->points;
+
+    if (capability.benchmarkSpeedMkeys <= 0.0) {
+      capability.benchmarkSpeedMkeys =
+          profile->averageSpeed;
+    }
+  }
+
+  if (!capability.hasLaunchProfile()) {
+    throw std::runtime_error(
+        "No GPU launch profile available for worker");
+  }
+
   auto bitcrack = ToolManager::bitcrackCudaPath();
 
   if (!bitcrack) {
@@ -89,6 +132,7 @@ StartExecutionRequest RuntimeDispatcher::prepare(
       *puzzle,
       *range,
       *job,
+      capability,
       *bitcrack,
       workspace);
 

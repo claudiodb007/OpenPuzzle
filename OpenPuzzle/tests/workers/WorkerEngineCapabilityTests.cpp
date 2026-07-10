@@ -24,6 +24,9 @@ int main() {
   cudaBitCrack.backend = "CUDA";
   cudaBitCrack.device = 0;
   cudaBitCrack.vramMb = 12288;
+  cudaBitCrack.blocks = 256;
+  cudaBitCrack.threads = 512;
+  cudaBitCrack.points = 2048;
   cudaBitCrack.benchmarkSpeedMkeys = 1350.0;
 
   WorkerEngineCapability openclBitCrack;
@@ -31,6 +34,9 @@ int main() {
   openclBitCrack.backend = "OpenCL";
   openclBitCrack.device = 0;
   openclBitCrack.vramMb = 8192;
+  openclBitCrack.blocks = 512;
+  openclBitCrack.threads = 256;
+  openclBitCrack.points = 256;
   openclBitCrack.benchmarkSpeedMkeys = 400.0;
 
   WorkerEngineCapability fasterCudaBitCrack;
@@ -38,6 +44,9 @@ int main() {
   fasterCudaBitCrack.backend = "CUDA";
   fasterCudaBitCrack.device = 1;
   fasterCudaBitCrack.vramMb = 16384;
+  fasterCudaBitCrack.blocks = 512;
+  fasterCudaBitCrack.threads = 1024;
+  fasterCudaBitCrack.points = 4096;
   fasterCudaBitCrack.benchmarkSpeedMkeys = 2100.0;
 
   WorkerEngineCapability keyHuntCpu;
@@ -75,6 +84,10 @@ int main() {
 
   assert(capability);
   assert(capability->device == 1);
+  assert(capability->blocks == 512);
+  assert(capability->threads == 1024);
+  assert(capability->points == 4096);
+  assert(capability->hasLaunchProfile());
   assert(capability->benchmarkSpeedMkeys == 2100.0);
 
   auto* opencl =
