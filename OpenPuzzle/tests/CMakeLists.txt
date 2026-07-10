@@ -688,3 +688,17 @@ add_test(
     NAME WorkerEngineCapabilityTests
     COMMAND WorkerEngineCapabilityTests
 )
+
+add_executable(WorkerHeartbeatTests
+    workers/WorkerHeartbeatTests.cpp
+)
+
+target_link_libraries(WorkerHeartbeatTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME WorkerHeartbeatTests
+    COMMAND WorkerHeartbeatTests
+)

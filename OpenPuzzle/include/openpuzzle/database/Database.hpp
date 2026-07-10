@@ -55,6 +55,16 @@ public:
 
   int upsertWorker(const WorkerRecord &worker);
   bool updateWorkerStatus(int workerId, const std::string& status);
+
+  bool updateWorkerHeartbeat(
+      int workerId,
+      const std::string& status,
+      double speedMkeys,
+      double temperature,
+      double power);
+
+  int markStaleWorkersOffline(int timeoutSeconds);
+
   std::vector<WorkerRecord> listWorkers();
   std::optional<WorkerRecord> getWorker(int workerId);
 

@@ -7,6 +7,7 @@
 #include "openpuzzle/runtime/RuntimeDispatcher.hpp"
 #include "openpuzzle/runtime/ExecutionProcessMonitor.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
+#include "openpuzzle/services/HeartbeatService.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -61,6 +62,25 @@ void DaemonRunner::stop() {
   running_ = false;
 }
 
+void DaemonRunner::heartbeatWorkers() {
+  HeartbeatService heartbeat(database_);
+
+  for (const auto* worker : workers_.all()) {
+    if (!worker || worker->offline()) {
+      continue;
+    }
+
+    heartbeat.update(
+        worker->info().workerId,
+        WorkerAgent::stateToString(worker->state()),
+        worker->info().speedMkeys,
+        worker->info().temperature,
+        worker->info().power);
+  }
+
+  heartbeat.expireStale(30);
+}
+
 void DaemonRunner::synchronizeWorkers() {
   for (auto* worker : workers_.all()) {
     if (!worker || !worker->hasExecution()) {
@@ -94,6 +114,8 @@ void DaemonRunner::synchronizeWorkers() {
 
 void DaemonRunner::tick() {
   ++tickCount_;
+
+  heartbeatWorkers();
 
   DaemonStatusCollector collector(database_);
   auto status = collector.collect();

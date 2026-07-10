@@ -8,19 +8,27 @@ class Database;
 
 class HeartbeatService {
 public:
-    explicit HeartbeatService(Database& database);
+  explicit HeartbeatService(Database& database);
 
-    void update(const std::string& machine,
-                const std::string& gpu,
-                const std::string& backend,
-                const std::string& engine,
-                const std::string& status,
-                double speed,
-                double temperature,
-                double power);
+  void update(const std::string& machine,
+              const std::string& gpu,
+              const std::string& backend,
+              const std::string& engine,
+              const std::string& status,
+              double speed,
+              double temperature,
+              double power);
+
+  bool update(int workerId,
+              const std::string& status,
+              double speed,
+              double temperature,
+              double power);
+
+  int expireStale(int timeoutSeconds);
 
 private:
-    Database& database_;
+  Database& database_;
 };
 
 } // namespace openpuzzle

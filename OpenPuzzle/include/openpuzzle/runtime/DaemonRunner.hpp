@@ -16,6 +16,7 @@ public:
 
 private:
   void loadWorkers();
+  void heartbeatWorkers();
   void synchronizeWorkers();
   void tick();
 

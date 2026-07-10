@@ -744,6 +744,77 @@ bool Database::updateWorkerStatus(
   return ok;
 }
 
+bool Database::updateWorkerHeartbeat(
+    int workerId,
+    const std::string& status,
+    double speedMkeys,
+    double temperature,
+    double power) {
+  sqlite3_stmt *stmt = nullptr;
+
+  const char *sql =
+      "UPDATE workers SET "
+      "status=?,"
+      "speed_mkeys=?,"
+      "temperature_c=?,"
+      "power_w=?,"
+      "last_seen=CURRENT_TIMESTAMP "
+      "WHERE id=?";
+
+  if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+    return false;
+  }
+
+  sqlite3_bind_text(
+      stmt,
+      1,
+      status.c_str(),
+      -1,
+      SQLITE_TRANSIENT);
+
+  sqlite3_bind_double(stmt, 2, speedMkeys);
+  sqlite3_bind_double(stmt, 3, temperature);
+  sqlite3_bind_double(stmt, 4, power);
+  sqlite3_bind_int(stmt, 5, workerId);
+
+  const bool ok =
+      sqlite3_step(stmt) == SQLITE_DONE &&
+      sqlite3_changes(db_) > 0;
+
+  sqlite3_finalize(stmt);
+  return ok;
+}
+
+int Database::markStaleWorkersOffline(int timeoutSeconds) {
+  if (timeoutSeconds < 0) {
+    return 0;
+  }
+
+  sqlite3_stmt *stmt = nullptr;
+
+  const char *sql =
+      "UPDATE workers "
+      "SET status='offline' "
+      "WHERE status!='offline' "
+      "AND unixepoch(last_seen) < unixepoch('now') - ?";
+
+  if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+    return 0;
+  }
+
+  sqlite3_bind_int(stmt, 1, timeoutSeconds);
+
+  if (sqlite3_step(stmt) != SQLITE_DONE) {
+    sqlite3_finalize(stmt);
+    return 0;
+  }
+
+  const int changed = sqlite3_changes(db_);
+
+  sqlite3_finalize(stmt);
+  return changed;
+}
+
 std::vector<WorkerRecord> Database::listWorkers() {
   std::vector<WorkerRecord> out;
 
