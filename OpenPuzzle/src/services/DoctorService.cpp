@@ -56,7 +56,7 @@ int DoctorService::execute(const std::vector<std::string>&) {
             std::cout << "GPU " << gpu.device << "............... "
                       << gpu.name << "\n";
             std::cout << "Memory.............. "
-                      << gpu.memory << "\n";
+                      << std::to_string(gpu.memoryMb) + " MiB" << "\n";
         }
     }
 

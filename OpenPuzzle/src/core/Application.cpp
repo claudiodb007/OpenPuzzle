@@ -491,7 +491,7 @@ int Application::cmdTools() {
 }
 int Application::cmdGpuList() {
   for (auto &g : GpuManager::listGpus())
-    std::cout << "GPU " << g.device << ": " << g.name << " | " << g.memory
+    std::cout << "GPU " << g.device << ": " << g.name << " | " << std::to_string(g.memoryMb) + " MiB"
               << " | " << g.uuid << "\n";
   return 0;
 }
