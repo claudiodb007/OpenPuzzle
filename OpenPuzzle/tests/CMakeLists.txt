@@ -674,3 +674,17 @@ add_test(
     NAME SchedulerPolicyInjectionTests
     COMMAND SchedulerPolicyInjectionTests
 )
+
+add_executable(WorkerEngineCapabilityTests
+    workers/WorkerEngineCapabilityTests.cpp
+)
+
+target_link_libraries(WorkerEngineCapabilityTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME WorkerEngineCapabilityTests
+    COMMAND WorkerEngineCapabilityTests
+)

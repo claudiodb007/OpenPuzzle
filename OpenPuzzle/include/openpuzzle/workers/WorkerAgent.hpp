@@ -2,9 +2,11 @@
 
 #include "openpuzzle/models/Models.hpp"
 #include "openpuzzle/runtime/ExecutionHandle.hpp"
+#include "openpuzzle/workers/WorkerEngineCapability.hpp"
 
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace openpuzzle {
 
@@ -31,6 +33,8 @@ struct WorkerAgentInfo {
   double speedMkeys = 0.0;
   double temperature = 0.0;
   double power = 0.0;
+
+  std::vector<WorkerEngineCapability> capabilities;
 };
 
 class WorkerAgent {
@@ -53,6 +57,13 @@ public:
 
   bool hasExecution() const;
   const std::optional<ExecutionHandle>& currentExecution() const;
+
+  bool supports(const std::string& engine,
+                const std::string& backend) const;
+
+  const WorkerEngineCapability* bestCapability(
+      const std::string& engine,
+      const std::string& backend) const;
 
   ExecutionHandle execute(
       BackgroundExecutionLauncher& launcher,

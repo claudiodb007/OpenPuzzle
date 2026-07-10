@@ -48,23 +48,50 @@ WorkerAgent* WorkerAgentRegistry::acquireIdle() {
 WorkerAgent* WorkerAgentRegistry::acquireIdle(
     const std::string& engine,
     const std::string& backend) {
+  WorkerAgent* selected = nullptr;
+  double selectedSpeed = -1.0;
+
   for (auto& agent : agents_) {
     if (!agent.idle()) {
       continue;
     }
 
-    if (!engine.empty() && agent.info().engine != engine) {
-      continue;
+    const auto* capability =
+        agent.bestCapability(engine, backend);
+
+    double speed = 0.0;
+
+    if (capability) {
+      speed = capability->benchmarkSpeedMkeys;
+    } else {
+      if (!agent.info().capabilities.empty()) {
+        continue;
+      }
+
+      if (!engine.empty() &&
+          agent.info().engine != engine) {
+        continue;
+      }
+
+      if (!backend.empty() &&
+          agent.info().backend != backend) {
+        continue;
+      }
+
+      speed = agent.info().speedMkeys;
     }
 
-    if (!backend.empty() && agent.info().backend != backend) {
-      continue;
+    if (!selected ||
+        speed > selectedSpeed ||
+        (speed == selectedSpeed &&
+         agent.info().workerId <
+             selected->info().workerId)) {
+      selected = &agent;
+      selectedSpeed = speed;
     }
-
-    return &agent;
   }
 
-  return nullptr;
+  return selected;
 }
 
 std::vector<WorkerAgent*> WorkerAgentRegistry::all() {

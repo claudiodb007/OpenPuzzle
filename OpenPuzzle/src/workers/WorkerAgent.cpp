@@ -59,6 +59,32 @@ WorkerAgent::currentExecution() const {
   return currentExecution_;
 }
 
+bool WorkerAgent::supports(
+    const std::string& engine,
+    const std::string& backend) const {
+  return bestCapability(engine, backend) != nullptr;
+}
+
+const WorkerEngineCapability* WorkerAgent::bestCapability(
+    const std::string& engine,
+    const std::string& backend) const {
+  const WorkerEngineCapability* selected = nullptr;
+
+  for (const auto& capability : info_.capabilities) {
+    if (!capability.matches(engine, backend)) {
+      continue;
+    }
+
+    if (!selected ||
+        capability.benchmarkSpeedMkeys >
+            selected->benchmarkSpeedMkeys) {
+      selected = &capability;
+    }
+  }
+
+  return selected;
+}
+
 ExecutionHandle WorkerAgent::execute(
     BackgroundExecutionLauncher& launcher,
     const StartExecutionRequest& request) {
