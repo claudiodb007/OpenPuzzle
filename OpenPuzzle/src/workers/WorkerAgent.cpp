@@ -100,6 +100,7 @@ bool WorkerAgent::stop(ExecutionStopper& stopper) {
 WorkerRecord WorkerAgent::toRecord() const {
   WorkerRecord record;
 
+  record.id = info_.workerId;
   record.machine = info_.machine;
   record.gpuName = info_.gpuName;
   record.backend = info_.backend;

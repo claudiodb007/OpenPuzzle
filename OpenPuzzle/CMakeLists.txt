@@ -27,6 +27,8 @@ add_library(OpenPuzzleCore
     src/runtime/ExecutionPersistence.cpp
     src/runtime/ExecutionProcessMonitor.cpp
     src/workers/Worker.cpp
+    src/workers/WorkerAgent.cpp
+    src/workers/WorkerAgentRegistry.cpp
     src/workers/WorkerRegistry.cpp
     src/core/ProcessRunner.cpp
     src/core/PosixProcessRunner.cpp

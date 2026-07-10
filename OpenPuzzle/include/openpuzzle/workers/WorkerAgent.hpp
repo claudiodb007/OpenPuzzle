@@ -19,6 +19,8 @@ enum class WorkerAgentState {
 };
 
 struct WorkerAgentInfo {
+  int workerId = 0;
+
   std::string machine;
   std::string gpuName;
   std::string backend;

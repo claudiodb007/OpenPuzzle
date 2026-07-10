@@ -604,3 +604,31 @@ add_test(
     NAME ExecutionProcessMonitorTests
     COMMAND ExecutionProcessMonitorTests
 )
+
+add_executable(WorkerAgentTests
+    workers/WorkerAgentTests.cpp
+)
+
+target_link_libraries(WorkerAgentTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME WorkerAgentTests
+    COMMAND WorkerAgentTests
+)
+
+add_executable(WorkerAgentRegistryTests
+    workers/WorkerAgentRegistryTests.cpp
+)
+
+target_link_libraries(WorkerAgentRegistryTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME WorkerAgentRegistryTests
+    COMMAND WorkerAgentRegistryTests
+)
