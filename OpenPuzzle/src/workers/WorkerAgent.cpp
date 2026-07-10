@@ -18,12 +18,12 @@ const WorkerAgentInfo& WorkerAgent::info() const {
   return info_;
 }
 
-WorkerState WorkerAgent::state() const {
+WorkerAgentState WorkerAgent::state() const {
   return info_.state;
 }
 
 bool WorkerAgent::offline() const {
-  return info_.state == WorkerState::Offline;
+  return info_.state == WorkerAgentState::Offline;
 }
 
 bool WorkerAgent::online() const {
@@ -31,23 +31,23 @@ bool WorkerAgent::online() const {
 }
 
 bool WorkerAgent::idle() const {
-  return info_.state == WorkerState::Idle;
+  return info_.state == WorkerAgentState::Idle;
 }
 
 bool WorkerAgent::busy() const {
-  return info_.state == WorkerState::Busy;
+  return info_.state == WorkerAgentState::Busy;
 }
 
 void WorkerAgent::markOffline() {
-  info_.state = WorkerState::Offline;
+  info_.state = WorkerAgentState::Offline;
 }
 
 void WorkerAgent::markIdle() {
-  info_.state = WorkerState::Idle;
+  info_.state = WorkerAgentState::Idle;
 }
 
 void WorkerAgent::markBusy() {
-  info_.state = WorkerState::Busy;
+  info_.state = WorkerAgentState::Busy;
 }
 
 bool WorkerAgent::hasExecution() const {
@@ -112,29 +112,29 @@ WorkerRecord WorkerAgent::toRecord() const {
   return record;
 }
 
-std::string WorkerAgent::stateToString(WorkerState state) {
+std::string WorkerAgent::stateToString(WorkerAgentState state) {
   switch (state) {
-  case WorkerState::Offline:
+  case WorkerAgentState::Offline:
     return "offline";
-  case WorkerState::Idle:
+  case WorkerAgentState::Idle:
     return "idle";
-  case WorkerState::Busy:
+  case WorkerAgentState::Busy:
     return "running";
   }
 
   return "offline";
 }
 
-WorkerState WorkerAgent::stateFromString(const std::string& state) {
+WorkerAgentState WorkerAgent::stateFromString(const std::string& state) {
   if (state == "idle") {
-    return WorkerState::Idle;
+    return WorkerAgentState::Idle;
   }
 
   if (state == "running" || state == "busy") {
-    return WorkerState::Busy;
+    return WorkerAgentState::Busy;
   }
 
-  return WorkerState::Offline;
+  return WorkerAgentState::Offline;
 }
 
 } // namespace openpuzzle

@@ -85,14 +85,14 @@ int main() {
   assert(record.engine == "BitCrack");
   assert(record.status == "offline");
 
-  assert(WorkerAgent::stateToString(WorkerState::Idle) == "idle");
-  assert(WorkerAgent::stateToString(WorkerState::Busy) == "running");
-  assert(WorkerAgent::stateToString(WorkerState::Offline) == "offline");
+  assert(WorkerAgent::stateToString(WorkerAgentState::Idle) == "idle");
+  assert(WorkerAgent::stateToString(WorkerAgentState::Busy) == "running");
+  assert(WorkerAgent::stateToString(WorkerAgentState::Offline) == "offline");
 
-  assert(WorkerAgent::stateFromString("idle") == WorkerState::Idle);
-  assert(WorkerAgent::stateFromString("running") == WorkerState::Busy);
-  assert(WorkerAgent::stateFromString("busy") == WorkerState::Busy);
-  assert(WorkerAgent::stateFromString("unknown") == WorkerState::Offline);
+  assert(WorkerAgent::stateFromString("idle") == WorkerAgentState::Idle);
+  assert(WorkerAgent::stateFromString("running") == WorkerAgentState::Busy);
+  assert(WorkerAgent::stateFromString("busy") == WorkerAgentState::Busy);
+  assert(WorkerAgent::stateFromString("unknown") == WorkerAgentState::Offline);
 
   std::filesystem::remove_all(workspace);
 

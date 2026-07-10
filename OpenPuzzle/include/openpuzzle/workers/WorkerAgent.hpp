@@ -12,7 +12,7 @@ class BackgroundExecutionLauncher;
 class ExecutionStopper;
 struct StartExecutionRequest;
 
-enum class WorkerState {
+enum class WorkerAgentState {
   Offline,
   Idle,
   Busy
@@ -24,7 +24,7 @@ struct WorkerAgentInfo {
   std::string backend;
   std::string engine;
 
-  WorkerState state = WorkerState::Idle;
+  WorkerAgentState state = WorkerAgentState::Idle;
 
   double speedMkeys = 0.0;
   double temperature = 0.0;
@@ -38,7 +38,7 @@ public:
 
   const WorkerAgentInfo& info() const;
 
-  WorkerState state() const;
+  WorkerAgentState state() const;
 
   bool offline() const;
   bool online() const;
@@ -60,8 +60,8 @@ public:
 
   WorkerRecord toRecord() const;
 
-  static std::string stateToString(WorkerState state);
-  static WorkerState stateFromString(const std::string& state);
+  static std::string stateToString(WorkerAgentState state);
+  static WorkerAgentState stateFromString(const std::string& state);
 
 private:
   WorkerAgentInfo info_;
