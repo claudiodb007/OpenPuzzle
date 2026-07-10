@@ -26,9 +26,9 @@ ExecutionHandle BackgroundExecutionLauncher::start(
   auto exitFile = (workspacePath / "exit.code").string();
 
   std::ostringstream shell;
-  shell << "setsid sh -c '"
+  shell << "setsid sh -c '("
         << request.command
-        << "; rc=$?; echo $rc > "
+        << "); rc=$?; echo $rc > "
         << exitFile
         << "; exit $rc"
         << "' >/dev/null 2>&1 & echo $!";

@@ -1,7 +1,13 @@
+#include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
+#include "openpuzzle/runtime/StartExecutionRequest.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
 
 #include <cassert>
+#include <chrono>
+#include <filesystem>
 #include <iostream>
+#include <thread>
+#include <unistd.h>
 
 using namespace openpuzzle;
 
@@ -30,6 +36,35 @@ int main() {
   assert(agent.idle());
   assert(agent.state() == WorkerState::Idle);
 
+  auto workspace =
+      std::filesystem::temp_directory_path() /
+      ("openpuzzle-worker-agent-" + std::to_string(getpid()));
+
+  std::filesystem::remove_all(workspace);
+  std::filesystem::create_directories(workspace);
+
+  StartExecutionRequest request;
+  request.executionId = 1;
+  request.workspace = workspace.string();
+  request.command = "exit 0";
+
+  BackgroundExecutionLauncher launcher;
+
+  auto handle = agent.execute(launcher, request);
+
+  assert(agent.busy());
+  assert(handle.executionId == 1);
+  assert(handle.pid > 0);
+  assert(handle.workspace == workspace.string());
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  assert(std::filesystem::exists(workspace / "process.pid"));
+  assert(std::filesystem::exists(workspace / "exit.code"));
+
+  agent.markIdle();
+  assert(agent.idle());
+
   agent.markOffline();
 
   assert(agent.offline());
@@ -51,6 +86,8 @@ int main() {
   assert(WorkerAgent::stateFromString("running") == WorkerState::Busy);
   assert(WorkerAgent::stateFromString("busy") == WorkerState::Busy);
   assert(WorkerAgent::stateFromString("unknown") == WorkerState::Offline);
+
+  std::filesystem::remove_all(workspace);
 
   std::cout << "WorkerAgentTests passed\n";
   return 0;

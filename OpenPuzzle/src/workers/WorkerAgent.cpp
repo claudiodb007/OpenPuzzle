@@ -1,5 +1,9 @@
 #include "openpuzzle/workers/WorkerAgent.hpp"
 
+#include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
+#include "openpuzzle/runtime/ExecutionHandle.hpp"
+#include "openpuzzle/runtime/StartExecutionRequest.hpp"
+
 #include <utility>
 
 namespace openpuzzle {
@@ -58,6 +62,19 @@ WorkerRecord WorkerAgent::toRecord() const {
   record.power = info_.power;
 
   return record;
+}
+
+ExecutionHandle WorkerAgent::execute(
+    BackgroundExecutionLauncher& launcher,
+    const StartExecutionRequest& request) {
+  markBusy();
+
+  try {
+    return launcher.start(request);
+  } catch (...) {
+    markIdle();
+    throw;
+  }
 }
 
 std::string WorkerAgent::stateToString(WorkerState state) {

@@ -6,6 +6,10 @@
 
 namespace openpuzzle {
 
+class BackgroundExecutionLauncher;
+struct StartExecutionRequest;
+struct ExecutionHandle;
+
 enum class WorkerState {
   Offline,
   Idle,
@@ -45,6 +49,10 @@ public:
   void markBusy();
 
   WorkerRecord toRecord() const;
+
+  ExecutionHandle execute(
+      BackgroundExecutionLauncher& launcher,
+      const StartExecutionRequest& request);
 
   static std::string stateToString(WorkerState state);
   static WorkerState stateFromString(const std::string& state);
