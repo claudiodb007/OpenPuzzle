@@ -18,13 +18,16 @@ SchedulerDecision SchedulerTick::execute() const {
 
   auto workers = database_.listWorkers();
 
-  if (workers.empty()) {
+  for (const auto& worker : workers) {
+    if (worker.status != "idle") {
+      continue;
+    }
+
+    decision.shouldDispatch = true;
+    decision.jobId = job->id;
+    decision.workerId = worker.id;
     return decision;
   }
-
-  decision.shouldDispatch = true;
-  decision.jobId = job->id;
-  decision.workerId = workers.front().id;
 
   return decision;
 }

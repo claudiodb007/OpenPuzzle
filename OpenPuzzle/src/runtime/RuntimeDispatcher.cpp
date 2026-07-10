@@ -7,6 +7,7 @@
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
+#include "openpuzzle/workers/WorkerAgentRegistry.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -14,8 +15,11 @@
 
 namespace openpuzzle {
 
-RuntimeDispatcher::RuntimeDispatcher(Database& database)
-    : database_(database) {}
+RuntimeDispatcher::RuntimeDispatcher(
+    Database& database,
+    WorkerAgentRegistry& workers)
+    : database_(database),
+      workers_(workers) {}
 
 bool RuntimeDispatcher::dispatch(const SchedulerDecision& decision) const {
   if (!decision.shouldDispatch) {
@@ -34,9 +38,9 @@ bool RuntimeDispatcher::dispatch(const SchedulerDecision& decision) const {
     return false;
   }
 
-  auto worker = database_.getWorker(decision.workerId);
+  auto* worker = workers_.find(decision.workerId);
 
-  if (!worker) {
+  if (!worker || !worker->idle()) {
     return false;
   }
 
@@ -114,27 +118,14 @@ ExecutionResult RuntimeDispatcher::dispatchAndLaunch(
     const SchedulerDecision& decision) const {
   auto request = prepare(decision);
 
-  auto workerRecord = database_.getWorker(decision.workerId);
+  auto* worker = workers_.find(decision.workerId);
 
-  if (!workerRecord) {
-    throw std::runtime_error("Worker not found");
+  if (!worker) {
+    throw std::runtime_error("Worker agent not found");
   }
 
-  WorkerAgentInfo info;
-  info.machine = workerRecord->machine;
-  info.gpuName = workerRecord->gpuName;
-  info.backend = workerRecord->backend;
-  info.engine = workerRecord->engine;
-  info.state =
-      WorkerAgent::stateFromString(workerRecord->status);
-  info.speedMkeys = workerRecord->speedMkeys;
-  info.temperature = workerRecord->temperature;
-  info.power = workerRecord->power;
-
-  WorkerAgent worker(info);
   BackgroundExecutionLauncher launcher;
-
-  auto handle = worker.execute(launcher, request);
+  auto handle = worker->execute(launcher, request);
 
   ExecutionResult result;
   result.success = handle.pid > 0;

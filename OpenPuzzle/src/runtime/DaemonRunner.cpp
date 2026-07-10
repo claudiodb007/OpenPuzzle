@@ -1,9 +1,12 @@
 #include "openpuzzle/runtime/DaemonRunner.hpp"
 
+#include "openpuzzle/database/Database.hpp"
+
 #include "openpuzzle/runtime/DaemonStatusCollector.hpp"
 #include "openpuzzle/runtime/SchedulerTick.hpp"
 #include "openpuzzle/runtime/RuntimeDispatcher.hpp"
 #include "openpuzzle/runtime/ExecutionProcessMonitor.hpp"
+#include "openpuzzle/workers/WorkerAgent.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -12,7 +15,29 @@
 namespace openpuzzle {
 
 DaemonRunner::DaemonRunner(Database& database)
-    : database_(database) {}
+    : database_(database) {
+  loadWorkers();
+}
+
+void DaemonRunner::loadWorkers() {
+  workers_.clear();
+
+  for (const auto& record : database_.listWorkers()) {
+    WorkerAgentInfo info;
+
+    info.workerId = record.id;
+    info.machine = record.machine;
+    info.gpuName = record.gpuName;
+    info.backend = record.backend;
+    info.engine = record.engine;
+    info.state = WorkerAgent::stateFromString(record.status);
+    info.speedMkeys = record.speedMkeys;
+    info.temperature = record.temperature;
+    info.power = record.power;
+
+    workers_.add(WorkerAgent(info));
+  }
+}
 
 int DaemonRunner::run(int ticks) {
   running_ = true;
@@ -51,7 +76,7 @@ void DaemonRunner::tick() {
   SchedulerTick scheduler(database_);
   auto decision = scheduler.execute();
 
-  RuntimeDispatcher dispatcher(database_);
+  RuntimeDispatcher dispatcher(database_, workers_);
 
   if (dispatcher.dispatch(decision)) {
     std::cout << "Decision.......... dispatch job "
