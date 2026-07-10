@@ -55,7 +55,7 @@ static int parseMemoryMb(const std::string& value) {
   return memoryMb;
 }
 
-std::vector<GpuInfo> GpuManager::listGpus() {
+std::vector<GpuInfo> GpuManager::listAllGpus() {
   std::vector<GpuInfo> result;
 
   auto output = runCommand(
