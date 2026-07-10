@@ -1,9 +1,10 @@
 #include "openpuzzle/workers/WorkerAgent.hpp"
 
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
-#include "openpuzzle/runtime/ExecutionHandle.hpp"
+#include "openpuzzle/runtime/ExecutionStopper.hpp"
 #include "openpuzzle/runtime/StartExecutionRequest.hpp"
 
+#include <stdexcept>
 #include <utility>
 
 namespace openpuzzle {
@@ -49,6 +50,53 @@ void WorkerAgent::markBusy() {
   info_.state = WorkerState::Busy;
 }
 
+bool WorkerAgent::hasExecution() const {
+  return currentExecution_.has_value();
+}
+
+const std::optional<ExecutionHandle>&
+WorkerAgent::currentExecution() const {
+  return currentExecution_;
+}
+
+ExecutionHandle WorkerAgent::execute(
+    BackgroundExecutionLauncher& launcher,
+    const StartExecutionRequest& request) {
+  if (offline()) {
+    throw std::runtime_error("Offline worker cannot execute work");
+  }
+
+  if (hasExecution()) {
+    throw std::runtime_error("Worker already has an active execution");
+  }
+
+  markBusy();
+
+  try {
+    auto handle = launcher.start(request);
+    currentExecution_ = handle;
+    return handle;
+  } catch (...) {
+    markIdle();
+    throw;
+  }
+}
+
+bool WorkerAgent::stop(ExecutionStopper& stopper) {
+  if (!currentExecution_) {
+    return false;
+  }
+
+  if (!stopper.stop(currentExecution_->workspace)) {
+    return false;
+  }
+
+  currentExecution_.reset();
+  markIdle();
+
+  return true;
+}
+
 WorkerRecord WorkerAgent::toRecord() const {
   WorkerRecord record;
 
@@ -62,19 +110,6 @@ WorkerRecord WorkerAgent::toRecord() const {
   record.power = info_.power;
 
   return record;
-}
-
-ExecutionHandle WorkerAgent::execute(
-    BackgroundExecutionLauncher& launcher,
-    const StartExecutionRequest& request) {
-  markBusy();
-
-  try {
-    return launcher.start(request);
-  } catch (...) {
-    markIdle();
-    throw;
-  }
 }
 
 std::string WorkerAgent::stateToString(WorkerState state) {

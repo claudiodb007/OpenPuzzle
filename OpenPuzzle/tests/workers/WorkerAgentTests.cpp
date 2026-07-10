@@ -1,12 +1,13 @@
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
+#include "openpuzzle/runtime/ExecutionStopper.hpp"
 #include "openpuzzle/runtime/StartExecutionRequest.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
 
 #include <cassert>
-#include <chrono>
 #include <filesystem>
 #include <iostream>
-#include <thread>
+#include <stdexcept>
+#include <string>
 #include <unistd.h>
 
 using namespace openpuzzle;
@@ -23,18 +24,7 @@ int main() {
   assert(agent.online());
   assert(agent.idle());
   assert(!agent.busy());
-  assert(!agent.offline());
-
-  agent.markBusy();
-
-  assert(agent.busy());
-  assert(!agent.idle());
-  assert(agent.state() == WorkerState::Busy);
-
-  agent.markIdle();
-
-  assert(agent.idle());
-  assert(agent.state() == WorkerState::Idle);
+  assert(!agent.hasExecution());
 
   auto workspace =
       std::filesystem::temp_directory_path() /
@@ -46,29 +36,46 @@ int main() {
   StartExecutionRequest request;
   request.executionId = 1;
   request.workspace = workspace.string();
-  request.command = "exit 0";
+  request.command = "sleep 9999";
 
   BackgroundExecutionLauncher launcher;
+  ExecutionStopper stopper;
 
   auto handle = agent.execute(launcher, request);
 
   assert(agent.busy());
-  assert(handle.executionId == 1);
+  assert(agent.hasExecution());
+  assert(agent.currentExecution());
+  assert(agent.currentExecution()->executionId == 1);
   assert(handle.pid > 0);
-  assert(handle.workspace == workspace.string());
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  bool duplicateRejected = false;
 
-  assert(std::filesystem::exists(workspace / "process.pid"));
-  assert(std::filesystem::exists(workspace / "exit.code"));
+  try {
+    agent.execute(launcher, request);
+  } catch (const std::runtime_error&) {
+    duplicateRejected = true;
+  }
 
-  agent.markIdle();
+  assert(duplicateRejected);
+
+  assert(agent.stop(stopper));
   assert(agent.idle());
+  assert(!agent.hasExecution());
+
+  assert(!agent.stop(stopper));
 
   agent.markOffline();
 
-  assert(agent.offline());
-  assert(!agent.online());
+  bool offlineRejected = false;
+
+  try {
+    agent.execute(launcher, request);
+  } catch (const std::runtime_error&) {
+    offlineRejected = true;
+  }
+
+  assert(offlineRejected);
 
   auto record = agent.toRecord();
 
