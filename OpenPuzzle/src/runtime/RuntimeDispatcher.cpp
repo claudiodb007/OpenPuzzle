@@ -6,6 +6,7 @@
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
+#include "openpuzzle/workers/WorkerAgent.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -111,15 +112,33 @@ StartExecutionRequest RuntimeDispatcher::prepare(
 
 ExecutionResult RuntimeDispatcher::dispatchAndLaunch(
     const SchedulerDecision& decision) const {
-
   auto request = prepare(decision);
 
+  auto workerRecord = database_.getWorker(decision.workerId);
+
+  if (!workerRecord) {
+    throw std::runtime_error("Worker not found");
+  }
+
+  WorkerAgentInfo info;
+  info.machine = workerRecord->machine;
+  info.gpuName = workerRecord->gpuName;
+  info.backend = workerRecord->backend;
+  info.engine = workerRecord->engine;
+  info.state =
+      WorkerAgent::stateFromString(workerRecord->status);
+  info.speedMkeys = workerRecord->speedMkeys;
+  info.temperature = workerRecord->temperature;
+  info.power = workerRecord->power;
+
+  WorkerAgent worker(info);
   BackgroundExecutionLauncher launcher;
-  auto handle = launcher.start(request);
+
+  auto handle = worker.execute(launcher, request);
 
   ExecutionResult result;
-  result.success = true;
-  result.exitCode = 0;
+  result.success = handle.pid > 0;
+  result.exitCode = result.success ? 0 : -1;
 
   return result;
 }
