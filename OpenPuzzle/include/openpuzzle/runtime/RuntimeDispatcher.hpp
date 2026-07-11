@@ -1,6 +1,7 @@
 #pragma once
 
 #include "openpuzzle/core/ExecutionResult.hpp"
+#include "openpuzzle/runtime/ExecutionPlan.hpp"
 #include "openpuzzle/runtime/SchedulerDecision.hpp"
 #include "openpuzzle/runtime/StartExecutionRequest.hpp"
 
@@ -18,6 +19,16 @@ public:
       EngineManager& engineManager);
 
   bool dispatch(
+      const ExecutionPlan& plan) const;
+
+  StartExecutionRequest prepare(
+      const ExecutionPlan& plan) const;
+
+  ExecutionResult dispatchAndLaunch(
+      const ExecutionPlan& plan) const;
+
+  // Compatibilidade temporária.
+  bool dispatch(
       const SchedulerDecision& decision) const;
 
   StartExecutionRequest prepare(
@@ -27,6 +38,9 @@ public:
       const SchedulerDecision& decision) const;
 
 private:
+  ExecutionPlan planFromDecision(
+      const SchedulerDecision& decision) const;
+
   Database& database_;
   WorkerAgentRegistry& workers_;
   EngineManager& engineManager_;

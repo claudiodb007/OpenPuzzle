@@ -4,8 +4,8 @@
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/dispatcher/ProfileSelector.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
-#include "openpuzzle/runtime/ExecutionRepository.hpp"
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
+#include "openpuzzle/runtime/ExecutionRepository.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
 #include "openpuzzle/workers/WorkerAgentRegistry.hpp"
@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <stdexcept>
+#include <utility>
 
 namespace openpuzzle {
 
@@ -24,60 +25,19 @@ RuntimeDispatcher::RuntimeDispatcher(
       workers_(workers),
       engineManager_(engineManager) {}
 
-bool RuntimeDispatcher::dispatch(const SchedulerDecision& decision) const {
+ExecutionPlan RuntimeDispatcher::planFromDecision(
+    const SchedulerDecision& decision) const {
+  ExecutionPlan plan;
+
   if (!decision.shouldDispatch) {
-    return false;
+    return plan;
   }
 
-  auto job = database_.getJob(decision.jobId);
-
-  if (!job) {
-    return false;
-  }
-
-  auto range = database_.getRange(job->rangeId);
-
-  if (!range) {
-    return false;
-  }
-
-  auto* worker = workers_.find(decision.workerId);
+  auto* worker =
+      workers_.find(decision.workerId);
 
   if (!worker || !worker->idle()) {
-    return false;
-  }
-
-  return true;
-}
-
-StartExecutionRequest RuntimeDispatcher::prepare(
-    const SchedulerDecision& decision) const {
-  if (!dispatch(decision)) {
-    throw std::runtime_error("Invalid scheduler decision");
-  }
-
-  auto job = database_.getJob(decision.jobId);
-
-  if (!job) {
-    throw std::runtime_error("Job not found");
-  }
-
-  auto range = database_.getRange(job->rangeId);
-
-  if (!range) {
-    throw std::runtime_error("Range not found");
-  }
-
-  auto puzzle = database_.getPuzzleById(job->puzzleId);
-
-  if (!puzzle) {
-    throw std::runtime_error("Puzzle not found");
-  }
-
-  auto* worker = workers_.find(decision.workerId);
-
-  if (!worker) {
-    throw std::runtime_error("Worker agent not found");
+    return plan;
   }
 
   WorkerEngineCapability capability;
@@ -88,22 +48,37 @@ StartExecutionRequest RuntimeDispatcher::prepare(
               worker->info().backend)) {
     capability = *registered;
   } else {
-    capability.engine = worker->info().engine;
-    capability.backend = worker->info().backend;
+    capability.engine =
+        worker->info().engine;
+
+    capability.backend =
+        worker->info().backend;
+
     capability.device = 0;
+
     capability.benchmarkSpeedMkeys =
         worker->info().speedMkeys;
   }
 
-  WorkerRecord workerRecord = worker->toRecord();
+  WorkerRecord workerRecord =
+      worker->toRecord();
 
-  ProfileSelector profileSelector(database_);
-  auto profile = profileSelector.select(workerRecord);
+  ProfileSelector profileSelector(
+      database_);
+
+  auto profile =
+      profileSelector.select(
+          workerRecord);
 
   if (profile) {
-    capability.blocks = profile->blocks;
-    capability.threads = profile->threads;
-    capability.points = profile->points;
+    capability.blocks =
+        profile->blocks;
+
+    capability.threads =
+        profile->threads;
+
+    capability.points =
+        profile->points;
 
     if (capability.benchmarkSpeedMkeys <= 0.0) {
       capability.benchmarkSpeedMkeys =
@@ -111,87 +86,255 @@ StartExecutionRequest RuntimeDispatcher::prepare(
     }
   }
 
-  if (!capability.hasLaunchProfile()) {
-    throw std::runtime_error(
-        "No GPU launch profile available for worker");
+  plan.workerId =
+      decision.workerId;
+
+  plan.jobId =
+      decision.jobId;
+
+  plan.engine =
+      capability.engine;
+
+  plan.backend =
+      capability.backend;
+
+  plan.capability =
+      capability;
+
+  plan.expectedSpeedMkeys =
+      capability.benchmarkSpeedMkeys;
+
+  plan.valid =
+      capability.available &&
+      capability.hasLaunchProfile();
+
+  return plan;
+}
+
+bool RuntimeDispatcher::dispatch(
+    const ExecutionPlan& plan) const {
+  if (!plan.valid ||
+      plan.jobId <= 0 ||
+      plan.workerId <= 0) {
+    return false;
   }
+
+  auto job =
+      database_.getJob(plan.jobId);
+
+  if (!job ||
+      job->state != JobState::Reserved) {
+    return false;
+  }
+
+  auto range =
+      database_.getRange(job->rangeId);
+
+  if (!range ||
+      range->status != RangeStatus::Reserved) {
+    return false;
+  }
+
+  auto* worker =
+      workers_.find(plan.workerId);
+
+  if (!worker ||
+      !worker->idle()) {
+    return false;
+  }
+
+  if (plan.engine.empty() ||
+      plan.backend.empty()) {
+    return false;
+  }
+
+  if (!plan.capability.available ||
+      !plan.capability.hasLaunchProfile()) {
+    return false;
+  }
+
+  if (!plan.capability.matches(
+          plan.engine,
+          plan.backend)) {
+    return false;
+  }
+
+  return true;
+}
+
+StartExecutionRequest RuntimeDispatcher::prepare(
+    const ExecutionPlan& plan) const {
+  if (!dispatch(plan)) {
+    throw std::runtime_error(
+        "Invalid execution plan");
+  }
+
+  auto job =
+      database_.getJob(plan.jobId);
+
+  if (!job) {
+    throw std::runtime_error(
+        "Job not found");
+  }
+
+  auto range =
+      database_.getRange(job->rangeId);
+
+  if (!range) {
+    throw std::runtime_error(
+        "Range not found");
+  }
+
+  auto puzzle =
+      database_.getPuzzleById(
+          job->puzzleId);
+
+  if (!puzzle) {
+    throw std::runtime_error(
+        "Puzzle not found");
+  }
+
+  auto* worker =
+      workers_.find(plan.workerId);
+
+  if (!worker) {
+    throw std::runtime_error(
+        "Worker agent not found");
+  }
+
+  const auto& capability =
+      plan.capability;
 
   auto executable =
       engineManager_.resolveExecutable(
-          capability.engine,
-          capability.backend);
+          plan.engine,
+          plan.backend);
 
   if (!executable) {
     throw std::runtime_error(
         "Search engine executable not available: " +
-        capability.engine +
+        plan.engine +
         " (" +
-        capability.backend +
+        plan.backend +
         ")");
   }
 
   WorkspaceManager workspaceManager(
-      std::filesystem::path(std::getenv("HOME") ? std::getenv("HOME") : ".") /
+      std::filesystem::path(
+          std::getenv("HOME")
+              ? std::getenv("HOME")
+              : ".") /
       ".local/share/OpenPuzzle");
 
-  auto workspace = workspaceManager.createJobWorkspace(job->id).string();
+  const auto workspace =
+      workspaceManager
+          .createJobWorkspace(job->id)
+          .string();
 
-  ExecutionRequestBuilder builder(engineManager_);
+  ExecutionRequestBuilder builder(
+      engineManager_);
 
-  auto request = builder.build(
-      *puzzle,
-      *range,
-      *job,
-      capability,
-      *executable,
-      workspace);
+  auto request =
+      builder.build(
+          *puzzle,
+          *range,
+          *job,
+          capability,
+          *executable,
+          workspace);
 
-  ExecutionRepository executionRepository(database_);
+  ExecutionRepository repository(
+      database_);
 
-  int executionId = executionRepository.create(
-      job->id,
-      workspace,
-      request.command,
-      "running");
+  const int executionId =
+      repository.create(
+          job->id,
+          workspace,
+          request.command,
+          "running");
 
   if (executionId <= 0) {
-    throw std::runtime_error("Could not create execution");
+    throw std::runtime_error(
+        "Could not create execution");
   }
 
-  database_.updateJobState(job->id, JobState::Running);
-  database_.updateRangeStatus(range->id, RangeStatus::Running);
+  if (!database_.updateJobState(
+          job->id,
+          JobState::Running)) {
+    throw std::runtime_error(
+        "Could not update job state");
+  }
 
-  request.executionId = executionId;
+  if (!database_.updateRangeStatus(
+          range->id,
+          RangeStatus::Running)) {
+    throw std::runtime_error(
+        "Could not update range state");
+  }
+
+  request.executionId =
+      executionId;
 
   return request;
 }
 
-
-
 ExecutionResult RuntimeDispatcher::dispatchAndLaunch(
-    const SchedulerDecision& decision) const {
-  auto request = prepare(decision);
+    const ExecutionPlan& plan) const {
+  auto request =
+      prepare(plan);
 
-  auto* worker = workers_.find(decision.workerId);
+  auto* worker =
+      workers_.find(plan.workerId);
 
   if (!worker) {
-    throw std::runtime_error("Worker agent not found");
+    throw std::runtime_error(
+        "Worker agent not found");
   }
 
   BackgroundExecutionLauncher launcher;
-  auto handle = worker->execute(launcher, request);
+
+  auto handle =
+      worker->execute(
+          launcher,
+          request);
 
   if (!database_.updateWorkerStatus(
           worker->info().workerId,
-          WorkerAgent::stateToString(worker->state()))) {
-    throw std::runtime_error("Could not update worker state");
+          WorkerAgent::stateToString(
+              worker->state()))) {
+    throw std::runtime_error(
+        "Could not update worker state");
   }
 
   ExecutionResult result;
-  result.success = handle.pid > 0;
-  result.exitCode = result.success ? 0 : -1;
+
+  result.success =
+      handle.pid > 0;
+
+  result.exitCode =
+      result.success
+          ? 0
+          : -1;
 
   return result;
+}
+
+bool RuntimeDispatcher::dispatch(
+    const SchedulerDecision& decision) const {
+  return dispatch(
+      planFromDecision(decision));
+}
+
+StartExecutionRequest RuntimeDispatcher::prepare(
+    const SchedulerDecision& decision) const {
+  return prepare(
+      planFromDecision(decision));
+}
+
+ExecutionResult RuntimeDispatcher::dispatchAndLaunch(
+    const SchedulerDecision& decision) const {
+  return dispatchAndLaunch(
+      planFromDecision(decision));
 }
 
 } // namespace openpuzzle

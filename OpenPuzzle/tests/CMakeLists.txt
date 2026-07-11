@@ -885,3 +885,17 @@ add_test(
     NAME ExecutionPlannerTests
     COMMAND ExecutionPlannerTests
 )
+
+add_executable(RuntimeDispatcherPlanTests
+    runtime/RuntimeDispatcherPlanTests.cpp
+)
+
+target_link_libraries(RuntimeDispatcherPlanTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME RuntimeDispatcherPlanTests
+    COMMAND RuntimeDispatcherPlanTests
+)
