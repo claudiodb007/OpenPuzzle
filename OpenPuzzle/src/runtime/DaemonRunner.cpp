@@ -6,13 +6,17 @@
 #include "openpuzzle/runtime/SchedulerTick.hpp"
 #include "openpuzzle/runtime/RuntimeDispatcher.hpp"
 #include "openpuzzle/runtime/ExecutionProcessMonitor.hpp"
+#include "openpuzzle/runtime/ExecutionResource.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
+#include "openpuzzle/workers/WorkerAgentFactory.hpp"
 #include "openpuzzle/services/HeartbeatService.hpp"
 #include "openpuzzle/performance/GpuProfileManager.hpp"
 
 #include <chrono>
 #include <iostream>
+#include <string>
 #include <thread>
+#include <utility>
 
 namespace openpuzzle {
 
@@ -24,6 +28,8 @@ DaemonRunner::DaemonRunner(Database& database)
 void DaemonRunner::loadWorkers() {
   workers_.clear();
 
+  GpuProfileManager profiles(database_);
+
   for (const auto& record : database_.listWorkers()) {
     WorkerAgentInfo info;
 
@@ -32,19 +38,32 @@ void DaemonRunner::loadWorkers() {
     info.gpuName = record.gpuName;
     info.backend = record.backend;
     info.engine = record.engine;
-    info.state = WorkerAgent::stateFromString(record.status);
+    info.state =
+        WorkerAgent::stateFromString(record.status);
     info.speedMkeys = record.speedMkeys;
     info.temperature = record.temperature;
     info.power = record.power;
 
-    WorkerEngineCapability capability;
-    capability.engine = record.engine;
-    capability.backend = record.backend;
-    capability.device = 0;
-    capability.benchmarkSpeedMkeys =
-        record.speedMkeys;
+    ExecutionResource resource;
 
-    GpuProfileManager profiles(database_);
+    resource.id =
+        record.backend + ":" +
+        std::to_string(record.id);
+
+    resource.name = record.gpuName;
+    resource.engine = record.engine;
+    resource.backend = record.backend;
+    resource.device = 0;
+    resource.available =
+        record.status != "offline";
+
+    resource.capability.engine = record.engine;
+    resource.capability.backend = record.backend;
+    resource.capability.device = resource.device;
+    resource.capability.available =
+        resource.available;
+    resource.capability.benchmarkSpeedMkeys =
+        record.speedMkeys;
 
     auto profile = profiles.chooseBest(
         record.gpuName,
@@ -52,19 +71,27 @@ void DaemonRunner::loadWorkers() {
         record.engine);
 
     if (profile) {
-      capability.blocks = profile->blocks;
-      capability.threads = profile->threads;
-      capability.points = profile->points;
+      resource.capability.blocks =
+          profile->blocks;
 
-      if (capability.benchmarkSpeedMkeys <= 0.0) {
-        capability.benchmarkSpeedMkeys =
+      resource.capability.threads =
+          profile->threads;
+
+      resource.capability.points =
+          profile->points;
+
+      if (resource.capability.benchmarkSpeedMkeys <= 0.0) {
+        resource.capability.benchmarkSpeedMkeys =
             profile->averageSpeed;
       }
     }
 
-    info.capabilities.push_back(capability);
+    auto agent =
+        WorkerAgentFactory::create(
+            resource,
+            std::move(info));
 
-    workers_.add(WorkerAgent(info));
+    workers_.add(std::move(agent));
   }
 }
 
