@@ -786,3 +786,17 @@ add_test(
     NAME ExecutionRequestBuilderTests
     COMMAND ExecutionRequestBuilderTests
 )
+
+add_executable(EngineLaunchBuilderTests
+    engines/EngineLaunchBuilderTests.cpp
+)
+
+target_link_libraries(EngineLaunchBuilderTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME EngineLaunchBuilderTests
+    COMMAND EngineLaunchBuilderTests
+)
