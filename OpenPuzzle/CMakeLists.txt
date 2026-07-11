@@ -21,6 +21,7 @@ add_library(OpenPuzzleCore
     src/runtime/RuntimeCoordinator.cpp
     src/runtime/ExecutionPlanner.cpp
     src/runtime/ExecutionRequestBuilder.cpp
+    src/runtime/LocalExecutionBackend.cpp
     src/runtime/ExecutionResourceFactory.cpp
     src/runtime/ExecutionRegistry.cpp
     src/runtime/ExecutionLauncher.cpp

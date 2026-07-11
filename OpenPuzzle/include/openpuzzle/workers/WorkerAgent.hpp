@@ -69,6 +69,9 @@ public:
       BackgroundExecutionLauncher& launcher,
       const StartExecutionRequest& request);
 
+  bool attachExecution(
+      const ExecutionHandle& handle);
+
   bool stop(ExecutionStopper& stopper);
   bool completeExecution();
 

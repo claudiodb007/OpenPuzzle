@@ -6,6 +6,7 @@
 #include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/runtime/ExecutionRepository.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
+#include "openpuzzle/runtime/LocalExecutionBackend.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
 #include "openpuzzle/workers/WorkerAgentRegistry.hpp"
 #include "openpuzzle/workers/WorkerRuntime.hpp"
@@ -291,8 +292,11 @@ ExecutionResult RuntimeDispatcher::dispatchAndLaunch(
         "Worker agent not found");
   }
 
+  LocalExecutionBackend backend;
+
   WorkerRuntime runtime(
-      *worker);
+      *worker,
+      backend);
 
   const bool started =
       runtime.start(request);

@@ -7,21 +7,21 @@
 
 namespace openpuzzle {
 
-class BackgroundExecutionLauncher;
-class ExecutionStopper;
+class IExecutionBackend;
 class WorkerAgent;
 struct StartExecutionRequest;
 
-class WorkerRuntime : public IWorkerRuntime {
+class WorkerRuntime final
+    : public IWorkerRuntime {
 public:
-  explicit WorkerRuntime(
-      WorkerAgent& worker);
+  WorkerRuntime(
+      WorkerAgent& worker,
+      IExecutionBackend& backend);
 
   bool start(
       const StartExecutionRequest& request) override;
 
   bool stop() override;
-
   bool complete() override;
 
   bool busy() const override;
@@ -32,6 +32,7 @@ public:
 
 private:
   WorkerAgent& worker_;
+  IExecutionBackend& backend_;
 };
 
 } // namespace openpuzzle

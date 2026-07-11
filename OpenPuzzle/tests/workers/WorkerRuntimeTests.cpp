@@ -1,4 +1,5 @@
 #include "openpuzzle/runtime/StartExecutionRequest.hpp"
+#include "openpuzzle/runtime/LocalExecutionBackend.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
 #include "openpuzzle/workers/WorkerRuntime.hpp"
 
@@ -38,7 +39,11 @@ static WorkerAgent makeWorker() {
 int main() {
   auto worker = makeWorker();
 
-  WorkerRuntime runtime(worker);
+  LocalExecutionBackend backend;
+
+  WorkerRuntime runtime(
+      worker,
+      backend);
 
   assert(runtime.idle());
   assert(!runtime.busy());

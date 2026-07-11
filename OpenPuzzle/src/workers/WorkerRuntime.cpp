@@ -1,17 +1,16 @@
 #include "openpuzzle/workers/WorkerRuntime.hpp"
 
-#include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
-#include "openpuzzle/runtime/ExecutionStopper.hpp"
+#include "openpuzzle/runtime/IExecutionBackend.hpp"
 #include "openpuzzle/runtime/StartExecutionRequest.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
-
-#include <stdexcept>
 
 namespace openpuzzle {
 
 WorkerRuntime::WorkerRuntime(
-    WorkerAgent& worker)
-    : worker_(worker) {}
+    WorkerAgent& worker,
+    IExecutionBackend& backend)
+    : worker_(worker),
+      backend_(backend) {}
 
 bool WorkerRuntime::start(
     const StartExecutionRequest& request) {
@@ -32,24 +31,34 @@ bool WorkerRuntime::start(
     return false;
   }
 
-  BackgroundExecutionLauncher launcher;
-
   const auto handle =
-      worker_.execute(
-          launcher,
-          request);
+      backend_.launch(request);
 
-  return handle.pid > 0;
-}
-
-bool WorkerRuntime::stop() {
-  if (!worker_.hasExecution()) {
+  if (handle.pid <= 0) {
     return false;
   }
 
-  ExecutionStopper stopper;
+  if (!worker_.attachExecution(handle)) {
+    backend_.stop(handle);
+    return false;
+  }
 
-  return worker_.stop(stopper);
+  return true;
+}
+
+bool WorkerRuntime::stop() {
+  if (!worker_.currentExecution()) {
+    return false;
+  }
+
+  const auto handle =
+      *worker_.currentExecution();
+
+  if (!backend_.stop(handle)) {
+    return false;
+  }
+
+  return worker_.completeExecution();
 }
 
 bool WorkerRuntime::complete() {

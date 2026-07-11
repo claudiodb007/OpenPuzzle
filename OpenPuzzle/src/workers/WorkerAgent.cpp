@@ -108,6 +108,22 @@ ExecutionHandle WorkerAgent::execute(
   }
 }
 
+bool WorkerAgent::attachExecution(
+    const ExecutionHandle& handle) {
+  if (offline() ||
+      hasExecution() ||
+      handle.executionId <= 0 ||
+      handle.pid <= 0 ||
+      handle.workspace.empty()) {
+    return false;
+  }
+
+  currentExecution_ = handle;
+  markBusy();
+
+  return true;
+}
+
 bool WorkerAgent::stop(ExecutionStopper& stopper) {
   if (!currentExecution_) {
     return false;
