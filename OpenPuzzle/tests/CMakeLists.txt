@@ -913,3 +913,17 @@ add_test(
     NAME RuntimeTickResultTests
     COMMAND RuntimeTickResultTests
 )
+
+add_executable(WorkerRuntimeTests
+    workers/WorkerRuntimeTests.cpp
+)
+
+target_link_libraries(WorkerRuntimeTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME WorkerRuntimeTests
+    COMMAND WorkerRuntimeTests
+)

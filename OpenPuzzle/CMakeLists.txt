@@ -36,6 +36,7 @@ add_library(OpenPuzzleCore
     src/workers/WorkerAgentFactory.cpp
     src/workers/WorkerAgentRegistry.cpp
     src/workers/WorkerLifecycle.cpp
+    src/workers/WorkerRuntime.cpp
     src/workers/WorkerRegistry.cpp
     src/core/ProcessRunner.cpp
     src/core/PosixProcessRunner.cpp
