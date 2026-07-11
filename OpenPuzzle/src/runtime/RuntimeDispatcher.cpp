@@ -7,7 +7,6 @@
 #include "openpuzzle/runtime/ExecutionRepository.hpp"
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
-#include "openpuzzle/tools/ToolManager.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
 #include "openpuzzle/workers/WorkerAgentRegistry.hpp"
 
@@ -117,10 +116,18 @@ StartExecutionRequest RuntimeDispatcher::prepare(
         "No GPU launch profile available for worker");
   }
 
-  auto bitcrack = ToolManager::bitcrackCudaPath();
+  auto executable =
+      engineManager_.resolveExecutable(
+          capability.engine,
+          capability.backend);
 
-  if (!bitcrack) {
-    throw std::runtime_error("BitCrack CUDA executable not configured");
+  if (!executable) {
+    throw std::runtime_error(
+        "Search engine executable not available: " +
+        capability.engine +
+        " (" +
+        capability.backend +
+        ")");
   }
 
   WorkspaceManager workspaceManager(
@@ -136,7 +143,7 @@ StartExecutionRequest RuntimeDispatcher::prepare(
       *range,
       *job,
       capability,
-      *bitcrack,
+      *executable,
       workspace);
 
   ExecutionRepository executionRepository(database_);
