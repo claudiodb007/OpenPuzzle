@@ -856,3 +856,17 @@ add_test(
     NAME EngineParserFactoryTests
     COMMAND EngineParserFactoryTests
 )
+
+add_executable(CapabilitySchedulerTests
+    scheduler/CapabilitySchedulerTests.cpp
+)
+
+target_link_libraries(CapabilitySchedulerTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME CapabilitySchedulerTests
+    COMMAND CapabilitySchedulerTests
+)
