@@ -3,12 +3,10 @@
 #include "openpuzzle/database/Database.hpp"
 
 #include "openpuzzle/runtime/DaemonStatusCollector.hpp"
-#include "openpuzzle/runtime/SchedulerTick.hpp"
-#include "openpuzzle/runtime/RuntimeDispatcher.hpp"
+#include "openpuzzle/runtime/RuntimeCoordinator.hpp"
 #include "openpuzzle/runtime/ExecutionResource.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
 #include "openpuzzle/workers/WorkerAgentFactory.hpp"
-#include "openpuzzle/workers/WorkerLifecycle.hpp"
 #include "openpuzzle/performance/GpuProfileManager.hpp"
 
 #include <chrono>
@@ -121,57 +119,61 @@ void DaemonRunner::stop() {
 void DaemonRunner::tick() {
   ++tickCount_;
 
-  WorkerLifecycle lifecycle(
-      database_,
-      workers_);
-
-  lifecycle.refreshHeartbeats();
-
   DaemonStatusCollector collector(database_);
   auto status = collector.collect();
 
-  std::cout << "Tick.............. " << tickCount_ << "\n";
-  std::cout << "Reserved jobs..... " << status.reservedJobs << "\n";
-  std::cout << "Running jobs...... " << status.runningJobs << "\n";
-  std::cout << "Running executions " << status.runningExecutions << "\n";
-  std::cout << "Workers........... " << status.workers << "\n";
+  std::cout << "Tick.............. "
+            << tickCount_ << "\n";
 
-  SchedulerTick scheduler(database_, schedulingPolicy_);
-  auto decision = scheduler.execute();
+  std::cout << "Reserved jobs..... "
+            << status.reservedJobs << "\n";
 
-  RuntimeDispatcher dispatcher(database_, workers_);
+  std::cout << "Running jobs...... "
+            << status.runningJobs << "\n";
 
-  if (dispatcher.dispatch(decision)) {
+  std::cout << "Running executions "
+            << status.runningExecutions << "\n";
+
+  std::cout << "Workers........... "
+            << status.workers << "\n";
+
+  RuntimeCoordinator coordinator(
+      database_,
+      workers_,
+      schedulingPolicy_);
+
+  auto result = coordinator.tick();
+
+  if (result.dispatched) {
     std::cout << "Decision.......... dispatch job "
-              << decision.jobId
+              << result.decision.jobId
               << " to worker "
-              << decision.workerId
+              << result.decision.workerId
               << "\n";
-
-    auto result = dispatcher.dispatchAndLaunch(decision);
 
     std::cout << "Execution result.. "
-              << (result.success ? "success" : "failed")
+              << (result.launchSuccess
+                      ? "success"
+                      : "failed")
               << "\n";
-    std::cout << "Exit code......... " << result.exitCode << "\n";
+
+    std::cout << "Exit code......... "
+              << result.exitCode
+              << "\n";
   } else {
     std::cout << "Decision.......... idle\n";
   }
 
-  auto summary =
-      lifecycle.monitorExecutions();
-
-  if (summary.finished ||
-      summary.failed ||
-      summary.cancelled) {
-
+  if (result.monitor.finished ||
+      result.monitor.failed ||
+      result.monitor.cancelled) {
     std::cout
         << "Monitor........... "
-        << summary.finished
+        << result.monitor.finished
         << " finished, "
-        << summary.failed
+        << result.monitor.failed
         << " failed, "
-        << summary.cancelled
+        << result.monitor.cancelled
         << " cancelled\n";
   }
 }

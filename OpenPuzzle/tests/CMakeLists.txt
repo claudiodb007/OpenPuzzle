@@ -744,3 +744,17 @@ add_test(
     NAME WorkerLifecycleTests
     COMMAND WorkerLifecycleTests
 )
+
+add_executable(RuntimeCoordinatorTests
+    runtime/RuntimeCoordinatorTests.cpp
+)
+
+target_link_libraries(RuntimeCoordinatorTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME RuntimeCoordinatorTests
+    COMMAND RuntimeCoordinatorTests
+)
