@@ -30,6 +30,7 @@ add_library(OpenPuzzleCore
     src/runtime/ExecutionProcessMonitor.cpp
     src/workers/Worker.cpp
     src/workers/WorkerAgent.cpp
+    src/workers/WorkerAgentFactory.cpp
     src/workers/WorkerAgentRegistry.cpp
     src/workers/WorkerRegistry.cpp
     src/core/ProcessRunner.cpp

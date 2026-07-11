@@ -1,0 +1,21 @@
+#pragma once
+
+#include "openpuzzle/runtime/ExecutionResource.hpp"
+#include "openpuzzle/workers/WorkerAgent.hpp"
+
+#include <vector>
+
+namespace openpuzzle {
+
+class WorkerAgentFactory {
+public:
+
+  static WorkerAgent create(
+      const ExecutionResource& resource);
+
+  static std::vector<WorkerAgent> create(
+      const std::vector<ExecutionResource>& resources);
+};
+
+}
+

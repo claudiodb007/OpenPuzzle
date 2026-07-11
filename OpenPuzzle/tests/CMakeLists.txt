@@ -716,3 +716,17 @@ add_test(
     NAME ExecutionResourceFactoryTests
     COMMAND ExecutionResourceFactoryTests
 )
+
+add_executable(WorkerAgentFactoryTests
+    workers/WorkerAgentFactoryTests.cpp
+)
+
+target_link_libraries(WorkerAgentFactoryTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME WorkerAgentFactoryTests
+    COMMAND WorkerAgentFactoryTests
+)
