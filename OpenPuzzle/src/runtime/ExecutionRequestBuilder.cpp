@@ -24,6 +24,10 @@ static std::string normalizeEngineId(
   return engine;
 }
 
+ExecutionRequestBuilder::ExecutionRequestBuilder(
+    EngineManager& engineManager)
+    : engineManager_(engineManager) {}
+
 StartExecutionRequest ExecutionRequestBuilder::build(
     const PuzzleRecord& puzzle,
     const RangeRecord& range,
@@ -45,9 +49,7 @@ StartExecutionRequest ExecutionRequestBuilder::build(
           capability,
           workspace);
 
-  EngineManager engineManager;
-
-  auto engine = engineManager.create(
+  auto engine = engineManager_.create(
       engineId,
       executable);
 

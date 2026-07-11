@@ -1,5 +1,6 @@
 #pragma once
 
+#include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/scheduler/DefaultSchedulingPolicy.hpp"
 #include "openpuzzle/workers/WorkerAgentRegistry.hpp"
 
@@ -21,6 +22,7 @@ private:
   Database& database_;
   WorkerAgentRegistry workers_;
   DefaultSchedulingPolicy schedulingPolicy_;
+  EngineManager engineManager_;
 
   bool running_ = false;
   int tickCount_ = 0;

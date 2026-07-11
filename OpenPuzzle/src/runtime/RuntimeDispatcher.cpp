@@ -3,6 +3,7 @@
 #include "openpuzzle/core/WorkspaceManager.hpp"
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/dispatcher/ProfileSelector.hpp"
+#include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/runtime/ExecutionRepository.hpp"
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
@@ -18,9 +19,11 @@ namespace openpuzzle {
 
 RuntimeDispatcher::RuntimeDispatcher(
     Database& database,
-    WorkerAgentRegistry& workers)
+    WorkerAgentRegistry& workers,
+    EngineManager& engineManager)
     : database_(database),
-      workers_(workers) {}
+      workers_(workers),
+      engineManager_(engineManager) {}
 
 bool RuntimeDispatcher::dispatch(const SchedulerDecision& decision) const {
   if (!decision.shouldDispatch) {
@@ -126,7 +129,7 @@ StartExecutionRequest RuntimeDispatcher::prepare(
 
   auto workspace = workspaceManager.createJobWorkspace(job->id).string();
 
-  ExecutionRequestBuilder builder;
+  ExecutionRequestBuilder builder(engineManager_);
 
   auto request = builder.build(
       *puzzle,

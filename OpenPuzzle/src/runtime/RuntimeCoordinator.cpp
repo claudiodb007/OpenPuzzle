@@ -1,6 +1,8 @@
 #include "openpuzzle/runtime/RuntimeCoordinator.hpp"
 
+#include "openpuzzle/core/EventBus.hpp"
 #include "openpuzzle/database/Database.hpp"
+#include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/runtime/RuntimeDispatcher.hpp"
 #include "openpuzzle/runtime/SchedulerTick.hpp"
 #include "openpuzzle/scheduler/SchedulingPolicy.hpp"
@@ -12,17 +14,37 @@ namespace openpuzzle {
 RuntimeCoordinator::RuntimeCoordinator(
     Database& database,
     WorkerAgentRegistry& workers,
-    const SchedulingPolicy& schedulingPolicy)
+    const SchedulingPolicy& schedulingPolicy,
+    EngineManager& engineManager)
     : database_(database),
       workers_(workers),
-      schedulingPolicy_(schedulingPolicy) {}
+      schedulingPolicy_(schedulingPolicy),
+      engineManager_(engineManager) {}
+
+RuntimeCoordinator::RuntimeCoordinator(
+    Database& database,
+    WorkerAgentRegistry& workers,
+    const SchedulingPolicy& schedulingPolicy,
+    EngineManager& engineManager,
+    EventBus& eventBus)
+    : database_(database),
+      workers_(workers),
+      schedulingPolicy_(schedulingPolicy),
+      engineManager_(engineManager),
+      eventBus_(&eventBus) {}
 
 RuntimeTickResult RuntimeCoordinator::tick() {
   RuntimeTickResult result;
 
-  WorkerLifecycle lifecycle(
-      database_,
-      workers_);
+  WorkerLifecycle lifecycle =
+      eventBus_
+          ? WorkerLifecycle(
+                database_,
+                workers_,
+                *eventBus_)
+          : WorkerLifecycle(
+                database_,
+                workers_);
 
   lifecycle.refreshHeartbeats();
 
@@ -34,7 +56,8 @@ RuntimeTickResult RuntimeCoordinator::tick() {
 
   RuntimeDispatcher dispatcher(
       database_,
-      workers_);
+      workers_,
+      engineManager_);
 
   if (dispatcher.dispatch(result.decision)) {
     auto executionResult =
@@ -46,6 +69,22 @@ RuntimeTickResult RuntimeCoordinator::tick() {
         executionResult.success;
     result.exitCode =
         executionResult.exitCode;
+
+    if (eventBus_) {
+      Event event;
+      event.type =
+          EventType::ExecutionDispatched;
+      event.jobId =
+          result.decision.jobId;
+      event.workerId =
+          result.decision.workerId;
+      event.exitCode =
+          result.exitCode;
+      event.message =
+          "Job dispatched to worker";
+
+      eventBus_->publish(event);
+    }
   }
 
   result.monitor =

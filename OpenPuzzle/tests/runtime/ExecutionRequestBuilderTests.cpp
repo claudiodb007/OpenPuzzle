@@ -1,4 +1,5 @@
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
+#include "openpuzzle/engines/EngineManager.hpp"
 
 #include <cassert>
 #include <filesystem>
@@ -64,7 +65,8 @@ int main() {
   capability.threads = 1024;
   capability.points = 4096;
 
-  ExecutionRequestBuilder builder;
+  EngineManager engineManager;
+  ExecutionRequestBuilder builder(engineManager);
 
   auto request = builder.build(
       makePuzzle(),

@@ -140,7 +140,8 @@ void DaemonRunner::tick() {
   RuntimeCoordinator coordinator(
       database_,
       workers_,
-      schedulingPolicy_);
+      schedulingPolicy_,
+      engineManager_);
 
   auto result = coordinator.tick();
 

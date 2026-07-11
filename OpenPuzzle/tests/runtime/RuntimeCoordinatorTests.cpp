@@ -1,4 +1,5 @@
 #include "openpuzzle/database/Database.hpp"
+#include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/runtime/RuntimeCoordinator.hpp"
 #include "openpuzzle/scheduler/SchedulingPolicy.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
@@ -49,10 +50,13 @@ int main() {
 
   IdleSchedulingPolicy policy;
 
+  EngineManager engineManager;
+
   RuntimeCoordinator coordinator(
       database,
       workers,
-      policy);
+      policy,
+      engineManager);
 
   auto result = coordinator.tick();
 
