@@ -23,7 +23,7 @@ int main() {
   ctx.puzzleId = 71;
   ctx.jobId = 42;
   ctx.rangeId = 1001;
-  ctx.engine = "Benchmark";
+  ctx.engine = "BitCrack";
   ctx.workspace = temp.string();
   ctx.command = "printf 'NVIDIA GeForce R 7918 / 11873MB | 1 target 1345.81 "
                 "MKey/s (104,958,263,296 total) [00:01:18]\\n'";

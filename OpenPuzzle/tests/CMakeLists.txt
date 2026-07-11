@@ -899,3 +899,17 @@ add_test(
     NAME RuntimeDispatcherPlanTests
     COMMAND RuntimeDispatcherPlanTests
 )
+
+add_executable(RuntimeTickResultTests
+    runtime/RuntimeTickResultTests.cpp
+)
+
+target_link_libraries(RuntimeTickResultTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME RuntimeTickResultTests
+    COMMAND RuntimeTickResultTests
+)

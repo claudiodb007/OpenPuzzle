@@ -45,11 +45,24 @@ int main() {
   info.engine = workerRecord.engine;
   info.state = WorkerAgentState::Idle;
 
+  WorkerEngineCapability capability;
+  capability.engine = "BitCrack";
+  capability.backend = "CUDA";
+  capability.device = 0;
+  capability.blocks = 256;
+  capability.threads = 256;
+  capability.points = 1024;
+  capability.benchmarkSpeedMkeys = 1350.0;
+
+  info.capabilities.push_back(
+      capability);
+
   WorkerAgentRegistry workers;
-  assert(workers.add(WorkerAgent(info)));
+
+  assert(workers.add(
+      WorkerAgent(info)));
 
   IdleSchedulingPolicy policy;
-
   EngineManager engineManager;
 
   RuntimeCoordinator coordinator(
@@ -60,9 +73,11 @@ int main() {
 
   auto result = coordinator.tick();
 
+  assert(!result.plan);
   assert(!result.decision.shouldDispatch);
   assert(!result.dispatched);
   assert(!result.launchSuccess);
+  assert(result.exitCode == 0);
 
   assert(result.monitor.running == 0);
   assert(result.monitor.finished == 0);

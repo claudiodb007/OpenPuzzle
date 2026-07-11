@@ -3,8 +3,8 @@
 #include "openpuzzle/core/EventBus.hpp"
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
+#include "openpuzzle/runtime/ExecutionPlanner.hpp"
 #include "openpuzzle/runtime/RuntimeDispatcher.hpp"
-#include "openpuzzle/runtime/SchedulerTick.hpp"
 #include "openpuzzle/scheduler/SchedulingPolicy.hpp"
 #include "openpuzzle/workers/WorkerAgentRegistry.hpp"
 #include "openpuzzle/workers/WorkerLifecycle.hpp"
@@ -48,40 +48,59 @@ RuntimeTickResult RuntimeCoordinator::tick() {
 
   lifecycle.refreshHeartbeats();
 
-  SchedulerTick scheduler(
+  ExecutionPlanner planner(
       database_,
-      schedulingPolicy_);
+      workers_);
 
-  result.decision = scheduler.execute();
+  result.plan = planner.plan();
+
+  if (result.plan) {
+    result.decision.shouldDispatch =
+        result.plan->valid;
+
+    result.decision.jobId =
+        result.plan->jobId;
+
+    result.decision.workerId =
+        result.plan->workerId;
+  }
 
   RuntimeDispatcher dispatcher(
       database_,
       workers_,
       engineManager_);
 
-  if (dispatcher.dispatch(result.decision)) {
+  if (result.plan &&
+      dispatcher.dispatch(*result.plan)) {
     auto executionResult =
         dispatcher.dispatchAndLaunch(
-            result.decision);
+            *result.plan);
 
     result.dispatched = true;
+
     result.launchSuccess =
         executionResult.success;
+
     result.exitCode =
         executionResult.exitCode;
 
     if (eventBus_) {
       Event event;
+
       event.type =
           EventType::ExecutionDispatched;
+
       event.jobId =
-          result.decision.jobId;
+          result.plan->jobId;
+
       event.workerId =
-          result.decision.workerId;
+          result.plan->workerId;
+
       event.exitCode =
           result.exitCode;
+
       event.message =
-          "Job dispatched to worker";
+          "Execution plan dispatched to worker";
 
       eventBus_->publish(event);
     }
