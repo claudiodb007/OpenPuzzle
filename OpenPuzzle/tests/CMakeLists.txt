@@ -870,3 +870,18 @@ add_test(
     NAME CapabilitySchedulerTests
     COMMAND CapabilitySchedulerTests
 )
+
+add_executable(ExecutionPlannerTests
+    runtime/ExecutionPlannerTests.cpp
+)
+
+target_link_libraries(
+    ExecutionPlannerTests
+    PRIVATE
+    OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionPlannerTests
+    COMMAND ExecutionPlannerTests
+)
