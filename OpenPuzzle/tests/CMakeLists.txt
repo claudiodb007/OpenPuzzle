@@ -758,3 +758,31 @@ add_test(
     NAME RuntimeCoordinatorTests
     COMMAND RuntimeCoordinatorTests
 )
+
+add_executable(ExecutionProcessMonitorEventTests
+    runtime/ExecutionProcessMonitorEventTests.cpp
+)
+
+target_link_libraries(ExecutionProcessMonitorEventTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionProcessMonitorEventTests
+    COMMAND ExecutionProcessMonitorEventTests
+)
+
+add_executable(ExecutionRequestBuilderTests
+    runtime/ExecutionRequestBuilderTests.cpp
+)
+
+target_link_libraries(ExecutionRequestBuilderTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionRequestBuilderTests
+    COMMAND ExecutionRequestBuilderTests
+)

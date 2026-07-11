@@ -4,10 +4,27 @@
 #include "openpuzzle/engines/EngineLaunchRequest.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <stdexcept>
+#include <string>
 
 namespace openpuzzle {
+
+static std::string normalizeEngineId(
+    std::string engine) {
+  std::transform(
+      engine.begin(),
+      engine.end(),
+      engine.begin(),
+      [](unsigned char character) {
+        return static_cast<char>(
+            std::tolower(character));
+      });
+
+  return engine;
+}
 
 StartExecutionRequest ExecutionRequestBuilder::build(
     const PuzzleRecord& puzzle,
@@ -17,29 +34,42 @@ StartExecutionRequest ExecutionRequestBuilder::build(
     const std::string& executable,
     const std::string& workspace) const {
   if (!capability.available) {
-    throw std::runtime_error("Worker engine capability is unavailable");
+    throw std::runtime_error(
+        "Worker engine capability is unavailable");
   }
 
   if (capability.engine.empty()) {
-    throw std::runtime_error("Worker engine capability has no engine");
+    throw std::runtime_error(
+        "Worker engine capability has no engine");
   }
 
   if (capability.backend.empty()) {
-    throw std::runtime_error("Worker engine capability has no backend");
+    throw std::runtime_error(
+        "Worker engine capability has no backend");
   }
 
   if (!capability.hasLaunchProfile()) {
-    throw std::runtime_error("Worker engine capability has no launch profile");
+    throw std::runtime_error(
+        "Worker engine capability has no launch profile");
   }
 
+  const std::string engineId =
+      normalizeEngineId(capability.engine);
+
   WorkspaceManager workspaceManager(
-      std::filesystem::path(workspace).parent_path().parent_path());
+      std::filesystem::path(workspace)
+          .parent_path()
+          .parent_path());
 
-  auto outputFile =
-      workspaceManager.foundFile(job.id).string();
+  const auto outputFile =
+      workspaceManager
+          .foundFile(job.id)
+          .string();
 
-  auto logFile =
-      workspaceManager.engineLog(job.id, "bitcrack").string();
+  const auto logFile =
+      workspaceManager
+          .engineLog(job.id, engineId)
+          .string();
 
   EngineLaunchRequest launchRequest;
   launchRequest.puzzle = puzzle;
@@ -55,11 +85,13 @@ StartExecutionRequest ExecutionRequestBuilder::build(
   EngineManager engineManager;
 
   auto engine = engineManager.create(
-      "bitcrack",
+      engineId,
       executable);
 
   if (!engine) {
-    throw std::runtime_error("Could not create BitCrack engine");
+    throw std::runtime_error(
+        "Could not create search engine: " +
+        capability.engine);
   }
 
   StartExecutionRequest request;
@@ -76,7 +108,8 @@ StartExecutionRequest ExecutionRequestBuilder::build(
   request.points = capability.points;
 
   request.workspace = workspace;
-  request.command = engine->buildCommand(launchRequest);
+  request.command =
+      engine->buildCommand(launchRequest);
   request.echoOutput = true;
 
   return request;
