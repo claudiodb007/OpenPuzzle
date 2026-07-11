@@ -702,3 +702,17 @@ add_test(
     NAME WorkerHeartbeatTests
     COMMAND WorkerHeartbeatTests
 )
+
+add_executable(ExecutionResourceFactoryTests
+    runtime/ExecutionResourceFactoryTests.cpp
+)
+
+target_link_libraries(ExecutionResourceFactoryTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionResourceFactoryTests
+    COMMAND ExecutionResourceFactoryTests
+)

@@ -55,7 +55,7 @@ static int parseMemoryMb(const std::string& value) {
   return memoryMb;
 }
 
-std::vector<GpuInfo> GpuManager::listAllGpus() {
+std::vector<GpuInfo> GpuManager::listCudaGpus() {
   std::vector<GpuInfo> result;
 
   auto output = runCommand(
@@ -102,6 +102,26 @@ std::vector<GpuInfo> GpuManager::listAllGpus() {
   return result;
 }
 
+std::vector<GpuInfo> GpuManager::listOpenClGpus() {
+  return {};
+}
+
+std::vector<GpuInfo> GpuManager::listGpus() {
+  return listCudaGpus();
+}
+
+std::vector<GpuInfo> GpuManager::listAllGpus() {
+  auto result = listCudaGpus();
+  auto opencl = listOpenClGpus();
+
+  result.insert(
+      result.end(),
+      opencl.begin(),
+      opencl.end());
+
+  return result;
+}
+
 bool GpuManager::selectGpu(int device) {
   fs::path configPath = ToolManager::configPath();
 
@@ -138,15 +158,15 @@ int GpuManager::selectedGpu() {
   std::stringstream buffer;
   buffer << input.rdbuf();
 
-  std::string text = buffer.str();
+  const std::string text = buffer.str();
 
-  auto key = text.find("\"gpu_device\"");
+  const auto key = text.find("\"gpu_device\"");
 
   if (key == std::string::npos) {
     return 0;
   }
 
-  auto colon = text.find(':', key);
+  const auto colon = text.find(':', key);
 
   if (colon == std::string::npos) {
     return 0;
@@ -158,7 +178,7 @@ int GpuManager::selectedGpu() {
 GpuInfo GpuManager::currentGpu() {
   const int selected = selectedGpu();
 
-  for (const auto& gpu : listGpus()) {
+  for (const auto& gpu : listAllGpus()) {
     if (gpu.device == selected) {
       return gpu;
     }
