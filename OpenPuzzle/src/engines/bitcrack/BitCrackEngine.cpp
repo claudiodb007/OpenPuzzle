@@ -26,11 +26,13 @@ std::string BitCrackEngine::buildCommand(const EngineLaunchRequest& request) con
     std::ostringstream command;
 
     command << executable_ << " "
-            << request.puzzle.address
+            << (request.targets.empty()
+                    ? ""
+                    : request.targets.front())
             << " --keyspace "
-            << request.range.startKey
+            << request.startKey
             << ":"
-            << request.range.endKey
+            << request.endKey
             << " --out "
             << request.outputFile
             << " -d "

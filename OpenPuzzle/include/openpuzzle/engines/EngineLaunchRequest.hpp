@@ -1,19 +1,23 @@
 #pragma once
 
-#include "openpuzzle/database/Database.hpp"
-
 #include <string>
+#include <vector>
 
 namespace openpuzzle {
 
 struct EngineLaunchRequest {
-  PuzzleRecord puzzle;
-  RangeRecord range;
+  std::string engine;
+  std::string backend;
+
+  std::vector<std::string> targets;
+
+  std::string startKey;
+  std::string endKey;
 
   int device = 0;
-  int blocks = 256;
-  int threads = 256;
-  int points = 256;
+  int blocks = 0;
+  int threads = 0;
+  int points = 0;
 
   std::string workspace;
   std::string targetFile;

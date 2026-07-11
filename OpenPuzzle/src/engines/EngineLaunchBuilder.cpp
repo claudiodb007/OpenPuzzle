@@ -62,8 +62,17 @@ EngineLaunchRequest EngineLaunchBuilder::build(
 
   EngineLaunchRequest request;
 
-  request.puzzle = puzzle;
-  request.range = range;
+  request.engine = capability.engine;
+  request.backend = capability.backend;
+
+  request.targets.push_back(
+      puzzle.address);
+
+  request.startKey =
+      range.startKey;
+
+  request.endKey =
+      range.endKey;
 
   request.device = capability.device;
   request.blocks = capability.blocks;

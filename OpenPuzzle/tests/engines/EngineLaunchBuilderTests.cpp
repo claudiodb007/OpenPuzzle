@@ -55,8 +55,21 @@ int main() {
       capability,
       workspace.string());
 
-  assert(request.puzzle.id == 71);
-  assert(request.range.id == 8);
+  assert(request.engine == "BitCrack");
+  assert(request.backend == "CUDA");
+
+  assert(request.targets.size() == 1);
+  assert(
+      request.targets.front() ==
+      puzzle.address);
+
+  assert(
+      request.startKey ==
+      range.startKey);
+
+  assert(
+      request.endKey ==
+      range.endKey);
 
   assert(request.device == 1);
   assert(request.blocks == 512);

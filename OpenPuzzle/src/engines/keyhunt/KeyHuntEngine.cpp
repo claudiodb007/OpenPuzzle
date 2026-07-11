@@ -34,9 +34,9 @@ std::string KeyHuntEngine::buildCommand(
       << " -f "
       << request.targetFile
       << " -r "
-      << request.range.startKey
+      << request.startKey
       << ":"
-      << request.range.endKey;
+      << request.endKey;
 
   if (request.threads > 0) {
     command

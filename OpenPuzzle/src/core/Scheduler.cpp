@@ -79,16 +79,44 @@ SchedulerResult
 Scheduler::runOnceWithEvents(const ExecutionContext &context,
                              const ExecutionResult &executionResult,
                              EventBus &bus) const {
-  bus.publish(Event{EventType::ExecutionStarted, context.executionId,
-                    context.jobId, "Scheduler cycle started", "", 0.0});
+  Event startedEvent;
+  startedEvent.type = EventType::ExecutionStarted;
+  startedEvent.executionId = context.executionId;
+  startedEvent.jobId = context.jobId;
+  startedEvent.rangeId = context.rangeId;
+  startedEvent.message = "Scheduler cycle started";
+
+  bus.publish(startedEvent);
 
   auto result = runOnce(context, executionResult);
 
-  bus.publish(Event{
-      result.success ? EventType::ExecutionFinished : EventType::Error,
-      context.executionId, context.jobId,
-      result.success ? "Scheduler cycle finished" : "Scheduler cycle failed",
-      "", static_cast<double>(result.exitCode)});
+  Event completedEvent;
+  completedEvent.type =
+      result.success
+          ? EventType::ExecutionFinished
+          : EventType::Error;
+
+  completedEvent.executionId =
+      context.executionId;
+
+  completedEvent.jobId =
+      context.jobId;
+
+  completedEvent.rangeId =
+      context.rangeId;
+
+  completedEvent.exitCode =
+      result.exitCode;
+
+  completedEvent.numericValue =
+      static_cast<double>(result.exitCode);
+
+  completedEvent.message =
+      result.success
+          ? "Scheduler cycle finished"
+          : "Scheduler cycle failed";
+
+  bus.publish(completedEvent);
 
   return result;
 }
@@ -133,8 +161,17 @@ SchedulerResult Scheduler::startJob(Database &db, int puzzleNumber, int jobId,
   auto logFile = workspaceManager.engineLog(jobId, engineId).string();
 
   EngineLaunchRequest request;
-  request.puzzle = *puzzle;
-  request.range = *range;
+  request.engine = "BitCrack";
+  request.backend = "CUDA";
+
+  request.targets.push_back(
+      puzzle->address);
+
+  request.startKey =
+      range->startKey;
+
+  request.endKey =
+      range->endKey;
   request.device = device;
   request.blocks = blocks;
   request.threads = threads;

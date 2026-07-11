@@ -20,13 +20,13 @@ int main() {
 
   EngineLaunchRequest request;
 
-  request.puzzle.address =
-      "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU";
+  request.targets.push_back(
+      "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU");
 
-  request.range.startKey =
+  request.startKey =
       "400000000000000000";
 
-  request.range.endKey =
+  request.endKey =
       "40000000FFFFFFFFFF";
 
   request.targetFile =
@@ -67,7 +67,7 @@ int main() {
 
   assert(!contains(
       command,
-      request.puzzle.address));
+      request.targets.front()));
 
   std::cout
       << "KeyHuntEngineCommandTests passed\n";
