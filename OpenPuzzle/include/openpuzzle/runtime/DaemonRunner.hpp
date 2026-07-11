@@ -1,7 +1,7 @@
 #pragma once
 
-#include "openpuzzle/workers/WorkerAgentRegistry.hpp"
 #include "openpuzzle/scheduler/DefaultSchedulingPolicy.hpp"
+#include "openpuzzle/workers/WorkerAgentRegistry.hpp"
 
 namespace openpuzzle {
 
@@ -16,8 +16,6 @@ public:
 
 private:
   void loadWorkers();
-  void heartbeatWorkers();
-  void synchronizeWorkers();
   void tick();
 
   Database& database_;

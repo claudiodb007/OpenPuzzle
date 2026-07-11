@@ -730,3 +730,17 @@ add_test(
     NAME WorkerAgentFactoryTests
     COMMAND WorkerAgentFactoryTests
 )
+
+add_executable(WorkerLifecycleTests
+    workers/WorkerLifecycleTests.cpp
+)
+
+target_link_libraries(WorkerLifecycleTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME WorkerLifecycleTests
+    COMMAND WorkerLifecycleTests
+)

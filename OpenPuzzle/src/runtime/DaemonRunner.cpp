@@ -5,11 +5,10 @@
 #include "openpuzzle/runtime/DaemonStatusCollector.hpp"
 #include "openpuzzle/runtime/SchedulerTick.hpp"
 #include "openpuzzle/runtime/RuntimeDispatcher.hpp"
-#include "openpuzzle/runtime/ExecutionProcessMonitor.hpp"
 #include "openpuzzle/runtime/ExecutionResource.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
 #include "openpuzzle/workers/WorkerAgentFactory.hpp"
-#include "openpuzzle/services/HeartbeatService.hpp"
+#include "openpuzzle/workers/WorkerLifecycle.hpp"
 #include "openpuzzle/performance/GpuProfileManager.hpp"
 
 #include <chrono>
@@ -117,60 +116,16 @@ void DaemonRunner::stop() {
   running_ = false;
 }
 
-void DaemonRunner::heartbeatWorkers() {
-  HeartbeatService heartbeat(database_);
 
-  for (const auto* worker : workers_.all()) {
-    if (!worker || worker->offline()) {
-      continue;
-    }
-
-    heartbeat.update(
-        worker->info().workerId,
-        WorkerAgent::stateToString(worker->state()),
-        worker->info().speedMkeys,
-        worker->info().temperature,
-        worker->info().power);
-  }
-
-  heartbeat.expireStale(30);
-}
-
-void DaemonRunner::synchronizeWorkers() {
-  for (auto* worker : workers_.all()) {
-    if (!worker || !worker->hasExecution()) {
-      continue;
-    }
-
-    const auto& handle = worker->currentExecution();
-
-    if (!handle) {
-      continue;
-    }
-
-    auto execution =
-        database_.getExecution(handle->executionId);
-
-    if (!execution) {
-      continue;
-    }
-
-    if (execution->status == ExecutionRecordStatus::Running) {
-      continue;
-    }
-
-    worker->completeExecution();
-
-    database_.updateWorkerStatus(
-        worker->info().workerId,
-        WorkerAgent::stateToString(worker->state()));
-  }
-}
 
 void DaemonRunner::tick() {
   ++tickCount_;
 
-  heartbeatWorkers();
+  WorkerLifecycle lifecycle(
+      database_,
+      workers_);
+
+  lifecycle.refreshHeartbeats();
 
   DaemonStatusCollector collector(database_);
   auto status = collector.collect();
@@ -203,11 +158,8 @@ void DaemonRunner::tick() {
     std::cout << "Decision.......... idle\n";
   }
 
-  ExecutionProcessMonitor monitor(database_);
-
-  auto summary = monitor.poll();
-
-  synchronizeWorkers();
+  auto summary =
+      lifecycle.monitorExecutions();
 
   if (summary.finished ||
       summary.failed ||
