@@ -4,11 +4,11 @@
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/dispatcher/ProfileSelector.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
-#include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
 #include "openpuzzle/runtime/ExecutionRepository.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/workers/WorkerAgent.hpp"
 #include "openpuzzle/workers/WorkerAgentRegistry.hpp"
+#include "openpuzzle/workers/WorkerRuntime.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -291,12 +291,18 @@ ExecutionResult RuntimeDispatcher::dispatchAndLaunch(
         "Worker agent not found");
   }
 
-  BackgroundExecutionLauncher launcher;
+  WorkerRuntime runtime(
+      *worker);
 
-  auto handle =
-      worker->execute(
-          launcher,
-          request);
+  const bool started =
+      runtime.start(request);
+
+  if (!started) {
+    ExecutionResult result;
+    result.success = false;
+    result.exitCode = -1;
+    return result;
+  }
 
   if (!database_.updateWorkerStatus(
           worker->info().workerId,
@@ -307,14 +313,8 @@ ExecutionResult RuntimeDispatcher::dispatchAndLaunch(
   }
 
   ExecutionResult result;
-
-  result.success =
-      handle.pid > 0;
-
-  result.exitCode =
-      result.success
-          ? 0
-          : -1;
+  result.success = true;
+  result.exitCode = 0;
 
   return result;
 }
