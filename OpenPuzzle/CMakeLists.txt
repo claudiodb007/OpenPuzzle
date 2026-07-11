@@ -76,6 +76,7 @@ add_library(OpenPuzzleCore
     src/engines/bitcrack/BitCrackEngine.cpp
     src/engines/keyhunt/KeyHuntEngine.cpp
     src/engines/EngineLaunchBuilder.cpp
+    src/engines/EngineParserFactory.cpp
     src/engines/EngineManager.cpp
     src/engines/common/EngineRegistry.cpp
     src/engines/common/EngineFactory.cpp

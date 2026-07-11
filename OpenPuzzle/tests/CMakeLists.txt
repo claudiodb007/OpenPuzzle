@@ -842,3 +842,17 @@ add_test(
     NAME KeyHuntEngineCommandTests
     COMMAND KeyHuntEngineCommandTests
 )
+
+add_executable(EngineParserFactoryTests
+    engines/EngineParserFactoryTests.cpp
+)
+
+target_link_libraries(EngineParserFactoryTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME EngineParserFactoryTests
+    COMMAND EngineParserFactoryTests
+)

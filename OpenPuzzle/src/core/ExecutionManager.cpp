@@ -1,6 +1,7 @@
 #include "openpuzzle/core/ExecutionManager.hpp"
 #include "openpuzzle/core/ProcessRunnerFactory.hpp"
-#include "openpuzzle/adapters/bitcrack/BitCrackProgressParser.hpp"
+#include "openpuzzle/engines/EngineParserFactory.hpp"
+#include "openpuzzle/adapters/bitcrack/BitCrackOutputParser.hpp"
 #include "openpuzzle/runtime/Execution.hpp"
 #include "openpuzzle/runtime/ExecutionMonitor.hpp"
 #include "openpuzzle/runtime/ExecutionPersistence.hpp"
@@ -87,7 +88,8 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
 
   auto runner = ProcessRunnerFactory::create();
   ExecutionMonitor monitor(
-      std::make_unique<bitcrack::BitCrackProgressParser>());
+      EngineParserFactory::create(
+          context.engine));
 
   monitor.setCallback([&](const ExecutionProgress &progress) {
     if (progress.speedMKeys > 0.0) {
