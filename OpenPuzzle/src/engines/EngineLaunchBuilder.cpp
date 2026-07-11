@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <string>
 
@@ -70,6 +71,27 @@ EngineLaunchRequest EngineLaunchBuilder::build(
   request.points = capability.points;
 
   request.workspace = workspace;
+
+  request.targetFile =
+      (std::filesystem::path(workspace) /
+       "targets.txt")
+          .string();
+
+  {
+    std::filesystem::create_directories(
+        workspace);
+
+    std::ofstream targets(
+        request.targetFile,
+        std::ios::trunc);
+
+    if (!targets.is_open()) {
+      throw std::runtime_error(
+          "Could not create engine target file");
+    }
+
+    targets << puzzle.address << "\n";
+  }
 
   request.outputFile =
       workspaceManager

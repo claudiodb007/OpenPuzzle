@@ -16,6 +16,7 @@ struct EngineLaunchRequest {
   int points = 256;
 
   std::string workspace;
+  std::string targetFile;
   std::string outputFile;
   std::string logFile;
 };

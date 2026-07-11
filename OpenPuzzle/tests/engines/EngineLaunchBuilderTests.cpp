@@ -64,6 +64,15 @@ int main() {
   assert(request.points == 4096);
 
   assert(
+      request.targetFile.find(
+          "targets.txt") !=
+      std::string::npos);
+
+  assert(
+      std::filesystem::exists(
+          request.targetFile));
+
+  assert(
       request.outputFile.find(
           "found.txt") !=
       std::string::npos);

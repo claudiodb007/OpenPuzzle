@@ -828,3 +828,17 @@ add_test(
     NAME EngineManagerTests
     COMMAND EngineManagerTests
 )
+
+add_executable(KeyHuntEngineCommandTests
+    engines/KeyHuntEngineCommandTests.cpp
+)
+
+target_link_libraries(KeyHuntEngineCommandTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME KeyHuntEngineCommandTests
+    COMMAND KeyHuntEngineCommandTests
+)

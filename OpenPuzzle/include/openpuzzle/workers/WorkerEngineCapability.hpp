@@ -39,6 +39,11 @@ struct WorkerEngineCapability {
   }
 
   bool hasLaunchProfile() const {
+    if (backend == "CPU" ||
+        backend == "cpu") {
+      return threads > 0;
+    }
+
     return blocks > 0 &&
            threads > 0 &&
            points > 0;

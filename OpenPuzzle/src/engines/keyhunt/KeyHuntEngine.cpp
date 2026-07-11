@@ -5,54 +5,64 @@
 
 namespace openpuzzle {
 
-KeyHuntEngine::KeyHuntEngine(std::string executable)
+KeyHuntEngine::KeyHuntEngine(
+    std::string executable)
     : executable_(std::move(executable)) {}
 
 EngineInfo KeyHuntEngine::info() const {
-    EngineInfo info;
-    info.name = "KeyHunt";
-    info.version = "unknown";
-    info.backend = "CPU";
-    info.executable = executable_;
-    info.available = !executable_.empty();
-    return info;
+  EngineInfo info;
+  info.name = "KeyHunt";
+  info.version = "unknown";
+  info.backend = "CPU";
+  info.executable = executable_;
+  info.available = !executable_.empty();
+
+  return info;
 }
 
 bool KeyHuntEngine::prepare() {
-    return true;
+  return !executable_.empty();
 }
 
-std::string KeyHuntEngine::buildCommand(const EngineLaunchRequest& request) const {
-    std::ostringstream command;
+std::string KeyHuntEngine::buildCommand(
+    const EngineLaunchRequest& request) const {
+  std::ostringstream command;
 
-    command << executable_
-            << " -m address"
-            << " -f "
-            << request.outputFile
-            << " -r "
-            << request.range.startKey
-            << ":"
-            << request.range.endKey
-            << " "
-            << request.puzzle.address
-            << " 2>&1 | tee -a "
-            << request.logFile;
+  command
+      << executable_
+      << " -m address"
+      << " -f "
+      << request.targetFile
+      << " -r "
+      << request.range.startKey
+      << ":"
+      << request.range.endKey;
 
-    return command.str();
+  if (request.threads > 0) {
+    command
+        << " -t "
+        << request.threads;
+  }
+
+  command
+      << " 2>&1 | tee -a "
+      << request.logFile;
+
+  return command.str();
 }
 
 bool KeyHuntEngine::launch() {
-    running_ = true;
-    return true;
+  running_ = true;
+  return true;
 }
 
 bool KeyHuntEngine::stop() {
-    running_ = false;
-    return true;
+  running_ = false;
+  return true;
 }
 
 bool KeyHuntEngine::running() const {
-    return running_;
+  return running_;
 }
 
 } // namespace openpuzzle
