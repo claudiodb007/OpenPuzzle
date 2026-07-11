@@ -800,3 +800,17 @@ add_test(
     NAME EngineLaunchBuilderTests
     COMMAND EngineLaunchBuilderTests
 )
+
+add_executable(EngineRegistryTests
+    engines/EngineRegistryTests.cpp
+)
+
+target_link_libraries(EngineRegistryTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME EngineRegistryTests
+    COMMAND EngineRegistryTests
+)

@@ -21,18 +21,59 @@ int EngineService::execute(const std::vector<std::string>& args) {
     if (args[0] == "list") {
         EngineManager manager;
 
-        std::cout << "ID          NAME        BACKEND       INSTALLED   EXECUTABLE\n";
-        std::cout << "--------------------------------------------------------------------------\n";
+        const auto& registry =
+            manager.registry();
 
-        for (const auto& engine : manager.registry().engines()) {
-            std::cout << std::left
-                      << std::setw(12) << engine.id
-                      << std::setw(12) << engine.name
-                      << std::setw(14) << engine.backend
-                      << std::setw(12) << (engine.runtime.installed ? "yes" : "no")
-                      << (engine.runtime.executable.empty() ? "-" : engine.runtime.executable)
-                      << "\n";
+        std::cout
+            << "ID          NAME        BACKEND       INSTALLED   AVAILABLE   VERSION       EXECUTABLE\n";
+
+        std::cout
+            << "------------------------------------------------------------------------------------------------\n";
+
+        for (const auto& engine :
+             registry.engines()) {
+            const std::string version =
+                !engine.runtime.version.empty()
+                    ? engine.runtime.version
+                    : engine.version;
+
+            std::cout
+                << std::left
+                << std::setw(12) << engine.id
+                << std::setw(12) << engine.name
+                << std::setw(14) << engine.backend
+                << std::setw(12)
+                << (engine.runtime.installed
+                        ? "yes"
+                        : "no")
+                << std::setw(12)
+                << (engine.runtime.available
+                        ? "yes"
+                        : "no")
+                << std::setw(14)
+                << (version.empty()
+                        ? "-"
+                        : version)
+                << (engine.runtime.executable.empty()
+                        ? "-"
+                        : engine.runtime.executable)
+                << "\n";
         }
+
+        std::cout
+            << "\nEngines............ "
+            << registry.count()
+            << "\n";
+
+        std::cout
+            << "Installed.......... "
+            << registry.installed().size()
+            << "\n";
+
+        std::cout
+            << "Available.......... "
+            << registry.available().size()
+            << "\n";
 
         return 0;
     }
