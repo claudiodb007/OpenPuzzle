@@ -36,17 +36,10 @@ RuntimeCoordinator::RuntimeCoordinator(
 RuntimeTickResult RuntimeCoordinator::tick() {
   RuntimeTickResult result;
 
-  WorkerLifecycle lifecycle =
-      eventBus_
-          ? WorkerLifecycle(
-                database_,
-                workers_,
-                *eventBus_)
-          : WorkerLifecycle(
-                database_,
-                workers_);
-
-  lifecycle.refreshHeartbeats();
+  WorkerLifecycle lifecycle(
+      database_,
+      workers_);
+lifecycle.refreshHeartbeats();
 
   ExecutionPlanner planner(
       database_,
@@ -83,28 +76,7 @@ RuntimeTickResult RuntimeCoordinator::tick() {
 
     result.exitCode =
         executionResult.exitCode;
-
-    if (eventBus_) {
-      Event event;
-
-      event.type =
-          EventType::ExecutionDispatched;
-
-      event.jobId =
-          result.plan->jobId;
-
-      event.workerId =
-          result.plan->workerId;
-
-      event.exitCode =
-          result.exitCode;
-
-      event.message =
-          "Execution plan dispatched to worker";
-
-      eventBus_->publish(event);
-    }
-  }
+}
 
   result.monitor =
       lifecycle.monitorExecutions();

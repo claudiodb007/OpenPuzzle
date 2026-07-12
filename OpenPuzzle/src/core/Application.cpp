@@ -9,6 +9,7 @@
 #include "openpuzzle/core/commands/BenchmarkCommand.hpp"
 #include "openpuzzle/core/commands/DispatchCommand.hpp"
 #include "openpuzzle/core/commands/WorkerRunCommand.hpp"
+#include "openpuzzle/core/commands/RangeCommand.hpp"
 #include "openpuzzle/core/commands/ProfileCommand.hpp"
 #include "openpuzzle/core/commands/StartJobCommand.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
@@ -169,6 +170,9 @@ int Application::run(int argc, char **argv) {
 
     if (cmd == "worker-run")
       return WorkerRunCommand().run(r);
+
+    if (cmd == "range")
+      return RangeCommand().run(r);
 
 
     if (cmd == "doctor") {

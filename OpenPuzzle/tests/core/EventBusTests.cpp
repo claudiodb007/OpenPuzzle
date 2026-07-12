@@ -8,7 +8,16 @@ int main() {
 
   bus.subscribe([&](const Event &) { received++; });
 
-  bus.publish(Event{EventType::ExecutionStarted, 1, 1, "test", "", 0.0});
+  Event event;
+
+  event.type =
+      EventType::ExecutionStarted;
+
+  event.executionId = 1;
+  event.jobId = 1;
+  event.message = "test";
+
+  bus.publish(event);
 
   return received == 1 ? 0 : 1;
 }
