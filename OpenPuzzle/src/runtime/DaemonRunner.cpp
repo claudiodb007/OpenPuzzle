@@ -2,6 +2,7 @@
 
 #include "openpuzzle/database/Database.hpp"
 
+#include "openpuzzle/client/ExecutionSyncService.hpp"
 #include "openpuzzle/runtime/DaemonStatusCollector.hpp"
 #include "openpuzzle/runtime/RuntimeCoordinator.hpp"
 #include "openpuzzle/runtime/ExecutionResource.hpp"
@@ -18,7 +19,23 @@
 namespace openpuzzle {
 
 DaemonRunner::DaemonRunner(Database& database)
-    : database_(database) {
+    : DaemonRunner(
+          database,
+          "https://claudiodb.com",
+          60) {}
+
+DaemonRunner::DaemonRunner(
+    Database& database,
+    std::string serverUrl,
+    int syncIntervalSeconds)
+    : database_(database),
+      serverUrl_(
+          std::move(serverUrl)),
+      syncInterval_(
+          std::chrono::seconds(
+              syncIntervalSeconds < 0
+                  ? 0
+                  : syncIntervalSeconds)) {
   loadWorkers();
 }
 
@@ -116,8 +133,113 @@ void DaemonRunner::stop() {
 
 
 
+void DaemonRunner::syncClientExecution() {
+  const auto now =
+      std::chrono::steady_clock::now();
+
+  if (hasSynced_ &&
+      now - lastSyncAt_ <
+          syncInterval_) {
+    return;
+  }
+
+  hasSynced_ = true;
+  lastSyncAt_ = now;
+
+  client::ExecutionSyncService service;
+
+  const auto result =
+      service.tick(
+          serverUrl_);
+
+  if (!result.hasState) {
+    std::cout
+        << "Client sync....... idle\n";
+
+    return;
+  }
+
+  if (result.running) {
+    if (!result.hasProgress) {
+      std::cout
+          << "Client sync....... "
+          << "waiting for progress\n";
+
+      return;
+    }
+
+    if (result.progressUploaded) {
+      std::cout
+          << "Client sync....... "
+          << "progress uploaded\n"
+          << "Client speed...... "
+          << result.progress.speedMKeys
+          << " MKey/s\n"
+          << "Client keys....... "
+          << result.progress.keysChecked
+          << "\n";
+    } else {
+      std::cout
+          << "Client sync....... "
+          << "progress failed\n"
+          << "Client error...... "
+          << result.progressError
+          << "\n";
+    }
+
+    return;
+  }
+
+  if (!result.hasExitCode) {
+    std::cout
+        << "Client sync....... "
+        << "waiting for exit code\n";
+
+    return;
+  }
+
+  if (result.exitCode != 0) {
+    std::cout
+        << "Client sync....... "
+        << "execution failed\n"
+        << "Client exit....... "
+        << result.exitCode
+        << "\n";
+
+    return;
+  }
+
+  if (!result.completionUploaded) {
+    std::cout
+        << "Client sync....... "
+        << "completion failed\n"
+        << "Client error...... "
+        << result.completionError
+        << "\n";
+
+    return;
+  }
+
+  if (!result.stateRemoved) {
+    std::cout
+        << "Client sync....... "
+        << "completion uploaded\n"
+        << "Client warning.... "
+        << result.completionError
+        << "\n";
+
+    return;
+  }
+
+  std::cout
+      << "Client sync....... "
+      << "completion uploaded\n";
+}
+
 void DaemonRunner::tick() {
   ++tickCount_;
+
+  syncClientExecution();
 
   DaemonStatusCollector collector(database_);
   auto status = collector.collect();
