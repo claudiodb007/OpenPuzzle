@@ -24,6 +24,7 @@ ExecutionHandle BackgroundExecutionLauncher::start(
 
   auto pidFile = (workspacePath / "process.pid").string();
   auto exitFile = (workspacePath / "exit.code").string();
+  auto logFile = (workspacePath / "bitcrack.log").string();
 
   std::ostringstream shell;
   shell << "setsid sh -c '("
@@ -31,7 +32,9 @@ ExecutionHandle BackgroundExecutionLauncher::start(
         << "); rc=$?; echo $rc > "
         << exitFile
         << "; exit $rc"
-        << "' >/dev/null 2>&1 & echo $!";
+        << "' >> "
+        << logFile
+        << " 2>&1 & echo $!";
 
   FILE* pipe = popen(shell.str().c_str(), "r");
 

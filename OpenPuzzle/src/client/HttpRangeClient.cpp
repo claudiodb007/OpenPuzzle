@@ -344,6 +344,156 @@ HttpRangeClient::claim(
       lastError_);
 }
 
+bool HttpRangeClient::progress(
+    const std::string& assignmentId,
+    const std::string& clientId,
+    double speedMKeys,
+    const std::string& keysChecked) {
+  lastError_.clear();
+
+  if (serverUrl_.empty()) {
+    lastError_ =
+        "Server URL is empty";
+
+    return false;
+  }
+
+  if (assignmentId.empty()) {
+    lastError_ =
+        "Assignment identity is empty";
+
+    return false;
+  }
+
+  if (clientId.empty()) {
+    lastError_ =
+        "Client identity is empty";
+
+    return false;
+  }
+
+  if (speedMKeys < 0.0) {
+    lastError_ =
+        "Speed cannot be negative";
+
+    return false;
+  }
+
+  if (keysChecked.empty()) {
+    lastError_ =
+        "Keys checked is empty";
+
+    return false;
+  }
+
+  for (const char character : keysChecked) {
+    if (character < '0' ||
+        character > '9') {
+      lastError_ =
+          "Keys checked must contain only digits";
+
+      return false;
+    }
+  }
+
+  std::ostringstream request;
+
+  request
+      << "{"
+      << "\"assignment_id\":\""
+      << jsonEscape(assignmentId)
+      << "\","
+      << "\"client_id\":\""
+      << jsonEscape(clientId)
+      << "\","
+      << "\"status\":\"running\","
+      << "\"speed_mkeys\":"
+      << speedMKeys
+      << ","
+      << "\"keys_checked\":\""
+      << jsonEscape(keysChecked)
+      << "\""
+      << "}";
+
+  const std::string url =
+      serverUrl_ +
+      "/api/range/progress";
+
+  std::ostringstream command;
+
+  command
+      << "curl"
+      << " --silent"
+      << " --show-error"
+      << " --location"
+      << " --post301"
+      << " --post302"
+      << " --fail-with-body"
+      << " --connect-timeout 10"
+      << " --max-time 30"
+      << " --request POST"
+      << " --header "
+      << shellQuote(
+             "Content-Type: application/json")
+      << " --data "
+      << shellQuote(
+             request.str())
+      << ' '
+      << shellQuote(url)
+      << " 2>&1";
+
+  FILE* pipe =
+      popen(
+          command.str().c_str(),
+          "r");
+
+  if (!pipe) {
+    lastError_ =
+        "Unable to start curl";
+
+    return false;
+  }
+
+  char buffer[4096];
+
+  std::string response;
+
+  while (fgets(
+             buffer,
+             sizeof(buffer),
+             pipe) != nullptr) {
+    response += buffer;
+  }
+
+  const int result =
+      pclose(pipe);
+
+  if (result == -1) {
+    lastError_ =
+        "Unable to obtain curl result";
+
+    return false;
+  }
+
+  if (!WIFEXITED(result) ||
+      WEXITSTATUS(result) != 0) {
+    lastError_ =
+        response.empty()
+            ? "HTTP request failed"
+            : response;
+
+    while (!lastError_.empty() &&
+           (lastError_.back() == '\n' ||
+            lastError_.back() == '\r')) {
+      lastError_.pop_back();
+    }
+
+    return false;
+  }
+
+  return true;
+}
+
 bool HttpRangeClient::complete(
     const std::string& assignmentId,
     const std::string& clientId,

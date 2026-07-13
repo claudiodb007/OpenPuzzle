@@ -1,5 +1,6 @@
 #include "openpuzzle/core/commands/RangeCommand.hpp"
 
+#include "openpuzzle/adapters/bitcrack/BitCrackProgressParser.hpp"
 #include "openpuzzle/client/ClientIdentity.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
@@ -142,6 +143,54 @@ int readExitCode(
   return exitCode;
 }
 
+std::optional<ExecutionProgress>
+readLatestProgress(
+    const std::string& workspace) {
+  const auto logPath =
+      std::filesystem::path(workspace) /
+      "bitcrack.log";
+
+  std::ifstream input(
+      logPath);
+
+  if (!input) {
+    return std::nullopt;
+  }
+
+  bitcrack::BitCrackProgressParser parser;
+
+  std::optional<ExecutionProgress>
+      latest;
+
+  std::string line;
+
+  while (std::getline(
+      input,
+      line)) {
+    const auto progress =
+        parser.parseLine(line);
+
+    if (!progress) {
+      continue;
+    }
+
+    /*
+     * Para telemetria pública consideramos apenas
+     * eventos de velocidade/progresso.
+     *
+     * Eventos Found podem conter material sensível
+     * e nunca são devolvidos por esta função.
+     */
+    if (progress->speedMKeys > 0.0 &&
+        !progress->keysChecked.empty()) {
+      latest =
+          *progress;
+    }
+  }
+
+  return latest;
+}
+
 void printAssignment(
     const client::RangeAssignment& assignment) {
   std::cout
@@ -231,6 +280,43 @@ int showStatus(
       << "Workspace.......... "
       << state->workspace
       << '\n';
+
+  if (running) {
+    const auto progress =
+        readLatestProgress(
+            state->workspace);
+
+    if (progress) {
+      std::cout
+          << "Speed.............. "
+          << progress->speedMKeys
+          << " MKey/s\n"
+          << "Keys checked....... "
+          << progress->keysChecked
+          << '\n';
+
+      client::HttpRangeClient httpClient(
+          server);
+
+      if (httpClient.progress(
+              state->assignmentId,
+              state->clientId,
+              progress->speedMKeys,
+              progress->keysChecked)) {
+        std::cout
+            << "Progress........... uploaded\n";
+      } else {
+        std::cerr
+            << "Progress........... failed\n"
+            << "Upload error....... "
+            << httpClient.lastError()
+            << '\n';
+      }
+    } else {
+      std::cout
+          << "Progress........... waiting for engine output\n";
+    }
+  }
 
   if (!running &&
       exitCode != -9999) {

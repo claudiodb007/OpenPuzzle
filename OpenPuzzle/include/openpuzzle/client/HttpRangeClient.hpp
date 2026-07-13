@@ -21,6 +21,12 @@ public:
       const std::string& clientId,
       int exitCode);
 
+  bool progress(
+      const std::string& assignmentId,
+      const std::string& clientId,
+      double speedMKeys,
+      const std::string& keysChecked);
+
   static std::optional<RangeAssignment>
   parseClaimResponse(
       const std::string& response,
