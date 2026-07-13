@@ -16,6 +16,11 @@ public:
       const std::string& clientId,
       int puzzle);
 
+  bool complete(
+      const std::string& assignmentId,
+      const std::string& clientId,
+      int exitCode);
+
   static std::optional<RangeAssignment>
   parseClaimResponse(
       const std::string& response,
