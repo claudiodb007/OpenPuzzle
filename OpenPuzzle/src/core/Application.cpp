@@ -174,6 +174,31 @@ int Application::run(int argc, char **argv) {
     if (cmd == "range")
       return RangeCommand().run(r);
 
+    if (cmd == "run") {
+      std::vector<std::string> commandArgs;
+      commandArgs.emplace_back("run");
+
+      commandArgs.insert(
+          commandArgs.end(),
+          r.begin(),
+          r.end());
+
+      return RangeCommand().run(
+          commandArgs);
+    }
+
+    if (cmd == "status") {
+      return RangeCommand().run({
+          "status"
+      });
+    }
+
+    if (cmd == "stop") {
+      return RangeCommand().run({
+          "stop"
+      });
+    }
+
 
     if (cmd == "doctor") {
       Database db;

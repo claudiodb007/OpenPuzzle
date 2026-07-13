@@ -64,6 +64,7 @@ add_library(OpenPuzzleCore
     src/core/commands/RangeCommand.cpp
     src/client/HttpRangeClient.cpp
     src/client/ClientIdentity.cpp
+    src/client/ClientStateStore.cpp
     src/core/commands/CommandRegistry.cpp
     src/core/commands/StartJobCommand.cpp
     src/services/PuzzleService.cpp
