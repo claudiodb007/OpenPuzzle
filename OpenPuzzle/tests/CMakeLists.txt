@@ -927,3 +927,32 @@ add_test(
     NAME HttpRangeClientTests
     COMMAND HttpRangeClientTests
 )
+
+
+add_executable(ClientStateStoreTests
+    client/ClientStateStoreTests.cpp
+)
+
+target_link_libraries(ClientStateStoreTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ClientStateStoreTests
+    COMMAND ClientStateStoreTests
+)
+
+add_executable(BackgroundExecutionLauncherTests
+    runtime/BackgroundExecutionLauncherTests.cpp
+)
+
+target_link_libraries(BackgroundExecutionLauncherTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME BackgroundExecutionLauncherTests
+    COMMAND BackgroundExecutionLauncherTests
+)
