@@ -1,8 +1,8 @@
 #include "openpuzzle/core/commands/RangeCommand.hpp"
 
-#include "openpuzzle/adapters/bitcrack/BitCrackProgressParser.hpp"
 #include "openpuzzle/client/ClientIdentity.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
+#include "openpuzzle/client/ExecutionSyncService.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
 #include "openpuzzle/core/CommandContext.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
@@ -123,74 +123,6 @@ bool processExists(
   return errno == EPERM;
 }
 
-int readExitCode(
-    const std::string& workspace) {
-  const auto exitPath =
-      std::filesystem::path(workspace) /
-      "exit.code";
-
-  std::ifstream input(
-      exitPath);
-
-  if (!input) {
-    return -9999;
-  }
-
-  int exitCode = -9999;
-
-  input >> exitCode;
-
-  return exitCode;
-}
-
-std::optional<ExecutionProgress>
-readLatestProgress(
-    const std::string& workspace) {
-  const auto logPath =
-      std::filesystem::path(workspace) /
-      "bitcrack.log";
-
-  std::ifstream input(
-      logPath);
-
-  if (!input) {
-    return std::nullopt;
-  }
-
-  bitcrack::BitCrackProgressParser parser;
-
-  std::optional<ExecutionProgress>
-      latest;
-
-  std::string line;
-
-  while (std::getline(
-      input,
-      line)) {
-    const auto progress =
-        parser.parseLine(line);
-
-    if (!progress) {
-      continue;
-    }
-
-    /*
-     * Para telemetria pública consideramos apenas
-     * eventos de velocidade/progresso.
-     *
-     * Eventos Found podem conter material sensível
-     * e nunca são devolvidos por esta função.
-     */
-    if (progress->speedMKeys > 0.0 &&
-        !progress->keysChecked.empty()) {
-      latest =
-          *progress;
-    }
-  }
-
-  return latest;
-}
-
 void printAssignment(
     const client::RangeAssignment& assignment) {
   std::cout
@@ -219,8 +151,11 @@ int showStatus(
   const std::string server =
       serverUrl(args);
 
-  const auto state =
-      client::ClientStateStore::load();
+  client::ExecutionSyncService syncService;
+
+  const auto result =
+      syncService.tick(
+          server);
 
   std::cout
       << "OpenPuzzle Status\n"
@@ -229,7 +164,7 @@ int showStatus(
       << server
       << '\n';
 
-  if (!state) {
+  if (!result.hasState) {
     std::cout
         << "Status............. idle\n"
         << "Execution.......... none\n";
@@ -237,128 +172,111 @@ int showStatus(
     return 0;
   }
 
-  const bool running =
-      processExists(
-          state->pid);
-
-  const int exitCode =
-      running
-          ? -9999
-          : readExitCode(
-                state->workspace);
+  const auto& state =
+      result.state;
 
   std::cout
       << "Status............. "
-      << (running
+      << (result.running
               ? "running"
               : "stopped")
       << '\n'
       << "Assignment......... "
-      << state->assignmentId
+      << state.assignmentId
       << '\n'
       << "Puzzle............. "
-      << state->puzzle
+      << state.puzzle
       << '\n'
       << "Range ID........... "
-      << state->rangeId
+      << state.rangeId
       << '\n'
       << "PID................ "
-      << state->pid
+      << state.pid
       << '\n'
       << "Engine............. "
-      << state->engine
+      << state.engine
       << '\n'
       << "Backend............ "
-      << state->backend
+      << state.backend
       << '\n'
       << "Start.............. "
-      << state->start
+      << state.start
       << '\n'
       << "End................ "
-      << state->end
+      << state.end
       << '\n'
       << "Workspace.......... "
-      << state->workspace
+      << state.workspace
       << '\n';
 
-  if (running) {
-    const auto progress =
-        readLatestProgress(
-            state->workspace);
-
-    if (progress) {
+  if (result.running) {
+    if (result.hasProgress) {
       std::cout
           << "Speed.............. "
-          << progress->speedMKeys
+          << result.progress.speedMKeys
           << " MKey/s\n"
           << "Keys checked....... "
-          << progress->keysChecked
+          << result.progress.keysChecked
           << '\n';
 
-      client::HttpRangeClient httpClient(
-          server);
-
-      if (httpClient.progress(
-              state->assignmentId,
-              state->clientId,
-              progress->speedMKeys,
-              progress->keysChecked)) {
+      if (result.progressUploaded) {
         std::cout
             << "Progress........... uploaded\n";
       } else {
         std::cerr
             << "Progress........... failed\n"
             << "Upload error....... "
-            << httpClient.lastError()
+            << result.progressError
             << '\n';
       }
     } else {
       std::cout
-          << "Progress........... waiting for engine output\n";
+          << "Progress........... "
+          << "waiting for engine output\n";
     }
+
+    return 0;
   }
 
-  if (!running &&
-      exitCode != -9999) {
+  if (!result.hasExitCode) {
+    return 0;
+  }
+
+  std::cout
+      << "Exit code.......... "
+      << result.exitCode
+      << '\n';
+
+  if (result.exitCode != 0) {
     std::cout
-        << "Exit code.......... "
-        << exitCode
+        << "Completion......... "
+        << "not uploaded\n"
+        << "Reason............. "
+        << "execution did not finish successfully\n";
+
+    return 0;
+  }
+
+  if (!result.completionUploaded) {
+    std::cerr
+        << "Completion......... failed\n"
+        << "Upload error....... "
+        << result.completionError
         << '\n';
 
-    if (exitCode == 0) {
-      client::HttpRangeClient httpClient(
-          server);
+    return 1;
+  }
 
-      if (httpClient.complete(
-              state->assignmentId,
-              state->clientId,
-              exitCode)) {
-        std::cout
-            << "Completion......... uploaded\n";
+  std::cout
+      << "Completion......... uploaded\n";
 
-        if (!client::ClientStateStore::remove()) {
-          std::cerr
-              << "Warning............ "
-              << "unable to remove local state\n";
+  if (!result.stateRemoved) {
+    std::cerr
+        << "Warning............ "
+        << result.completionError
+        << '\n';
 
-          return 1;
-        }
-      } else {
-        std::cerr
-            << "Completion......... failed\n"
-            << "Upload error....... "
-            << httpClient.lastError()
-            << '\n';
-
-        return 1;
-      }
-    } else {
-      std::cout
-          << "Completion......... "
-          << "not uploaded\n"
-          << "Reason............. "
-          << "execution did not finish successfully\n";
-    }
+    return 1;
   }
 
   return 0;

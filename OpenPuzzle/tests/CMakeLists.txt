@@ -956,3 +956,17 @@ add_test(
     NAME BackgroundExecutionLauncherTests
     COMMAND BackgroundExecutionLauncherTests
 )
+
+add_executable(ExecutionSyncServiceTests
+    client/ExecutionSyncServiceTests.cpp
+)
+
+target_link_libraries(ExecutionSyncServiceTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionSyncServiceTests
+    COMMAND ExecutionSyncServiceTests
+)
