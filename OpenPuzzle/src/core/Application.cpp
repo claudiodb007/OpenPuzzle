@@ -188,9 +188,16 @@ int Application::run(int argc, char **argv) {
     }
 
     if (cmd == "status") {
-      return RangeCommand().run({
-          "status"
-      });
+      std::vector<std::string> commandArgs;
+      commandArgs.emplace_back("status");
+
+      commandArgs.insert(
+          commandArgs.end(),
+          r.begin(),
+          r.end());
+
+      return RangeCommand().run(
+          commandArgs);
     }
 
     if (cmd == "stop") {
