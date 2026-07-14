@@ -1,5 +1,6 @@
 #pragma once
 
+#include "openpuzzle/client/ClientRegistration.hpp"
 #include "openpuzzle/client/RangeAssignment.hpp"
 
 #include <optional>
@@ -11,6 +12,9 @@ class HttpRangeClient {
 public:
   explicit HttpRangeClient(
       std::string serverUrl);
+
+  bool registerClient(
+      const ClientRegistration& registration);
 
   std::optional<RangeAssignment> claim(
       const std::string& clientId,

@@ -970,3 +970,17 @@ add_test(
     NAME ExecutionSyncServiceTests
     COMMAND ExecutionSyncServiceTests
 )
+
+add_executable(ClientRegistrationTests
+    client/ClientRegistrationTests.cpp
+)
+
+target_link_libraries(ClientRegistrationTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ClientRegistrationTests
+    COMMAND ClientRegistrationTests
+)
