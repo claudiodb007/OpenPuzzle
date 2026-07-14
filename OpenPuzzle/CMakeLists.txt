@@ -63,7 +63,9 @@ add_library(OpenPuzzleCore
     src/core/commands/WorkerRunCommand.cpp
     src/core/commands/RangeCommand.cpp
     src/client/HttpRangeClient.cpp
+    src/client/ClientHeartbeatService.cpp
     src/client/ClientIdentity.cpp
+    src/client/ClientRegistrationService.cpp
     src/client/ClientStateStore.cpp
     src/client/ExecutionSyncService.cpp
     src/core/commands/CommandRegistry.cpp
@@ -115,6 +117,12 @@ target_link_libraries(OpenPuzzleCore
 target_compile_options(OpenPuzzleCore
     PRIVATE
         -Wall -Wextra -Wpedantic
+)
+
+
+target_compile_definitions(OpenPuzzleCore
+    PUBLIC
+        OPENPUZZLE_VERSION="${PROJECT_VERSION}"
 )
 
 add_executable(OpenPuzzle

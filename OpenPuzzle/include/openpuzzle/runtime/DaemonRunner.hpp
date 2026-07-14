@@ -25,6 +25,7 @@ public:
 
 private:
   void loadWorkers();
+  void registerClient();
   void tick();
   void syncClientExecution();
 

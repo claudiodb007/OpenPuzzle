@@ -2,6 +2,8 @@
 
 #include "openpuzzle/database/Database.hpp"
 
+#include "openpuzzle/client/ClientHeartbeatService.hpp"
+#include "openpuzzle/client/ClientRegistrationService.hpp"
 #include "openpuzzle/client/ExecutionSyncService.hpp"
 #include "openpuzzle/runtime/DaemonStatusCollector.hpp"
 #include "openpuzzle/runtime/RuntimeCoordinator.hpp"
@@ -117,6 +119,8 @@ int DaemonRunner::run(int ticks) {
   std::cout << "-----------------\n";
   std::cout << "Status............ starting\n";
 
+  registerClient();
+
   while (running_ && tickCount_ < ticks) {
     tick();
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -133,6 +137,35 @@ void DaemonRunner::stop() {
 
 
 
+void DaemonRunner::registerClient() {
+  client::ClientRegistrationService service;
+
+  const auto result =
+      service.registerWith(
+          serverUrl_);
+
+  if (result.success) {
+    std::cout
+        << "Client registration registered\n"
+        << "Client ID......... "
+        << result.registration.clientId
+        << "\n";
+
+    return;
+  }
+
+  /*
+   * O daemon deve continuar a trabalhar mesmo
+   * quando o servidor está temporariamente
+   * indisponível.
+   */
+  std::cout
+      << "Client registration failed\n"
+      << "Registration error. "
+      << result.error
+      << "\n";
+}
+
 void DaemonRunner::syncClientExecution() {
   const auto now =
       std::chrono::steady_clock::now();
@@ -145,6 +178,35 @@ void DaemonRunner::syncClientExecution() {
 
   hasSynced_ = true;
   lastSyncAt_ = now;
+
+  {
+    client::ClientHeartbeatService
+        heartbeatService;
+
+    const auto heartbeat =
+        heartbeatService.send(
+            serverUrl_);
+
+    if (heartbeat.success) {
+      std::cout
+          << "Client heartbeat.. uploaded\n"
+          << "Client status..... "
+          << heartbeat.heartbeat.status
+          << "\n"
+          << "Client CPU........ "
+          << heartbeat.heartbeat.cpu.name
+          << "\n"
+          << "Client GPUs....... "
+          << heartbeat.heartbeat.gpus.size()
+          << "\n";
+    } else {
+      std::cout
+          << "Client heartbeat.. failed\n"
+          << "Heartbeat error... "
+          << heartbeat.error
+          << "\n";
+    }
+  }
 
   client::ExecutionSyncService service;
 

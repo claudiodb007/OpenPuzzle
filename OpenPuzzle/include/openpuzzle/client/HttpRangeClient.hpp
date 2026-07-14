@@ -1,5 +1,6 @@
 #pragma once
 
+#include "openpuzzle/client/ClientHeartbeat.hpp"
 #include "openpuzzle/client/ClientRegistration.hpp"
 #include "openpuzzle/client/RangeAssignment.hpp"
 
@@ -15,6 +16,9 @@ public:
 
   bool registerClient(
       const ClientRegistration& registration);
+
+  bool heartbeat(
+      const ClientHeartbeat& heartbeat);
 
   std::optional<RangeAssignment> claim(
       const std::string& clientId,

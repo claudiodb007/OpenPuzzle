@@ -250,24 +250,170 @@ bool HttpRangeClient::registerClient(
       << "\"client_id\":\""
       << jsonEscape(
              registration.clientId)
-      << "\","
-      << "\"hostname\":\""
-      << jsonEscape(
-             registration.hostname)
-      << "\","
-      << "\"platform\":\""
-      << jsonEscape(
-             registration.platform)
-      << "\","
-      << "\"version\":\""
-      << jsonEscape(
-             registration.version)
       << "\""
       << "}";
 
   const std::string url =
       serverUrl_ +
       "/api/client/register";
+
+  std::ostringstream command;
+
+  command
+      << "curl"
+      << " --silent"
+      << " --show-error"
+      << " --location"
+      << " --post301"
+      << " --post302"
+      << " --fail-with-body"
+      << " --connect-timeout 10"
+      << " --max-time 30"
+      << " --request POST"
+      << " --header "
+      << shellQuote(
+             "Content-Type: application/json")
+      << " --data "
+      << shellQuote(
+             request.str())
+      << ' '
+      << shellQuote(url)
+      << " 2>&1";
+
+  FILE* pipe =
+      popen(
+          command.str().c_str(),
+          "r");
+
+  if (!pipe) {
+    lastError_ =
+        "Unable to start curl";
+
+    return false;
+  }
+
+  char buffer[4096];
+  std::string response;
+
+  while (fgets(
+             buffer,
+             sizeof(buffer),
+             pipe) != nullptr) {
+    response += buffer;
+  }
+
+  const int result =
+      pclose(pipe);
+
+  if (result == -1) {
+    lastError_ =
+        "Unable to obtain curl result";
+
+    return false;
+  }
+
+  if (!WIFEXITED(result) ||
+      WEXITSTATUS(result) != 0) {
+    lastError_ =
+        response.empty()
+            ? "HTTP request failed"
+            : response;
+
+    while (!lastError_.empty() &&
+           (lastError_.back() == '\n' ||
+            lastError_.back() == '\r')) {
+      lastError_.pop_back();
+    }
+
+    return false;
+  }
+
+  return true;
+}
+
+bool HttpRangeClient::heartbeat(
+    const ClientHeartbeat& heartbeat) {
+  lastError_.clear();
+
+  if (serverUrl_.empty()) {
+    lastError_ =
+        "Server URL is empty";
+
+    return false;
+  }
+
+  if (!heartbeat.valid()) {
+    lastError_ =
+        "Client heartbeat is invalid";
+
+    return false;
+  }
+
+  std::ostringstream request;
+
+  request
+      << "{"
+      << "\"client_id\":\""
+      << jsonEscape(
+             heartbeat.clientId)
+      << "\","
+      << "\"version\":\""
+      << jsonEscape(
+             heartbeat.version)
+      << "\","
+      << "\"platform\":\""
+      << jsonEscape(
+             heartbeat.platform)
+      << "\","
+      << "\"status\":\""
+      << jsonEscape(
+             heartbeat.status)
+      << "\","
+      << "\"cpu\":{"
+      << "\"name\":\""
+      << jsonEscape(
+             heartbeat.cpu.name)
+      << "\","
+      << "\"cores\":"
+      << heartbeat.cpu.cores
+      << ","
+      << "\"threads\":"
+      << heartbeat.cpu.threads
+      << "},"
+      << "\"gpus\":[";
+
+  for (std::size_t index = 0;
+       index < heartbeat.gpus.size();
+       ++index) {
+    const auto& gpu =
+        heartbeat.gpus[index];
+
+    if (index > 0) {
+      request << ',';
+    }
+
+    request
+        << "{"
+        << "\"backend\":\""
+        << jsonEscape(
+               gpu.backend)
+        << "\","
+        << "\"name\":\""
+        << jsonEscape(
+               gpu.name)
+        << "\","
+        << "\"memory_mb\":"
+        << gpu.memoryMB
+        << "}";
+  }
+
+  request
+      << "]"
+      << "}";
+
+  const std::string url =
+      serverUrl_ +
+      "/api/client/heartbeat";
 
   std::ostringstream command;
 

@@ -984,3 +984,45 @@ add_test(
     NAME ClientRegistrationTests
     COMMAND ClientRegistrationTests
 )
+
+add_executable(ClientRegistrationServiceTests
+    client/ClientRegistrationServiceTests.cpp
+)
+
+target_link_libraries(ClientRegistrationServiceTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ClientRegistrationServiceTests
+    COMMAND ClientRegistrationServiceTests
+)
+
+add_executable(ClientHeartbeatTests
+    client/ClientHeartbeatTests.cpp
+)
+
+target_link_libraries(ClientHeartbeatTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ClientHeartbeatTests
+    COMMAND ClientHeartbeatTests
+)
+
+add_executable(ClientHeartbeatServiceTests
+    client/ClientHeartbeatServiceTests.cpp
+)
+
+target_link_libraries(ClientHeartbeatServiceTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ClientHeartbeatServiceTests
+    COMMAND ClientHeartbeatServiceTests
+)

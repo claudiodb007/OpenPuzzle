@@ -13,18 +13,9 @@ int main() {
   registration.clientId =
       "11111111-1111-4111-8111-111111111111";
 
-  registration.hostname =
-      "worker-01";
-
-  registration.platform =
-      "Ubuntu Linux";
-
-  registration.version =
-      "0.10.0";
-
   assert(registration.valid());
 
-  registration.hostname.clear();
+  registration.clientId.clear();
 
   assert(!registration.valid());
 
