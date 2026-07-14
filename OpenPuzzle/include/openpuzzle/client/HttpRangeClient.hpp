@@ -11,46 +11,33 @@ namespace openpuzzle::client {
 
 class HttpRangeClient {
 public:
-  explicit HttpRangeClient(
-      std::string serverUrl);
+  explicit HttpRangeClient(std::string serverUrl);
 
-  bool registerClient(
-      const ClientRegistration& registration);
+  bool registerClient(const ClientRegistration &registration);
 
-  bool heartbeat(
-      const ClientHeartbeat& heartbeat);
+  bool heartbeat(const ClientHeartbeat &heartbeat);
 
-  std::optional<RangeAssignment> claim(
-      const std::string& clientId,
-      int puzzle);
+  std::optional<RangeAssignment> claim(const std::string &clientId, int puzzle,
+                                       const std::string &requestedKeys = "0");
 
-  bool complete(
-      const std::string& assignmentId,
-      const std::string& clientId,
-      int exitCode);
+  bool complete(const std::string &assignmentId, const std::string &clientId,
+                int exitCode);
 
-  bool progress(
-      const std::string& assignmentId,
-      const std::string& clientId,
-      double speedMKeys,
-      const std::string& keysChecked);
+  bool progress(const std::string &assignmentId, const std::string &clientId,
+                double speedMKeys, const std::string &keysChecked);
 
   static std::optional<RangeAssignment>
-  parseClaimResponse(
-      const std::string& response,
-      std::string& error);
+  parseClaimResponse(const std::string &response, std::string &error);
 
-  const std::string& lastError() const;
+  const std::string &lastError() const;
 
 private:
   std::string serverUrl_;
   std::string lastError_;
 
-  static std::string shellQuote(
-      const std::string& value);
+  static std::string shellQuote(const std::string &value);
 
-  static std::string normalizeServerUrl(
-      std::string value);
+  static std::string normalizeServerUrl(std::string value);
 };
 
 } // namespace openpuzzle::client
