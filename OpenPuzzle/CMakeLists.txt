@@ -62,6 +62,7 @@ add_library(OpenPuzzleCore
     src/core/commands/DispatchCommand.cpp
     src/core/commands/WorkerRunCommand.cpp
     src/core/commands/RangeCommand.cpp
+    src/runtime/RunSession.cpp
     src/client/HttpRangeClient.cpp
     src/client/ClientHeartbeatService.cpp
     src/client/ClientIdentity.cpp
