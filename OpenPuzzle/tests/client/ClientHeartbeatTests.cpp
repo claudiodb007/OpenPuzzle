@@ -45,6 +45,21 @@ int main() {
 
   heartbeat.gpus.push_back(gpu);
 
+  ClientEngineCapability engine;
+
+  engine.name =
+      "BitCrack";
+
+  engine.backend =
+      "CUDA";
+
+  engine.installed = true;
+  engine.available = true;
+
+  assert(engine.valid());
+
+  heartbeat.engines.push_back(engine);
+
   assert(heartbeat.valid());
 
   heartbeat.status =

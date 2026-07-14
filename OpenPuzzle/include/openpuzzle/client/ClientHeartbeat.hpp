@@ -29,6 +29,19 @@ struct ClientGpuCapability {
   }
 };
 
+struct ClientEngineCapability {
+  std::string name;
+  std::string backend;
+
+  bool installed = false;
+  bool available = false;
+
+  bool valid() const {
+    return !name.empty() &&
+           !backend.empty();
+  }
+};
+
 struct ClientHeartbeat {
   std::string clientId;
   std::string version;
@@ -37,6 +50,7 @@ struct ClientHeartbeat {
 
   ClientCpuCapability cpu;
   std::vector<ClientGpuCapability> gpus;
+  std::vector<ClientEngineCapability> engines;
 
   bool valid() const {
     return !clientId.empty() &&

@@ -408,6 +408,42 @@ bool HttpRangeClient::heartbeat(
   }
 
   request
+      << "],"
+      << "\"engines\":[";
+
+  for (std::size_t index = 0;
+       index < heartbeat.engines.size();
+       ++index) {
+    const auto& engine =
+        heartbeat.engines[index];
+
+    if (index > 0) {
+      request << ',';
+    }
+
+    request
+        << "{"
+        << "\"name\":\""
+        << jsonEscape(
+               engine.name)
+        << "\","
+        << "\"backend\":\""
+        << jsonEscape(
+               engine.backend)
+        << "\","
+        << "\"installed\":"
+        << (engine.installed
+                ? "true"
+                : "false")
+        << ","
+        << "\"available\":"
+        << (engine.available
+                ? "true"
+                : "false")
+        << "}";
+  }
+
+  request
       << "]"
       << "}";
 

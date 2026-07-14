@@ -77,13 +77,20 @@ int main() {
   for (const auto& gpu :
        heartbeat.gpus) {
     assert(gpu.valid());
-
-    /*
-     * O modelo público não possui qualquer
-     * campo de UUID.
-     */
     assert(!gpu.name.empty());
     assert(!gpu.backend.empty());
+  }
+
+  assert(
+      heartbeat.engines.size() == 3);
+
+  for (const auto& engine :
+       heartbeat.engines) {
+    assert(engine.valid());
+
+    if (engine.available) {
+      assert(engine.installed);
+    }
   }
 
   ClientHeartbeatService service;

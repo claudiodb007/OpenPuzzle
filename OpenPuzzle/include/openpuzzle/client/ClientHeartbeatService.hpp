@@ -22,7 +22,13 @@ public:
 private:
   static std::string platform();
   static ClientCpuCapability cpu();
-  static std::vector<ClientGpuCapability> gpus();
+
+  static std::vector<ClientGpuCapability>
+  gpus();
+
+  static std::vector<ClientEngineCapability>
+  engines();
+
   static std::string executionStatus();
 };
 

@@ -3,6 +3,7 @@
 #include "openpuzzle/client/ClientIdentity.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
+#include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 
 #include <algorithm>
@@ -222,6 +223,57 @@ ClientHeartbeatService::gpus() {
   return capabilities;
 }
 
+std::vector<ClientEngineCapability>
+ClientHeartbeatService::engines() {
+  std::vector<ClientEngineCapability>
+      capabilities;
+
+  EngineManager manager;
+
+  const auto makeCapability =
+      [&manager](
+          const std::string& name,
+          const std::string& backend) {
+        ClientEngineCapability capability;
+
+        capability.name = name;
+        capability.backend = backend;
+
+        const auto executable =
+            manager.resolveExecutable(
+                name,
+                backend);
+
+        capability.installed =
+            executable.has_value() &&
+            !executable->empty() &&
+            std::filesystem::is_regular_file(
+                *executable);
+
+        capability.available =
+            capability.installed;
+
+        return capability;
+      };
+
+  capabilities.push_back(
+      makeCapability(
+          "BitCrack",
+          "CUDA"));
+
+  capabilities.push_back(
+      makeCapability(
+          "BitCrack",
+          "OpenCL"));
+
+  capabilities.push_back(
+      makeCapability(
+          "KeyHunt",
+          "CPU"));
+
+  return capabilities;
+}
+
 std::string
 ClientHeartbeatService::
 executionStatus() {
@@ -264,6 +316,9 @@ collectLocalHeartbeat() {
 
   heartbeat.gpus =
       gpus();
+
+  heartbeat.engines =
+      engines();
 
   return heartbeat;
 }
