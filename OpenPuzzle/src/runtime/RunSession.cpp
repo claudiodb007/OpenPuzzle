@@ -174,7 +174,7 @@ bool processExists(int pid) {
 void printAssignment(const client::RangeAssignment &assignment) {
   std::cout << "Assignment......... " << assignment.assignmentId << '\n'
             << "Puzzle............. " << assignment.puzzle << '\n'
-            << "Range ID........... " << assignment.rangeId << '\n'
+            << "Assignment number... " << assignment.rangeId << '\n'
             << "Target............. " << assignment.target << '\n'
             << "Start.............. " << assignment.start << '\n'
             << "End................ " << assignment.end << '\n';
@@ -203,7 +203,7 @@ int showStatus(const std::vector<std::string> &args) {
             << (result.running ? "running" : "stopped") << '\n'
             << "Assignment......... " << state.assignmentId << '\n'
             << "Puzzle............. " << state.puzzle << '\n'
-            << "Range ID........... " << state.rangeId << '\n'
+            << "Assignment number... " << state.rangeId << '\n'
             << "PID................ " << state.pid << '\n'
             << "Engine............. " << state.engine << '\n'
             << "Backend............ " << state.backend << '\n'

@@ -133,7 +133,7 @@ HttpRangeClient::parseClaimResponse(const std::string &response,
 
   if (extractBoolean(response, "available", available) && !available) {
     if (!extractString(response, "message", error)) {
-      error = "No range available";
+      error = "No assignment available";
     }
 
     return std::nullopt;
