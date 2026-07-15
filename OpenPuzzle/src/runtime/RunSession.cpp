@@ -103,7 +103,7 @@ int selectedPuzzle(const std::vector<std::string> &args) {
     return puzzle;
   }
 
-  return getIntegerArgument(args, "--puzzle", 71);
+  return getIntegerArgument(args, "--puzzle", 0);
 }
 
 std::optional<std::string>
