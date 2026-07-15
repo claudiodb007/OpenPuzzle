@@ -11,68 +11,51 @@
 
 namespace openpuzzle {
 
-static std::string normalizeEngineLogName(
-    std::string engine) {
-  std::transform(
-      engine.begin(),
-      engine.end(),
-      engine.begin(),
-      [](unsigned char character) {
-        return static_cast<char>(
-            std::tolower(character));
-      });
+static std::string normalizeEngineLogName(std::string engine) {
+  std::transform(engine.begin(), engine.end(), engine.begin(),
+                 [](unsigned char character) {
+                   return static_cast<char>(std::tolower(character));
+                 });
 
   return engine;
 }
 
-EngineLaunchRequest EngineLaunchBuilder::build(
-    const PuzzleRecord& puzzle,
-    const RangeRecord& range,
-    const JobRecord& job,
-    const WorkerEngineCapability& capability,
-    const std::string& workspace) const {
+EngineLaunchRequest
+EngineLaunchBuilder::build(const PuzzleRecord &puzzle, const RangeRecord &range,
+                           const JobRecord &job,
+                           const WorkerEngineCapability &capability,
+                           const std::string &workspace) const {
   if (!capability.available) {
-    throw std::runtime_error(
-        "Worker engine capability is unavailable");
+    throw std::runtime_error("Worker engine capability is unavailable");
   }
 
   if (capability.engine.empty()) {
-    throw std::runtime_error(
-        "Worker engine capability has no engine");
+    throw std::runtime_error("Worker engine capability has no engine");
   }
 
   if (capability.backend.empty()) {
-    throw std::runtime_error(
-        "Worker engine capability has no backend");
+    throw std::runtime_error("Worker engine capability has no backend");
   }
 
   if (!capability.hasLaunchProfile()) {
-    throw std::runtime_error(
-        "Worker engine capability has no launch profile");
+    throw std::runtime_error("Worker engine capability has no launch profile");
   }
 
   WorkspaceManager workspaceManager(
-      std::filesystem::path(workspace)
-          .parent_path()
-          .parent_path());
+      std::filesystem::path(workspace).parent_path().parent_path());
 
-  const auto engineLogName =
-      normalizeEngineLogName(
-          capability.engine);
+  const auto engineLogName = normalizeEngineLogName(capability.engine);
 
   EngineLaunchRequest request;
 
   request.engine = capability.engine;
   request.backend = capability.backend;
 
-  request.targets.push_back(
-      puzzle.address);
+  request.targets.push_back(puzzle.address);
 
-  request.startKey =
-      range.startKey;
+  request.startKey = range.startKey;
 
-  request.endKey =
-      range.endKey;
+  request.endKey = range.endKey;
 
   request.device = capability.device;
   request.blocks = capability.blocks;
@@ -82,37 +65,25 @@ EngineLaunchRequest EngineLaunchBuilder::build(
   request.workspace = workspace;
 
   request.targetFile =
-      (std::filesystem::path(workspace) /
-       "targets.txt")
-          .string();
+      (std::filesystem::path(workspace) / "targets.txt").string();
 
   {
-    std::filesystem::create_directories(
-        workspace);
+    std::filesystem::create_directories(workspace);
 
-    std::ofstream targets(
-        request.targetFile,
-        std::ios::trunc);
+    std::ofstream targets(request.targetFile, std::ios::trunc);
 
     if (!targets.is_open()) {
-      throw std::runtime_error(
-          "Could not create engine target file");
+      throw std::runtime_error("Could not create engine target file");
     }
 
     targets << puzzle.address << "\n";
   }
 
   request.outputFile =
-      workspaceManager
-          .foundFile(job.id)
-          .string();
+      (std::filesystem::path(workspace) / "found.txt").string();
 
   request.logFile =
-      workspaceManager
-          .engineLog(
-              job.id,
-              engineLogName)
-          .string();
+      (std::filesystem::path(workspace) / "bitcrack.log").string();
 
   return request;
 }

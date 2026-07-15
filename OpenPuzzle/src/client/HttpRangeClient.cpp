@@ -1,6 +1,7 @@
 #include "openpuzzle/client/HttpRangeClient.hpp"
 
 #include <cstdio>
+#include <iomanip>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -358,7 +359,7 @@ bool HttpRangeClient::heartbeat(const ClientHeartbeat &heartbeat) {
 
 std::optional<RangeAssignment>
 HttpRangeClient::claim(const std::string &clientId, int puzzle,
-                       const std::string &requestedKeys) {
+                       int targetDurationMinutes, double speedMKeys) {
   lastError_.clear();
 
   if (serverUrl_.empty()) {
@@ -373,24 +374,22 @@ HttpRangeClient::claim(const std::string &clientId, int puzzle,
     return std::nullopt;
   }
 
-  if (puzzle <= 0) {
+  if (puzzle < 0) {
     lastError_ = "Puzzle number is invalid";
 
     return std::nullopt;
   }
 
-  if (requestedKeys.empty()) {
-    lastError_ = "Requested keys is empty";
+  if (targetDurationMinutes < 1 || targetDurationMinutes > 360) {
+    lastError_ = "Target duration must be between 1 and 360 minutes";
 
     return std::nullopt;
   }
 
-  for (const char character : requestedKeys) {
-    if (character < '0' || character > '9') {
-      lastError_ = "Requested keys must contain only digits";
+  if (speedMKeys < 0.0) {
+    lastError_ = "Speed cannot be negative";
 
-      return std::nullopt;
-    }
+    return std::nullopt;
   }
 
   std::ostringstream request;
@@ -398,8 +397,9 @@ HttpRangeClient::claim(const std::string &clientId, int puzzle,
   request << "{"
           << "\"client_id\":\"" << jsonEscape(clientId) << "\","
           << "\"puzzle\":" << puzzle << ","
-          << "\"requested_keys\":\"" << jsonEscape(requestedKeys) << "\""
-          << "}";
+          << "\"target_duration_minutes\":" << targetDurationMinutes << ","
+          << "\"speed_mkeys\":" << std::fixed << std::setprecision(6)
+          << speedMKeys << "}";
 
   const std::string url = serverUrl_ + "/api/range/claim";
 

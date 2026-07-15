@@ -18,7 +18,8 @@ public:
   bool heartbeat(const ClientHeartbeat &heartbeat);
 
   std::optional<RangeAssignment> claim(const std::string &clientId, int puzzle,
-                                       const std::string &requestedKeys = "0");
+                                       int targetDurationMinutes,
+                                       double speedMKeys = 0.0);
 
   bool complete(const std::string &assignmentId, const std::string &clientId,
                 int exitCode);

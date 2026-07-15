@@ -111,10 +111,7 @@ int selectedPuzzle(const std::vector<std::string> &args) {
   return getIntegerArgument(args, "--puzzle", 0);
 }
 
-constexpr const char *calibrationRequestedKeys = "30000000000";
-
-std::optional<std::string>
-requestedKeysForOneHour(const std::vector<std::string> &args) {
+std::optional<double> measuredSpeedMKeys(const std::vector<std::string> &args) {
   CommandContext context;
 
   if (!context.initialize()) {
@@ -140,26 +137,7 @@ requestedKeysForOneHour(const std::vector<std::string> &args) {
     return std::nullopt;
   }
 
-  constexpr long double secondsPerHour = 3600.0L;
-
-  constexpr long double keysPerMKey = 1000000.0L;
-
-  /*
-   * O servidor aceita atualmente até 10^17 chaves
-   * por assignment.
-   */
-  constexpr long double serverMaximum = 100000000000000000.0L;
-
-  long double requested = static_cast<long double>(profile->averageSpeed) *
-                          keysPerMKey * secondsPerHour;
-
-  requested = std::max(1.0L, std::min(requested, serverMaximum));
-
-  std::ostringstream value;
-
-  value << std::fixed << std::setprecision(0) << requested;
-
-  return value.str();
+  return profile->averageSpeed;
 }
 
 std::filesystem::path assignmentWorkspace(const std::string &assignmentId) {
@@ -375,17 +353,17 @@ int RunSession::run(const std::vector<std::string> &args) const {
     }
   }
 
-  std::string requestedKeys = "0";
+  int targetDurationMinutes = 60;
+  double speedMKeys = 0.0;
   bool calibrationAssignment = false;
 
   if (subcommand == "run") {
-    const auto calculated = requestedKeysForOneHour(args);
+    const auto measured = measuredSpeedMKeys(args);
 
-    if (calculated) {
-      requestedKeys = *calculated;
+    if (measured) {
+      speedMKeys = *measured;
     } else {
-      requestedKeys = calibrationRequestedKeys;
-
+      targetDurationMinutes = 5;
       calibrationAssignment = true;
     }
   }
@@ -410,11 +388,14 @@ int RunSession::run(const std::vector<std::string> &args) const {
 
     if (calibrationAssignment) {
       std::cout << "Assignment type.... calibration\n";
-    } else {
-      std::cout << "Target duration.... 60 minutes\n";
     }
 
-    std::cout << "Requested keys..... " << requestedKeys << '\n';
+    std::cout << "Target duration.... " << targetDurationMinutes
+              << " minutes\n";
+
+    if (speedMKeys > 0.0) {
+      std::cout << "Measured speed..... " << speedMKeys << " MKey/s\n";
+    }
   }
 
   /*
@@ -449,8 +430,8 @@ int RunSession::run(const std::vector<std::string> &args) const {
 
   client::HttpRangeClient httpClient(server);
 
-  const auto assignment =
-      httpClient.claim(clientId, puzzleNumber, requestedKeys);
+  const auto assignment = httpClient.claim(clientId, puzzleNumber,
+                                           targetDurationMinutes, speedMKeys);
 
   if (!assignment) {
     std::cerr << "Unable to claim assignment: " << httpClient.lastError()
