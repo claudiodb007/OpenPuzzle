@@ -8,24 +8,24 @@
 #include "openpuzzle/core/Scheduler.hpp"
 #include "openpuzzle/core/commands/BenchmarkCommand.hpp"
 #include "openpuzzle/core/commands/DispatchCommand.hpp"
-#include "openpuzzle/core/commands/WorkerRunCommand.hpp"
-#include "openpuzzle/core/commands/RangeCommand.hpp"
 #include "openpuzzle/core/commands/ProfileCommand.hpp"
+#include "openpuzzle/core/commands/RangeCommand.hpp"
 #include "openpuzzle/core/commands/StartJobCommand.hpp"
+#include "openpuzzle/core/commands/WorkerRunCommand.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/performance/AutoTuner.hpp"
 #include "openpuzzle/performance/BenchmarkRunner.hpp"
 #include "openpuzzle/performance/GpuProfileManager.hpp"
-#include "openpuzzle/tools/ToolManager.hpp"
-#include "openpuzzle/services/PuzzleService.hpp"
-#include "openpuzzle/services/WorkerService.hpp"
-#include "openpuzzle/services/QueueService.hpp"
 #include "openpuzzle/services/BenchmarkService.hpp"
+#include "openpuzzle/services/DaemonService.hpp"
+#include "openpuzzle/services/DashboardService.hpp"
+#include "openpuzzle/services/DoctorService.hpp"
 #include "openpuzzle/services/EngineService.hpp"
 #include "openpuzzle/services/ExecutionService.hpp"
-#include "openpuzzle/services/DoctorService.hpp"
-#include "openpuzzle/services/DashboardService.hpp"
-#include "openpuzzle/services/DaemonService.hpp"
+#include "openpuzzle/services/PuzzleService.hpp"
+#include "openpuzzle/services/QueueService.hpp"
+#include "openpuzzle/services/WorkerService.hpp"
+#include "openpuzzle/tools/ToolManager.hpp"
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -89,11 +89,39 @@ int Application::run(int argc, char **argv) {
   std::vector<std::string> args;
   for (int i = 1; i < argc; ++i)
     args.emplace_back(argv[i]);
+  /*
+   * Interface principal:
+   *
+   *   OpenPuzzle
+   *       -> run automático
+   *
+   *   OpenPuzzle 73
+   *       -> run Puzzle 73
+   *
+   * Os comandos antigos "run" e "run 73"
+   * permanecem disponíveis por compatibilidade.
+   */
   if (args.empty()) {
-    std::cout << "OpenPuzzle 0.11.1-dev\n";
-    return 0;
+    args.emplace_back("run");
+  } else {
+    const auto &first = args.front();
+
+    bool numeric = !first.empty();
+
+    for (const char character : first) {
+      if (character < '0' || character > '9') {
+        numeric = false;
+        break;
+      }
+    }
+
+    if (numeric) {
+      args.insert(args.begin(), "run");
+    }
   }
+
   auto cmd = args[0];
+
   std::vector<std::string> r(args.begin() + 1, args.end());
   try {
     if (cmd == "init")
@@ -178,34 +206,23 @@ int Application::run(int argc, char **argv) {
       std::vector<std::string> commandArgs;
       commandArgs.emplace_back("run");
 
-      commandArgs.insert(
-          commandArgs.end(),
-          r.begin(),
-          r.end());
+      commandArgs.insert(commandArgs.end(), r.begin(), r.end());
 
-      return RangeCommand().run(
-          commandArgs);
+      return RangeCommand().run(commandArgs);
     }
 
     if (cmd == "status") {
       std::vector<std::string> commandArgs;
       commandArgs.emplace_back("status");
 
-      commandArgs.insert(
-          commandArgs.end(),
-          r.begin(),
-          r.end());
+      commandArgs.insert(commandArgs.end(), r.begin(), r.end());
 
-      return RangeCommand().run(
-          commandArgs);
+      return RangeCommand().run(commandArgs);
     }
 
     if (cmd == "stop") {
-      return RangeCommand().run({
-          "stop"
-      });
+      return RangeCommand().run({"stop"});
     }
-
 
     if (cmd == "doctor") {
       Database db;
@@ -313,8 +330,8 @@ int Application::cmdListPuzzles() {
   return 0;
 }
 
-static std::vector<std::string> extractJsonStringsArray(const std::string &txt,
-                                                        const std::string &key) {
+static std::vector<std::string>
+extractJsonStringsArray(const std::string &txt, const std::string &key) {
   std::vector<std::string> out;
   auto p = txt.find("\"" + key + "\"");
   if (p == std::string::npos)
@@ -340,7 +357,8 @@ struct ImportedRangeItem {
   int status = 0;
 };
 
-static std::vector<ImportedRangeItem> extractRangesArray(const std::string &txt) {
+static std::vector<ImportedRangeItem>
+extractRangesArray(const std::string &txt) {
   std::vector<ImportedRangeItem> out;
   std::regex re(
       R"JSON(\{\s*"min"\s*:\s*"([^"]+)"\s*,\s*"max"\s*:\s*"([^"]+)"\s*,\s*"status"\s*:\s*([0-9]+)\s*\})JSON");
@@ -368,9 +386,12 @@ static std::string strip0x(std::string v) {
 int Application::cmdSyncData(const std::vector<std::string> &a) {
   auto dir = getArg(a, "--dir", "data");
 
-  auto wallets = extractJsonStringsArray(readFile((fs::path(dir) / "wallets.json").string()), "wallets");
-  auto hash160s = extractJsonStringsArray(readFile((fs::path(dir) / "hash160s.json").string()), "hash160s");
-  auto ranges = extractRangesArray(readFile((fs::path(dir) / "ranges.json").string()));
+  auto wallets = extractJsonStringsArray(
+      readFile((fs::path(dir) / "wallets.json").string()), "wallets");
+  auto hash160s = extractJsonStringsArray(
+      readFile((fs::path(dir) / "hash160s.json").string()), "hash160s");
+  auto ranges =
+      extractRangesArray(readFile((fs::path(dir) / "ranges.json").string()));
 
   if (wallets.empty())
     throw std::runtime_error("wallets.json has no wallets");
@@ -379,7 +400,8 @@ int Application::cmdSyncData(const std::vector<std::string> &a) {
   if (hash160s.empty())
     throw std::runtime_error("hash160s.json has no hash160s");
 
-  size_t count = std::min<size_t>(160, std::min(wallets.size(), std::min(hash160s.size(), ranges.size())));
+  size_t count = std::min<size_t>(
+      160, std::min(wallets.size(), std::min(hash160s.size(), ranges.size())));
 
   Database db;
   if (!ensureDb(db))
@@ -405,14 +427,13 @@ int Application::cmdSyncData(const std::vector<std::string> &a) {
   std::cout << "Puzzles synchronized. " << count << "\n";
 
   if (wallets.size() != ranges.size() || wallets.size() != hash160s.size()) {
-    std::cout << "Warning.............. input counts differ; synchronized first "
-              << count << " puzzles only\n";
+    std::cout
+        << "Warning.............. input counts differ; synchronized first "
+        << count << " puzzles only\n";
   }
 
   return 0;
 }
-
-
 
 int Application::cmdQueue(const std::vector<std::string> &a) {
   Database db;
@@ -527,8 +548,8 @@ int Application::cmdTools() {
 }
 int Application::cmdGpuList() {
   for (auto &g : GpuManager::listGpus())
-    std::cout << "GPU " << g.device << ": " << g.name << " | " << std::to_string(g.memoryMb) + " MiB"
-              << " | " << g.uuid << "\n";
+    std::cout << "GPU " << g.device << ": " << g.name << " | "
+              << std::to_string(g.memoryMb) + " MiB" << " | " << g.uuid << "\n";
   return 0;
 }
 int Application::cmdGpuSelect(const std::vector<std::string> &a) {
