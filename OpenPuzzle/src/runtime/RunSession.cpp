@@ -21,6 +21,7 @@
 #include "openpuzzle/workers/WorkerEngineCapability.hpp"
 
 #include <cerrno>
+#include <chrono>
 #include <cmath>
 #include <csignal>
 #include <cstdlib>
@@ -32,6 +33,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <unistd.h>
 #include <vector>
 
@@ -667,11 +669,88 @@ int RunSession::run(const std::vector<std::string> &args) const {
 
   std::cout << "BitCrack started.\n"
             << "PID................ " << handle.pid << '\n'
-            << "\nUse:\n"
-            << "  OpenPuzzle status\n"
-            << "  OpenPuzzle stop\n";
+            << "Monitoring.......... active\n\n";
 
-  return 0;
+  client::ExecutionSyncService syncService;
+  client::ClientHeartbeatService heartbeatService;
+
+  constexpr auto syncInterval = std::chrono::seconds(60);
+
+  constexpr auto completionPollInterval = std::chrono::seconds(2);
+
+  while (true) {
+    const auto result = syncService.tick(server);
+
+    if (!result.hasState) {
+      std::cout << "Assignment complete.\n";
+
+      return 0;
+    }
+
+    if (result.running) {
+      if (result.hasProgress) {
+        std::cout << "Speed.............. " << result.progress.speedMKeys
+                  << " MKey/s\n"
+                  << "Keys checked....... " << result.progress.keysChecked
+                  << '\n';
+
+        if (!result.progressUploaded) {
+          std::cerr << "Progress upload.... failed\n"
+                    << "Reason............. " << result.progressError << '\n';
+        }
+      } else {
+        std::cout << "Progress........... "
+                  << "waiting for engine output\n";
+      }
+
+      const auto heartbeat = heartbeatService.send(server);
+
+      if (!heartbeat.success) {
+        std::cerr << "Heartbeat.......... failed\n"
+                  << "Reason............. " << heartbeat.error << '\n';
+      }
+
+      std::this_thread::sleep_for(syncInterval);
+
+      continue;
+    }
+
+    if (!result.hasExitCode) {
+      std::this_thread::sleep_for(completionPollInterval);
+
+      continue;
+    }
+
+    std::cout << "Exit code.......... " << result.exitCode << '\n';
+
+    if (result.exitCode != 0) {
+      std::cerr << "Assignment......... failed\n"
+                << "Local state retained for diagnosis.\n";
+
+      return 1;
+    }
+
+    if (!result.completionUploaded) {
+      std::cerr << "Completion upload.. failed\n"
+                << "Reason............. " << result.completionError << '\n';
+
+      std::this_thread::sleep_for(syncInterval);
+
+      continue;
+    }
+
+    if (!result.stateRemoved) {
+      std::cerr << "State cleanup...... failed\n"
+                << "Reason............. " << result.completionError << '\n';
+
+      return 1;
+    }
+
+    std::cout << "Completion......... uploaded\n"
+              << "Assignment complete.\n";
+
+    return 0;
+  }
 }
 
 } // namespace openpuzzle
