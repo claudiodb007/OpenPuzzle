@@ -412,10 +412,15 @@ int RunSession::run(const std::vector<std::string> &args) const {
   }
 
   std::cout << "OpenPuzzle\n"
-            << "----------\n"
-            << "Puzzle............. " << puzzleNumber << '\n';
+            << "----------\n";
 
   if (subcommand == "run") {
+    if (puzzleNumber > 0) {
+      std::cout << "Requested puzzle... " << puzzleNumber << '\n';
+    } else {
+      std::cout << "Requested puzzle... automatic\n";
+    }
+
     std::cout << "Target duration.... 60 minutes\n"
               << "Requested keys..... " << requestedKeys << '\n';
   }
@@ -428,7 +433,8 @@ int RunSession::run(const std::vector<std::string> &args) const {
       httpClient.claim(clientId, puzzleNumber, requestedKeys);
 
   if (!assignment) {
-    std::cerr << "Unable to claim range: " << httpClient.lastError() << '\n';
+    std::cerr << "Unable to claim assignment: " << httpClient.lastError()
+              << '\n';
 
     return 1;
   }
