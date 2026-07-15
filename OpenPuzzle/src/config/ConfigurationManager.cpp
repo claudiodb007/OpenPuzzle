@@ -5,42 +5,99 @@
 #include <fstream>
 #include <optional>
 #include <sstream>
+#include <string>
 
 namespace fs = std::filesystem;
 
 namespace openpuzzle {
 
-static std::optional<std::string> readJsonStringAfterKey(const std::string& text,
-                                                         const std::string& key) {
-  auto k = text.find("\"" + key + "\"");
+namespace {
 
-  if (k == std::string::npos)
+std::optional<std::string> readJsonStringAfterKey(const std::string &text,
+                                                  const std::string &key) {
+  const auto keyPosition = text.find("\"" + key + "\"");
+
+  if (keyPosition == std::string::npos) {
     return std::nullopt;
+  }
 
-  auto c = text.find(':', k);
-  auto f = text.find('"', c);
-  auto e = text.find('"', f + 1);
+  const auto colon = text.find(':', keyPosition);
 
-  if (c == std::string::npos || f == std::string::npos || e == std::string::npos)
+  const auto firstQuote = text.find('"', colon);
+
+  const auto lastQuote = text.find('"', firstQuote + 1);
+
+  if (colon == std::string::npos || firstQuote == std::string::npos ||
+      lastQuote == std::string::npos) {
     return std::nullopt;
+  }
 
-  return text.substr(f + 1, e - f - 1);
+  return text.substr(firstQuote + 1, lastQuote - firstQuote - 1);
 }
 
-static std::string readFile(const std::string& path) {
-  std::ifstream in(path);
+std::optional<int> readJsonIntegerAfterKey(const std::string &text,
+                                           const std::string &key) {
+  const auto keyPosition = text.find("\"" + key + "\"");
 
-  if (!in)
+  if (keyPosition == std::string::npos) {
+    return std::nullopt;
+  }
+
+  const auto colon = text.find(':', keyPosition);
+
+  if (colon == std::string::npos) {
+    return std::nullopt;
+  }
+
+  std::size_t position = colon + 1;
+
+  while (position < text.size() &&
+         std::isspace(static_cast<unsigned char>(text[position]))) {
+    ++position;
+  }
+
+  std::size_t consumed = 0;
+
+  try {
+    const int value = std::stoi(text.substr(position), &consumed);
+
+    return value;
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+std::string readFile(const std::string &path) {
+  std::ifstream input(path);
+
+  if (!input) {
     return {};
+  }
 
   std::stringstream buffer;
-  buffer << in.rdbuf();
+  buffer << input.rdbuf();
 
   return buffer.str();
 }
 
+std::string escapeJson(const std::string &value) {
+  std::string escaped;
+
+  for (const char character : value) {
+    if (character == '\\' || character == '"') {
+      escaped.push_back('\\');
+    }
+
+    escaped.push_back(character);
+  }
+
+  return escaped;
+}
+
+} // namespace
+
 std::string ConfigurationManager::configPath() {
-  const char* home = std::getenv("HOME");
+  const char *home = std::getenv("HOME");
 
   fs::path path = home ? fs::path(home) : fs::current_path();
 
@@ -54,49 +111,80 @@ Configuration ConfigurationManager::load() {
 
   const auto text = readFile(configPath());
 
-  if (text.empty())
+  if (text.empty()) {
     return config;
-
-  auto cudaPath = readJsonStringAfterKey(text, "cuda");
-
-  if (cudaPath) {
-    config.bitcrack.cudaPath = *cudaPath;
-  } else {
-    auto legacyBitCrack = readJsonStringAfterKey(text, "bitcrack");
-
-    if (legacyBitCrack)
-      config.bitcrack.cudaPath = *legacyBitCrack;
   }
 
-  auto openclPath = readJsonStringAfterKey(text, "opencl");
+  if (const auto value = readJsonStringAfterKey(text, "cuda")) {
+    config.bitcrack.cudaPath = *value;
+  } else if (const auto legacy = readJsonStringAfterKey(text, "bitcrack")) {
+    config.bitcrack.cudaPath = *legacy;
+  }
 
-  if (openclPath) {
-    config.bitcrack.openclPath = *openclPath;
+  if (const auto value = readJsonStringAfterKey(text, "opencl")) {
+    config.bitcrack.openclPath = *value;
   } else if (!config.bitcrack.cudaPath.empty()) {
-    fs::path cudaExecutable(config.bitcrack.cudaPath);
     config.bitcrack.openclPath =
-        (cudaExecutable.parent_path() / "clBitCrack").string();
+        (fs::path(config.bitcrack.cudaPath).parent_path() / "clBitCrack")
+            .string();
+  }
+
+  if (const auto value = readJsonStringAfterKey(text, "engine_id")) {
+    config.engine.id = *value;
+  }
+
+  if (const auto value = readJsonStringAfterKey(text, "backend")) {
+    config.engine.backend = *value;
+  }
+
+  if (const auto value = readJsonStringAfterKey(text, "executable")) {
+    config.engine.executable = *value;
+  }
+
+  if (const auto value = readJsonIntegerAfterKey(text, "gpu_device")) {
+    config.gpu.device = *value;
+  }
+
+  if (const auto value = readJsonIntegerAfterKey(text, "duration_minutes")) {
+    if (*value > 0) {
+      config.assignment.durationMinutes = *value;
+    }
   }
 
   return config;
 }
 
-bool ConfigurationManager::save(const Configuration& config) {
-  fs::path path = configPath();
+bool ConfigurationManager::save(const Configuration &config) {
+  const fs::path path = configPath();
+
   fs::create_directories(path.parent_path());
 
-  std::ofstream out(path);
+  std::ofstream output(path);
 
-  if (!out)
+  if (!output) {
     return false;
+  }
 
-  out << "{\n";
-  out << "  \"bitcrack\": {\n";
-  out << "    \"cuda\": \"" << config.bitcrack.cudaPath << "\",\n";
-  out << "    \"opencl\": \"" << config.bitcrack.openclPath << "\"\n";
-  out << "  },\n";
-  out << "  \"gpu_device\": " << config.gpu.device << "\n";
-  out << "}\n";
+  output << "{\n"
+         << "  \"engine\": {\n"
+         << "    \"engine_id\": \"" << escapeJson(config.engine.id) << "\",\n"
+         << "    \"backend\": \"" << escapeJson(config.engine.backend)
+         << "\",\n"
+         << "    \"executable\": \"" << escapeJson(config.engine.executable)
+         << "\"\n"
+         << "  },\n"
+         << "  \"bitcrack\": {\n"
+         << "    \"cuda\": \"" << escapeJson(config.bitcrack.cudaPath)
+         << "\",\n"
+         << "    \"opencl\": \"" << escapeJson(config.bitcrack.openclPath)
+         << "\"\n"
+         << "  },\n"
+         << "  \"gpu_device\": " << config.gpu.device << ",\n"
+         << "  \"assignment\": {\n"
+         << "    \"duration_minutes\": " << config.assignment.durationMinutes
+         << "\n"
+         << "  }\n"
+         << "}\n";
 
   return true;
 }

@@ -1,5 +1,8 @@
 #include "openpuzzle/runtime/RunSession.hpp"
 
+#include "openpuzzle/config/ConfigurationManager.hpp"
+#include "openpuzzle/setup/FirstRunSetup.hpp"
+
 #include "openpuzzle/client/ClientHeartbeatService.hpp"
 #include "openpuzzle/client/ClientIdentity.hpp"
 #include "openpuzzle/client/ClientRegistrationService.hpp"
@@ -114,7 +117,13 @@ requestedKeysForOneHour(const std::vector<std::string> &args) {
     return std::nullopt;
   }
 
-  const std::string backend = getArgument(args, "--backend", "cuda");
+  const auto configuration = ConfigurationManager::load();
+
+  const std::string configuredBackend = configuration.engine.backend.empty()
+                                            ? "cuda"
+                                            : configuration.engine.backend;
+
+  const std::string backend = getArgument(args, "--backend", configuredBackend);
 
   const auto gpu = GpuManager::currentGpu();
 
@@ -354,6 +363,14 @@ int RunSession::run(const std::vector<std::string> &args) const {
 
   const int puzzleNumber = selectedPuzzle(args);
 
+  if (subcommand == "run") {
+    FirstRunSetup setup;
+
+    if (!setup.ensureConfigured()) {
+      return 1;
+    }
+  }
+
   std::string requestedKeys = "0";
 
   if (subcommand == "run") {
@@ -457,7 +474,13 @@ int RunSession::run(const std::vector<std::string> &args) const {
 
   const std::string engine = getArgument(args, "--engine", "bitcrack");
 
-  const std::string backend = getArgument(args, "--backend", "cuda");
+  const auto configuration = ConfigurationManager::load();
+
+  const std::string configuredBackend = configuration.engine.backend.empty()
+                                            ? "cuda"
+                                            : configuration.engine.backend;
+
+  const std::string backend = getArgument(args, "--backend", configuredBackend);
 
   if (engine != "bitcrack") {
     throw std::runtime_error("Only BitCrack is currently enabled");
