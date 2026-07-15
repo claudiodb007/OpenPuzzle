@@ -109,6 +109,8 @@ int selectedPuzzle(const std::vector<std::string> &args) {
   return getIntegerArgument(args, "--puzzle", 0);
 }
 
+constexpr const char *calibrationRequestedKeys = "30000000000";
+
 std::optional<std::string>
 requestedKeysForOneHour(const std::vector<std::string> &args) {
   CommandContext context;
@@ -372,20 +374,18 @@ int RunSession::run(const std::vector<std::string> &args) const {
   }
 
   std::string requestedKeys = "0";
+  bool calibrationAssignment = false;
 
   if (subcommand == "run") {
     const auto calculated = requestedKeysForOneHour(args);
 
-    if (!calculated) {
-      std::cerr << "No benchmark profile is available "
-                << "for the selected GPU.\n"
-                << "Run:\n"
-                << "  OpenPuzzle benchmark --auto\n";
+    if (calculated) {
+      requestedKeys = *calculated;
+    } else {
+      requestedKeys = calibrationRequestedKeys;
 
-      return 1;
+      calibrationAssignment = true;
     }
-
-    requestedKeys = *calculated;
   }
 
   const std::string clientId = client::ClientIdentity::loadOrCreate();
@@ -396,13 +396,28 @@ int RunSession::run(const std::vector<std::string> &args) const {
     return 1;
   }
 
+  std::cout << "OpenPuzzle\n"
+            << "----------\n";
+
+  if (subcommand == "run") {
+    if (puzzleNumber > 0) {
+      std::cout << "Requested puzzle... " << puzzleNumber << '\n';
+    } else {
+      std::cout << "Requested puzzle... automatic\n";
+    }
+
+    if (calibrationAssignment) {
+      std::cout << "Assignment type.... calibration\n";
+    } else {
+      std::cout << "Target duration.... 60 minutes\n";
+    }
+
+    std::cout << "Requested keys..... " << requestedKeys << '\n';
+  }
+
   /*
-   * O comando run é autónomo:
-   *
-   *   registo -> heartbeat -> claim
-   *
-   * O utilizador não precisa de iniciar primeiro
-   * o daemon nem de configurar o servidor.
+   * Mostrar primeiro a configuração local.
+   * A ligação à rede acontece imediatamente depois.
    */
   if (subcommand == "run") {
     client::ClientRegistrationService registrationService;
@@ -426,20 +441,6 @@ int RunSession::run(const std::vector<std::string> &args) const {
 
       return 1;
     }
-  }
-
-  std::cout << "OpenPuzzle\n"
-            << "----------\n";
-
-  if (subcommand == "run") {
-    if (puzzleNumber > 0) {
-      std::cout << "Requested puzzle... " << puzzleNumber << '\n';
-    } else {
-      std::cout << "Requested puzzle... automatic\n";
-    }
-
-    std::cout << "Target duration.... 60 minutes\n"
-              << "Requested keys..... " << requestedKeys << '\n';
   }
 
   std::cout << "Requesting assignment...\n\n";
