@@ -1,6 +1,8 @@
 #include "openpuzzle/runtime/RunSession.hpp"
 
+#include "openpuzzle/client/ClientHeartbeatService.hpp"
 #include "openpuzzle/client/ClientIdentity.hpp"
+#include "openpuzzle/client/ClientRegistrationService.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/ExecutionSyncService.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
@@ -375,6 +377,38 @@ int RunSession::run(const std::vector<std::string> &args) const {
     std::cerr << "Unable to create local client identity\n";
 
     return 1;
+  }
+
+  /*
+   * O comando run é autónomo:
+   *
+   *   registo -> heartbeat -> claim
+   *
+   * O utilizador não precisa de iniciar primeiro
+   * o daemon nem de configurar o servidor.
+   */
+  if (subcommand == "run") {
+    client::ClientRegistrationService registrationService;
+
+    const auto registration = registrationService.registerWith(server);
+
+    if (!registration.success) {
+      std::cerr << "Unable to connect to the "
+                << "OpenPuzzle network: " << registration.error << '\n';
+
+      return 1;
+    }
+
+    client::ClientHeartbeatService heartbeatService;
+
+    const auto heartbeat = heartbeatService.send(server);
+
+    if (!heartbeat.success) {
+      std::cerr << "Unable to update client status: " << heartbeat.error
+                << '\n';
+
+      return 1;
+    }
   }
 
   std::cout << "OpenPuzzle\n"
