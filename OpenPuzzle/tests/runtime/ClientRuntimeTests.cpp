@@ -31,9 +31,11 @@ ClientRuntimeDependencies makeDependencies() {
         return true;
       };
 
-  dependencies.cancelAssignment =
+  dependencies.finalizeAssignment =
       [](const std::string &,
          const std::string &,
+         const std::string &,
+         int,
          const std::string &,
          std::string &) {
         return true;
@@ -199,14 +201,18 @@ int main() {
           return true;
         };
 
-    dependencies.cancelAssignment =
+    dependencies.finalizeAssignment =
         [&](const std::string &server,
             const std::string &assignment,
             const std::string &clientId,
+            int exitCode,
+            const std::string &status,
             std::string &) {
           assert(server == "https://server.test");
           assert(assignment == "assignment-3");
           assert(clientId == "client-3");
+          assert(exitCode == -2);
+          assert(status == "cancelled");
           cancelled = true;
           return true;
         };
@@ -233,11 +239,15 @@ int main() {
   }
 
   /*
-   * Exit code diferente de zero.
+   * Exit code diferente de zero:
+   * reporta failed e remove o estado.
    */
   {
     auto dependencies =
         makeDependencies();
+
+    bool failureUploaded = false;
+    bool stateRemoved = false;
 
     dependencies.sync =
         [](const std::string &) {
@@ -246,6 +256,29 @@ int main() {
           result.hasExitCode = true;
           result.exitCode = 7;
           return result;
+        };
+
+    dependencies.finalizeAssignment =
+        [&](const std::string &server,
+            const std::string &assignment,
+            const std::string &clientId,
+            int exitCode,
+            const std::string &status,
+            std::string &) {
+          assert(server == "https://server.test");
+          assert(assignment == "assignment-4");
+          assert(clientId == "client-4");
+          assert(exitCode == 7);
+          assert(status == "failed");
+
+          failureUploaded = true;
+          return true;
+        };
+
+    dependencies.removeState =
+        [&] {
+          stateRemoved = true;
+          return true;
         };
 
     ClientRuntime runtime(
@@ -257,6 +290,9 @@ int main() {
             "assignment-4",
             "client-4",
             "/tmp/workspace-4") == 1);
+
+    assert(failureUploaded);
+    assert(stateRemoved);
   }
 
   /*

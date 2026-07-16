@@ -26,7 +26,7 @@ ClientRuntime::ClientRuntime(
   if (!dependencies_.sync ||
       !dependencies_.heartbeat ||
       !dependencies_.stopExecution ||
-      !dependencies_.cancelAssignment ||
+      !dependencies_.finalizeAssignment ||
       !dependencies_.removeState ||
       !dependencies_.acquireRuntime ||
       !dependencies_.releaseRuntime ||
@@ -63,10 +63,12 @@ ClientRuntime::productionDependencies() {
         return stopper.stop(workspace);
       };
 
-  dependencies.cancelAssignment =
+  dependencies.finalizeAssignment =
       [](const std::string &serverUrl,
          const std::string &assignmentId,
          const std::string &clientId,
+         int exitCode,
+         const std::string &status,
          std::string &error) {
         client::HttpRangeClient httpClient(
             serverUrl);
@@ -75,8 +77,8 @@ ClientRuntime::productionDependencies() {
             httpClient.complete(
                 assignmentId,
                 clientId,
-                -2,
-                "cancelled");
+                exitCode,
+                status);
 
         if (!result) {
           error = httpClient.lastError();
@@ -280,10 +282,12 @@ int ClientRuntime::run(
 
       std::string cancellationError;
 
-      if (!dependencies_.cancelAssignment(
+      if (!dependencies_.finalizeAssignment(
               serverUrl,
               assignmentId,
               clientId,
+              -2,
+              "cancelled",
               cancellationError)) {
         std::cerr
             << "Cancellation upload failed.\n"
@@ -371,8 +375,38 @@ int ClientRuntime::run(
 
     if (result.exitCode != 0) {
       std::cerr
-          << "Assignment......... failed\n"
-          << "Local state retained for diagnosis.\n";
+          << "Assignment......... failed\n";
+
+      std::string failureError;
+
+      if (!dependencies_.finalizeAssignment(
+              serverUrl,
+              assignmentId,
+              clientId,
+              result.exitCode,
+              "failed",
+              failureError)) {
+        std::cerr
+            << "Failure upload..... failed\n"
+            << "Reason............. "
+            << failureError
+            << '\n'
+            << "Local state retained for retry.\n";
+
+        return 1;
+      }
+
+      if (!dependencies_.removeState()) {
+        std::cerr
+            << "Failure upload..... uploaded\n"
+            << "State cleanup...... failed\n";
+
+        return 1;
+      }
+
+      std::cerr
+          << "Failure upload..... uploaded\n"
+          << "Local state........ removed\n";
 
       return 1;
     }

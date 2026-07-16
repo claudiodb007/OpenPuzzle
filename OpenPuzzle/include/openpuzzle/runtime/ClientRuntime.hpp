@@ -68,7 +68,9 @@ struct ClientRuntimeDependencies {
       const std::string &serverUrl,
       const std::string &assignmentId,
       const std::string &clientId,
-      std::string &error)> cancelAssignment;
+      int exitCode,
+      const std::string &status,
+      std::string &error)> finalizeAssignment;
 
   std::function<bool()> removeState;
 
