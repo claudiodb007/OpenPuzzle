@@ -87,6 +87,41 @@ std::string serverUrl(const std::vector<std::string> &args) {
   return getArgument(args, "--server", value);
 }
 
+std::optional<int> requestedDurationMinutes(
+    const std::vector<std::string> &args) {
+  std::string value;
+
+  if (const char *environment =
+          std::getenv(
+              "OPENPUZZLE_TARGET_DURATION_MINUTES")) {
+    if (*environment != '\0') {
+      value = environment;
+    }
+  }
+
+  value = getArgument(
+      args,
+      "--duration-minutes",
+      value);
+
+  if (value.empty()) {
+    return std::nullopt;
+  }
+
+  std::size_t consumed = 0;
+  const int duration =
+      std::stoi(value, &consumed);
+
+  if (consumed != value.size() ||
+      duration < 1 ||
+      duration > 360) {
+    throw std::runtime_error(
+        "Duration must be between 1 and 360 minutes");
+  }
+
+  return duration;
+}
+
 int selectedPuzzle(const std::vector<std::string> &args) {
   /*
    * Formato principal:
@@ -332,7 +367,8 @@ int RunSession::run(
    */
   if (args.empty() ||
       args.front() != "run" ||
-      hasArgument(args, "--dry-run")) {
+      hasArgument(args, "--dry-run") ||
+      hasArgument(args, "--once")) {
     return runOnce(args).exitCode;
   }
 
@@ -405,17 +441,31 @@ ClientIterationResult RunSession::runOnce(
     }
   }
 
-  int targetDurationMinutes = 60;
+  const auto requestedDuration =
+      requestedDurationMinutes(args);
+
+  int targetDurationMinutes =
+      requestedDuration.value_or(60);
+
   double speedMKeys = 0.0;
   bool calibrationAssignment = false;
 
   if (subcommand == "run") {
-    const auto measured = measuredSpeedMKeys(args);
+    const auto measured =
+        measuredSpeedMKeys(args);
 
     if (measured) {
       speedMKeys = *measured;
     } else {
-      targetDurationMinutes = 5;
+      /*
+       * Sem perfil medido, usar uma atribuição curta
+       * de calibração, exceto quando o utilizador
+       * definiu explicitamente a duração.
+       */
+      if (!requestedDuration) {
+        targetDurationMinutes = 5;
+      }
+
       calibrationAssignment = true;
     }
   }
@@ -440,6 +490,10 @@ ClientIterationResult RunSession::runOnce(
 
     if (calibrationAssignment) {
       std::cout << "Assignment type.... calibration\n";
+    }
+
+    if (hasArgument(args, "--once")) {
+      std::cout << "Execution mode..... single assignment\n";
     }
 
     std::cout << "Target duration.... " << targetDurationMinutes
