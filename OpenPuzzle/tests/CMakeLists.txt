@@ -1026,3 +1026,17 @@ add_test(
     NAME ClientHeartbeatServiceTests
     COMMAND ClientHeartbeatServiceTests
 )
+
+add_executable(ClientRuntimeTests
+    runtime/ClientRuntimeTests.cpp
+)
+
+target_link_libraries(ClientRuntimeTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ClientRuntimeTests
+    COMMAND ClientRuntimeTests
+)
