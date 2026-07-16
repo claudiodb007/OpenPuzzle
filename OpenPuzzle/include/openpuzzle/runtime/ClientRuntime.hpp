@@ -6,8 +6,53 @@
 #include <chrono>
 #include <functional>
 #include <string>
+#include <utility>
 
 namespace openpuzzle {
+
+enum class ClientIterationStatus {
+  Completed,
+  Unavailable,
+  Retry,
+  Failed
+};
+
+struct ClientIterationResult {
+  ClientIterationStatus status =
+      ClientIterationStatus::Completed;
+
+  int exitCode = 0;
+  std::string message;
+
+  ClientIterationResult() = default;
+
+  ClientIterationResult(int code)
+      : status(
+            code == 0
+                ? ClientIterationStatus::Completed
+                : ClientIterationStatus::Failed),
+        exitCode(code) {}
+
+  static ClientIterationResult unavailable(
+      std::string message) {
+    ClientIterationResult result;
+    result.status =
+        ClientIterationStatus::Unavailable;
+    result.message =
+        std::move(message);
+    return result;
+  }
+
+  static ClientIterationResult retry(
+      std::string message) {
+    ClientIterationResult result;
+    result.status =
+        ClientIterationStatus::Retry;
+    result.message =
+        std::move(message);
+    return result;
+  }
+};
 
 struct ClientRuntimeDependencies {
   std::function<client::ExecutionSyncResult(
@@ -26,6 +71,10 @@ struct ClientRuntimeDependencies {
       std::string &error)> cancelAssignment;
 
   std::function<bool()> removeState;
+
+  std::function<bool()> acquireRuntime;
+  std::function<void()> releaseRuntime;
+
   std::function<bool()> stopRequested;
   std::function<void()> prepareSignals;
 
@@ -39,6 +88,10 @@ public:
 
   explicit ClientRuntime(
       ClientRuntimeDependencies dependencies);
+
+  int runContinuous(
+      const std::function<ClientIterationResult()> &
+          executeAssignment) const;
 
   int run(const std::string &serverUrl,
           const std::string &assignmentId,

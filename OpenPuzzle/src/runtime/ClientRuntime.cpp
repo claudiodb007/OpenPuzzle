@@ -1,5 +1,7 @@
 #include "openpuzzle/runtime/ClientRuntime.hpp"
 
+#include "openpuzzle/runtime/ClientRuntimeControl.hpp"
+
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
 #include "openpuzzle/core/SignalHandler.hpp"
@@ -26,6 +28,8 @@ ClientRuntime::ClientRuntime(
       !dependencies_.stopExecution ||
       !dependencies_.cancelAssignment ||
       !dependencies_.removeState ||
+      !dependencies_.acquireRuntime ||
+      !dependencies_.releaseRuntime ||
       !dependencies_.stopRequested ||
       !dependencies_.prepareSignals ||
       !dependencies_.sleep) {
@@ -86,6 +90,16 @@ ClientRuntime::productionDependencies() {
         return client::ClientStateStore::remove();
       };
 
+  dependencies.acquireRuntime =
+      [] {
+        return ClientRuntimeControl::acquire();
+      };
+
+  dependencies.releaseRuntime =
+      [] {
+        ClientRuntimeControl::release();
+      };
+
   dependencies.stopRequested =
       [] {
         return SignalHandler::stopRequested();
@@ -119,6 +133,104 @@ bool ClientRuntime::sleepInterruptibly(
   }
 
   return true;
+}
+
+int ClientRuntime::runContinuous(
+    const std::function<ClientIterationResult()> &
+        executeAssignment) const {
+  if (!dependencies_.acquireRuntime()) {
+    std::cerr
+        << "OpenPuzzle is already running "
+        << "or runtime state cannot be created.\n";
+
+    return 1;
+  }
+
+  struct RuntimeReleaseGuard {
+    const ClientRuntimeDependencies &
+        dependencies;
+
+    ~RuntimeReleaseGuard() {
+      dependencies.releaseRuntime();
+    }
+  };
+
+  const RuntimeReleaseGuard releaseGuard{
+      dependencies_
+  };
+
+  dependencies_.prepareSignals();
+
+  constexpr auto retryInterval =
+      std::chrono::seconds(30);
+
+  while (true) {
+    if (dependencies_.stopRequested()) {
+      std::cout << "OpenPuzzle stopped.\n";
+
+      return 0;
+    }
+
+    const auto result =
+        executeAssignment();
+
+    /*
+     * A execução monitorizada pode ter terminado
+     * devido a SIGINT ou SIGTERM.
+     */
+    if (dependencies_.stopRequested()) {
+      return result.exitCode;
+    }
+
+    switch (result.status) {
+    case ClientIterationStatus::Completed:
+      std::cout
+          << "\nRequesting next assignment...\n";
+
+      continue;
+
+    case ClientIterationStatus::Unavailable:
+      std::cout
+          << "Work............... unavailable\n";
+
+      if (!result.message.empty()) {
+        std::cout
+            << "Reason............. "
+            << result.message
+            << '\n';
+      }
+
+      std::cout
+          << "Retrying........... in 30 seconds\n";
+
+      sleepInterruptibly(retryInterval);
+
+      continue;
+
+    case ClientIterationStatus::Retry:
+      std::cerr
+          << "Network............ temporarily unavailable\n";
+
+      if (!result.message.empty()) {
+        std::cerr
+            << "Reason............. "
+            << result.message
+            << '\n';
+      }
+
+      std::cerr
+          << "Retrying........... in 30 seconds\n";
+
+      sleepInterruptibly(retryInterval);
+
+      continue;
+
+    case ClientIterationStatus::Failed:
+      return result.exitCode == 0
+                 ? 1
+                 : result.exitCode;
+    }
+  }
 }
 
 int ClientRuntime::run(

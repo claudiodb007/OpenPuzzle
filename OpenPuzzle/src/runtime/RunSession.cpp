@@ -16,6 +16,7 @@
 #include "openpuzzle/performance/GpuProfileManager.hpp"
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
 #include "openpuzzle/runtime/ClientRuntime.hpp"
+#include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/runtime/ExecutionStopper.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
@@ -181,8 +182,24 @@ int showStatus(const std::vector<std::string> &args) {
             << "-----------------\n";
 
   if (!result.hasState) {
-    std::cout << "Status............. idle\n"
-              << "Execution.......... none\n";
+    const auto runtimePid =
+        ClientRuntimeControl::runtimePid();
+
+    if (runtimePid &&
+        ClientRuntimeControl::running()) {
+      std::cout
+          << "Status............. waiting\n"
+          << "Execution.......... none\n"
+          << "Runtime PID........ "
+          << *runtimePid
+          << '\n';
+
+      return 0;
+    }
+
+    std::cout
+        << "Status............. idle\n"
+        << "Execution.......... none\n";
 
     return 0;
   }
@@ -256,10 +273,23 @@ int showStatus(const std::vector<std::string> &args) {
 }
 
 int stopExecution() {
-  const auto state = client::ClientStateStore::load();
-
   std::cout << "OpenPuzzle\n"
             << "----------\n";
+
+  /*
+   * O runtime principal é responsável por sincronizar,
+   * cancelar a atribuição e terminar o motor.
+   */
+  if (ClientRuntimeControl::requestStop()) {
+    std::cout
+        << "Stop requested.\n"
+        << "The active runtime is shutting down.\n";
+
+    return 0;
+  }
+
+  const auto state =
+      client::ClientStateStore::load();
 
   if (!state) {
     std::cout << "No active execution to stop.\n";
@@ -294,7 +324,28 @@ int stopExecution() {
 
 } // namespace
 
-int RunSession::run(const std::vector<std::string> &args) const {
+int RunSession::run(
+    const std::vector<std::string> &args) const {
+  /*
+   * status, stop e claim são operações únicas.
+   * Apenas run entra no ciclo contínuo.
+   */
+  if (args.empty() ||
+      args.front() != "run" ||
+      hasArgument(args, "--dry-run")) {
+    return runOnce(args).exitCode;
+  }
+
+  ClientRuntime runtime;
+
+  return runtime.runContinuous(
+      [this, &args] {
+        return runOnce(args);
+      });
+}
+
+ClientIterationResult RunSession::runOnce(
+    const std::vector<std::string> &args) const {
   if (args.empty()) {
     std::cerr << "Usage:\n"
               << "  OpenPuzzle run <puzzle> [--dry-run]\n"
@@ -464,15 +515,49 @@ int RunSession::run(const std::vector<std::string> &args) const {
 
   client::HttpRangeClient httpClient(server);
 
-  const auto assignment = httpClient.claim(clientId, puzzleNumber,
-                                           targetDurationMinutes, speedMKeys);
+  const auto claimResult =
+      httpClient.claimResult(
+          clientId,
+          puzzleNumber,
+          targetDurationMinutes,
+          speedMKeys);
 
-  if (!assignment) {
-    std::cerr << "Unable to claim assignment: " << httpClient.lastError()
-              << '\n';
+  if (claimResult.unavailable()) {
+    if (subcommand == "claim") {
+      std::cout
+          << "No assignment available.\n";
 
-    return 1;
+      if (!claimResult.message.empty()) {
+        std::cout
+            << "Reason............. "
+            << claimResult.message
+            << '\n';
+      }
+
+      return 0;
+    }
+
+    return ClientIterationResult::unavailable(
+        claimResult.message);
   }
+
+  if (claimResult.failed() ||
+      !claimResult.assignment) {
+    if (subcommand == "claim") {
+      std::cerr
+          << "Unable to claim assignment: "
+          << claimResult.message
+          << '\n';
+
+      return 1;
+    }
+
+    return ClientIterationResult::retry(
+        claimResult.message);
+  }
+
+  const auto assignment =
+      claimResult.assignment;
 
   printAssignment(*assignment);
 

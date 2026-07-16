@@ -1040,3 +1040,17 @@ add_test(
     NAME ClientRuntimeTests
     COMMAND ClientRuntimeTests
 )
+
+add_executable(ClientRuntimeControlTests
+    runtime/ClientRuntimeControlTests.cpp
+)
+
+target_link_libraries(ClientRuntimeControlTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ClientRuntimeControlTests
+    COMMAND ClientRuntimeControlTests
+)

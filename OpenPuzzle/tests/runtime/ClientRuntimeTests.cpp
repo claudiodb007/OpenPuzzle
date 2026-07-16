@@ -44,6 +44,14 @@ ClientRuntimeDependencies makeDependencies() {
         return true;
       };
 
+  dependencies.acquireRuntime =
+      [] {
+        return true;
+      };
+
+  dependencies.releaseRuntime =
+      [] {};
+
   dependencies.stopRequested =
       [] {
         return false;
@@ -299,6 +307,101 @@ int main() {
 
     assert(syncCalls == 2);
     assert(sleepCalls == 60);
+  }
+
+  /*
+   * O ciclo pede uma nova atribuição depois
+   * de cada conclusão.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    int executions = 0;
+
+    dependencies.stopRequested =
+        [&] {
+          return executions >= 2;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    const int result =
+        runtime.runContinuous(
+            [&] {
+              ++executions;
+              return ClientIterationResult{};
+            });
+
+    assert(result == 0);
+    assert(executions == 2);
+  }
+
+  /*
+   * Ausência temporária de trabalho:
+   * aguarda e volta a tentar.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    int executions = 0;
+    int sleepCalls = 0;
+
+    dependencies.stopRequested =
+        [&] {
+          return executions >= 2;
+        };
+
+    dependencies.sleep =
+        [&](std::chrono::seconds duration) {
+          assert(
+              duration ==
+              std::chrono::seconds(1));
+
+          ++sleepCalls;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    const int result =
+        runtime.runContinuous(
+            [&] {
+              ++executions;
+
+              if (executions == 1) {
+                return
+                    ClientIterationResult::unavailable(
+                        "No work available");
+              }
+
+              return ClientIterationResult{};
+            });
+
+    assert(result == 0);
+    assert(executions == 2);
+    assert(sleepCalls == 30);
+  }
+
+  /*
+   * Falha local permanente termina o runtime.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    const int result =
+        runtime.runContinuous(
+            [] {
+              return ClientIterationResult(7);
+            });
+
+    assert(result == 7);
   }
 
   std::cout
