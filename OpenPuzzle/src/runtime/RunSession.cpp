@@ -281,10 +281,31 @@ int showStatus(const std::vector<std::string> &args) {
   std::cout << "Exit code.......... " << result.exitCode << '\n';
 
   if (result.exitCode != 0) {
-    std::cout << "Completion......... "
-              << "not uploaded\n"
-              << "Reason............. "
-              << "execution did not finish successfully\n";
+    if (!result.completionUploaded) {
+      std::cerr
+          << "Failure upload..... failed\n"
+          << "Reason............. "
+          << result.completionError
+          << '\n';
+
+      return 1;
+    }
+
+    std::cout
+        << "Failure upload..... uploaded\n";
+
+    if (!result.stateRemoved) {
+      std::cerr
+          << "State cleanup...... failed\n"
+          << "Reason............. "
+          << result.completionError
+          << '\n';
+
+      return 1;
+    }
+
+    std::cout
+        << "Local state........ removed\n";
 
     return 0;
   }

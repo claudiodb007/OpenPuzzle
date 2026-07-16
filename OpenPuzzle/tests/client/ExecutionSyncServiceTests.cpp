@@ -113,7 +113,8 @@ int main() {
 
   /*
    * Processo terminado com exit code diferente de zero:
-   * não deve contactar o servidor nem remover o estado.
+   * tenta reportar failed e preserva o estado quando
+   * o servidor não está disponível.
    */
   {
     const auto state =
@@ -139,6 +140,7 @@ int main() {
     assert(result.exitCode == 7);
 
     assert(!result.completionUploaded);
+    assert(!result.completionError.empty());
     assert(!result.stateRemoved);
 
     assert(

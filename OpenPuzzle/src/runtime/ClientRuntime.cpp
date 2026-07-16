@@ -377,6 +377,29 @@ int ClientRuntime::run(
       std::cerr
           << "Assignment......... failed\n";
 
+      /*
+       * ExecutionSyncService já pode ter enviado
+       * e limpo o estado da execução falhada.
+       */
+      if (result.completionUploaded) {
+        if (!result.stateRemoved) {
+          std::cerr
+              << "Failure upload..... uploaded\n"
+              << "State cleanup...... failed\n"
+              << "Reason............. "
+              << result.completionError
+              << '\n';
+
+          return 1;
+        }
+
+        std::cerr
+            << "Failure upload..... uploaded\n"
+            << "Local state........ removed\n";
+
+        return 1;
+      }
+
       std::string failureError;
 
       if (!dependencies_.finalizeAssignment(

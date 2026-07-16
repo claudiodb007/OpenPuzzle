@@ -159,9 +159,10 @@ ExecutionSyncService::tick(
   result.hasExitCode = true;
   result.exitCode = exitCode;
 
-  if (exitCode != 0) {
-    return result;
-  }
+  const std::string finalStatus =
+      exitCode == 0
+          ? "completed"
+          : "failed";
 
   HttpRangeClient httpClient(
       serverUrl);
@@ -170,7 +171,8 @@ ExecutionSyncService::tick(
       httpClient.complete(
           state->assignmentId,
           state->clientId,
-          exitCode);
+          exitCode,
+          finalStatus);
 
   if (!result.completionUploaded) {
     result.completionError =
