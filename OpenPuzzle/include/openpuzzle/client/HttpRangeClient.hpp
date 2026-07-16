@@ -22,7 +22,7 @@ public:
                                        double speedMKeys = 0.0);
 
   bool complete(const std::string &assignmentId, const std::string &clientId,
-                int exitCode);
+                int exitCode, const std::string &status = "completed");
 
   bool progress(const std::string &assignmentId, const std::string &clientId,
                 double speedMKeys, const std::string &keysChecked);

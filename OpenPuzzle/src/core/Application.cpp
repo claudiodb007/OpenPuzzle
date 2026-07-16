@@ -115,7 +115,9 @@ int Application::run(int argc, char **argv) {
       }
     }
 
-    if (numeric) {
+    const bool directRunOption = !first.empty() && first.front() == '-';
+
+    if (numeric || directRunOption) {
       args.insert(args.begin(), "run");
     }
   }

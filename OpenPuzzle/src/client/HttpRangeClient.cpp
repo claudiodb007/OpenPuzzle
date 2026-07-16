@@ -567,7 +567,8 @@ bool HttpRangeClient::progress(const std::string &assignmentId,
 }
 
 bool HttpRangeClient::complete(const std::string &assignmentId,
-                               const std::string &clientId, int exitCode) {
+                               const std::string &clientId, int exitCode,
+                               const std::string &status) {
   lastError_.clear();
 
   if (serverUrl_.empty()) {
@@ -588,8 +589,21 @@ bool HttpRangeClient::complete(const std::string &assignmentId,
     return false;
   }
 
-  if (exitCode != 0) {
-    lastError_ = "Only successful executions can be completed";
+  if (status != "completed" && status != "failed" && status != "cancelled") {
+    lastError_ = "Status must be completed, failed or cancelled";
+
+    return false;
+  }
+
+  if (status == "completed" && exitCode != 0) {
+    lastError_ = "Completed executions must use exit code 0";
+
+    return false;
+  }
+
+  if (status != "completed" && exitCode == 0) {
+    lastError_ =
+        "Failed and cancelled executions must use a non-zero exit code";
 
     return false;
   }
@@ -600,7 +614,7 @@ bool HttpRangeClient::complete(const std::string &assignmentId,
           << "\"assignment_id\":\"" << jsonEscape(assignmentId) << "\","
           << "\"client_id\":\"" << jsonEscape(clientId) << "\","
           << "\"exit_code\":" << exitCode << ","
-          << "\"status\":\"completed\""
+          << "\"status\":\"" << jsonEscape(status) << "\""
           << "}";
 
   const std::string url = serverUrl_ + "/api/range/complete";
