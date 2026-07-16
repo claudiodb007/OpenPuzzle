@@ -366,7 +366,7 @@ int ClientRuntime::run(
 
       if (
           result.progressStatus ==
-          client::ProgressUploadStatus::
+          client::AssignmentUploadStatus::
               AssignmentRejected) {
         std::cerr
             << "Assignment......... rejected by server\n"
@@ -397,7 +397,7 @@ int ClientRuntime::run(
 
       if (
           result.progressStatus ==
-          client::ProgressUploadStatus::
+          client::AssignmentUploadStatus::
               PermanentFailure) {
         std::cerr
             << "Progress error..... permanent\n"
@@ -442,6 +442,45 @@ int ClientRuntime::run(
         << "Exit code.......... "
         << result.exitCode
         << '\n';
+
+    if (
+        result.completionStatus ==
+        client::AssignmentUploadStatus::
+            AssignmentRejected) {
+      std::cerr
+          << "Completion......... rejected by server\n";
+
+      if (!result.stateRemoved) {
+        std::cerr
+            << "State cleanup...... failed\n"
+            << "Reason............. "
+            << result.completionError
+            << '\n';
+
+        return 1;
+      }
+
+      std::cout
+          << "Local state........ removed\n"
+          << "Requesting new work after "
+          << "server rejection.\n";
+
+      return 0;
+    }
+
+    if (
+        result.completionStatus ==
+        client::AssignmentUploadStatus::
+            PermanentFailure) {
+      std::cerr
+          << "Completion error... permanent\n"
+          << "Reason............. "
+          << result.completionError
+          << '\n'
+          << "Local state retained for diagnosis.\n";
+
+      return 1;
+    }
 
     if (result.exitCode != 0) {
       std::cerr

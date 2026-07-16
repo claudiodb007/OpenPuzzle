@@ -356,6 +356,88 @@ int main() {
   }
 
   /*
+   * Conclusão rejeitada pelo servidor:
+   * o estado já foi removido pela sincronização
+   * e o ciclo pode pedir novo trabalho.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    dependencies.sync =
+        [](const std::string &) {
+          client::ExecutionSyncResult result;
+          result.hasState = true;
+          result.running = false;
+          result.hasExitCode = true;
+          result.exitCode = 0;
+          result.completionUploaded = false;
+          result.completionStatus =
+              client::AssignmentUploadStatus::
+                  AssignmentRejected;
+          result.stateRemoved = true;
+          result.completionError =
+              "Assignment is no longer assigned";
+          return result;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    assert(
+        runtime.run(
+            "https://server.test",
+            "assignment-final-rejected",
+            "client-final-rejected",
+            "/tmp/workspace-final-rejected") == 0);
+  }
+
+  /*
+   * Erro permanente na conclusão:
+   * termina e preserva o estado.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    bool stateRemoved = false;
+
+    dependencies.sync =
+        [](const std::string &) {
+          client::ExecutionSyncResult result;
+          result.hasState = true;
+          result.running = false;
+          result.hasExitCode = true;
+          result.exitCode = 0;
+          result.completionUploaded = false;
+          result.completionStatus =
+              client::AssignmentUploadStatus::
+                  PermanentFailure;
+          result.completionError =
+              "Invalid completion request";
+          return result;
+        };
+
+    dependencies.removeState =
+        [&] {
+          stateRemoved = true;
+          return true;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    assert(
+        runtime.run(
+            "https://server.test",
+            "assignment-final-invalid",
+            "client-final-invalid",
+            "/tmp/workspace-final-invalid") == 1);
+
+    assert(!stateRemoved);
+  }
+
+  /*
    * Uma atribuição rejeitada pelo servidor:
    * para o engine, remove o estado e permite
    * ao ciclo contínuo pedir novo trabalho.
@@ -376,7 +458,7 @@ int main() {
           result.hasProgress = true;
           result.progressUploaded = false;
           result.progressStatus =
-              client::ProgressUploadStatus::
+              client::AssignmentUploadStatus::
                   AssignmentRejected;
           result.progressError =
               "Assignment lease has expired";
@@ -440,7 +522,7 @@ int main() {
           result.hasProgress = true;
           result.progressUploaded = false;
           result.progressStatus =
-              client::ProgressUploadStatus::
+              client::AssignmentUploadStatus::
                   PermanentFailure;
           result.progressError =
               "Invalid client identity";

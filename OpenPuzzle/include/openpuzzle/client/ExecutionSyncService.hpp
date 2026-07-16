@@ -8,7 +8,7 @@
 
 namespace openpuzzle::client {
 
-enum class ProgressUploadStatus {
+enum class AssignmentUploadStatus {
   NotAttempted,
   Uploaded,
   TemporaryFailure,
@@ -28,8 +28,8 @@ struct ExecutionSyncResult {
 
   bool progressUploaded = false;
 
-  ProgressUploadStatus progressStatus =
-      ProgressUploadStatus::NotAttempted;
+  AssignmentUploadStatus progressStatus =
+      AssignmentUploadStatus::NotAttempted;
 
   std::string progressError;
 
@@ -37,6 +37,10 @@ struct ExecutionSyncResult {
   int exitCode = 0;
 
   bool completionUploaded = false;
+
+  AssignmentUploadStatus completionStatus =
+      AssignmentUploadStatus::NotAttempted;
+
   bool stateRemoved = false;
   std::string completionError;
 };
@@ -50,8 +54,12 @@ public:
   latestProgress(
       const std::string& workspace);
 
-  static ProgressUploadStatus
+  static AssignmentUploadStatus
   classifyProgressError(
+      const std::string& errorCode);
+
+  static AssignmentUploadStatus
+  classifyCompletionError(
       const std::string& errorCode);
 
 private:

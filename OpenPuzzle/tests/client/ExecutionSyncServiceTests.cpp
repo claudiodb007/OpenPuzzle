@@ -103,27 +103,47 @@ int main() {
   assert(
       ExecutionSyncService::classifyProgressError(
           "assignment_not_found") ==
-      ProgressUploadStatus::AssignmentRejected);
+      AssignmentUploadStatus::AssignmentRejected);
 
   assert(
       ExecutionSyncService::classifyProgressError(
           "assignment_lease_expired") ==
-      ProgressUploadStatus::AssignmentRejected);
+      AssignmentUploadStatus::AssignmentRejected);
 
   assert(
       ExecutionSyncService::classifyProgressError(
           "invalid_keys_checked") ==
-      ProgressUploadStatus::PermanentFailure);
+      AssignmentUploadStatus::PermanentFailure);
 
   assert(
       ExecutionSyncService::classifyProgressError(
           "progress_failed") ==
-      ProgressUploadStatus::TemporaryFailure);
+      AssignmentUploadStatus::TemporaryFailure);
 
   assert(
       ExecutionSyncService::classifyProgressError(
           "") ==
-      ProgressUploadStatus::TemporaryFailure);
+      AssignmentUploadStatus::TemporaryFailure);
+
+  assert(
+      ExecutionSyncService::classifyCompletionError(
+          "assignment_not_found") ==
+      AssignmentUploadStatus::AssignmentRejected);
+
+  assert(
+      ExecutionSyncService::classifyCompletionError(
+          "invalid_assignment_state") ==
+      AssignmentUploadStatus::AssignmentRejected);
+
+  assert(
+      ExecutionSyncService::classifyCompletionError(
+          "invalid_exit_code") ==
+      AssignmentUploadStatus::PermanentFailure);
+
+  assert(
+      ExecutionSyncService::classifyCompletionError(
+          "completion_failed") ==
+      AssignmentUploadStatus::TemporaryFailure);
 
   /*
    * Sem estado local não existe sincronização.

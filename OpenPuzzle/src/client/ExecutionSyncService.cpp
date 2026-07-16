@@ -113,7 +113,7 @@ ExecutionSyncService::latestProgress(
   return progress;
 }
 
-ProgressUploadStatus
+AssignmentUploadStatus
 ExecutionSyncService::classifyProgressError(
     const std::string& errorCode) {
   if (
@@ -122,7 +122,7 @@ ExecutionSyncService::classifyProgressError(
       errorCode == "invalid_assignment_state" ||
       errorCode == "assignment_lease_expired") {
     return
-        ProgressUploadStatus::
+        AssignmentUploadStatus::
             AssignmentRejected;
   }
 
@@ -136,12 +136,45 @@ ExecutionSyncService::classifyProgressError(
       errorCode == "invalid_speed" ||
       errorCode == "invalid_keys_checked") {
     return
-        ProgressUploadStatus::
+        AssignmentUploadStatus::
             PermanentFailure;
   }
 
   return
-      ProgressUploadStatus::
+      AssignmentUploadStatus::
+          TemporaryFailure;
+}
+
+AssignmentUploadStatus
+ExecutionSyncService::classifyCompletionError(
+    const std::string& errorCode) {
+  if (
+      errorCode == "assignment_not_found" ||
+      errorCode == "assignment_client_mismatch" ||
+      errorCode == "invalid_assignment_state") {
+    return
+        AssignmentUploadStatus::
+            AssignmentRejected;
+  }
+
+  if (
+      errorCode == "method_not_allowed" ||
+      errorCode == "invalid_json" ||
+      errorCode == "invalid_request" ||
+      errorCode == "invalid_assignment_id" ||
+      errorCode == "invalid_client_id" ||
+      errorCode == "invalid_exit_code" ||
+      errorCode == "invalid_status" ||
+      errorCode == "invalid_completed_exit_code" ||
+      errorCode == "invalid_final_exit_code" ||
+      errorCode == "invalid_keys_checked") {
+    return
+        AssignmentUploadStatus::
+            PermanentFailure;
+  }
+
+  return
+      AssignmentUploadStatus::
           TemporaryFailure;
 }
 
@@ -188,7 +221,7 @@ ExecutionSyncService::tick(
 
     if (result.progressUploaded) {
       result.progressStatus =
-          ProgressUploadStatus::Uploaded;
+          AssignmentUploadStatus::Uploaded;
     } else {
       result.progressStatus =
           classifyProgressError(
@@ -238,11 +271,32 @@ ExecutionSyncService::tick(
           finalKeysChecked);
 
   if (!result.completionUploaded) {
+    result.completionStatus =
+        classifyCompletionError(
+            httpClient.lastErrorCode());
+
     result.completionError =
         httpClient.lastError();
 
+    if (
+        result.completionStatus ==
+        AssignmentUploadStatus::
+            AssignmentRejected) {
+      result.stateRemoved =
+          ClientStateStore::remove();
+
+      if (!result.stateRemoved) {
+        result.completionError +=
+            "; Unable to remove local "
+            "execution state";
+      }
+    }
+
     return result;
   }
+
+  result.completionStatus =
+      AssignmentUploadStatus::Uploaded;
 
   result.stateRemoved =
       ClientStateStore::remove();

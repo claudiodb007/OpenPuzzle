@@ -489,35 +489,69 @@ ClientIterationResult RunSession::runOnce(
             "is not available yet");
       }
 
-      if (!recovery.completionUploaded) {
-        return ClientIterationResult::retry(
-            recovery.completionError.empty()
-                ? "Unable to synchronize "
-                  "finished execution"
-                : recovery.completionError);
+      if (
+          recovery.completionStatus ==
+          client::AssignmentUploadStatus::
+              AssignmentRejected) {
+        if (!recovery.stateRemoved) {
+          return ClientIterationResult::retry(
+              recovery.completionError.empty()
+                  ? "Unable to remove rejected "
+                    "execution state"
+                  : recovery.completionError);
+        }
+
+        std::cout
+            << "Recovered assignment rejected "
+            << "by server.\n"
+            << "Local state........ removed\n\n";
+      } else {
+        if (
+            recovery.completionStatus ==
+            client::AssignmentUploadStatus::
+                PermanentFailure) {
+          std::cerr
+              << "Recovered completion has a "
+              << "permanent error.\n"
+              << "Reason............. "
+              << recovery.completionError
+              << '\n'
+              << "Local state retained for "
+              << "diagnosis.\n";
+
+          return 1;
+        }
+
+        if (!recovery.completionUploaded) {
+          return ClientIterationResult::retry(
+              recovery.completionError.empty()
+                  ? "Unable to synchronize "
+                    "finished execution"
+                  : recovery.completionError);
+        }
+
+        if (!recovery.stateRemoved) {
+          return ClientIterationResult::retry(
+              recovery.completionError.empty()
+                  ? "Unable to remove recovered "
+                    "execution state"
+                  : recovery.completionError);
+        }
+
+        if (recovery.exitCode != 0) {
+          std::cerr
+              << "Recovered failure.. uploaded\n"
+              << "Exit code.......... "
+              << recovery.exitCode
+              << '\n';
+
+          return recovery.exitCode;
+        }
+
+        std::cout
+            << "Recovered completion uploaded.\n"
+            << "Local state........ removed\n\n";
       }
-
-      if (!recovery.stateRemoved) {
-        return ClientIterationResult::retry(
-            recovery.completionError.empty()
-                ? "Unable to remove recovered "
-                  "execution state"
-                : recovery.completionError);
-      }
-
-      if (recovery.exitCode != 0) {
-        std::cerr
-            << "Recovered failure.. uploaded\n"
-            << "Exit code.......... "
-            << recovery.exitCode
-            << '\n';
-
-        return recovery.exitCode;
-      }
-
-      std::cout
-          << "Recovered completion uploaded.\n"
-          << "Local state........ removed\n\n";
     }
   }
 
