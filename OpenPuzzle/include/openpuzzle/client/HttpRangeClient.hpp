@@ -42,11 +42,16 @@ public:
   static RangeClaimResult
   parseClaimResult(const std::string &response);
 
+  static std::string
+  parseErrorCode(const std::string &response);
+
   const std::string &lastError() const;
+  const std::string &lastErrorCode() const;
 
 private:
   std::string serverUrl_;
   std::string lastError_;
+  std::string lastErrorCode_;
 
   RangeClaimStatus lastClaimStatus_ =
       RangeClaimStatus::Failed;

@@ -364,6 +364,57 @@ int ClientRuntime::run(
             << "waiting for engine output\n";
       }
 
+      if (
+          result.progressStatus ==
+          client::ProgressUploadStatus::
+              AssignmentRejected) {
+        std::cerr
+            << "Assignment......... rejected by server\n"
+            << "Stopping BitCrack...\n";
+
+        if (!dependencies_.stopExecution(
+                workspace)) {
+          std::cerr
+              << "Unable to stop BitCrack cleanly.\n";
+
+          return 1;
+        }
+
+        if (!dependencies_.removeState()) {
+          std::cerr
+              << "Unable to remove rejected "
+              << "execution state.\n";
+
+          return 1;
+        }
+
+        std::cout
+            << "BitCrack............ stopped\n"
+            << "Local state........ removed\n";
+
+        return 0;
+      }
+
+      if (
+          result.progressStatus ==
+          client::ProgressUploadStatus::
+              PermanentFailure) {
+        std::cerr
+            << "Progress error..... permanent\n"
+            << "Stopping BitCrack...\n";
+
+        if (!dependencies_.stopExecution(
+                workspace)) {
+          std::cerr
+              << "Unable to stop BitCrack cleanly.\n";
+        }
+
+        std::cerr
+            << "Local state retained for diagnosis.\n";
+
+        return 1;
+      }
+
       const auto heartbeat =
           dependencies_.heartbeat(serverUrl);
 

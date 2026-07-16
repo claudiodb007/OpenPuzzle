@@ -113,6 +113,38 @@ ExecutionSyncService::latestProgress(
   return progress;
 }
 
+ProgressUploadStatus
+ExecutionSyncService::classifyProgressError(
+    const std::string& errorCode) {
+  if (
+      errorCode == "assignment_not_found" ||
+      errorCode == "assignment_client_mismatch" ||
+      errorCode == "invalid_assignment_state" ||
+      errorCode == "assignment_lease_expired") {
+    return
+        ProgressUploadStatus::
+            AssignmentRejected;
+  }
+
+  if (
+      errorCode == "method_not_allowed" ||
+      errorCode == "invalid_json" ||
+      errorCode == "invalid_request" ||
+      errorCode == "invalid_assignment_id" ||
+      errorCode == "invalid_client_id" ||
+      errorCode == "invalid_status" ||
+      errorCode == "invalid_speed" ||
+      errorCode == "invalid_keys_checked") {
+    return
+        ProgressUploadStatus::
+            PermanentFailure;
+  }
+
+  return
+      ProgressUploadStatus::
+          TemporaryFailure;
+}
+
 ExecutionSyncResult
 ExecutionSyncService::tick(
     const std::string& serverUrl) const {
@@ -154,7 +186,14 @@ ExecutionSyncService::tick(
             progress.speedMKeys,
             progress.keysChecked);
 
-    if (!result.progressUploaded) {
+    if (result.progressUploaded) {
+      result.progressStatus =
+          ProgressUploadStatus::Uploaded;
+    } else {
+      result.progressStatus =
+          classifyProgressError(
+              httpClient.lastErrorCode());
+
       result.progressError =
           httpClient.lastError();
     }

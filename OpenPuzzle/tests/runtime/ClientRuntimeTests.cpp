@@ -356,6 +356,124 @@ int main() {
   }
 
   /*
+   * Uma atribuição rejeitada pelo servidor:
+   * para o engine, remove o estado e permite
+   * ao ciclo contínuo pedir novo trabalho.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    bool stopped = false;
+    bool stateRemoved = false;
+    int heartbeatCalls = 0;
+
+    dependencies.sync =
+        [](const std::string &) {
+          client::ExecutionSyncResult result;
+          result.hasState = true;
+          result.running = true;
+          result.hasProgress = true;
+          result.progressUploaded = false;
+          result.progressStatus =
+              client::ProgressUploadStatus::
+                  AssignmentRejected;
+          result.progressError =
+              "Assignment lease has expired";
+          return result;
+        };
+
+    dependencies.stopExecution =
+        [&](const std::string &workspace) {
+          assert(
+              workspace ==
+              "/tmp/workspace-rejected");
+          stopped = true;
+          return true;
+        };
+
+    dependencies.removeState =
+        [&] {
+          stateRemoved = true;
+          return true;
+        };
+
+    dependencies.heartbeat =
+        [&](const std::string &) {
+          ++heartbeatCalls;
+          client::ClientHeartbeatResult result;
+          result.success = true;
+          return result;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    assert(
+        runtime.run(
+            "https://server.test",
+            "assignment-rejected",
+            "client-rejected",
+            "/tmp/workspace-rejected") == 0);
+
+    assert(stopped);
+    assert(stateRemoved);
+    assert(heartbeatCalls == 0);
+  }
+
+  /*
+   * Um erro permanente de protocolo para o
+   * engine, mas preserva o estado para diagnóstico.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    bool stopped = false;
+    bool stateRemoved = false;
+
+    dependencies.sync =
+        [](const std::string &) {
+          client::ExecutionSyncResult result;
+          result.hasState = true;
+          result.running = true;
+          result.hasProgress = true;
+          result.progressUploaded = false;
+          result.progressStatus =
+              client::ProgressUploadStatus::
+                  PermanentFailure;
+          result.progressError =
+              "Invalid client identity";
+          return result;
+        };
+
+    dependencies.stopExecution =
+        [&](const std::string &) {
+          stopped = true;
+          return true;
+        };
+
+    dependencies.removeState =
+        [&] {
+          stateRemoved = true;
+          return true;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    assert(
+        runtime.run(
+            "https://server.test",
+            "assignment-invalid",
+            "client-invalid",
+            "/tmp/workspace-invalid") == 1);
+
+    assert(stopped);
+    assert(!stateRemoved);
+  }
+
+  /*
    * O ciclo pede uma nova atribuição depois
    * de cada conclusão.
    */

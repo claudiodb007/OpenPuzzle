@@ -101,6 +101,18 @@ int main() {
   assert(!failedResult.assignment);
   assert(!failedResult.message.empty());
 
+  assert(
+      HttpRangeClient::parseErrorCode(
+          R"JSON({
+            "error": "assignment_lease_expired",
+            "message": "Assignment lease has expired"
+          })JSON") ==
+      "assignment_lease_expired");
+
+  assert(
+      HttpRangeClient::parseErrorCode(
+          "{}").empty());
+
   /*
    * keys_checked inválido deve falhar antes
    * de qualquer pedido HTTP.

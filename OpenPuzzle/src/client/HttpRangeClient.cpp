@@ -216,6 +216,18 @@ HttpRangeClient::parseClaimResponse(
   return result.assignment;
 }
 
+std::string HttpRangeClient::parseErrorCode(
+    const std::string &response) {
+  std::string errorCode;
+
+  extractString(
+      response,
+      "error",
+      errorCode);
+
+  return errorCode;
+}
+
 bool HttpRangeClient::registerClient(const ClientRegistration &registration) {
   lastError_.clear();
 
@@ -550,6 +562,7 @@ bool HttpRangeClient::progress(const std::string &assignmentId,
                                const std::string &clientId, double speedMKeys,
                                const std::string &keysChecked) {
   lastError_.clear();
+  lastErrorCode_.clear();
 
   if (serverUrl_.empty()) {
     lastError_ = "Server URL is empty";
@@ -642,6 +655,9 @@ bool HttpRangeClient::progress(const std::string &assignmentId,
   }
 
   if (!WIFEXITED(result) || WEXITSTATUS(result) != 0) {
+    lastErrorCode_ =
+        parseErrorCode(response);
+
     lastError_ = response.empty() ? "HTTP request failed" : response;
 
     while (!lastError_.empty() &&
@@ -786,5 +802,10 @@ bool HttpRangeClient::complete(
 }
 
 const std::string &HttpRangeClient::lastError() const { return lastError_; }
+
+const std::string &
+HttpRangeClient::lastErrorCode() const {
+  return lastErrorCode_;
+}
 
 } // namespace openpuzzle::client

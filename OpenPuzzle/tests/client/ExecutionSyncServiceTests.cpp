@@ -100,6 +100,31 @@ int main() {
 
   ExecutionSyncService service;
 
+  assert(
+      ExecutionSyncService::classifyProgressError(
+          "assignment_not_found") ==
+      ProgressUploadStatus::AssignmentRejected);
+
+  assert(
+      ExecutionSyncService::classifyProgressError(
+          "assignment_lease_expired") ==
+      ProgressUploadStatus::AssignmentRejected);
+
+  assert(
+      ExecutionSyncService::classifyProgressError(
+          "invalid_keys_checked") ==
+      ProgressUploadStatus::PermanentFailure);
+
+  assert(
+      ExecutionSyncService::classifyProgressError(
+          "progress_failed") ==
+      ProgressUploadStatus::TemporaryFailure);
+
+  assert(
+      ExecutionSyncService::classifyProgressError(
+          "") ==
+      ProgressUploadStatus::TemporaryFailure);
+
   /*
    * Sem estado local não existe sincronização.
    */
