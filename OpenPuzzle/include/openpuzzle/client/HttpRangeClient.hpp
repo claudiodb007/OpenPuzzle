@@ -3,6 +3,7 @@
 #include "openpuzzle/client/ClientHeartbeat.hpp"
 #include "openpuzzle/client/ClientRegistration.hpp"
 #include "openpuzzle/client/RangeAssignment.hpp"
+#include "openpuzzle/client/RangeClaimResult.hpp"
 
 #include <optional>
 #include <string>
@@ -21,6 +22,10 @@ public:
                                        int targetDurationMinutes,
                                        double speedMKeys = 0.0);
 
+  RangeClaimResult claimResult(const std::string &clientId, int puzzle,
+                               int targetDurationMinutes,
+                               double speedMKeys = 0.0);
+
   bool complete(const std::string &assignmentId, const std::string &clientId,
                 int exitCode, const std::string &status = "completed");
 
@@ -30,11 +35,17 @@ public:
   static std::optional<RangeAssignment>
   parseClaimResponse(const std::string &response, std::string &error);
 
+  static RangeClaimResult
+  parseClaimResult(const std::string &response);
+
   const std::string &lastError() const;
 
 private:
   std::string serverUrl_;
   std::string lastError_;
+
+  RangeClaimStatus lastClaimStatus_ =
+      RangeClaimStatus::Failed;
 
   static std::string shellQuote(const std::string &value);
 

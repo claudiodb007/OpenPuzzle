@@ -127,42 +127,93 @@ std::string HttpRangeClient::shellQuote(const std::string &value) {
   return quoted;
 }
 
-std::optional<RangeAssignment>
-HttpRangeClient::parseClaimResponse(const std::string &response,
-                                    std::string &error) {
+RangeClaimResult
+HttpRangeClient::parseClaimResult(
+    const std::string &response) {
+  RangeClaimResult result;
+
   bool available = true;
 
-  if (extractBoolean(response, "available", available) && !available) {
-    if (!extractString(response, "message", error)) {
-      error = "No assignment available";
+  if (extractBoolean(
+          response,
+          "available",
+          available) &&
+      !available) {
+    result.status =
+        RangeClaimStatus::Unavailable;
+
+    if (!extractString(
+            response,
+            "message",
+            result.message)) {
+      result.message =
+          "No assignment available";
     }
 
-    return std::nullopt;
+    return result;
   }
 
   RangeAssignment assignment;
 
-  extractString(response, "assignment_id", assignment.assignmentId);
+  extractString(
+      response,
+      "assignment_id",
+      assignment.assignmentId);
 
-  extractInteger(response, "puzzle", assignment.puzzle);
+  extractInteger(
+      response,
+      "puzzle",
+      assignment.puzzle);
 
-  extractInteger(response, "range_id", assignment.rangeId);
+  extractInteger(
+      response,
+      "range_id",
+      assignment.rangeId);
 
-  extractString(response, "target", assignment.target);
+  extractString(
+      response,
+      "target",
+      assignment.target);
 
-  extractString(response, "start", assignment.start);
+  extractString(
+      response,
+      "start",
+      assignment.start);
 
-  extractString(response, "end", assignment.end);
+  extractString(
+      response,
+      "end",
+      assignment.end);
 
   if (!assignment.valid()) {
-    error = "Server returned an invalid range assignment";
+    result.status =
+        RangeClaimStatus::Failed;
 
-    return std::nullopt;
+    result.message =
+        "Server returned an invalid range assignment";
+
+    return result;
   }
 
-  error.clear();
+  result.status =
+      RangeClaimStatus::Assigned;
 
-  return assignment;
+  result.assignment =
+      std::move(assignment);
+
+  return result;
+}
+
+std::optional<RangeAssignment>
+HttpRangeClient::parseClaimResponse(
+    const std::string &response,
+    std::string &error) {
+  auto result =
+      parseClaimResult(response);
+
+  error = result.message;
+
+  return result.assignment;
 }
 
 bool HttpRangeClient::registerClient(const ClientRegistration &registration) {
@@ -362,6 +413,9 @@ HttpRangeClient::claim(const std::string &clientId, int puzzle,
                        int targetDurationMinutes, double speedMKeys) {
   lastError_.clear();
 
+  lastClaimStatus_ =
+      RangeClaimStatus::Failed;
+
   if (serverUrl_.empty()) {
     lastError_ = "Server URL is empty";
 
@@ -454,7 +508,42 @@ HttpRangeClient::claim(const std::string &clientId, int puzzle,
     return std::nullopt;
   }
 
-  return parseClaimResponse(response, lastError_);
+  auto claimResult =
+      parseClaimResult(response);
+
+  lastClaimStatus_ =
+      claimResult.status;
+
+  lastError_ =
+      claimResult.message;
+
+  return claimResult.assignment;
+}
+
+RangeClaimResult HttpRangeClient::claimResult(
+    const std::string &clientId,
+    int puzzle,
+    int targetDurationMinutes,
+    double speedMKeys) {
+  auto assignment =
+      claim(
+          clientId,
+          puzzle,
+          targetDurationMinutes,
+          speedMKeys);
+
+  RangeClaimResult result;
+
+  result.status =
+      lastClaimStatus_;
+
+  result.assignment =
+      std::move(assignment);
+
+  result.message =
+      lastError_;
+
+  return result;
 }
 
 bool HttpRangeClient::progress(const std::string &assignmentId,

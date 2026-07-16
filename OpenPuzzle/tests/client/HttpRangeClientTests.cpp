@@ -66,6 +66,41 @@ int main() {
       error ==
       "No work available");
 
+  const auto assignedResult =
+      HttpRangeClient::parseClaimResult(
+          json);
+
+  assert(assignedResult.assigned());
+  assert(!assignedResult.unavailable());
+  assert(!assignedResult.failed());
+  assert(assignedResult.assignment);
+  assert(assignedResult.message.empty());
+
+  const auto unavailableResult =
+      HttpRangeClient::parseClaimResult(
+          R"JSON({
+            "available": false,
+            "message": "No work available"
+          })JSON");
+
+  assert(!unavailableResult.assigned());
+  assert(unavailableResult.unavailable());
+  assert(!unavailableResult.failed());
+  assert(!unavailableResult.assignment);
+  assert(
+      unavailableResult.message ==
+      "No work available");
+
+  const auto failedResult =
+      HttpRangeClient::parseClaimResult(
+          "{}");
+
+  assert(!failedResult.assigned());
+  assert(!failedResult.unavailable());
+  assert(failedResult.failed());
+  assert(!failedResult.assignment);
+  assert(!failedResult.message.empty());
+
   std::cout
       << "HttpRangeClientTests passed\n";
 
