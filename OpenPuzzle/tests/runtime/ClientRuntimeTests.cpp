@@ -37,8 +37,14 @@ ClientRuntimeDependencies makeDependencies() {
          const std::string &,
          int,
          const std::string &,
+         const std::string &,
          std::string &) {
         return true;
+      };
+
+  dependencies.finalKeysChecked =
+      [](const std::string &) {
+        return std::string{"2500000"};
       };
 
   dependencies.removeState =
@@ -207,12 +213,14 @@ int main() {
             const std::string &clientId,
             int exitCode,
             const std::string &status,
+            const std::string &keysChecked,
             std::string &) {
           assert(server == "https://server.test");
           assert(assignment == "assignment-3");
           assert(clientId == "client-3");
           assert(exitCode == -2);
           assert(status == "cancelled");
+          assert(keysChecked == "2500000");
           cancelled = true;
           return true;
         };
@@ -264,12 +272,14 @@ int main() {
             const std::string &clientId,
             int exitCode,
             const std::string &status,
+            const std::string &keysChecked,
             std::string &) {
           assert(server == "https://server.test");
           assert(assignment == "assignment-4");
           assert(clientId == "client-4");
           assert(exitCode == 7);
           assert(status == "failed");
+          assert(keysChecked == "2500000");
 
           failureUploaded = true;
           return true;

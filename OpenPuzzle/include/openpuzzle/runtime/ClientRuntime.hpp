@@ -70,7 +70,12 @@ struct ClientRuntimeDependencies {
       const std::string &clientId,
       int exitCode,
       const std::string &status,
+      const std::string &keysChecked,
       std::string &error)> finalizeAssignment;
+
+  std::function<std::string(
+      const std::string &workspace)>
+      finalKeysChecked;
 
   std::function<bool()> removeState;
 

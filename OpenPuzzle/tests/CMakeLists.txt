@@ -1054,3 +1054,17 @@ add_test(
     NAME ClientRuntimeControlTests
     COMMAND ClientRuntimeControlTests
 )
+
+find_program(
+    PHP_EXECUTABLE
+    NAMES php
+)
+
+if(PHP_EXECUTABLE)
+    add_test(
+        NAME RangeCoverageCalculatorTests
+        COMMAND
+            ${PHP_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/server/tests/search/RangeCoverageCalculatorTests.php
+    )
+endif()

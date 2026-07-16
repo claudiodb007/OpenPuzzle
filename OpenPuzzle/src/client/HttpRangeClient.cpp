@@ -655,9 +655,12 @@ bool HttpRangeClient::progress(const std::string &assignmentId,
   return true;
 }
 
-bool HttpRangeClient::complete(const std::string &assignmentId,
-                               const std::string &clientId, int exitCode,
-                               const std::string &status) {
+bool HttpRangeClient::complete(
+    const std::string &assignmentId,
+    const std::string &clientId,
+    int exitCode,
+    const std::string &status,
+    const std::string &keysChecked) {
   lastError_.clear();
 
   if (serverUrl_.empty()) {
@@ -697,14 +700,34 @@ bool HttpRangeClient::complete(const std::string &assignmentId,
     return false;
   }
 
+  if (!keysChecked.empty()) {
+    for (const char character : keysChecked) {
+      if (character < '0' ||
+          character > '9') {
+        lastError_ =
+            "Keys checked must contain only digits";
+
+        return false;
+      }
+    }
+  }
+
   std::ostringstream request;
 
   request << "{"
           << "\"assignment_id\":\"" << jsonEscape(assignmentId) << "\","
           << "\"client_id\":\"" << jsonEscape(clientId) << "\","
           << "\"exit_code\":" << exitCode << ","
-          << "\"status\":\"" << jsonEscape(status) << "\""
-          << "}";
+          << "\"status\":\"" << jsonEscape(status) << "\"";
+
+  if (!keysChecked.empty()) {
+    request
+        << ",\"keys_checked\":\""
+        << jsonEscape(keysChecked)
+        << "\"";
+  }
+
+  request << "}";
 
   const std::string url = serverUrl_ + "/api/range/complete";
 

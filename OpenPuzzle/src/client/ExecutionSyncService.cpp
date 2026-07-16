@@ -99,6 +99,20 @@ bool ExecutionSyncService::readLatestProgress(
   return found;
 }
 
+std::optional<ExecutionProgress>
+ExecutionSyncService::latestProgress(
+    const std::string& workspace) {
+  ExecutionProgress progress;
+
+  if (!readLatestProgress(
+          workspace,
+          progress)) {
+    return std::nullopt;
+  }
+
+  return progress;
+}
+
 ExecutionSyncResult
 ExecutionSyncService::tick(
     const std::string& serverUrl) const {
@@ -167,12 +181,22 @@ ExecutionSyncService::tick(
   HttpRangeClient httpClient(
       serverUrl);
 
+  const auto finalProgress =
+      latestProgress(
+          state->workspace);
+
+  const std::string finalKeysChecked =
+      finalProgress
+          ? finalProgress->keysChecked
+          : "";
+
   result.completionUploaded =
       httpClient.complete(
           state->assignmentId,
           state->clientId,
           exitCode,
-          finalStatus);
+          finalStatus,
+          finalKeysChecked);
 
   if (!result.completionUploaded) {
     result.completionError =

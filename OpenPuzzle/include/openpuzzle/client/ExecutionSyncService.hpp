@@ -3,6 +3,7 @@
 #include "openpuzzle/client/ClientExecutionState.hpp"
 #include "openpuzzle/runtime/ExecutionProgress.hpp"
 
+#include <optional>
 #include <string>
 
 namespace openpuzzle::client {
@@ -32,6 +33,10 @@ class ExecutionSyncService {
 public:
   ExecutionSyncResult tick(
       const std::string& serverUrl) const;
+
+  static std::optional<ExecutionProgress>
+  latestProgress(
+      const std::string& workspace);
 
 private:
   static bool processExists(

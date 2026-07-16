@@ -26,8 +26,12 @@ public:
                                int targetDurationMinutes,
                                double speedMKeys = 0.0);
 
-  bool complete(const std::string &assignmentId, const std::string &clientId,
-                int exitCode, const std::string &status = "completed");
+  bool complete(
+      const std::string &assignmentId,
+      const std::string &clientId,
+      int exitCode,
+      const std::string &status = "completed",
+      const std::string &keysChecked = {});
 
   bool progress(const std::string &assignmentId, const std::string &clientId,
                 double speedMKeys, const std::string &keysChecked);

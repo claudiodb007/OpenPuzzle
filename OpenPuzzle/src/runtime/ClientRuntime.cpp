@@ -27,6 +27,7 @@ ClientRuntime::ClientRuntime(
       !dependencies_.heartbeat ||
       !dependencies_.stopExecution ||
       !dependencies_.finalizeAssignment ||
+      !dependencies_.finalKeysChecked ||
       !dependencies_.removeState ||
       !dependencies_.acquireRuntime ||
       !dependencies_.releaseRuntime ||
@@ -69,6 +70,7 @@ ClientRuntime::productionDependencies() {
          const std::string &clientId,
          int exitCode,
          const std::string &status,
+         const std::string &keysChecked,
          std::string &error) {
         client::HttpRangeClient httpClient(
             serverUrl);
@@ -78,13 +80,25 @@ ClientRuntime::productionDependencies() {
                 assignmentId,
                 clientId,
                 exitCode,
-                status);
+                status,
+                keysChecked);
 
         if (!result) {
           error = httpClient.lastError();
         }
 
         return result;
+      };
+
+  dependencies.finalKeysChecked =
+      [](const std::string &workspace) {
+        const auto progress =
+            client::ExecutionSyncService::
+                latestProgress(workspace);
+
+        return progress
+            ? progress->keysChecked
+            : std::string{};
       };
 
   dependencies.removeState =
@@ -280,6 +294,10 @@ int ClientRuntime::run(
       std::cout
           << "BitCrack............ stopped\n";
 
+      const std::string finalKeysChecked =
+          dependencies_.finalKeysChecked(
+              workspace);
+
       std::string cancellationError;
 
       if (!dependencies_.finalizeAssignment(
@@ -288,6 +306,7 @@ int ClientRuntime::run(
               clientId,
               -2,
               "cancelled",
+              finalKeysChecked,
               cancellationError)) {
         std::cerr
             << "Cancellation upload failed.\n"
@@ -408,6 +427,8 @@ int ClientRuntime::run(
               clientId,
               result.exitCode,
               "failed",
+              dependencies_.finalKeysChecked(
+                  workspace),
               failureError)) {
         std::cerr
             << "Failure upload..... failed\n"

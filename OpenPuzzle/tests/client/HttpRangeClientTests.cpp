@@ -101,6 +101,27 @@ int main() {
   assert(!failedResult.assignment);
   assert(!failedResult.message.empty());
 
+  /*
+   * keys_checked inválido deve falhar antes
+   * de qualquer pedido HTTP.
+   */
+  {
+    HttpRangeClient client(
+        "http://127.0.0.1:1");
+
+    assert(
+        !client.complete(
+            "assignment-test",
+            "client-test",
+            -2,
+            "cancelled",
+            "12x34"));
+
+    assert(
+        client.lastError() ==
+        "Keys checked must contain only digits");
+  }
+
   std::cout
       << "HttpRangeClientTests passed\n";
 
