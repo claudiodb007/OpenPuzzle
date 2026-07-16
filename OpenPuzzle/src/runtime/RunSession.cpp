@@ -438,29 +438,91 @@ ClientIterationResult RunSession::runOnce(
     return 1;
   }
 
+  const std::string server =
+      serverUrl(args);
+
   /*
-   * Não iniciar outra execução enquanto existir
-   * um processo local ativo.
+   * Recuperar primeiro qualquer execução local
+   * pertencente a uma sessão anterior.
    */
   if (subcommand == "run") {
     const auto existing = client::ClientStateStore::load();
 
-    if (existing && processExists(existing->pid)) {
-      std::cerr << "OpenPuzzle is already running.\n"
-                << "PID................ " << existing->pid << '\n'
-                << "Assignment......... " << existing->assignmentId << '\n';
+    if (existing &&
+        processExists(existing->pid)) {
+      std::cout
+          << "Recovering active execution...\n"
+          << "PID................ "
+          << existing->pid
+          << '\n'
+          << "Assignment......... "
+          << existing->assignmentId
+          << '\n'
+          << "Workspace.......... "
+          << existing->workspace
+          << "\n\n";
 
-      return 1;
+      ClientRuntime recoveryRuntime;
+
+      return recoveryRuntime.run(
+          server,
+          existing->assignmentId,
+          existing->clientId,
+          existing->workspace);
     }
 
     if (existing) {
-      client::ClientStateStore::remove();
+      std::cout
+          << "Recovering finished execution...\n"
+          << "Assignment......... "
+          << existing->assignmentId
+          << '\n';
+
+      client::ExecutionSyncService syncService;
+
+      const auto recovery =
+          syncService.tick(server);
+
+      if (!recovery.hasExitCode) {
+        return ClientIterationResult::retry(
+            "Execution stopped but exit.code "
+            "is not available yet");
+      }
+
+      if (!recovery.completionUploaded) {
+        return ClientIterationResult::retry(
+            recovery.completionError.empty()
+                ? "Unable to synchronize "
+                  "finished execution"
+                : recovery.completionError);
+      }
+
+      if (!recovery.stateRemoved) {
+        return ClientIterationResult::retry(
+            recovery.completionError.empty()
+                ? "Unable to remove recovered "
+                  "execution state"
+                : recovery.completionError);
+      }
+
+      if (recovery.exitCode != 0) {
+        std::cerr
+            << "Recovered failure.. uploaded\n"
+            << "Exit code.......... "
+            << recovery.exitCode
+            << '\n';
+
+        return recovery.exitCode;
+      }
+
+      std::cout
+          << "Recovered completion uploaded.\n"
+          << "Local state........ removed\n\n";
     }
   }
 
-  const std::string server = serverUrl(args);
-
-  const int puzzleNumber = selectedPuzzle(args);
+  const int puzzleNumber =
+      selectedPuzzle(args);
 
   const bool dryRun = hasArgument(args, "--dry-run");
 
