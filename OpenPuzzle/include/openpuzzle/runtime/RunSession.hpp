@@ -14,7 +14,8 @@ public:
 
 private:
   ClientIterationResult runOnce(
-      const std::vector<std::string> &args) const;
+      const std::vector<std::string> &args,
+      bool initializeClient = true) const;
 };
 
 } // namespace openpuzzle

@@ -374,14 +374,24 @@ int RunSession::run(
 
   ClientRuntime runtime;
 
+  bool initializeClient = true;
+
   return runtime.runContinuous(
-      [this, &args] {
-        return runOnce(args);
+      [this, &args, &initializeClient] {
+        const auto result =
+            runOnce(
+                args,
+                initializeClient);
+
+        initializeClient = false;
+
+        return result;
       });
 }
 
 ClientIterationResult RunSession::runOnce(
-    const std::vector<std::string> &args) const {
+    const std::vector<std::string> &args,
+    bool initializeClient) const {
   if (args.empty()) {
     std::cerr << "Usage:\n"
               << "  OpenPuzzle run <puzzle> [--dry-run]\n"
@@ -433,7 +443,8 @@ ClientIterationResult RunSession::runOnce(
 
   const bool dryRun = hasArgument(args, "--dry-run");
 
-  if (subcommand == "run") {
+  if (subcommand == "run" &&
+      initializeClient) {
     FirstRunSetup setup;
 
     if (!setup.ensureConfigured()) {
@@ -478,29 +489,32 @@ ClientIterationResult RunSession::runOnce(
     return 1;
   }
 
-  std::cout << "OpenPuzzle\n"
-            << "----------\n";
+  if (subcommand != "run" ||
+      initializeClient) {
+    std::cout << "OpenPuzzle\n"
+              << "----------\n";
 
-  if (subcommand == "run") {
-    if (puzzleNumber > 0) {
-      std::cout << "Requested puzzle... " << puzzleNumber << '\n';
-    } else {
-      std::cout << "Requested puzzle... automatic\n";
-    }
+    if (subcommand == "run") {
+      if (puzzleNumber > 0) {
+        std::cout << "Requested puzzle... " << puzzleNumber << '\n';
+      } else {
+        std::cout << "Requested puzzle... automatic\n";
+      }
 
-    if (calibrationAssignment) {
-      std::cout << "Assignment type.... calibration\n";
-    }
+      if (calibrationAssignment) {
+        std::cout << "Assignment type.... calibration\n";
+      }
 
-    if (hasArgument(args, "--once")) {
-      std::cout << "Execution mode..... single assignment\n";
-    }
+      if (hasArgument(args, "--once")) {
+        std::cout << "Execution mode..... single assignment\n";
+      }
 
-    std::cout << "Target duration.... " << targetDurationMinutes
-              << " minutes\n";
+      std::cout << "Target duration.... " << targetDurationMinutes
+                << " minutes\n";
 
-    if (speedMKeys > 0.0) {
-      std::cout << "Measured speed..... " << speedMKeys << " MKey/s\n";
+      if (speedMKeys > 0.0) {
+        std::cout << "Measured speed..... " << speedMKeys << " MKey/s\n";
+      }
     }
   }
 
@@ -541,7 +555,8 @@ ClientIterationResult RunSession::runOnce(
    * Mostrar primeiro a configuração local.
    * A ligação à rede acontece imediatamente depois.
    */
-  if (subcommand == "run") {
+  if (subcommand == "run" &&
+      initializeClient) {
     client::ClientRegistrationService registrationService;
 
     const auto registration = registrationService.registerWith(server);
