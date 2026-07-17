@@ -1068,3 +1068,26 @@ if(PHP_EXECUTABLE)
             ${CMAKE_SOURCE_DIR}/server/tests/search/RangeCoverageCalculatorTests.php
     )
 endif()
+
+find_program(
+    OPENPUZZLE_CURL_EXECUTABLE
+    curl
+)
+
+if(OPENPUZZLE_CURL_EXECUTABLE)
+    add_executable(
+        HttpRangeClientIntegrationTests
+        client/HttpRangeClientIntegrationTests.cpp
+    )
+
+    target_link_libraries(
+        HttpRangeClientIntegrationTests
+        PRIVATE
+            OpenPuzzleCore
+    )
+
+    add_test(
+        NAME HttpRangeClientIntegrationTests
+        COMMAND HttpRangeClientIntegrationTests
+    )
+endif()
