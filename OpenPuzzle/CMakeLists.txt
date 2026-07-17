@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(OpenPuzzle VERSION 0.10.0 LANGUAGES CXX)
+project(OpenPuzzle VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -143,3 +143,47 @@ include(CTest)
 enable_testing()
 
 add_subdirectory(tests)
+
+
+# OpenPuzzle client installation and packaging
+include(GNUInstallDirs)
+
+install(
+    TARGETS OpenPuzzle
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(
+    FILES
+        README.md
+        CHANGELOG.md
+        LICENSE
+    DESTINATION ${CMAKE_INSTALL_DOCDIR}
+)
+
+install(
+    FILES
+        docs/CLIENT_RUNTIME.md
+        docs/RELEASE_1.0.0.md
+    DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
+)
+
+set(CPACK_GENERATOR "TGZ")
+set(CPACK_PACKAGE_NAME "OpenPuzzle")
+set(CPACK_PACKAGE_VENDOR "OpenPuzzle")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(
+    CPACK_PACKAGE_DESCRIPTION_SUMMARY
+    "Continuous OpenPuzzle client"
+)
+set(
+    CPACK_PACKAGE_FILE_NAME
+    "OpenPuzzle-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
+)
+set(
+    CPACK_PACKAGE_DIRECTORY
+    "${CMAKE_SOURCE_DIR}/dist"
+)
+set(CPACK_PACKAGE_CHECKSUM "SHA256")
+
+include(CPack)

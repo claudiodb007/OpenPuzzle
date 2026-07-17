@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0 — Continuous client
+
+- Added continuous assignment execution.
+- Added automatic client registration, heartbeat and progress synchronization.
+- Added assignment completion, failure and cancellation reporting.
+- Added recovery of active and finished local executions.
+- Added `run`, `status`, `stop`, `--once`, `--help` and `--version` workflows.
+- Added safe local solution detection without displaying or uploading private keys.
+- Added metadata-only solution notification.
+- Added protected local runtime and assignment storage.
+- Added BitCrack execution monitoring and progress parsing.
+- Added Release-build test coverage for the public client.
+- Prepared a client-only source and binary distribution.
+
 ## 0.10-dev — Foundation/Core
 
 - Added persistent execution model.

@@ -1,5 +1,17 @@
 # OpenPuzzle
 
+## Current release
+
+**OpenPuzzle 1.0.0** provides a continuous Linux client for requesting,
+executing and synchronizing OpenPuzzle assignments.
+
+The public repository contains the client only. The coordination service
+and website infrastructure are not included.
+
+See [OpenPuzzle 1.0.0 release notes](docs/RELEASE_1.0.0.md) and the
+[Client Runtime guide](docs/CLIENT_RUNTIME.md).
+
+
 ## Open-source orchestration platform for cryptographic keyspace exploration
 
 > **OpenPuzzle** is an orchestration platform for cryptographic keyspace
