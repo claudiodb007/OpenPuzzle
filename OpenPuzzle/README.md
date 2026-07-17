@@ -258,7 +258,8 @@ recovery, cancellation and security details.
 
 See:
 
--   docs/
+-   [Continuous Client Runtime](docs/CLIENT_RUNTIME.md)
+-   [Solution Report Review](docs/SOLUTION_REVIEW.md)
 -   docs/architecture/
 -   ROADMAP.md
 

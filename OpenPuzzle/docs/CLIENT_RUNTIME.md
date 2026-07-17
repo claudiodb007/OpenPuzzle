@@ -147,6 +147,9 @@ offline tooling and public blockchain data. A report may then be marked
 `verified` or `rejected`. Marking a puzzle as solved remains a distinct
 administrative action and is never triggered automatically by a client report.
 
+See [Solution Report Review](SOLUTION_REVIEW.md) for the phpMyAdmin review
+workflow and its security boundaries.
+
 ## Filesystem protection
 
 OpenPuzzle protects sensitive local storage using owner-only permissions:
