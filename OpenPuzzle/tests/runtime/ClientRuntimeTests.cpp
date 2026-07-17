@@ -31,6 +31,14 @@ ClientRuntimeDependencies makeDependencies() {
         return true;
       };
 
+  dependencies.reportSolution =
+      [](const std::string &,
+         const std::string &,
+         const std::string &,
+         std::string &) {
+        return true;
+      };
+
   dependencies.finalizeAssignment =
       [](const std::string &,
          const std::string &,
@@ -977,6 +985,94 @@ int main() {
             });
 
     assert(result == 7);
+  }
+
+
+  /*
+   * Uma solução local envia somente o relatório
+   * de metadados, termina o motor e preserva
+   * o estado para revisão e recuperação.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    bool reported = false;
+    bool stopped = false;
+    bool stateRemoved = false;
+
+    dependencies.sync =
+        [](const std::string &) {
+          client::ExecutionSyncResult result;
+
+          result.hasState = true;
+          result.running = true;
+          result.solutionFound = true;
+          result.solutionPath =
+              "/private/workspace/found.txt";
+
+          return result;
+        };
+
+    dependencies.reportSolution =
+        [&](const std::string &server,
+            const std::string &assignment,
+            const std::string &clientId,
+            std::string &) {
+          assert(
+              server ==
+              "https://server.test"
+          );
+
+          assert(
+              assignment ==
+              "assignment-solution"
+          );
+
+          assert(
+              clientId ==
+              "client-solution"
+          );
+
+          reported = true;
+
+          return true;
+        };
+
+    dependencies.stopExecution =
+        [&](const std::string &workspace) {
+          assert(
+              workspace ==
+              "/private/workspace"
+          );
+
+          stopped = true;
+
+          return true;
+        };
+
+    dependencies.removeState =
+        [&] {
+          stateRemoved = true;
+          return true;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    assert(
+        runtime.run(
+            "https://server.test",
+            "assignment-solution",
+            "client-solution",
+            "/private/workspace") ==
+        ClientRuntime::
+            SolutionFoundExitCode
+    );
+
+    assert(reported);
+    assert(stopped);
+    assert(!stateRemoved);
   }
 
   std::cout

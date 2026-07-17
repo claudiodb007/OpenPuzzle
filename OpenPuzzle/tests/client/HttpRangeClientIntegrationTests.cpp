@@ -19,9 +19,15 @@ class OneShotHttpServer {
 public:
   OneShotHttpServer(
       std::string status,
-      std::string body)
+      std::string body,
+      std::string expectedPath = {},
+      std::string expectedBody = {})
       : status_(std::move(status)),
-        body_(std::move(body)) {
+        body_(std::move(body)),
+        expectedPath_(
+            std::move(expectedPath)),
+        expectedBody_(
+            std::move(expectedBody)) {
     start();
   }
 
@@ -58,6 +64,8 @@ public:
 private:
   std::string status_;
   std::string body_;
+  std::string expectedPath_;
+  std::string expectedBody_;
 
   int port_ = 0;
   pid_t childPid_ = 0;
@@ -88,8 +96,8 @@ private:
   }
 
   static bool readRequest(
-      int socketFd) {
-    std::string request;
+      int socketFd,
+      std::string &request) {
     char buffer[4096];
 
     std::size_t expectedSize = 0;
@@ -233,10 +241,57 @@ private:
         _exit(1);
       }
 
-      if (!readRequest(clientFd)) {
+      std::string request;
+
+      if (!readRequest(
+              clientFd,
+              request)) {
         close(clientFd);
         close(listenFd);
         _exit(2);
+      }
+
+      if (!expectedPath_.empty()) {
+        const std::string requestLine =
+            "POST " +
+            expectedPath_ +
+            " HTTP/1.1\r\n";
+
+        if (
+            request.find(requestLine) !=
+            0
+        ) {
+          close(clientFd);
+          close(listenFd);
+          _exit(4);
+        }
+      }
+
+      if (!expectedBody_.empty()) {
+        const auto headerEnd =
+            request.find("\r\n\r\n");
+
+        if (
+            headerEnd ==
+            std::string::npos
+        ) {
+          close(clientFd);
+          close(listenFd);
+          _exit(5);
+        }
+
+        const std::string requestBody =
+            request.substr(
+                headerEnd + 4);
+
+        if (
+            requestBody !=
+            expectedBody_
+        ) {
+          close(clientFd);
+          close(listenFd);
+          _exit(6);
+        }
       }
 
       const std::string response =
@@ -339,6 +394,51 @@ int main() {
         client.lastError().find(
             "Assignment is not assigned") !=
         std::string::npos);
+
+    server.wait();
+  }
+
+
+  /*
+   * O relatório de solução atravessa uma ligação
+   * HTTP real com somente assignment_id e client_id.
+   */
+  {
+    const std::string expectedBody =
+        "{\"assignment_id\":"
+        "\"11111111-1111-4111-8111-111111111111\","
+        "\"client_id\":"
+        "\"22222222-2222-4222-8222-222222222222\"}";
+
+    OneShotHttpServer server(
+        "201 Created",
+        R"JSON({
+          "success": true,
+          "report_id":
+            "33333333-3333-4333-8333-333333333333",
+          "puzzle": 71,
+          "status": "pending",
+          "already_reported": false
+        })JSON",
+        "/api/puzzle/report-solution",
+        expectedBody);
+
+    HttpRangeClient client(
+        server.url());
+
+    assert(
+        client.reportSolution(
+            assignmentId,
+            clientId)
+    );
+
+    assert(
+        client.lastError().empty()
+    );
+
+    assert(
+        client.lastErrorCode().empty()
+    );
 
     server.wait();
   }

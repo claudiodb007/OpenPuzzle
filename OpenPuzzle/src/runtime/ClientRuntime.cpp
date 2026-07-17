@@ -26,6 +26,7 @@ ClientRuntime::ClientRuntime(
   if (!dependencies_.sync ||
       !dependencies_.heartbeat ||
       !dependencies_.stopExecution ||
+      !dependencies_.reportSolution ||
       !dependencies_.finalizeAssignment ||
       !dependencies_.finalKeysChecked ||
       !dependencies_.removeState ||
@@ -62,6 +63,25 @@ ClientRuntime::productionDependencies() {
         ExecutionStopper stopper;
 
         return stopper.stop(workspace);
+      };
+
+  dependencies.reportSolution =
+      [](const std::string &serverUrl,
+         const std::string &assignmentId,
+         const std::string &clientId,
+         std::string &error) {
+        client::HttpRangeClient httpClient(
+            serverUrl);
+
+        const bool uploaded =
+            httpClient.reportSolution(
+                assignmentId,
+                clientId);
+
+        error =
+            httpClient.lastError();
+
+        return uploaded;
       };
 
   dependencies.finalizeAssignment =
@@ -268,6 +288,37 @@ int ClientRuntime::run(
     const std::string &workspace) const {
   dependencies_.prepareSignals();
 
+  const auto reportDetectedSolution =
+      [&] {
+        std::string error;
+
+        if (dependencies_.reportSolution(
+                serverUrl,
+                assignmentId,
+                clientId,
+                error)) {
+          std::cout
+              << "Solution report.... "
+              << "pending review\n";
+
+          return;
+        }
+
+        std::cerr
+            << "Solution report.... failed\n";
+
+        if (!error.empty()) {
+          std::cerr
+              << "Reason............. "
+              << error
+              << '\n';
+        }
+
+        std::cerr
+            << "Local state........ preserved "
+            << "for retry\n";
+      };
+
   constexpr auto syncInterval =
       std::chrono::seconds(60);
 
@@ -307,7 +358,9 @@ int ClientRuntime::run(
               << "BitCrack............ stopped\n";
         }
 
-        return SolutionFoundExitCode;
+        reportDetectedSolution();
+
+      return SolutionFoundExitCode;
       }
 
       if (finalSync.hasProgress &&
@@ -443,6 +496,8 @@ int ClientRuntime::run(
               << "BitCrack............ stopped\n";
         }
       }
+
+      reportDetectedSolution();
 
       return SolutionFoundExitCode;
     }

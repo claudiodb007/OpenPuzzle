@@ -18,6 +18,10 @@ public:
 
   bool heartbeat(const ClientHeartbeat &heartbeat);
 
+  bool reportSolution(
+      const std::string &assignmentId,
+      const std::string &clientId);
+
   std::optional<RangeAssignment> claim(const std::string &clientId, int puzzle,
                                        int targetDurationMinutes,
                                        double speedMKeys = 0.0);
@@ -44,6 +48,11 @@ public:
 
   static std::string
   parseErrorCode(const std::string &response);
+
+  static std::string
+  buildSolutionReportPayload(
+      const std::string &assignmentId,
+      const std::string &clientId);
 
   const std::string &lastError() const;
   const std::string &lastErrorCode() const;

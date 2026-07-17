@@ -134,6 +134,61 @@ int main() {
         "Keys checked must contain only digits");
   }
 
+
+  /*
+   * O relatório contém somente as identidades
+   * públicas necessárias.
+   */
+  {
+    const auto payload =
+        HttpRangeClient::
+            buildSolutionReportPayload(
+                "assignment-public-id",
+                "client-public-id");
+
+    assert(
+        payload ==
+        "{\"assignment_id\":"
+        "\"assignment-public-id\","
+        "\"client_id\":"
+        "\"client-public-id\"}"
+    );
+
+    assert(
+        payload.find("private_key") ==
+        std::string::npos
+    );
+
+    assert(
+        payload.find("found.txt") ==
+        std::string::npos
+    );
+
+    assert(
+        payload.find("path") ==
+        std::string::npos
+    );
+  }
+
+  /*
+   * Identidades vazias falham antes da rede.
+   */
+  {
+    HttpRangeClient client(
+        "http://127.0.0.1:1");
+
+    assert(
+        !client.reportSolution(
+            "",
+            "client-public-id")
+    );
+
+    assert(
+        client.lastError() ==
+        "Assignment identity is empty"
+    );
+  }
+
   std::cout
       << "HttpRangeClientTests passed\n";
 
