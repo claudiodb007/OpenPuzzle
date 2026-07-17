@@ -1124,3 +1124,13 @@ add_test(
     NAME LocalStorageSecurityTests
     COMMAND LocalStorageSecurityTests
 )
+
+
+if(PHP_EXECUTABLE)
+    add_test(
+        NAME SolutionReportRequestTests
+        COMMAND
+            ${PHP_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/server/tests/solutions/SolutionReportRequestTests.php
+    )
+endif()
