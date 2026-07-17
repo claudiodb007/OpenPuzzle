@@ -14,6 +14,7 @@ enum class ClientIterationStatus {
   Completed,
   Unavailable,
   Retry,
+  SolutionFound,
   Failed
 };
 
@@ -38,6 +39,17 @@ struct ClientIterationResult {
     ClientIterationResult result;
     result.status =
         ClientIterationStatus::Unavailable;
+    result.message =
+        std::move(message);
+    return result;
+  }
+
+  static ClientIterationResult
+  solutionFound(
+      std::string message = {}) {
+    ClientIterationResult result;
+    result.status =
+        ClientIterationStatus::SolutionFound;
     result.message =
         std::move(message);
     return result;
@@ -93,6 +105,9 @@ struct ClientRuntimeDependencies {
 
 class ClientRuntime {
 public:
+  static constexpr int
+      SolutionFoundExitCode = 10;
+
   ClientRuntime();
 
   explicit ClientRuntime(

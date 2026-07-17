@@ -157,6 +157,74 @@ int main() {
   }
 
   /*
+   * found.txt não vazio suspende toda a
+   * sincronização e preserva o estado.
+   */
+  {
+    const auto state =
+        makeState(
+            workspace,
+            999999999);
+
+    assert(
+        ClientStateStore::save(
+            state));
+
+    writeFile(
+        workspace / "found.txt",
+        "synthetic-test-secret\n");
+
+    writeFile(
+        workspace / "exit.code",
+        "0\n");
+
+    const auto solution =
+        ExecutionSyncService::solutionFile(
+            workspace.string());
+
+    assert(solution);
+
+    const auto result =
+        service.tick(
+            "http://127.0.0.1:1");
+
+    assert(result.hasState);
+    assert(result.solutionFound);
+    assert(
+        result.solutionPath ==
+        (workspace / "found.txt").string());
+
+    assert(!result.completionUploaded);
+    assert(!result.stateRemoved);
+    assert(ClientStateStore::load());
+
+    std::filesystem::remove(
+        workspace / "found.txt");
+
+    std::filesystem::remove(
+        workspace / "exit.code");
+
+    assert(
+        ClientStateStore::remove());
+  }
+
+  /*
+   * Ficheiro vazio não representa solução.
+   */
+  {
+    writeFile(
+        workspace / "found.txt",
+        "");
+
+    assert(
+        !ExecutionSyncService::solutionFile(
+            workspace.string()));
+
+    std::filesystem::remove(
+        workspace / "found.txt");
+  }
+
+  /*
    * Processo terminado com exit code diferente de zero:
    * tenta reportar failed e preserva o estado quando
    * o servidor não está disponível.

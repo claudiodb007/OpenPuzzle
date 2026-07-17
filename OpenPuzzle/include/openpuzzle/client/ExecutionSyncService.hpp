@@ -21,6 +21,9 @@ struct ExecutionSyncResult {
 
   ClientExecutionState state;
 
+  bool solutionFound = false;
+  std::string solutionPath;
+
   bool running = false;
 
   bool hasProgress = false;
@@ -52,6 +55,10 @@ public:
 
   static std::optional<ExecutionProgress>
   latestProgress(
+      const std::string& workspace);
+
+  static std::optional<std::string>
+  solutionFile(
       const std::string& workspace);
 
   static AssignmentUploadStatus

@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <system_error>
 #include <unistd.h>
 
 namespace openpuzzle::client {
@@ -113,6 +114,35 @@ ExecutionSyncService::latestProgress(
   return progress;
 }
 
+std::optional<std::string>
+ExecutionSyncService::solutionFile(
+    const std::string& workspace) {
+  const auto path =
+      std::filesystem::path(workspace) /
+      "found.txt";
+
+  std::error_code error;
+
+  if (
+      !std::filesystem::is_regular_file(
+          path,
+          error) ||
+      error) {
+    return std::nullopt;
+  }
+
+  const auto size =
+      std::filesystem::file_size(
+          path,
+          error);
+
+  if (error || size == 0) {
+    return std::nullopt;
+  }
+
+  return path.string();
+}
+
 AssignmentUploadStatus
 ExecutionSyncService::classifyProgressError(
     const std::string& errorCode) {
@@ -196,6 +226,22 @@ ExecutionSyncService::tick(
   result.running =
       processExists(
           state->pid);
+
+  const auto detectedSolution =
+      solutionFile(
+          state->workspace);
+
+  if (detectedSolution) {
+    result.solutionFound = true;
+    result.solutionPath =
+        *detectedSolution;
+
+    /*
+     * Não finalizar, remover estado, ler nem
+     * transmitir o conteúdo de found.txt.
+     */
+    return result;
+  }
 
   if (result.running) {
     ExecutionProgress progress;

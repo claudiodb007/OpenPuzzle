@@ -246,6 +246,13 @@ int ClientRuntime::runContinuous(
 
       continue;
 
+    case ClientIterationStatus::SolutionFound:
+      std::cout
+          << "Continuous execution stopped "
+          << "after local solution detection.\n";
+
+      return 0;
+
     case ClientIterationStatus::Failed:
       return result.exitCode == 0
                  ? 1
@@ -273,6 +280,35 @@ int ClientRuntime::run(
 
       const auto finalSync =
           dependencies_.sync(serverUrl);
+
+      if (finalSync.solutionFound) {
+        std::cout
+            << "\n"
+            << "SOLUTION FOUND\n"
+            << "--------------\n"
+            << "Solution file...... "
+            << finalSync.solutionPath
+            << '\n'
+            << "Workspace.......... "
+            << workspace
+            << '\n'
+            << "Local state........ preserved\n"
+            << "The private key was not read "
+            << "or uploaded by OpenPuzzle.\n"
+            << "Stopping BitCrack...\n";
+
+        if (!dependencies_.stopExecution(
+                workspace)) {
+          std::cerr
+              << "Warning............ unable to "
+              << "confirm BitCrack termination\n";
+        } else {
+          std::cout
+              << "BitCrack............ stopped\n";
+        }
+
+        return SolutionFoundExitCode;
+      }
 
       if (finalSync.hasProgress &&
           finalSync.progressUploaded) {
@@ -376,6 +412,39 @@ int ClientRuntime::run(
       std::cout << "Assignment complete.\n";
 
       return 0;
+    }
+
+    if (result.solutionFound) {
+      std::cout
+          << "\n"
+          << "SOLUTION FOUND\n"
+          << "--------------\n"
+          << "Solution file...... "
+          << result.solutionPath
+          << '\n'
+          << "Workspace.......... "
+          << workspace
+          << '\n'
+          << "Local state........ preserved\n"
+          << "The private key was not read "
+          << "or uploaded by OpenPuzzle.\n";
+
+      if (result.running) {
+        std::cout
+            << "Stopping BitCrack...\n";
+
+        if (!dependencies_.stopExecution(
+                workspace)) {
+          std::cerr
+              << "Warning............ unable to "
+              << "confirm BitCrack termination\n";
+        } else {
+          std::cout
+              << "BitCrack............ stopped\n";
+        }
+      }
+
+      return SolutionFoundExitCode;
     }
 
     if (result.running) {

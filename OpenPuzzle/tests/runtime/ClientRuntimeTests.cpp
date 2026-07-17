@@ -504,6 +504,187 @@ int main() {
   }
 
   /*
+   * Uma solução detetada durante o tratamento
+   * de SIGINT/SIGTERM também é preservada.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    bool stopped = false;
+    bool finalized = false;
+    bool stateRemoved = false;
+
+    dependencies.stopRequested =
+        [] {
+          return true;
+        };
+
+    dependencies.sync =
+        [](const std::string &) {
+          client::ExecutionSyncResult result;
+          result.hasState = true;
+          result.running = true;
+          result.solutionFound = true;
+          result.solutionPath =
+              "/tmp/workspace-signal-solution/"
+              "found.txt";
+          return result;
+        };
+
+    dependencies.stopExecution =
+        [&](const std::string &workspace) {
+          assert(
+              workspace ==
+              "/tmp/workspace-signal-solution");
+          stopped = true;
+          return true;
+        };
+
+    dependencies.finalizeAssignment =
+        [&](const std::string &,
+            const std::string &,
+            const std::string &,
+            int,
+            const std::string &,
+            const std::string &,
+            std::string &) {
+          finalized = true;
+
+          return
+              client::AssignmentUploadStatus::
+                  Uploaded;
+        };
+
+    dependencies.removeState =
+        [&] {
+          stateRemoved = true;
+          return true;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    assert(
+        runtime.run(
+            "https://server.test",
+            "assignment-signal-solution",
+            "client-signal-solution",
+            "/tmp/workspace-signal-solution") ==
+        ClientRuntime::SolutionFoundExitCode);
+
+    assert(stopped);
+    assert(!finalized);
+    assert(!stateRemoved);
+  }
+
+  /*
+   * Uma solução local para o runtime sem
+   * finalizar nem remover o estado.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    bool stopped = false;
+    bool finalized = false;
+    bool stateRemoved = false;
+    int heartbeatCalls = 0;
+
+    dependencies.sync =
+        [](const std::string &) {
+          client::ExecutionSyncResult result;
+          result.hasState = true;
+          result.running = true;
+          result.solutionFound = true;
+          result.solutionPath =
+              "/tmp/workspace-solution/found.txt";
+          return result;
+        };
+
+    dependencies.stopExecution =
+        [&](const std::string &workspace) {
+          assert(
+              workspace ==
+              "/tmp/workspace-solution");
+          stopped = true;
+          return true;
+        };
+
+    dependencies.finalizeAssignment =
+        [&](const std::string &,
+            const std::string &,
+            const std::string &,
+            int,
+            const std::string &,
+            const std::string &,
+            std::string &) {
+          finalized = true;
+
+          return
+              client::AssignmentUploadStatus::
+                  Uploaded;
+        };
+
+    dependencies.removeState =
+        [&] {
+          stateRemoved = true;
+          return true;
+        };
+
+    dependencies.heartbeat =
+        [&](const std::string &) {
+          ++heartbeatCalls;
+          client::ClientHeartbeatResult result;
+          result.success = true;
+          return result;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    assert(
+        runtime.run(
+            "https://server.test",
+            "assignment-solution",
+            "client-solution",
+            "/tmp/workspace-solution") ==
+        ClientRuntime::SolutionFoundExitCode);
+
+    assert(stopped);
+    assert(!finalized);
+    assert(!stateRemoved);
+    assert(heartbeatCalls == 0);
+  }
+
+  /*
+   * O ciclo contínuo termina normalmente quando
+   * uma iteração comunica solução encontrada.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    int executions = 0;
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    const int result =
+        runtime.runContinuous(
+            [&] {
+              ++executions;
+
+              return
+                  ClientIterationResult::
+                      solutionFound();
+            });
+
+    assert(result == 0);
+    assert(executions == 1);
+  }
+
+  /*
    * Conclusão rejeitada pelo servidor:
    * o estado já foi removido pela sincronização
    * e o ciclo pode pedir novo trabalho.

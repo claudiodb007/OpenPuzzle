@@ -197,6 +197,20 @@ bool processExists(int pid) {
   return errno == EPERM;
 }
 
+ClientIterationResult monitoredResult(
+    int exitCode) {
+  if (
+      exitCode ==
+      ClientRuntime::SolutionFoundExitCode) {
+    return
+        ClientIterationResult::
+            solutionFound();
+  }
+
+  return ClientIterationResult(
+      exitCode);
+}
+
 void printAssignment(const client::RangeAssignment &assignment) {
   std::cout << "Assignment......... " << assignment.assignmentId << '\n'
             << "Puzzle............. " << assignment.puzzle << '\n'
@@ -242,7 +256,14 @@ int showStatus(const std::vector<std::string> &args) {
   const auto &state = result.state;
 
   std::cout << "Status............. "
-            << (result.running ? "running" : "stopped") << '\n'
+            << (
+                   result.solutionFound
+                       ? "solution found"
+                       : (
+                             result.running
+                                 ? "running"
+                                 : "stopped"))
+            << '\n'
             << "Assignment......... " << state.assignmentId << '\n'
             << "Puzzle............. " << state.puzzle << '\n'
             << "Assignment number... " << state.rangeId << '\n'
@@ -252,6 +273,17 @@ int showStatus(const std::vector<std::string> &args) {
             << "Start.............. " << state.start << '\n'
             << "End................ " << state.end << '\n'
             << "Workspace.......... " << state.workspace << '\n';
+
+  if (result.solutionFound) {
+    std::cout
+        << "Solution file...... "
+        << result.solutionPath
+        << '\n'
+        << "Local state........ preserved\n"
+        << "Private key........ not displayed\n";
+
+    return 0;
+  }
 
   if (result.running) {
     if (result.hasProgress) {
@@ -349,6 +381,22 @@ int stopExecution() {
 
   if (!state) {
     std::cout << "No active execution to stop.\n";
+
+    return 0;
+  }
+
+  const auto solution =
+      client::ExecutionSyncService::
+          solutionFile(
+              state->workspace);
+
+  if (solution) {
+    std::cout
+        << "Solution found.\n"
+        << "Solution file...... "
+        << *solution
+        << '\n'
+        << "Local state was preserved.\n";
 
     return 0;
   }
@@ -464,11 +512,12 @@ ClientIterationResult RunSession::runOnce(
 
       ClientRuntime recoveryRuntime;
 
-      return recoveryRuntime.run(
-          server,
-          existing->assignmentId,
-          existing->clientId,
-          existing->workspace);
+      return monitoredResult(
+          recoveryRuntime.run(
+              server,
+              existing->assignmentId,
+              existing->clientId,
+              existing->workspace));
     }
 
     if (existing) {
@@ -957,11 +1006,12 @@ ClientIterationResult RunSession::runOnce(
 
   ClientRuntime runtime;
 
-  return runtime.run(
-      server,
-      assignment->assignmentId,
-      clientId,
-      handle.workspace);
+  return monitoredResult(
+      runtime.run(
+          server,
+          assignment->assignmentId,
+          clientId,
+          handle.workspace));
 }
 
 } // namespace openpuzzle
