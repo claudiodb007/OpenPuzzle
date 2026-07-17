@@ -30,7 +30,7 @@ ExecutionHandle BackgroundExecutionLauncher::start(
   auto logFile = (workspacePath / "bitcrack.log").string();
 
   std::ostringstream shell;
-  shell << "setsid sh -c '("
+  shell << "umask 077; setsid sh -c '("
         << request.command
         << "); rc=$?; echo $rc > "
         << exitFile
@@ -61,9 +61,22 @@ ExecutionHandle BackgroundExecutionLauncher::start(
   int pid = std::stoi(output);
 
   std::ofstream out(pidFile);
-  if (out.is_open()) {
-    out << pid << "\n";
+
+  if (!out.is_open()) {
+    throw std::runtime_error(
+        "Failed to create process pid file");
   }
+
+  out << pid << "\n";
+  out.close();
+
+  if (!out) {
+    throw std::runtime_error(
+        "Failed to write process pid file");
+  }
+
+  WorkspaceSecurity::protectFile(
+      pidFile);
 
   ExecutionHandle handle;
   handle.executionId = request.executionId;

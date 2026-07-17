@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <unistd.h>
@@ -20,6 +21,33 @@ void assertPrivate(
       (permissions &
        std::filesystem::perms::owner_all) ==
       std::filesystem::perms::owner_all);
+
+  assert(
+      (permissions &
+       std::filesystem::perms::group_all) ==
+      std::filesystem::perms::none);
+
+  assert(
+      (permissions &
+       std::filesystem::perms::others_all) ==
+      std::filesystem::perms::none);
+}
+
+void assertPrivateFile(
+    const std::filesystem::path &file) {
+  const auto permissions =
+      std::filesystem::status(
+          file).permissions();
+
+  assert(
+      (permissions &
+       std::filesystem::perms::owner_read) !=
+      std::filesystem::perms::none);
+
+  assert(
+      (permissions &
+       std::filesystem::perms::owner_write) !=
+      std::filesystem::perms::none);
 
   assert(
       (permissions &
@@ -87,6 +115,29 @@ int main() {
 
   assertPrivate(
       workspace);
+
+  const auto sensitiveFile =
+      workspace /
+      "found.txt";
+
+  {
+    std::ofstream output(
+        sensitiveFile);
+
+    output
+        << "synthetic-secret\n";
+  }
+
+  std::filesystem::permissions(
+      sensitiveFile,
+      std::filesystem::perms::all,
+      std::filesystem::perm_options::replace);
+
+  WorkspaceSecurity::protectFile(
+      sensitiveFile);
+
+  assertPrivateFile(
+      sensitiveFile);
 
   std::filesystem::remove_all(
       root);

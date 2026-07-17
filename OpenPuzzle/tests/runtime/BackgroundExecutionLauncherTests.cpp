@@ -24,6 +24,33 @@ std::string readFile(
   return buffer.str();
 }
 
+void assertPrivateFile(
+    const std::filesystem::path &path) {
+  const auto permissions =
+      std::filesystem::status(
+          path).permissions();
+
+  assert(
+      (permissions &
+       std::filesystem::perms::owner_read) !=
+      std::filesystem::perms::none);
+
+  assert(
+      (permissions &
+       std::filesystem::perms::owner_write) !=
+      std::filesystem::perms::none);
+
+  assert(
+      (permissions &
+       std::filesystem::perms::group_all) ==
+      std::filesystem::perms::none);
+
+  assert(
+      (permissions &
+       std::filesystem::perms::others_all) ==
+      std::filesystem::perms::none);
+}
+
 bool waitForFile(
     const std::filesystem::path& path,
     std::chrono::milliseconds timeout) {
@@ -70,7 +97,12 @@ int main() {
   request.command =
       "echo stdout-line; "
       "echo stderr-line >&2; "
-      "exit 7";
+      "echo synthetic-found > " +
+      (
+          workspace /
+          "found.txt"
+      ).string() +
+      "; exit 7";
 
   BackgroundExecutionLauncher launcher;
 
@@ -97,6 +129,10 @@ int main() {
       workspace /
       "bitcrack.log";
 
+  const auto foundPath =
+      workspace /
+      "found.txt";
+
   assert(
       waitForFile(
           pidPath,
@@ -111,6 +147,23 @@ int main() {
       waitForFile(
           logPath,
           std::chrono::seconds(2)));
+
+  assert(
+      waitForFile(
+          foundPath,
+          std::chrono::seconds(2)));
+
+  assertPrivateFile(
+      pidPath);
+
+  assertPrivateFile(
+      exitPath);
+
+  assertPrivateFile(
+      logPath);
+
+  assertPrivateFile(
+      foundPath);
 
   int storedPid = 0;
 

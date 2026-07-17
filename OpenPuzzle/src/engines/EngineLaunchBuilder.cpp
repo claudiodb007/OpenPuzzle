@@ -79,6 +79,15 @@ EngineLaunchBuilder::build(const PuzzleRecord &puzzle, const RangeRecord &range,
     }
 
     targets << puzzle.address << "\n";
+    targets.close();
+
+    if (!targets) {
+      throw std::runtime_error(
+          "Could not write engine target file");
+    }
+
+    WorkspaceSecurity::protectFile(
+        request.targetFile);
   }
 
   request.outputFile =
