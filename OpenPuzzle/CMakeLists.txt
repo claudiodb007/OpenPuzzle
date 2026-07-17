@@ -65,6 +65,7 @@ add_library(OpenPuzzleCore
     src/runtime/RunSession.cpp
     src/runtime/ClientRuntime.cpp
     src/runtime/ClientRuntimeControl.cpp
+    src/runtime/WorkspaceSecurity.cpp
     src/setup/FirstRunSetup.cpp
     src/client/HttpRangeClient.cpp
     src/client/ClientHeartbeatService.cpp

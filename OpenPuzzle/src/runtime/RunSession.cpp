@@ -19,6 +19,7 @@
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/runtime/ExecutionStopper.hpp"
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 #include "openpuzzle/workers/WorkerEngineCapability.hpp"
 
@@ -956,7 +957,8 @@ ClientIterationResult RunSession::runOnce(
 
   const auto workspace = assignmentWorkspace(assignment->assignmentId);
 
-  std::filesystem::create_directories(workspace);
+  WorkspaceSecurity::prepare(
+      workspace);
 
   EngineManager engineManager;
 

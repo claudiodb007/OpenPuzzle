@@ -1,6 +1,7 @@
 #include "openpuzzle/engines/EngineLaunchBuilder.hpp"
 
 #include "openpuzzle/core/WorkspaceManager.hpp"
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -68,7 +69,8 @@ EngineLaunchBuilder::build(const PuzzleRecord &puzzle, const RangeRecord &range,
       (std::filesystem::path(workspace) / "targets.txt").string();
 
   {
-    std::filesystem::create_directories(workspace);
+    WorkspaceSecurity::prepare(
+        workspace);
 
     std::ofstream targets(request.targetFile, std::ios::trunc);
 

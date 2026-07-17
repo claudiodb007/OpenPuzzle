@@ -1091,3 +1091,19 @@ if(OPENPUZZLE_CURL_EXECUTABLE)
         COMMAND HttpRangeClientIntegrationTests
     )
 endif()
+
+add_executable(
+    WorkspaceSecurityTests
+    runtime/WorkspaceSecurityTests.cpp
+)
+
+target_link_libraries(
+    WorkspaceSecurityTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME WorkspaceSecurityTests
+    COMMAND WorkspaceSecurityTests
+)

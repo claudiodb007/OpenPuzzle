@@ -1,5 +1,7 @@
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
 
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -17,7 +19,8 @@ ExecutionHandle BackgroundExecutionLauncher::start(
   }
 
   if (!request.workspace.empty()) {
-    std::filesystem::create_directories(request.workspace);
+    WorkspaceSecurity::prepare(
+        request.workspace);
   }
 
   auto workspacePath = std::filesystem::path(request.workspace);
