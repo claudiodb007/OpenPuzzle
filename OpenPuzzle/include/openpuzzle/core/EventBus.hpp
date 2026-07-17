@@ -19,6 +19,9 @@ struct Event {
   EventType type = EventType::Progress;
   int executionId = 0;
   int jobId = 0;
+  int workerId = 0;
+  int rangeId = 0;
+  int exitCode = 0;
   std::string message;
   std::string value;
   double numericValue = 0.0;

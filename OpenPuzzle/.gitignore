@@ -10,3 +10,7 @@ continue.dat
 .cache/
 .vscode/
 .idea/
+/server/
+/docs/SOLUTION_REVIEW.md
+/build-release/
+/dist/

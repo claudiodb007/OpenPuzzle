@@ -107,7 +107,7 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
   ctx.puzzleId = puzzle->id;
   ctx.jobId = job->id;
   ctx.rangeId = range->id;
-  ctx.engine = "Benchmark";
+  ctx.engine = "BitCrack";
   ctx.workspace = "";
   ctx.command = command;
   ctx.echoOutput = true;

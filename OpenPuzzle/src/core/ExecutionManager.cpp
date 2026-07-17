@@ -1,5 +1,10 @@
 #include "openpuzzle/core/ExecutionManager.hpp"
 #include "openpuzzle/core/ProcessRunnerFactory.hpp"
+#include "openpuzzle/engines/EngineParserFactory.hpp"
+#include "openpuzzle/adapters/bitcrack/BitCrackOutputParser.hpp"
+#include "openpuzzle/runtime/Execution.hpp"
+#include "openpuzzle/runtime/ExecutionMonitor.hpp"
+#include "openpuzzle/runtime/ExecutionPersistence.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -7,28 +12,6 @@
 
 namespace openpuzzle {
 
-static void writeStateFile(const ExecutionContext &context,
-                           const std::string &status,
-                           const ExecutionResult &result) {
-  if (context.workspace.empty()) {
-    return;
-  }
-
-  std::ofstream stateFile(std::filesystem::path(context.workspace) /
-                          "state.json");
-
-  if (!stateFile.is_open()) {
-    return;
-  }
-
-  stateFile << "{\n";
-  stateFile << "  \"status\": \"" << status << "\",\n";
-  stateFile << "  \"exit_code\": " << result.exitCode << ",\n";
-  stateFile << "  \"lines_read\": " << result.linesRead << ",\n";
-  stateFile << "  \"average_speed\": " << result.averageSpeed << ",\n";
-  stateFile << "  \"keys_checked\": \"" << result.keysChecked << "\"\n";
-  stateFile << "}\n";
-}
 
 ExecutionSummary ExecutionManager::runCommand(const std::string &command,
                                               bool echoOutput) const {
@@ -79,6 +62,7 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
   result.keysChecked = "0";
 
   std::ofstream stdoutLog;
+  ExecutionPersistence persistence;
 
   if (!context.workspace.empty()) {
     std::filesystem::create_directories(context.workspace);
@@ -86,28 +70,51 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
     stdoutLog.open(std::filesystem::path(context.workspace) / "stdout.log",
                    std::ios::app);
 
-    std::ofstream executionFile(std::filesystem::path(context.workspace) /
-                                "execution.json");
-
-    if (executionFile.is_open()) {
-      executionFile << "{\n";
-      executionFile << "  \"execution_id\": " << context.executionId << ",\n";
-      executionFile << "  \"puzzle_id\": " << context.puzzleId << ",\n";
-      executionFile << "  \"job_id\": " << context.jobId << ",\n";
-      executionFile << "  \"range_id\": " << context.rangeId << ",\n";
-      executionFile << "  \"engine\": \"" << context.engine << "\",\n";
-      executionFile << "  \"command\": \"" << context.command << "\",\n";
-      executionFile << "  \"workspace\": \"" << context.workspace << "\",\n";
-      executionFile << "  \"echo_output\": "
-                    << (context.echoOutput ? "true" : "false") << "\n";
-      executionFile << "}\n";
-    }
-
-    writeStateFile(context, "RUNNING", result);
+    persistence.writeExecutionFile(context);
+    persistence.writeStateFile(context, "RUNNING", result);
   }
 
+  ExecutionState executionState;
+  executionState.executionId = context.executionId;
+  executionState.puzzleId = context.puzzleId;
+  executionState.jobId = context.jobId;
+  executionState.rangeId = context.rangeId;
+  executionState.engine = context.engine;
+  executionState.workspace = context.workspace;
+  executionState.command = context.command;
+  executionState.status = RuntimeExecutionStatus::Running;
+
+  Execution execution(executionState);
+
   auto runner = ProcessRunnerFactory::create();
-  bitcrack::BitCrackOutputParser parser;
+  ExecutionMonitor monitor(
+      EngineParserFactory::create(
+          context.engine));
+
+  monitor.setCallback([&](const ExecutionProgress &progress) {
+    if (progress.speedMKeys > 0.0) {
+      result.averageSpeed = progress.speedMKeys;
+
+      if (progress.speedMKeys >= 100.0) {
+        result.speedSamples.push_back(progress.speedMKeys);
+      }
+    }
+
+    if (!progress.keysChecked.empty()) {
+      result.keysChecked = progress.keysChecked;
+    }
+
+    if (progress.keyFound) {
+      result.keyFound = true;
+      result.privateKey = progress.privateKey;
+    }
+
+    persistence.writeStateFile(context, "RUNNING", result);
+
+    if (context.onProgress) {
+      context.onProgress(result);
+    }
+  });
 
   auto processResult = runner->run(
       context.command,
@@ -123,30 +130,7 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
           stdoutLog.flush();
         }
 
-        auto parsed = parser.parse(line);
-
-        if (parsed.type == bitcrack::ParsedLineType::Speed) {
-          result.averageSpeed = parsed.speedMKeys;
-
-          if (parsed.speedMKeys >= 100.0) {
-            result.speedSamples.push_back(parsed.speedMKeys);
-          }
-
-          if (!parsed.totalKeys.empty()) {
-            result.keysChecked = parsed.totalKeys;
-          }
-
-          writeStateFile(context, "RUNNING", result);
-
-          if (context.onProgress) {
-            context.onProgress(result);
-          }
-        }
-
-        if (parsed.type == bitcrack::ParsedLineType::Found) {
-          result.keyFound = true;
-          result.privateKey = parsed.value;
-        }
+        monitor.processLine(execution, line);
       },
       maxSeconds,
       [&]() {
@@ -157,7 +141,7 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
   result.exitCode = processResult.exitCode;
   result.success = processResult.started && processResult.exitCode == 0;
 
-  writeStateFile(context, result.success ? "FINISHED" : "FAILED", result);
+  persistence.writeStateFile(context, result.success ? "FINISHED" : "FAILED", result);
 
   return result;
 }

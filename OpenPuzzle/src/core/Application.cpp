@@ -1,4 +1,6 @@
 #include "openpuzzle/core/Application.hpp"
+
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/adapters/bitcrack/BitCrackOutputParser.hpp"
 #include "openpuzzle/allocator/RangeAllocator.hpp"
 #include "openpuzzle/core/EventBus.hpp"
@@ -7,12 +9,24 @@
 #include "openpuzzle/core/ProcessRunner.hpp"
 #include "openpuzzle/core/Scheduler.hpp"
 #include "openpuzzle/core/commands/BenchmarkCommand.hpp"
+#include "openpuzzle/core/commands/DispatchCommand.hpp"
 #include "openpuzzle/core/commands/ProfileCommand.hpp"
+#include "openpuzzle/core/commands/RangeCommand.hpp"
 #include "openpuzzle/core/commands/StartJobCommand.hpp"
+#include "openpuzzle/core/commands/WorkerRunCommand.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/performance/AutoTuner.hpp"
 #include "openpuzzle/performance/BenchmarkRunner.hpp"
 #include "openpuzzle/performance/GpuProfileManager.hpp"
+#include "openpuzzle/services/BenchmarkService.hpp"
+#include "openpuzzle/services/DaemonService.hpp"
+#include "openpuzzle/services/DashboardService.hpp"
+#include "openpuzzle/services/DoctorService.hpp"
+#include "openpuzzle/services/EngineService.hpp"
+#include "openpuzzle/services/ExecutionService.hpp"
+#include "openpuzzle/services/PuzzleService.hpp"
+#include "openpuzzle/services/QueueService.hpp"
+#include "openpuzzle/services/WorkerService.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 #include <cstdlib>
 #include <filesystem>
@@ -48,7 +62,10 @@ std::string Application::dbPath() const {
   const char *h = getenv("HOME");
   fs::path p = h ? fs::path(h) : fs::current_path();
   p /= ".local/share/OpenPuzzle/openpuzzle.db";
-  fs::create_directories(p.parent_path());
+
+  WorkspaceSecurity::prepare(
+      p.parent_path());
+
   return p.string();
 }
 bool Application::ensureDb(Database &db) {
@@ -73,15 +90,113 @@ int Application::getIntArg(const std::vector<std::string> &a,
   auto s = getArg(a, n, "");
   return s.empty() ? d : std::stoi(s);
 }
+static void printApplicationHelp() {
+  std::cout
+      << "OpenPuzzle\n"
+      << "----------\n"
+      << "Usage:\n"
+      << "  OpenPuzzle [puzzle] [run options]\n"
+      << "  OpenPuzzle run [puzzle] [run options]\n"
+      << "  OpenPuzzle status\n"
+      << "  OpenPuzzle stop\n"
+      << "\n"
+      << "Global options:\n"
+      << "  -h, --help       Show this help\n"
+      << "  -V, --version    Show program version\n"
+      << "\n"
+      << "Run options:\n"
+      << "  --once           Execute one assignment\n"
+      << "  --dry-run        Show local configuration only\n"
+      << "  --server URL     Select the coordination server\n"
+      << "  --duration-minutes N\n"
+      << "                   Target assignment duration\n";
+}
+
+static void printApplicationVersion() {
+#ifdef OPENPUZZLE_VERSION
+  std::cout
+      << "OpenPuzzle "
+      << OPENPUZZLE_VERSION
+      << '\n';
+#else
+  std::cout
+      << "OpenPuzzle development\n";
+#endif
+}
+
 int Application::run(int argc, char **argv) {
   std::vector<std::string> args;
   for (int i = 1; i < argc; ++i)
     args.emplace_back(argv[i]);
-  if (args.empty()) {
-    std::cout << "OpenPuzzle 0.11.1-dev\n";
+
+  /*
+   * Informational options are strictly local.
+   *
+   * They are handled before automatic run routing
+   * and must never initialize the client, contact
+   * the server, claim work or start an engine.
+   */
+  if (
+      hasArg(args, "--help") ||
+      hasArg(args, "-h") ||
+      (
+          !args.empty() &&
+          args.front() == "help"
+      )
+  ) {
+    printApplicationHelp();
+
     return 0;
   }
+
+  if (
+      hasArg(args, "--version") ||
+      hasArg(args, "-V") ||
+      (
+          !args.empty() &&
+          args.front() == "version"
+      )
+  ) {
+    printApplicationVersion();
+
+    return 0;
+  }
+
+  /*
+   * Interface principal:
+   *
+   *   OpenPuzzle
+   *       -> run automático
+   *
+   *   OpenPuzzle 73
+   *       -> run Puzzle 73
+   *
+   * Os comandos antigos "run" e "run 73"
+   * permanecem disponíveis por compatibilidade.
+   */
+  if (args.empty()) {
+    args.emplace_back("run");
+  } else {
+    const auto &first = args.front();
+
+    bool numeric = !first.empty();
+
+    for (const char character : first) {
+      if (character < '0' || character > '9') {
+        numeric = false;
+        break;
+      }
+    }
+
+    const bool directRunOption = !first.empty() && first.front() == '-';
+
+    if (numeric || directRunOption) {
+      args.insert(args.begin(), "run");
+    }
+  }
+
   auto cmd = args[0];
+
   std::vector<std::string> r(args.begin() + 1, args.end());
   try {
     if (cmd == "init")
@@ -132,12 +247,83 @@ int Application::run(int argc, char **argv) {
       return cmdResumeTest(r);
     if (cmd == "parse-bitcrack-line")
       return cmdParseBitCrackLine(r);
-    if (cmd == "dashboard")
-      return cmdDashboard(r);
+    if (cmd == "dashboard") {
+      Database db;
+      if (!ensureDb(db))
+        return 1;
+
+      DashboardService service(db);
+      return service.execute(r);
+    }
+
+    if (cmd == "daemon") {
+      Database db;
+      if (!ensureDb(db))
+        return 1;
+
+      DaemonService service(db);
+      return service.execute(r);
+    }
     if (cmd == "audit")
       return cmdAudit(r);
     if (cmd == "benchmark")
       return BenchmarkCommand().run(r);
+    if (cmd == "dispatch")
+      return DispatchCommand().run(r);
+
+    if (cmd == "worker-run")
+      return WorkerRunCommand().run(r);
+
+    if (cmd == "range")
+      return RangeCommand().run(r);
+
+    if (cmd == "run") {
+      std::vector<std::string> commandArgs;
+      commandArgs.emplace_back("run");
+
+      commandArgs.insert(commandArgs.end(), r.begin(), r.end());
+
+      return RangeCommand().run(commandArgs);
+    }
+
+    if (cmd == "status") {
+      std::vector<std::string> commandArgs;
+      commandArgs.emplace_back("status");
+
+      commandArgs.insert(commandArgs.end(), r.begin(), r.end());
+
+      return RangeCommand().run(commandArgs);
+    }
+
+    if (cmd == "stop") {
+      return RangeCommand().run({"stop"});
+    }
+
+    if (cmd == "doctor") {
+      Database db;
+      if (!ensureDb(db))
+        return 1;
+
+      DoctorService service(db);
+      return service.execute(r);
+    }
+    if (cmd == "engine") {
+      Database db;
+      if (!ensureDb(db))
+        return 1;
+
+      EngineService service(db);
+      return service.execute(r);
+    }
+
+    if (cmd == "execution") {
+      Database db;
+      if (!ensureDb(db))
+        return 1;
+
+      ExecutionService service(db);
+      return service.execute(r);
+    }
     if (cmd == "profile")
       return ProfileCommand().run(r);
   } catch (const std::exception &e) {
@@ -219,8 +405,8 @@ int Application::cmdListPuzzles() {
   return 0;
 }
 
-static std::vector<std::string> extractJsonStringsArray(const std::string &txt,
-                                                        const std::string &key) {
+static std::vector<std::string>
+extractJsonStringsArray(const std::string &txt, const std::string &key) {
   std::vector<std::string> out;
   auto p = txt.find("\"" + key + "\"");
   if (p == std::string::npos)
@@ -246,7 +432,8 @@ struct ImportedRangeItem {
   int status = 0;
 };
 
-static std::vector<ImportedRangeItem> extractRangesArray(const std::string &txt) {
+static std::vector<ImportedRangeItem>
+extractRangesArray(const std::string &txt) {
   std::vector<ImportedRangeItem> out;
   std::regex re(
       R"JSON(\{\s*"min"\s*:\s*"([^"]+)"\s*,\s*"max"\s*:\s*"([^"]+)"\s*,\s*"status"\s*:\s*([0-9]+)\s*\})JSON");
@@ -274,9 +461,12 @@ static std::string strip0x(std::string v) {
 int Application::cmdSyncData(const std::vector<std::string> &a) {
   auto dir = getArg(a, "--dir", "data");
 
-  auto wallets = extractJsonStringsArray(readFile((fs::path(dir) / "wallets.json").string()), "wallets");
-  auto hash160s = extractJsonStringsArray(readFile((fs::path(dir) / "hash160s.json").string()), "hash160s");
-  auto ranges = extractRangesArray(readFile((fs::path(dir) / "ranges.json").string()));
+  auto wallets = extractJsonStringsArray(
+      readFile((fs::path(dir) / "wallets.json").string()), "wallets");
+  auto hash160s = extractJsonStringsArray(
+      readFile((fs::path(dir) / "hash160s.json").string()), "hash160s");
+  auto ranges =
+      extractRangesArray(readFile((fs::path(dir) / "ranges.json").string()));
 
   if (wallets.empty())
     throw std::runtime_error("wallets.json has no wallets");
@@ -285,7 +475,8 @@ int Application::cmdSyncData(const std::vector<std::string> &a) {
   if (hash160s.empty())
     throw std::runtime_error("hash160s.json has no hash160s");
 
-  size_t count = std::min<size_t>(160, std::min(wallets.size(), std::min(hash160s.size(), ranges.size())));
+  size_t count = std::min<size_t>(
+      160, std::min(wallets.size(), std::min(hash160s.size(), ranges.size())));
 
   Database db;
   if (!ensureDb(db))
@@ -311,259 +502,41 @@ int Application::cmdSyncData(const std::vector<std::string> &a) {
   std::cout << "Puzzles synchronized. " << count << "\n";
 
   if (wallets.size() != ranges.size() || wallets.size() != hash160s.size()) {
-    std::cout << "Warning.............. input counts differ; synchronized first "
-              << count << " puzzles only\n";
+    std::cout
+        << "Warning.............. input counts differ; synchronized first "
+        << count << " puzzles only\n";
   }
 
   return 0;
 }
 
-
-
 int Application::cmdQueue(const std::vector<std::string> &a) {
-  if (a.empty()) {
-    std::cerr << "Usage: OpenPuzzle queue add|list|show\n";
-    return 1;
-  }
-
   Database db;
   if (!ensureDb(db))
     return 1;
 
-  if (a[0] == "add") {
-    int puzzleNumber = getIntArg(a, "--puzzle", 71);
-    int blockBits = getIntArg(a, "--block-bits", 40);
-
-    auto puzzle = db.getPuzzleByNumber(puzzleNumber);
-    if (!puzzle)
-      throw std::runtime_error("Puzzle not found");
-
-    RangeAllocator allocator(db);
-    auto range = allocator.allocateNext(*puzzle, blockBits);
-
-    if (!range)
-      throw std::runtime_error("No range available");
-
-    JobRecord job;
-    job.puzzleId = puzzle->id;
-    job.rangeId = range->id;
-    job.state = JobState::Reserved;
-    job.id = db.insertJob(job);
-
-    std::cout << "Queued job.......... " << job.id << "\n";
-    std::cout << "Puzzle.............. " << puzzle->number << "\n";
-    std::cout << "Range ID............ " << range->id << "\n";
-    std::cout << "Range Start......... " << range->startKey << "\n";
-    std::cout << "Range End........... " << range->endKey << "\n";
-    std::cout << "Block bits.......... " << blockBits << "\n";
-
-    return 0;
-  }
-
-  if (a[0] == "list") {
-    int puzzleNumber = getIntArg(a, "--puzzle", 71);
-
-    auto puzzle = db.getPuzzleByNumber(puzzleNumber);
-    if (!puzzle)
-      throw std::runtime_error("Puzzle not found");
-
-    std::cout << "Queue for Puzzle " << puzzle->number << "\n";
-    std::cout << "ID   STATUS      START                              END\n";
-    std::cout << "-------------------------------------------------------------------------------\n";
-
-    for (auto &range : db.listRanges(puzzle->id)) {
-      std::cout << std::setw(3) << range.id << "  "
-                << std::setw(10) << st(range.status) << "  "
-                << std::setw(34) << range.startKey << "  "
-                << range.endKey << "\n";
-    }
-
-    return 0;
-  }
-
-  if (a[0] == "show") {
-    if (a.size() < 2)
-      throw std::runtime_error("Missing range id");
-
-    int rangeId = std::stoi(a[1]);
-    auto range = db.getRange(rangeId);
-
-    if (!range)
-      throw std::runtime_error("Range not found");
-
-    std::cout << "Range............... " << range->id << "\n";
-    std::cout << "Puzzle ID........... " << range->puzzleId << "\n";
-    std::cout << "Status.............. " << st(range->status) << "\n";
-    std::cout << "Start............... " << range->startKey << "\n";
-    std::cout << "End................. " << range->endKey << "\n";
-    std::cout << "Block bits.......... " << range->blockBits << "\n";
-    std::cout << "Keys checked........ " << range->keysChecked << "\n";
-
-    return 0;
-  }
-
-  std::cerr << "Unknown queue command\n";
-  return 1;
+  QueueService service(db);
+  return service.execute(a);
 }
 
 int Application::cmdWorker(const std::vector<std::string> &a) {
-  if (a.empty()) {
-    std::cerr << "Usage: OpenPuzzle worker register|list|show\n";
-    return 1;
-  }
-
   Database db;
   if (!ensureDb(db))
     return 1;
 
-  if (a[0] == "register") {
-    WorkerRecord w;
-    w.machine = getArg(a, "--machine", "local");
-    w.gpuName = getArg(a, "--gpu", "unknown");
-    w.backend = getArg(a, "--backend", "unknown");
-    w.engine = getArg(a, "--engine", "bitcrack");
-    w.status = getArg(a, "--status", "idle");
-
-    int id = db.upsertWorker(w);
-
-    std::cout << "Worker registered\n";
-    std::cout << "Machine............ " << w.machine << "\n";
-    std::cout << "GPU................ " << w.gpuName << "\n";
-    std::cout << "Backend............ " << w.backend << "\n";
-    std::cout << "Engine............. " << w.engine << "\n";
-    std::cout << "Status............. " << w.status << "\n";
-
-    if (id > 0)
-      std::cout << "ID................. " << id << "\n";
-
-    return 0;
-  }
-
-  if (a[0] == "list") {
-    std::cout << "ID   MACHINE        GPU                    BACKEND   ENGINE      STATUS\n";
-    std::cout << "----------------------------------------------------------------------------\n";
-
-    for (auto &w : db.listWorkers()) {
-      std::cout << std::setw(3) << w.id << "  "
-                << std::setw(13) << w.machine << "  "
-                << std::setw(22) << w.gpuName << "  "
-                << std::setw(7) << w.backend << "  "
-                << std::setw(10) << w.engine << "  "
-                << w.status << "\n";
-    }
-
-    return 0;
-  }
-
-  if (a[0] == "show") {
-    if (a.size() < 2)
-      throw std::runtime_error("Missing worker id");
-
-    int id = std::stoi(a[1]);
-    auto w = db.getWorker(id);
-
-    if (!w)
-      throw std::runtime_error("Worker not found");
-
-    std::cout << "Worker............. " << w->id << "\n";
-    std::cout << "Machine............ " << w->machine << "\n";
-    std::cout << "GPU................ " << w->gpuName << "\n";
-    std::cout << "Backend............ " << w->backend << "\n";
-    std::cout << "Engine............. " << w->engine << "\n";
-    std::cout << "Status............. " << w->status << "\n";
-    std::cout << "Speed.............. " << w->speedMkeys << " MKey/s\n";
-    std::cout << "Temperature........ " << w->temperature << " C\n";
-    std::cout << "Power.............. " << w->power << " W\n";
-
-    return 0;
-  }
-
-  if (a[0] == "enable" || a[0] == "disable" || a[0] == "drain") {
-    if (a.size() < 2)
-      throw std::runtime_error("Missing worker id");
-
-    int id = std::stoi(a[1]);
-    auto w = db.getWorker(id);
-
-    if (!w)
-      throw std::runtime_error("Worker not found");
-
-    if (a[0] == "enable")
-      w->status = "idle";
-    else if (a[0] == "disable")
-      w->status = "disabled";
-    else
-      w->status = "draining";
-
-    db.upsertWorker(*w);
-
-    std::cout << "Worker............. " << w->id << "\n";
-    std::cout << "Status............. " << w->status << "\n";
-
-    return 0;
-  }
-
-  std::cerr << "Unknown worker command\n";
-  return 1;
+  WorkerService service(db);
+  return service.execute(a);
 }
 
 int Application::cmdPuzzle(const std::vector<std::string> &a) {
-  if (a.empty()) {
-    std::cerr << "Usage: OpenPuzzle puzzle list | show <number>\n";
-    return 1;
-  }
-
   Database db;
   if (!ensureDb(db))
     return 1;
 
-  if (a[0] == "list") {
-    std::cout << "ID   STATUS   ADDRESS\n";
-    std::cout << "--------------------------------------------------\n";
-    for (auto &p : db.listPuzzles()) {
-      std::cout << std::setw(3) << p.number << "  "
-                << (p.solved ? "solved " : "open   ") << "  "
-                << p.address << "\n";
-    }
-    return 0;
-  }
-
-  if (a[0] == "show") {
-    if (a.size() < 2)
-      throw std::runtime_error("Missing puzzle number");
-
-    int number = std::stoi(a[1]);
-    auto p = db.getPuzzleByNumber(number);
-
-    if (!p)
-      throw std::runtime_error("Puzzle not found");
-
-    std::cout << "Puzzle............. " << p->number << "\n";
-    std::cout << "Name............... " << p->name << "\n";
-    std::cout << "Reward............. " << p->reward << " BTC\n";
-    std::cout << "Status............. " << (p->solved ? "SOLVED" : "OPEN") << "\n";
-    std::cout << "Address............ " << p->address << "\n";
-    std::cout << "Hash160............ " << p->hash160 << "\n";
-    std::cout << "Range Start........ " << p->rangeStart << "\n";
-    std::cout << "Range End.......... " << p->rangeEnd << "\n";
-
-    auto reserved = db.countRangesByStatus(p->id, RangeStatus::Reserved);
-    auto running = db.countRangesByStatus(p->id, RangeStatus::Running);
-    auto completed = db.countRangesByStatus(p->id, RangeStatus::Completed);
-    auto failed = db.countRangesByStatus(p->id, RangeStatus::Failed);
-
-    std::cout << "\n";
-    std::cout << "Ranges reserved.... " << reserved << "\n";
-    std::cout << "Ranges running..... " << running << "\n";
-    std::cout << "Ranges completed... " << completed << "\n";
-    std::cout << "Ranges failed...... " << failed << "\n";
-
-    return 0;
-  }
-
-  std::cerr << "Unknown puzzle command\n";
-  return 1;
+  PuzzleService service(db);
+  return service.execute(a);
 }
+
 int Application::cmdCreateJob(const std::vector<std::string> &a) {
   int n = getIntArg(a, "--puzzle", 71), bits = getIntArg(a, "--block-bits", 40);
   Database db;
@@ -650,8 +623,8 @@ int Application::cmdTools() {
 }
 int Application::cmdGpuList() {
   for (auto &g : GpuManager::listGpus())
-    std::cout << "GPU " << g.device << ": " << g.name << " | " << g.memory
-              << " | " << g.uuid << "\n";
+    std::cout << "GPU " << g.device << ": " << g.name << " | "
+              << std::to_string(g.memoryMb) + " MiB" << " | " << g.uuid << "\n";
   return 0;
 }
 int Application::cmdGpuSelect(const std::vector<std::string> &a) {
@@ -685,64 +658,6 @@ int Application::cmdBitcrackCommand(const std::vector<std::string> &a) {
 
   std::cout << scheduler.buildBitCrackCommand(*bc, *p, *r, dev, b, t, pt, out)
             << "\n";
-  return 0;
-}
-
-int Application::cmdDashboard(const std::vector<std::string> &args) {
-  int number = getIntArg(args, "--puzzle", 71);
-
-  Database db;
-  if (!ensureDb(db)) {
-    std::cerr << "Database error\n";
-    return 1;
-  }
-
-  auto puzzle = db.getPuzzleByNumber(number);
-  if (!puzzle) {
-    std::cerr << "Puzzle not found\n";
-    return 1;
-  }
-
-  std::cout << "======================================\n";
-  std::cout << "        OpenPuzzle Dashboard\n";
-  std::cout << "======================================\n\n";
-  std::cout << "Puzzle............... " << puzzle->name << "\n";
-  std::cout << "Address.............. " << puzzle->address << "\n";
-  std::cout << "Keyspace............. " << puzzle->rangeStart << ":"
-            << puzzle->rangeEnd << "\n\n";
-
-  std::cout << "Ranges RESERVED...... "
-            << db.countRangesByStatus(puzzle->id, RangeStatus::Reserved)
-            << "\n";
-  std::cout << "Ranges RUNNING....... "
-            << db.countRangesByStatus(puzzle->id, RangeStatus::Running) << "\n";
-  std::cout << "Ranges COMPLETED..... "
-            << db.countRangesByStatus(puzzle->id, RangeStatus::Completed)
-            << "\n";
-  std::cout << "Jobs RESERVED........ "
-            << db.countJobsByState(puzzle->id, JobState::Reserved) << "\n";
-  std::cout << "Jobs RUNNING......... "
-            << db.countJobsByState(puzzle->id, JobState::Running) << "\n";
-  std::cout << "Jobs COMPLETED....... "
-            << db.countJobsByState(puzzle->id, JobState::Completed) << "\n\n";
-
-  std::cout << "Recent ranges:\n";
-  auto ranges = db.listRanges(puzzle->id);
-  int shown = 0;
-  for (const auto &range : ranges) {
-    std::cout << "  #" << range.id << " " << range.startKey << ":"
-              << range.endKey << " " << st(range.status)
-              << " block_bits=" << range.blockBits << "\n";
-    if (++shown >= 10) {
-      break;
-    }
-  }
-
-  auto bitcrack = ToolManager::bitcrackPath();
-  std::cout << "\nBitCrack............. "
-            << (bitcrack ? *bitcrack : "(not configured)") << "\n";
-  std::cout << "Selected GPU......... " << GpuManager::selectedGpu() << "\n";
-
   return 0;
 }
 

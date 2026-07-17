@@ -101,12 +101,37 @@ int Application::cmdEventTest(const std::vector<std::string> &args) {
     }
   });
 
-  bus.publish(
-      Event{EventType::ExecutionStarted, 1, 42, "Execution started", "", 0.0});
-  bus.publish(
-      Event{EventType::Speed, 1, 42, "Speed sample", "MKey/s", 1334.62});
-  bus.publish(Event{EventType::ExecutionFinished, 1, 42, "Execution finished",
-                    "", 0.0});
+  Event startedEvent;
+  startedEvent.type =
+      EventType::ExecutionStarted;
+  startedEvent.executionId = 1;
+  startedEvent.jobId = 42;
+  startedEvent.message =
+      "Execution started";
+
+  bus.publish(startedEvent);
+
+  Event speedEvent;
+  speedEvent.type =
+      EventType::Speed;
+  speedEvent.executionId = 1;
+  speedEvent.jobId = 42;
+  speedEvent.message =
+      "Speed sample";
+  speedEvent.value =
+      1334.62;
+
+  bus.publish(speedEvent);
+
+  Event finishedEvent;
+  finishedEvent.type =
+      EventType::ExecutionFinished;
+  finishedEvent.executionId = 1;
+  finishedEvent.jobId = 42;
+  finishedEvent.message =
+      "Execution finished";
+
+  bus.publish(finishedEvent);
 
   std::cout << "Events received...... " << received << "\n";
 

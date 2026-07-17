@@ -6,6 +6,7 @@ namespace openpuzzle {
 
 enum class ExecutionRecordStatus {
   Created,
+  DryRun,
   Running,
   Finished,
   Failed,
@@ -21,6 +22,10 @@ struct ExecutionRecord {
   std::string engine;
   std::string workspace;
   std::string command;
+
+  int exitCode = -1;
+  std::string startedAt;
+  std::string finishedAt;
 
   ExecutionRecordStatus status = ExecutionRecordStatus::Created;
 

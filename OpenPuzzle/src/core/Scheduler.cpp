@@ -1,4 +1,9 @@
 #include "openpuzzle/core/Scheduler.hpp"
+#include "openpuzzle/core/WorkspaceManager.hpp"
+
+#include "openpuzzle/engines/EngineManager.hpp"
+#include "openpuzzle/engines/EngineLaunchRequest.hpp"
+#include "openpuzzle/runtime/ExecutionRepository.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -74,16 +79,44 @@ SchedulerResult
 Scheduler::runOnceWithEvents(const ExecutionContext &context,
                              const ExecutionResult &executionResult,
                              EventBus &bus) const {
-  bus.publish(Event{EventType::ExecutionStarted, context.executionId,
-                    context.jobId, "Scheduler cycle started", "", 0.0});
+  Event startedEvent;
+  startedEvent.type = EventType::ExecutionStarted;
+  startedEvent.executionId = context.executionId;
+  startedEvent.jobId = context.jobId;
+  startedEvent.rangeId = context.rangeId;
+  startedEvent.message = "Scheduler cycle started";
+
+  bus.publish(startedEvent);
 
   auto result = runOnce(context, executionResult);
 
-  bus.publish(Event{
-      result.success ? EventType::ExecutionFinished : EventType::Error,
-      context.executionId, context.jobId,
-      result.success ? "Scheduler cycle finished" : "Scheduler cycle failed",
-      "", static_cast<double>(result.exitCode)});
+  Event completedEvent;
+  completedEvent.type =
+      result.success
+          ? EventType::ExecutionFinished
+          : EventType::Error;
+
+  completedEvent.executionId =
+      context.executionId;
+
+  completedEvent.jobId =
+      context.jobId;
+
+  completedEvent.rangeId =
+      context.rangeId;
+
+  completedEvent.exitCode =
+      result.exitCode;
+
+  completedEvent.numericValue =
+      static_cast<double>(result.exitCode);
+
+  completedEvent.message =
+      result.success
+          ? "Scheduler cycle finished"
+          : "Scheduler cycle failed";
+
+  bus.publish(completedEvent);
 
   return result;
 }
@@ -96,9 +129,10 @@ Scheduler::runExecution(const ExecutionContext &context,
 }
 
 SchedulerResult Scheduler::startJob(Database &db, int puzzleNumber, int jobId,
-                                    const std::string &bitcrackPath, int device,
-                                    int blocks, int threads, int points,
-                                    bool dryRun) const {
+                                    const std::string &engineId,
+                                    const std::string &engineExecutable,
+                                    int device, int blocks, int threads,
+                                    int points, bool dryRun) const {
   auto puzzle = db.getPuzzleByNumber(puzzleNumber);
   auto job = db.getJob(jobId);
 
@@ -120,16 +154,49 @@ SchedulerResult Scheduler::startJob(Database &db, int puzzleNumber, int jobId,
     return result;
   }
 
-  auto workspace = workspaceForJob(jobId);
-  auto outputFile = (std::filesystem::path(workspace) / "found.txt").string();
-  auto logFile = (std::filesystem::path(workspace) / "bitcrack.log").string();
+  WorkspaceManager workspaceManager(std::filesystem::path(workspaceForJob(0)).parent_path().parent_path());
 
-  auto command = buildBitCrackCommand(bitcrackPath, *puzzle, *range, device,
-                                      blocks, threads, points, outputFile) +
-                 " 2>&1 | tee -a " + logFile;
+  auto workspace = workspaceManager.createJobWorkspace(jobId).string();
+  auto outputFile = workspaceManager.foundFile(jobId).string();
+  auto logFile = workspaceManager.engineLog(jobId, engineId).string();
+
+  EngineLaunchRequest request;
+  request.engine = "BitCrack";
+  request.backend = "CUDA";
+
+  request.targets.push_back(
+      puzzle->address);
+
+  request.startKey =
+      range->startKey;
+
+  request.endKey =
+      range->endKey;
+  request.device = device;
+  request.blocks = blocks;
+  request.threads = threads;
+  request.points = points;
+  request.workspace = workspace;
+  request.outputFile = outputFile;
+  request.logFile = logFile;
+
+  EngineManager engineManager;
+  auto engine = engineManager.create(engineId, engineExecutable);
+
+  if (!engine) {
+    SchedulerResult result;
+    result.success = false;
+    result.jobId = jobId;
+    result.rangeId = range->id;
+    result.exitCode = -1;
+    return result;
+  }
+
+  auto command = engine->buildCommand(request);
 
   auto context = buildExecutionContext(0, puzzle->id, job->id, range->id,
-                                       "BitCrack", workspace, command, true);
+                                       engine->info().name, workspace, command,
+                                       true);
 
   ExecutionManager executionManager;
   return runExistingJob(db, *job, *range, context, executionManager, dryRun);
@@ -144,9 +211,11 @@ Scheduler::runExistingJob(Database &db, const JobRecord &job,
   schedulerResult.jobId = job.id;
   schedulerResult.rangeId = range.id;
 
+  ExecutionRepository executionRepository(db);
+
   int executionId =
-      db.insertExecution(job.id, context.workspace, context.command,
-                         dryRun ? "dry-run" : "running");
+      executionRepository.create(job.id, context.workspace, context.command,
+                                 dryRun ? "dry-run" : "running");
 
   if (executionId <= 0) {
     schedulerResult.success = false;
@@ -165,9 +234,15 @@ Scheduler::runExistingJob(Database &db, const JobRecord &job,
   db.updateJobState(job.id, JobState::Running);
   db.updateRangeStatus(range.id, RangeStatus::Running);
 
+  auto previousProgressHandler = context.onProgress;
+
   context.onProgress = [&](const ExecutionResult &progress) {
     if (!progress.keysChecked.empty()) {
       db.updateRangeKeysChecked(range.id, progress.keysChecked);
+    }
+
+    if (previousProgressHandler) {
+      previousProgressHandler(progress);
     }
   };
 
@@ -177,9 +252,24 @@ Scheduler::runExistingJob(Database &db, const JobRecord &job,
     db.updateRangeKeysChecked(range.id, executionResult.keysChecked);
   }
 
-  db.finishExecution(executionId,
-                     executionResult.success ? "finished" : "failed",
-                     executionResult.exitCode);
+  ExecutionState executionState;
+  executionState.executionId = executionId;
+  executionState.jobId = job.id;
+  executionState.rangeId = range.id;
+  executionState.workspace = context.workspace;
+  executionState.command = context.command;
+  executionState.engine = context.engine;
+  executionState.exitCode = executionResult.exitCode;
+
+  Execution execution(executionState);
+
+  if (executionResult.success) {
+    execution.finish(executionResult);
+  } else {
+    execution.fail(executionResult);
+  }
+
+  executionRepository.finish(execution);
 
   if (executionResult.success) {
     db.updateJobState(job.id, JobState::Completed);

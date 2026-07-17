@@ -44,7 +44,8 @@ public:
                                const ExecutionManager &executionManager) const;
 
   SchedulerResult startJob(Database &db, int puzzleNumber, int jobId,
-                           const std::string &bitcrackPath, int device,
+                           const std::string &engineId,
+                           const std::string &engineExecutable, int device,
                            int blocks, int threads, int points,
                            bool dryRun) const;
 

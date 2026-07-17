@@ -1,10 +1,35 @@
 #include "openpuzzle/database/Database.hpp"
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+#include <filesystem>
 #include <iostream>
 namespace openpuzzle {
 Database::~Database() { close(); }
 bool Database::open(const std::string &path) {
   close();
-  return sqlite3_open(path.c_str(), &db_) == SQLITE_OK;
+
+  if (
+      sqlite3_open(
+          path.c_str(),
+          &db_) != SQLITE_OK) {
+    close();
+
+    return false;
+  }
+
+  if (path == ":memory:") {
+    return true;
+  }
+
+  try {
+    WorkspaceSecurity::protectFile(
+        std::filesystem::path(path));
+  } catch (...) {
+    close();
+
+    return false;
+  }
+
+  return true;
 }
 void Database::close() {
   if (db_) {
@@ -120,6 +145,35 @@ std::optional<PuzzleRecord> Database::getPuzzleByNumber(int number) {
   sqlite3_stmt *s = nullptr;
   sqlite3_prepare_v2(db_, sql, -1, &s, nullptr);
   sqlite3_bind_int(s, 1, number);
+  std::optional<PuzzleRecord> out;
+  if (sqlite3_step(s) == SQLITE_ROW) {
+    PuzzleRecord p;
+    p.id = sqlite3_column_int(s, 0);
+    p.number = sqlite3_column_int(s, 1);
+    p.name = (const char *)sqlite3_column_text(s, 2);
+    p.address = (const char *)sqlite3_column_text(s, 3);
+    p.hash160 = (const char *)sqlite3_column_text(s, 4);
+    p.rangeStart = (const char *)sqlite3_column_text(s, 5);
+    p.rangeEnd = (const char *)sqlite3_column_text(s, 6);
+    p.reward = sqlite3_column_double(s, 7);
+    p.solved = sqlite3_column_int(s, 8) != 0;
+    p.solvedKey = (const char *)sqlite3_column_text(s, 9);
+    p.solvedAddress = (const char *)sqlite3_column_text(s, 10);
+    p.sharing = (const char *)sqlite3_column_text(s, 11);
+    out = p;
+  }
+  sqlite3_finalize(s);
+  return out;
+}
+
+std::optional<PuzzleRecord> Database::getPuzzleById(int id) {
+  const char *sql =
+      "SELECT id,number,name,address,COALESCE(hash160,''),range_start,range_end,"
+      "reward,COALESCE(solved,0),COALESCE(solved_key,''),"
+      "COALESCE(solved_address,''),sharing FROM puzzles WHERE id=?";
+  sqlite3_stmt *s = nullptr;
+  sqlite3_prepare_v2(db_, sql, -1, &s, nullptr);
+  sqlite3_bind_int(s, 1, id);
   std::optional<PuzzleRecord> out;
   if (sqlite3_step(s) == SQLITE_ROW) {
     PuzzleRecord p;
@@ -284,6 +338,30 @@ std::optional<JobRecord> Database::getJob(int id) {
   sqlite3_finalize(s);
   return out;
 }
+
+std::optional<JobRecord> Database::nextReservedJob() {
+  sqlite3_stmt *s = nullptr;
+  sqlite3_prepare_v2(
+      db_,
+      "SELECT id,puzzle_id,range_id,state FROM jobs WHERE state=? ORDER BY id LIMIT 1",
+      -1, &s, nullptr);
+
+  sqlite3_bind_int(s, 1, (int)JobState::Reserved);
+
+  std::optional<JobRecord> out;
+
+  if (sqlite3_step(s) == SQLITE_ROW) {
+    JobRecord j;
+    j.id = sqlite3_column_int(s, 0);
+    j.puzzleId = sqlite3_column_int(s, 1);
+    j.rangeId = sqlite3_column_int(s, 2);
+    j.state = (JobState)sqlite3_column_int(s, 3);
+    out = j;
+  }
+
+  sqlite3_finalize(s);
+  return out;
+}
 bool Database::updateJobState(int id, JobState st) {
   sqlite3_stmt *s = nullptr;
   sqlite3_prepare_v2(
@@ -421,17 +499,85 @@ long long Database::countRangesByStatus(int puzzleId, RangeStatus status) {
 }
 long long Database::countJobsByState(int puzzleId, JobState state) {
   sqlite3_stmt *s = nullptr;
-  sqlite3_prepare_v2(db_,
-                     "SELECT COUNT(*) FROM jobs WHERE puzzle_id=? AND state=?",
-                     -1, &s, nullptr);
-  sqlite3_bind_int(s, 1, puzzleId);
-  sqlite3_bind_int(s, 2, (int)state);
+
+  if (puzzleId > 0) {
+    sqlite3_prepare_v2(
+        db_,
+        "SELECT COUNT(*) FROM jobs WHERE puzzle_id=? AND state=?",
+        -1, &s, nullptr);
+
+    sqlite3_bind_int(s, 1, puzzleId);
+    sqlite3_bind_int(s, 2, (int)state);
+  } else {
+    sqlite3_prepare_v2(
+        db_,
+        "SELECT COUNT(*) FROM jobs WHERE state=?",
+        -1, &s, nullptr);
+
+    sqlite3_bind_int(s, 1, (int)state);
+  }
+
   long long c = 0;
+
   if (sqlite3_step(s) == SQLITE_ROW)
     c = sqlite3_column_int64(s, 0);
+
   sqlite3_finalize(s);
   return c;
 }
+
+std::vector<ExecutionRecord> Database::listRunningExecutions() {
+  std::vector<ExecutionRecord> result;
+
+  sqlite3_stmt *stmt = nullptr;
+
+  const char *sql =
+      "SELECT e.id,e.job_id,j.puzzle_id,j.range_id,e.workspace,e.command,e.state,COALESCE(e.exit_code,-1),COALESCE(e.started_at,''),COALESCE(e.finished_at,'') "
+      "FROM executions e "
+      "LEFT JOIN jobs j ON j.id=e.job_id "
+      "WHERE e.state='running' "
+      "ORDER BY e.id DESC";
+
+  if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+    return result;
+  }
+
+  while (sqlite3_step(stmt) == SQLITE_ROW) {
+    ExecutionRecord record;
+
+    record.executionId = sqlite3_column_int(stmt, 0);
+    record.jobId = sqlite3_column_int(stmt, 1);
+    record.puzzleId = sqlite3_column_int(stmt, 2);
+    record.rangeId = sqlite3_column_int(stmt, 3);
+
+    const unsigned char *workspace = sqlite3_column_text(stmt, 4);
+    const unsigned char *command = sqlite3_column_text(stmt, 5);
+    const unsigned char *state = sqlite3_column_text(stmt, 6);
+    const unsigned char *startedAt = sqlite3_column_text(stmt, 8);
+    const unsigned char *finishedAt = sqlite3_column_text(stmt, 9);
+
+    record.workspace = workspace ? reinterpret_cast<const char *>(workspace) : "";
+    record.command = command ? reinterpret_cast<const char *>(command) : "";
+    record.exitCode = sqlite3_column_int(stmt, 7);
+    record.startedAt = startedAt ? reinterpret_cast<const char *>(startedAt) : "";
+    record.finishedAt = finishedAt ? reinterpret_cast<const char *>(finishedAt) : "";
+
+    std::string status = state ? reinterpret_cast<const char *>(state) : "";
+
+    if (status == "running") {
+      record.status = ExecutionRecordStatus::Running;
+    } else {
+      record.status = ExecutionRecordStatus::Created;
+    }
+
+    result.push_back(record);
+  }
+
+  sqlite3_finalize(stmt);
+  return result;
+}
+
+
 } // namespace openpuzzle
 
 namespace openpuzzle {
@@ -515,6 +661,8 @@ Database::getGpuProfile(const std::string &gpuName, const std::string &backend,
   return out;
 }
 
+
+
 } // namespace openpuzzle
 
 namespace openpuzzle {
@@ -555,6 +703,8 @@ std::vector<GpuProfileRecord> Database::listGpuProfiles() {
   return profiles;
 }
 
+
+
 } // namespace openpuzzle
 
 namespace openpuzzle {
@@ -587,6 +737,107 @@ int Database::upsertWorker(const WorkerRecord &w) {
   sqlite3_finalize(s);
 
   return ok ? (int)sqlite3_last_insert_rowid(db_) : 0;
+}
+
+bool Database::updateWorkerStatus(
+    int workerId,
+    const std::string& status) {
+  sqlite3_stmt *stmt = nullptr;
+
+  const char *sql =
+      "UPDATE workers "
+      "SET status=?, last_seen=CURRENT_TIMESTAMP "
+      "WHERE id=?";
+
+  if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+    return false;
+  }
+
+  sqlite3_bind_text(
+      stmt,
+      1,
+      status.c_str(),
+      -1,
+      SQLITE_TRANSIENT);
+
+  sqlite3_bind_int(stmt, 2, workerId);
+
+  bool ok = sqlite3_step(stmt) == SQLITE_DONE &&
+            sqlite3_changes(db_) > 0;
+
+  sqlite3_finalize(stmt);
+  return ok;
+}
+
+bool Database::updateWorkerHeartbeat(
+    int workerId,
+    const std::string& status,
+    double speedMkeys,
+    double temperature,
+    double power) {
+  sqlite3_stmt *stmt = nullptr;
+
+  const char *sql =
+      "UPDATE workers SET "
+      "status=?,"
+      "speed_mkeys=?,"
+      "temperature_c=?,"
+      "power_w=?,"
+      "last_seen=CURRENT_TIMESTAMP "
+      "WHERE id=?";
+
+  if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+    return false;
+  }
+
+  sqlite3_bind_text(
+      stmt,
+      1,
+      status.c_str(),
+      -1,
+      SQLITE_TRANSIENT);
+
+  sqlite3_bind_double(stmt, 2, speedMkeys);
+  sqlite3_bind_double(stmt, 3, temperature);
+  sqlite3_bind_double(stmt, 4, power);
+  sqlite3_bind_int(stmt, 5, workerId);
+
+  const bool ok =
+      sqlite3_step(stmt) == SQLITE_DONE &&
+      sqlite3_changes(db_) > 0;
+
+  sqlite3_finalize(stmt);
+  return ok;
+}
+
+int Database::markStaleWorkersOffline(int timeoutSeconds) {
+  if (timeoutSeconds < 0) {
+    return 0;
+  }
+
+  sqlite3_stmt *stmt = nullptr;
+
+  const char *sql =
+      "UPDATE workers "
+      "SET status='offline' "
+      "WHERE status!='offline' "
+      "AND unixepoch(last_seen) < unixepoch('now') - ?";
+
+  if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+    return 0;
+  }
+
+  sqlite3_bind_int(stmt, 1, timeoutSeconds);
+
+  if (sqlite3_step(stmt) != SQLITE_DONE) {
+    sqlite3_finalize(stmt);
+    return 0;
+  }
+
+  const int changed = sqlite3_changes(db_);
+
+  sqlite3_finalize(stmt);
+  return changed;
 }
 
 std::vector<WorkerRecord> Database::listWorkers() {
@@ -646,5 +897,129 @@ std::optional<WorkerRecord> Database::getWorker(int workerId) {
   sqlite3_finalize(s);
   return out;
 }
+
+
+
+} // namespace openpuzzle
+
+namespace openpuzzle {
+
+
+std::optional<ExecutionRecord> Database::getExecution(int executionId) {
+  sqlite3_stmt *stmt = nullptr;
+
+  const char *sql =
+      "SELECT e.id,e.job_id,j.puzzle_id,j.range_id,e.workspace,e.command,e.state,COALESCE(e.exit_code,-1),COALESCE(e.started_at,''),COALESCE(e.finished_at,'') "
+      "FROM executions e "
+      "LEFT JOIN jobs j ON j.id=e.job_id "
+      "WHERE e.id=?";
+
+  sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
+  sqlite3_bind_int(stmt, 1, executionId);
+
+  std::optional<ExecutionRecord> out;
+
+  if (sqlite3_step(stmt) == SQLITE_ROW) {
+    ExecutionRecord record;
+
+    record.executionId = sqlite3_column_int(stmt, 0);
+    record.jobId = sqlite3_column_int(stmt, 1);
+    record.puzzleId = sqlite3_column_int(stmt, 2);
+    record.rangeId = sqlite3_column_int(stmt, 3);
+
+    const unsigned char *workspace = sqlite3_column_text(stmt, 4);
+    const unsigned char *command = sqlite3_column_text(stmt, 5);
+    const unsigned char *state = sqlite3_column_text(stmt, 6);
+    const unsigned char *startedAt = sqlite3_column_text(stmt, 8);
+    const unsigned char *finishedAt = sqlite3_column_text(stmt, 9);
+
+    record.workspace = workspace ? reinterpret_cast<const char *>(workspace) : "";
+    record.command = command ? reinterpret_cast<const char *>(command) : "";
+    record.exitCode = sqlite3_column_int(stmt, 7);
+    record.startedAt = startedAt ? reinterpret_cast<const char *>(startedAt) : "";
+    record.finishedAt = finishedAt ? reinterpret_cast<const char *>(finishedAt) : "";
+
+    std::string status = state ? reinterpret_cast<const char *>(state) : "";
+
+    if (status == "dry-run") {
+      record.status = ExecutionRecordStatus::DryRun;
+    } else if (status == "running") {
+      record.status = ExecutionRecordStatus::Running;
+    } else if (status == "finished") {
+      record.status = ExecutionRecordStatus::Finished;
+    } else if (status == "failed") {
+      record.status = ExecutionRecordStatus::Failed;
+    } else if (status == "cancelled") {
+      record.status = ExecutionRecordStatus::Cancelled;
+    } else {
+      record.status = ExecutionRecordStatus::Created;
+    }
+
+    out = record;
+  }
+
+  sqlite3_finalize(stmt);
+  return out;
+}
+
+std::vector<ExecutionRecord> Database::listExecutions() {
+  std::vector<ExecutionRecord> result;
+
+  sqlite3_stmt *stmt = nullptr;
+
+  const char *sql =
+      "SELECT e.id,e.job_id,j.puzzle_id,j.range_id,e.workspace,e.command,e.state,COALESCE(e.exit_code,-1),COALESCE(e.started_at,''),COALESCE(e.finished_at,'') "
+      "FROM executions e "
+      "LEFT JOIN jobs j ON j.id=e.job_id "
+      "ORDER BY e.id DESC";
+
+  if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+    return result;
+  }
+
+  while (sqlite3_step(stmt) == SQLITE_ROW) {
+    ExecutionRecord record;
+
+    record.executionId = sqlite3_column_int(stmt, 0);
+    record.jobId = sqlite3_column_int(stmt, 1);
+    record.puzzleId = sqlite3_column_int(stmt, 2);
+    record.rangeId = sqlite3_column_int(stmt, 3);
+
+    const unsigned char *workspace = sqlite3_column_text(stmt, 4);
+    const unsigned char *command = sqlite3_column_text(stmt, 5);
+    const unsigned char *state = sqlite3_column_text(stmt, 6);
+    const unsigned char *startedAt = sqlite3_column_text(stmt, 8);
+    const unsigned char *finishedAt = sqlite3_column_text(stmt, 9);
+
+    record.workspace = workspace ? reinterpret_cast<const char *>(workspace) : "";
+    record.command = command ? reinterpret_cast<const char *>(command) : "";
+    record.exitCode = sqlite3_column_int(stmt, 7);
+    record.startedAt = startedAt ? reinterpret_cast<const char *>(startedAt) : "";
+    record.finishedAt = finishedAt ? reinterpret_cast<const char *>(finishedAt) : "";
+
+    std::string status = state ? reinterpret_cast<const char *>(state) : "";
+
+    if (status == "dry-run") {
+      record.status = ExecutionRecordStatus::DryRun;
+    } else if (status == "running") {
+      record.status = ExecutionRecordStatus::Running;
+    } else if (status == "finished") {
+      record.status = ExecutionRecordStatus::Finished;
+    } else if (status == "failed") {
+      record.status = ExecutionRecordStatus::Failed;
+    } else if (status == "cancelled") {
+      record.status = ExecutionRecordStatus::Cancelled;
+    } else {
+      record.status = ExecutionRecordStatus::Created;
+    }
+
+    result.push_back(record);
+  }
+
+  sqlite3_finalize(stmt);
+  return result;
+}
+
+
 
 } // namespace openpuzzle

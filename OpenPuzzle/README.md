@@ -1,287 +1,284 @@
 # OpenPuzzle
 
-<p align="center">
-
 ## Open-source orchestration platform for cryptographic keyspace exploration
 
-</p>
+> **OpenPuzzle** is an orchestration platform for cryptographic keyspace
+> exploration. It coordinates search engines such as **BitCrack**, while
+> remaining engine-independent.
 
-> ⚠️ **OpenPuzzle is under active development.**
->
-> APIs, database schema and CLI commands may change between releases.
+------------------------------------------------------------------------
 
----
+## Overview
 
-## Why OpenPuzzle?
+OpenPuzzle does **not** perform cryptographic searches itself.
 
-Existing search engines are excellent at performing cryptographic searches.
+Instead, it manages:
 
-OpenPuzzle focuses on everything around the search itself:
+-   Puzzle metadata
+-   Wallet and Hash160 databases
+-   Range allocation
+-   Job scheduling
+-   Worker coordination
+-   Benchmarking
+-   Recovery
+-   Engine discovery
+-   Execution monitoring
+-   Distributed execution (roadmap)
 
-- Managing workers
-- Coordinating jobs
-- Allocating ranges
-- Tracking executions
-- Benchmarking
-- Recovering interrupted work
-- Preparing distributed execution
+The current implementation focuses on the Bitcoin Puzzle project but is
+designed to support multiple search engines.
 
-This separation keeps the core modular and allows different search engines to be integrated without redesigning the platform.
-
----
-
-## What is OpenPuzzle?
-
-OpenPuzzle is an open-source project designed to coordinate cryptographic keyspace exploration.
-
-Unlike tools such as BitCrack or KeyHunt, OpenPuzzle does **not** perform the cryptographic search itself.
-
-Its purpose is to organize, schedule, monitor and recover search jobs while external engines perform the computation.
-
-Current development is focused on the Bitcoin Puzzle project, but the architecture is designed to support additional search engines in the future.
-
----
-
-## Current Features
-
-- SQLite database
-- Bitcoin Puzzle database (1–160)
-- Wallet database
-- Hash160 database
-- Range database
-- Puzzle management
-- Worker management
-- Execution queue
-- Automatic range allocation
-- GPU profile database
-- Benchmark support
-- Recovery support
-- BitCrack output parser
-
-
-## Project Structure
-
-```text
-OpenPuzzle/
-├── docs/
-├── include/
-├── src/
-├── tests/
-├── scripts/
-├── build/
-├── data/
-└── CMakeLists.txt
-```
-
----
-
-## Core Commands
-
-Synchronize puzzle data:
-
-```bash
-./build/OpenPuzzle sync-data --dir data
-```
-
-List available puzzles:
-
-```bash
-./build/OpenPuzzle puzzle list
-```
-
-Show information about a puzzle:
-
-```bash
-./build/OpenPuzzle puzzle show 71
-```
-
-List registered workers:
-
-```bash
-./build/OpenPuzzle worker list
-```
-
-Create a new execution queue entry:
-
-```bash
-./build/OpenPuzzle queue add --puzzle 71 --block-bits 40
-```
-
-List queued jobs:
-
-```bash
-./build/OpenPuzzle queue list
-```
-
-
-## Build
-
-Build the project:
-
-./scripts/build.sh
-
----
-
-## Running Tests
-
-Execute the complete test suite:
-
-./scripts/test.sh
-
----
-
-## Project Status
-
-OpenPuzzle is currently under active development.
-
-Implemented components include:
-
-- Puzzle database management
-- Worker management
-- Execution queue
-- Automatic range allocation
-- GPU profile management
-- Benchmark framework
-- Recovery framework
-- BitCrack output parser
-- SQLite persistence
-
-The project is evolving towards a modular orchestration platform capable of coordinating cryptographic search engines across multiple GPUs and, in the future, multiple computers.
-
-
-## Roadmap
-
-The project roadmap is available in:
-
-**ROADMAP.md**
-
-## Support OpenPuzzle
-
-OpenPuzzle is developed in free time and every contribution helps improve the project.
-
-If you would like to support future development, you can make a Bitcoin donation.
-
-bc1qs946xs860jpqd5jv8fcv3jzkpwwydmz44w25h6
-
-Thank you for supporting OpenPuzzle!
-
----
-
-## Contributing
-
-Contributions, bug reports and feature requests are welcome.
-
-Please read CONTRIBUTING.md before submitting pull requests.
-
----
-
-## License
-
-This project is released under the MIT License.
-
----
+------------------------------------------------------------------------
 
 ## Design Philosophy
 
-OpenPuzzle is designed around one simple principle:
-
 > **OpenPuzzle coordinates work. Search engines execute work.**
 
-The OpenPuzzle core should remain independent from any specific search engine.
+The core never depends directly on a specific engine.
 
-Search engines such as BitCrack, KeyHunt, Kangaroo or future implementations should be integrated through adapters rather than tightly coupled to the core platform.
+------------------------------------------------------------------------
 
-This design keeps the project modular, maintainable and extensible.
+## Current Features
 
----
+-   SQLite persistence
+-   Puzzle / Wallet / Hash160 databases
+-   Range allocator
+-   Scheduler
+-   Dispatcher foundation
+-   Worker management
+-   Heartbeat service
+-   GPU profile database
+-   Benchmark framework
+-   Recovery framework
+-   Execution tracking
+-   Execution workspaces
+-   Engine framework
+-   Engine registry
+-   Engine discovery
+-   Engine monitor
+-   BitCrack integration
+-   Dashboard service
+-   Doctor command
+-   Extensive automated tests
 
-## Current Development Status
+------------------------------------------------------------------------
 
-OpenPuzzle is currently under active development.
+## Architecture
 
-The current implementation already provides:
+``` text
+                 OpenPuzzle
+                      │
+                Application
+                      │
+        ┌─────────────┴─────────────┐
+        │                           │
+     Commands                    Services
+        │                           │
+        └─────────────┬─────────────┘
+                      │
+                  Scheduler
+                      │
+                  Dispatcher
+                      │
+                EngineManager
+                      │
+        ┌─────────────┴─────────────┐
+        │                           │
+   EngineRegistry              EngineFactory
+        │                           │
+        └─────────────┬─────────────┘
+                      │
+                ISearchEngine
+                      │
+               BitCrackEngine
+                      │
+                EngineMonitor
+                      │
+              ExecutionManager
+                      │
+                ProcessRunner
+```
 
-- Persistent SQLite database
-- Bitcoin Puzzle metadata
-- Worker management
-- Execution queue
-- Automatic range allocation
-- GPU profile management
-- Benchmark foundation
-- Recovery framework
-- BitCrack output parser
+------------------------------------------------------------------------
 
-The next development milestone is the implementation of the Service Layer, followed by the Dispatcher and the OpenPuzzleAgent.
+## Build
 
+``` bash
+./scripts/build.sh
+```
 
----
+or
+
+``` bash
+cmake -S . -B build
+cmake --build build
+```
+
+------------------------------------------------------------------------
+
+## Tests
+
+``` bash
+./scripts/test.sh
+```
+
+or
+
+``` bash
+cd build
+ctest --output-on-failure
+```
+
+------------------------------------------------------------------------
+
+## Common Commands
+
+### Synchronize data
+
+``` bash
+./build/OpenPuzzle sync-data --dir data
+```
+
+### List puzzles
+
+``` bash
+./build/OpenPuzzle puzzle list
+```
+
+### Show puzzle
+
+``` bash
+./build/OpenPuzzle puzzle show 71
+```
+
+### Queue jobs
+
+``` bash
+./build/OpenPuzzle queue add --puzzle 71 --block-bits 40
+./build/OpenPuzzle queue list
+```
+
+### Engine management
+
+``` bash
+./build/OpenPuzzle engine list
+./build/OpenPuzzle engine info bitcrack
+```
+
+### Execute a job
+
+``` bash
+./build/OpenPuzzle start-job \
+    --puzzle 71 \
+    --job 1 \
+    --engine bitcrack \
+    --dry-run
+```
+
+### Benchmark
+
+``` bash
+./build/OpenPuzzle benchmark --real --auto --gpu 0
+```
+
+### Diagnostics
+
+``` bash
+./build/OpenPuzzle doctor
+```
+
+------------------------------------------------------------------------
+
+## Current Release
+
+### release/0.40
+
+Implemented:
+
+-   Dashboard Service
+-   Dispatch Service
+-   Graceful shutdown
+-   Engine Framework
+-   Engine Registry
+-   Engine Discovery
+-   Engine Manager
+-   Engine Monitor
+-   BitCrack Engine
+-   Engine List
+-   Engine Info
+-   `start-job --engine`
+-   BitCrack command generation tests
+
+------------------------------------------------------------------------
+
+## Continuous client
+
+The client can run autonomously:
+
+```bash
+OpenPuzzle run
+OpenPuzzle run 71
+OpenPuzzle status
+OpenPuzzle stop
+```
+
+It requests random non-overlapping assignments, uploads progress, renews
+leases, recovers interrupted sessions and continues with new work.
+
+Potential solutions remain strictly local. OpenPuzzle stops execution and
+preserves the private `found.txt` workspace without reading, printing or
+uploading its contents. It submits only the assignment UUID and anonymous
+client UUID as a pending report for independent review. A report never marks a
+puzzle as solved automatically.
+
+See [Continuous Client Runtime](docs/CLIENT_RUNTIME.md) for lifecycle,
+recovery, cancellation and security details.
+
+------------------------------------------------------------------------
+
+## Roadmap
+
+### 0.50
+
+-   KeyHunt engine
+-   Multi-engine execution
+-   Continuous workers
+-   Improved dispatcher
+
+### 0.60
+
+-   Distributed workers
+-   REST API
+-   Web dashboard
+-   Multi-node clusters
+
+------------------------------------------------------------------------
+
+## Documentation
+
+See:
+
+-   [Continuous Client Runtime](docs/CLIENT_RUNTIME.md)
+-   docs/architecture/
+-   ROADMAP.md
+
+------------------------------------------------------------------------
 
 ## Requirements
 
-The current development environment is:
+-   Linux
+-   GCC (C++20)
+-   CMake 3.22+
+-   SQLite3
 
-- Linux
-- GCC with C++20 support
-- CMake 3.22 or newer
-- SQLite3
-- Git
+------------------------------------------------------------------------
 
-Future releases are expected to support additional operating systems and toolchains.
+## Contributing
 
----
+Pull requests, issues and suggestions are welcome.
 
-## Project Goals
+------------------------------------------------------------------------
 
-The long-term objective of OpenPuzzle is to provide a unified platform capable of managing large-scale cryptographic keyspace exploration.
+## License
 
-Planned capabilities include:
-
-- Multiple GPUs
-- Multiple computers
-- Multiple search engines
-- Automatic scheduling
-- Checkpoint recovery
-- Performance benchmarking
-- Distributed execution
-- Modular engine plugins
-
-OpenPuzzle is being designed as an orchestration platform rather than another search engine.
-
-
----
-
-## Supported Engines
-
-The OpenPuzzle core is designed to support multiple search engines.
-
-Current integration:
-
-- BitCrack (in development)
-
-Planned integrations:
-
-- KeyHunt
-- Kangaroo
-- VanitySearch
-- Additional engines through a plugin architecture.
-
-
----
-
-## Project Vision
-
-The long-term vision of OpenPuzzle is to become a complete orchestration platform for cryptographic keyspace exploration.
-
-Instead of focusing on a single search engine, OpenPuzzle aims to provide a unified environment capable of managing:
-
-- Workers
-- GPUs
-- Search engines
-- Jobs
-- Queues
-- Benchmarks
-- Statistics
-- Distributed execution
-
-The goal is to allow researchers and enthusiasts to coordinate large search workloads from a single platform while keeping the architecture modular and extensible.
-
+MIT License.

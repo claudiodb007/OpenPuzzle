@@ -25,7 +25,16 @@ std::filesystem::path WorkspaceManager::createJobWorkspace(int jobId) const {
 }
 
 std::filesystem::path WorkspaceManager::bitcrackLog(int jobId) const {
-  return jobWorkspace(jobId) / "bitcrack.log";
+  return engineLog(jobId, "bitcrack");
+}
+
+std::filesystem::path WorkspaceManager::engineLog(
+    int jobId, const std::string& engineId) const {
+  return jobWorkspace(jobId) / (engineId + ".log");
+}
+
+std::filesystem::path WorkspaceManager::foundFile(int jobId) const {
+  return jobWorkspace(jobId) / "found.txt";
 }
 
 std::filesystem::path WorkspaceManager::stdoutLog(int jobId) const {

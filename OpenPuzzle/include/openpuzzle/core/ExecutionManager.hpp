@@ -1,6 +1,5 @@
 #pragma once
 
-#include "openpuzzle/adapters/bitcrack/BitCrackOutputParser.hpp"
 #include "openpuzzle/core/ExecutionContext.hpp"
 #include "openpuzzle/core/ExecutionResult.hpp"
 #include "openpuzzle/core/ProcessRunner.hpp"

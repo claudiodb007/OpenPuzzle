@@ -31,6 +31,16 @@ static int getIntArg(const std::vector<std::string> &args,
   return fallback;
 }
 
+static std::string getStringArg(const std::vector<std::string> &args,
+                                const std::string &name,
+                                const std::string &fallback) {
+  for (std::size_t i = 0; i + 1 < args.size(); ++i)
+    if (args[i] == name)
+      return args[i + 1];
+
+  return fallback;
+}
+
 int StartJobCommand::run(const std::vector<std::string> &args) const {
   CommandContext context;
 
@@ -51,11 +61,16 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
 
   int device = getIntArg(args, "--device", getIntArg(args, "--d", context.gpu));
 
+  std::string engine = getStringArg(args, "--engine", "bitcrack");
+  std::string backend = getStringArg(args, "--backend", "cuda");
+
   bool dryRun = hasArg(args, "--dry-run");
 
   std::cout << "Puzzle............ " << puzzle << "\n";
   std::cout << "Job............... " << job << "\n";
   std::cout << "Device............ " << device << "\n";
+  std::cout << "Engine............ " << engine << "\n";
+  std::cout << "Backend........... " << backend << "\n";
   std::cout << "Blocks............ " << blocks << "\n";
   std::cout << "Threads........... " << threads << "\n";
   std::cout << "Points............ " << points << "\n";
@@ -74,7 +89,10 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
 
     GpuProfileManager profiles(db);
 
-    auto profile = profiles.chooseBest(gpu.name, "CUDA", "BitCrack");
+    auto profile = profiles.chooseBest(
+        gpu.name,
+        backend == "opencl" ? "OpenCL" : "CUDA",
+        "BitCrack");
 
     if (profile) {
       blocks = profile->blocks;
@@ -92,13 +110,32 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
     }
   }
 
+  if (engine != "bitcrack") {
+    throw std::runtime_error("Unsupported engine for job execution: " + engine);
+  }
+
+  if (backend != "cuda" && backend != "opencl") {
+    throw std::runtime_error("Unsupported BitCrack backend: " + backend);
+  }
+
   auto bitcrack = context.bitcrack;
 
   if (!bitcrack)
-    throw std::runtime_error("BitCrack not found");
+    throw std::runtime_error("BitCrack CUDA executable not configured");
 
-  auto result = scheduler.startJob(db, puzzle, job, *bitcrack, device, blocks,
-                                   threads, points, dryRun);
+  std::string executable = *bitcrack;
+
+  if (backend == "opencl") {
+    auto opencl = ToolManager::bitcrackOpenCLPath();
+
+    if (!opencl)
+      throw std::runtime_error("BitCrack OpenCL executable not configured");
+
+    executable = *opencl;
+  }
+
+  auto result = scheduler.startJob(db, puzzle, job, engine, executable, device,
+                                   blocks, threads, points, dryRun);
 
   std::cout << "\nJob................ " << result.jobId << "\n";
   std::cout << "Range.............. " << result.rangeId << "\n";

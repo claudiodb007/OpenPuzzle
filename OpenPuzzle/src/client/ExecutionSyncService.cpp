@@ -1,0 +1,358 @@
+#include "openpuzzle/client/ExecutionSyncService.hpp"
+
+#include "openpuzzle/adapters/bitcrack/BitCrackProgressParser.hpp"
+#include "openpuzzle/client/ClientStateStore.hpp"
+#include "openpuzzle/client/HttpRangeClient.hpp"
+
+#include <cerrno>
+#include <csignal>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <system_error>
+#include <unistd.h>
+
+namespace openpuzzle::client {
+
+bool ExecutionSyncService::processExists(
+    int pid) {
+  if (pid <= 0) {
+    return false;
+  }
+
+  if (kill(pid, 0) == 0) {
+    return true;
+  }
+
+  return errno == EPERM;
+}
+
+bool ExecutionSyncService::readExitCode(
+    const std::string& workspace,
+    int& exitCode) {
+  const auto exitPath =
+      std::filesystem::path(workspace) /
+      "exit.code";
+
+  std::ifstream input(
+      exitPath);
+
+  if (!input) {
+    return false;
+  }
+
+  int value = 0;
+
+  if (!(input >> value)) {
+    return false;
+  }
+
+  exitCode = value;
+
+  return true;
+}
+
+bool ExecutionSyncService::readLatestProgress(
+    const std::string& workspace,
+    ExecutionProgress& progress) {
+  const auto logPath =
+      std::filesystem::path(workspace) /
+      "bitcrack.log";
+
+  std::ifstream input(
+      logPath);
+
+  if (!input) {
+    return false;
+  }
+
+  bitcrack::BitCrackProgressParser parser;
+
+  bool found = false;
+
+  std::string line;
+
+  while (std::getline(
+      input,
+      line)) {
+    const auto parsed =
+        parser.parseLine(line);
+
+    if (!parsed) {
+      continue;
+    }
+
+    /*
+     * Apenas métricas públicas de progresso.
+     *
+     * Eventos Found, mensagens de erro e qualquer
+     * conteúdo potencialmente sensível são ignorados.
+     */
+    if (parsed->speedMKeys > 0.0 &&
+        !parsed->keysChecked.empty()) {
+      progress =
+          *parsed;
+
+      found = true;
+    }
+  }
+
+  return found;
+}
+
+std::optional<ExecutionProgress>
+ExecutionSyncService::latestProgress(
+    const std::string& workspace) {
+  ExecutionProgress progress;
+
+  if (!readLatestProgress(
+          workspace,
+          progress)) {
+    return std::nullopt;
+  }
+
+  return progress;
+}
+
+std::optional<std::string>
+ExecutionSyncService::solutionFile(
+    const std::string& workspace) {
+  const auto path =
+      std::filesystem::path(workspace) /
+      "found.txt";
+
+  std::error_code error;
+
+  if (
+      !std::filesystem::is_regular_file(
+          path,
+          error) ||
+      error) {
+    return std::nullopt;
+  }
+
+  const auto size =
+      std::filesystem::file_size(
+          path,
+          error);
+
+  if (error || size == 0) {
+    return std::nullopt;
+  }
+
+  return path.string();
+}
+
+AssignmentUploadStatus
+ExecutionSyncService::classifyProgressError(
+    const std::string& errorCode) {
+  if (
+      errorCode == "assignment_not_found" ||
+      errorCode == "assignment_client_mismatch" ||
+      errorCode == "invalid_assignment_state" ||
+      errorCode == "assignment_lease_expired") {
+    return
+        AssignmentUploadStatus::
+            AssignmentRejected;
+  }
+
+  if (
+      errorCode == "method_not_allowed" ||
+      errorCode == "invalid_json" ||
+      errorCode == "invalid_request" ||
+      errorCode == "invalid_assignment_id" ||
+      errorCode == "invalid_client_id" ||
+      errorCode == "invalid_status" ||
+      errorCode == "invalid_speed" ||
+      errorCode == "invalid_keys_checked") {
+    return
+        AssignmentUploadStatus::
+            PermanentFailure;
+  }
+
+  return
+      AssignmentUploadStatus::
+          TemporaryFailure;
+}
+
+AssignmentUploadStatus
+ExecutionSyncService::classifyCompletionError(
+    const std::string& errorCode) {
+  if (
+      errorCode == "assignment_not_found" ||
+      errorCode == "assignment_client_mismatch" ||
+      errorCode == "invalid_assignment_state") {
+    return
+        AssignmentUploadStatus::
+            AssignmentRejected;
+  }
+
+  if (
+      errorCode == "method_not_allowed" ||
+      errorCode == "invalid_json" ||
+      errorCode == "invalid_request" ||
+      errorCode == "invalid_assignment_id" ||
+      errorCode == "invalid_client_id" ||
+      errorCode == "invalid_exit_code" ||
+      errorCode == "invalid_status" ||
+      errorCode == "invalid_completed_exit_code" ||
+      errorCode == "invalid_final_exit_code" ||
+      errorCode == "invalid_keys_checked") {
+    return
+        AssignmentUploadStatus::
+            PermanentFailure;
+  }
+
+  return
+      AssignmentUploadStatus::
+          TemporaryFailure;
+}
+
+ExecutionSyncResult
+ExecutionSyncService::tick(
+    const std::string& serverUrl) const {
+  ExecutionSyncResult result;
+
+  const auto state =
+      ClientStateStore::load();
+
+  if (!state) {
+    return result;
+  }
+
+  result.hasState = true;
+  result.state = *state;
+
+  result.running =
+      processExists(
+          state->pid);
+
+  const auto detectedSolution =
+      solutionFile(
+          state->workspace);
+
+  if (detectedSolution) {
+    result.solutionFound = true;
+    result.solutionPath =
+        *detectedSolution;
+
+    /*
+     * Não finalizar, remover estado, ler nem
+     * transmitir o conteúdo de found.txt.
+     */
+    return result;
+  }
+
+  if (result.running) {
+    ExecutionProgress progress;
+
+    if (!readLatestProgress(
+            state->workspace,
+            progress)) {
+      return result;
+    }
+
+    result.hasProgress = true;
+    result.progress = progress;
+
+    HttpRangeClient httpClient(
+        serverUrl);
+
+    result.progressUploaded =
+        httpClient.progress(
+            state->assignmentId,
+            state->clientId,
+            progress.speedMKeys,
+            progress.keysChecked);
+
+    if (result.progressUploaded) {
+      result.progressStatus =
+          AssignmentUploadStatus::Uploaded;
+    } else {
+      result.progressStatus =
+          classifyProgressError(
+              httpClient.lastErrorCode());
+
+      result.progressError =
+          httpClient.lastError();
+    }
+
+    return result;
+  }
+
+  int exitCode = 0;
+
+  if (!readExitCode(
+          state->workspace,
+          exitCode)) {
+    return result;
+  }
+
+  result.hasExitCode = true;
+  result.exitCode = exitCode;
+
+  const std::string finalStatus =
+      exitCode == 0
+          ? "completed"
+          : "failed";
+
+  HttpRangeClient httpClient(
+      serverUrl);
+
+  const auto finalProgress =
+      latestProgress(
+          state->workspace);
+
+  const std::string finalKeysChecked =
+      finalProgress
+          ? finalProgress->keysChecked
+          : "";
+
+  result.completionUploaded =
+      httpClient.complete(
+          state->assignmentId,
+          state->clientId,
+          exitCode,
+          finalStatus,
+          finalKeysChecked);
+
+  if (!result.completionUploaded) {
+    result.completionStatus =
+        classifyCompletionError(
+            httpClient.lastErrorCode());
+
+    result.completionError =
+        httpClient.lastError();
+
+    if (
+        result.completionStatus ==
+        AssignmentUploadStatus::
+            AssignmentRejected) {
+      result.stateRemoved =
+          ClientStateStore::remove();
+
+      if (!result.stateRemoved) {
+        result.completionError +=
+            "; Unable to remove local "
+            "execution state";
+      }
+    }
+
+    return result;
+  }
+
+  result.completionStatus =
+      AssignmentUploadStatus::Uploaded;
+
+  result.stateRemoved =
+      ClientStateStore::remove();
+
+  if (!result.stateRemoved) {
+    result.completionError =
+        "Unable to remove local execution state";
+  }
+
+  return result;
+}
+
+} // namespace openpuzzle::client
