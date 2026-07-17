@@ -211,6 +211,29 @@ Implemented:
 
 ------------------------------------------------------------------------
 
+## Continuous client
+
+The client can run autonomously:
+
+```bash
+OpenPuzzle run
+OpenPuzzle run 71
+OpenPuzzle status
+OpenPuzzle stop
+```
+
+It requests random non-overlapping assignments, uploads progress, renews
+leases, recovers interrupted sessions and continues with new work.
+
+Potential solutions remain strictly local. OpenPuzzle stops execution and
+preserves the private `found.txt` workspace without printing or uploading its
+contents.
+
+See [Continuous Client Runtime](docs/CLIENT_RUNTIME.md) for lifecycle,
+recovery, cancellation and security details.
+
+------------------------------------------------------------------------
+
 ## Roadmap
 
 ### 0.50
