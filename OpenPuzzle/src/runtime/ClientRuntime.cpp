@@ -75,19 +75,24 @@ ClientRuntime::productionDependencies() {
         client::HttpRangeClient httpClient(
             serverUrl);
 
-        const bool result =
-            httpClient.complete(
+        if (httpClient.complete(
                 assignmentId,
                 clientId,
                 exitCode,
                 status,
-                keysChecked);
-
-        if (!result) {
-          error = httpClient.lastError();
+                keysChecked)) {
+          return
+              client::AssignmentUploadStatus::
+                  Uploaded;
         }
 
-        return result;
+        error =
+            httpClient.lastError();
+
+        return
+            client::ExecutionSyncService::
+                classifyCompletionError(
+                    httpClient.lastErrorCode());
       };
 
   dependencies.finalKeysChecked =
@@ -300,19 +305,43 @@ int ClientRuntime::run(
 
       std::string cancellationError;
 
-      if (!dependencies_.finalizeAssignment(
-              serverUrl,
-              assignmentId,
-              clientId,
-              -2,
-              "cancelled",
-              finalKeysChecked,
-              cancellationError)) {
+      client::AssignmentUploadStatus
+          cancellationStatus =
+              client::AssignmentUploadStatus::
+                  NotAttempted;
+
+      if (
+          finalSync.progressStatus ==
+          client::AssignmentUploadStatus::
+              AssignmentRejected) {
+        cancellationStatus =
+            client::AssignmentUploadStatus::
+                AssignmentRejected;
+      } else {
+        cancellationStatus =
+            dependencies_.finalizeAssignment(
+                serverUrl,
+                assignmentId,
+                clientId,
+                -2,
+                "cancelled",
+                finalKeysChecked,
+                cancellationError);
+      }
+
+      if (
+          cancellationStatus !=
+              client::AssignmentUploadStatus::
+                  Uploaded &&
+          cancellationStatus !=
+              client::AssignmentUploadStatus::
+                  AssignmentRejected) {
         std::cerr
             << "Cancellation upload failed.\n"
             << "Reason............. "
             << cancellationError
-            << '\n';
+            << '\n'
+            << "Local state retained for retry.\n";
 
         return 1;
       }
@@ -326,7 +355,15 @@ int ClientRuntime::run(
       }
 
       std::cout
-          << "Assignment......... cancelled\n"
+          << "Assignment......... "
+          << (
+                 cancellationStatus ==
+                         client::
+                             AssignmentUploadStatus::
+                                 Uploaded
+                     ? "cancelled"
+                     : "already rejected")
+          << '\n'
           << "Goodbye.\n";
 
       return 0;
@@ -511,7 +548,8 @@ int ClientRuntime::run(
 
       std::string failureError;
 
-      if (!dependencies_.finalizeAssignment(
+      const auto failureStatus =
+          dependencies_.finalizeAssignment(
               serverUrl,
               assignmentId,
               clientId,
@@ -519,7 +557,15 @@ int ClientRuntime::run(
               "failed",
               dependencies_.finalKeysChecked(
                   workspace),
-              failureError)) {
+              failureError);
+
+      if (
+          failureStatus !=
+              client::AssignmentUploadStatus::
+                  Uploaded &&
+          failureStatus !=
+              client::AssignmentUploadStatus::
+                  AssignmentRejected) {
         std::cerr
             << "Failure upload..... failed\n"
             << "Reason............. "
@@ -539,7 +585,15 @@ int ClientRuntime::run(
       }
 
       std::cerr
-          << "Failure upload..... uploaded\n"
+          << "Failure upload..... "
+          << (
+                 failureStatus ==
+                         client::
+                             AssignmentUploadStatus::
+                                 Uploaded
+                     ? "uploaded"
+                     : "rejected by server")
+          << '\n'
           << "Local state........ removed\n";
 
       return 1;

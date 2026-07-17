@@ -39,7 +39,9 @@ ClientRuntimeDependencies makeDependencies() {
          const std::string &,
          const std::string &,
          std::string &) {
-        return true;
+        return
+            client::AssignmentUploadStatus::
+                Uploaded;
       };
 
   dependencies.finalKeysChecked =
@@ -222,7 +224,10 @@ int main() {
           assert(status == "cancelled");
           assert(keysChecked == "2500000");
           cancelled = true;
-          return true;
+
+          return
+              client::AssignmentUploadStatus::
+                  Uploaded;
         };
 
     dependencies.removeState =
@@ -282,7 +287,10 @@ int main() {
           assert(keysChecked == "2500000");
 
           failureUploaded = true;
-          return true;
+
+          return
+              client::AssignmentUploadStatus::
+                  Uploaded;
         };
 
     dependencies.removeState =
@@ -353,6 +361,146 @@ int main() {
 
     assert(syncCalls == 2);
     assert(sleepCalls == 60);
+  }
+
+  /*
+   * O progresso final indica que a atribuição
+   * já foi rejeitada. Não deve enviar novamente
+   * o cancelamento.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    bool stopped = false;
+    bool finalized = false;
+    bool stateRemoved = false;
+
+    dependencies.stopRequested =
+        [] {
+          return true;
+        };
+
+    dependencies.sync =
+        [](const std::string &) {
+          client::ExecutionSyncResult result;
+          result.hasState = true;
+          result.running = true;
+          result.hasProgress = true;
+          result.progressUploaded = false;
+          result.progressStatus =
+              client::AssignmentUploadStatus::
+                  AssignmentRejected;
+          result.progressError =
+              "Assignment lease has expired";
+          return result;
+        };
+
+    dependencies.stopExecution =
+        [&](const std::string &) {
+          stopped = true;
+          return true;
+        };
+
+    dependencies.finalizeAssignment =
+        [&](const std::string &,
+            const std::string &,
+            const std::string &,
+            int,
+            const std::string &,
+            const std::string &,
+            std::string &) {
+          finalized = true;
+
+          return
+              client::AssignmentUploadStatus::
+                  Uploaded;
+        };
+
+    dependencies.removeState =
+        [&] {
+          stateRemoved = true;
+          return true;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    assert(
+        runtime.run(
+            "https://server.test",
+            "assignment-stop-rejected",
+            "client-stop-rejected",
+            "/tmp/workspace-stop-rejected") == 0);
+
+    assert(stopped);
+    assert(!finalized);
+    assert(stateRemoved);
+  }
+
+  /*
+   * A atribuição pode ser rejeitada entre o
+   * progresso final e o pedido de cancelamento.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    bool stopped = false;
+    bool stateRemoved = false;
+
+    dependencies.stopRequested =
+        [] {
+          return true;
+        };
+
+    dependencies.sync =
+        [](const std::string &) {
+          client::ExecutionSyncResult result;
+          result.hasState = true;
+          return result;
+        };
+
+    dependencies.stopExecution =
+        [&](const std::string &) {
+          stopped = true;
+          return true;
+        };
+
+    dependencies.finalizeAssignment =
+        [](const std::string &,
+           const std::string &,
+           const std::string &,
+           int,
+           const std::string &,
+           const std::string &,
+           std::string &error) {
+          error =
+              "Assignment is not assigned";
+
+          return
+              client::AssignmentUploadStatus::
+                  AssignmentRejected;
+        };
+
+    dependencies.removeState =
+        [&] {
+          stateRemoved = true;
+          return true;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    assert(
+        runtime.run(
+            "https://server.test",
+            "assignment-stop-race",
+            "client-stop-race",
+            "/tmp/workspace-stop-race") == 0);
+
+    assert(stopped);
+    assert(stateRemoved);
   }
 
   /*

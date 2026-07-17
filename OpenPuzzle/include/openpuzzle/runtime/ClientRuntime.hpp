@@ -64,14 +64,16 @@ struct ClientRuntimeDependencies {
   std::function<bool(
       const std::string &workspace)> stopExecution;
 
-  std::function<bool(
-      const std::string &serverUrl,
-      const std::string &assignmentId,
-      const std::string &clientId,
-      int exitCode,
-      const std::string &status,
-      const std::string &keysChecked,
-      std::string &error)> finalizeAssignment;
+  std::function<
+      client::AssignmentUploadStatus(
+          const std::string &serverUrl,
+          const std::string &assignmentId,
+          const std::string &clientId,
+          int exitCode,
+          const std::string &status,
+          const std::string &keysChecked,
+          std::string &error)>
+      finalizeAssignment;
 
   std::function<std::string(
       const std::string &workspace)>
