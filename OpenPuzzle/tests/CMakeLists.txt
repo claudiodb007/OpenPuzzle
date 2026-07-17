@@ -1134,3 +1134,20 @@ if(PHP_EXECUTABLE)
             ${CMAKE_SOURCE_DIR}/server/tests/solutions/SolutionReportRequestTests.php
     )
 endif()
+
+
+add_executable(
+    ApplicationCliTests
+    core/ApplicationCliTests.cpp
+)
+
+target_link_libraries(
+    ApplicationCliTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ApplicationCliTests
+    COMMAND ApplicationCliTests
+)

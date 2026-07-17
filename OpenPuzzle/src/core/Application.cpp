@@ -90,10 +90,78 @@ int Application::getIntArg(const std::vector<std::string> &a,
   auto s = getArg(a, n, "");
   return s.empty() ? d : std::stoi(s);
 }
+static void printApplicationHelp() {
+  std::cout
+      << "OpenPuzzle\n"
+      << "----------\n"
+      << "Usage:\n"
+      << "  OpenPuzzle [puzzle] [run options]\n"
+      << "  OpenPuzzle run [puzzle] [run options]\n"
+      << "  OpenPuzzle status\n"
+      << "  OpenPuzzle stop\n"
+      << "\n"
+      << "Global options:\n"
+      << "  -h, --help       Show this help\n"
+      << "  -V, --version    Show program version\n"
+      << "\n"
+      << "Run options:\n"
+      << "  --once           Execute one assignment\n"
+      << "  --dry-run        Show local configuration only\n"
+      << "  --server URL     Select the coordination server\n"
+      << "  --duration-minutes N\n"
+      << "                   Target assignment duration\n";
+}
+
+static void printApplicationVersion() {
+#ifdef OPENPUZZLE_VERSION
+  std::cout
+      << "OpenPuzzle "
+      << OPENPUZZLE_VERSION
+      << '\n';
+#else
+  std::cout
+      << "OpenPuzzle development\n";
+#endif
+}
+
 int Application::run(int argc, char **argv) {
   std::vector<std::string> args;
   for (int i = 1; i < argc; ++i)
     args.emplace_back(argv[i]);
+
+  /*
+   * Informational options are strictly local.
+   *
+   * They are handled before automatic run routing
+   * and must never initialize the client, contact
+   * the server, claim work or start an engine.
+   */
+  if (
+      hasArg(args, "--help") ||
+      hasArg(args, "-h") ||
+      (
+          !args.empty() &&
+          args.front() == "help"
+      )
+  ) {
+    printApplicationHelp();
+
+    return 0;
+  }
+
+  if (
+      hasArg(args, "--version") ||
+      hasArg(args, "-V") ||
+      (
+          !args.empty() &&
+          args.front() == "version"
+      )
+  ) {
+    printApplicationVersion();
+
+    return 0;
+  }
+
   /*
    * Interface principal:
    *
