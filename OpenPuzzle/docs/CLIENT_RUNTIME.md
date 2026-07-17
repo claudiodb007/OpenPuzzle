@@ -118,6 +118,7 @@ When detected, OpenPuzzle:
 - stops the engine if it is still active;
 - preserves `client.state`, `found.txt` and the entire workspace;
 - displays only the solution file path;
+- submits only `assignment_id` and the anonymous `client_id` for review;
 - does not read, print or upload the private key;
 - prevents `OpenPuzzle stop` from deleting the preserved solution.
 
@@ -125,8 +126,26 @@ The operator should make a secure offline backup and verify the result with a
 trusted offline tool. Never paste a private key into a website, chat, issue,
 log or untrusted application.
 
-Automatic server-side solution proof and verification are intentionally
-separate from the normal progress and completion endpoints.
+The metadata-only report is stored as `pending`. It does not complete the
+assignment, change range allocation, stop the scheduler or mark the puzzle as
+solved. Repeated reports for the same assignment are idempotent.
+
+The report endpoint accepts exactly two fields:
+
+```json
+{
+  "assignment_id": "<assignment UUID>",
+  "client_id": "<anonymous client UUID>"
+}
+```
+
+Private keys, solution contents, filesystem paths and raw engine output are
+rejected by the server.
+
+An operator must independently verify a potential solution using trusted
+offline tooling and public blockchain data. A report may then be marked
+`verified` or `rejected`. Marking a puzzle as solved remains a distinct
+administrative action and is never triggered automatically by a client report.
 
 ## Filesystem protection
 

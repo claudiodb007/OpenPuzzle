@@ -226,8 +226,10 @@ It requests random non-overlapping assignments, uploads progress, renews
 leases, recovers interrupted sessions and continues with new work.
 
 Potential solutions remain strictly local. OpenPuzzle stops execution and
-preserves the private `found.txt` workspace without printing or uploading its
-contents.
+preserves the private `found.txt` workspace without reading, printing or
+uploading its contents. It submits only the assignment UUID and anonymous
+client UUID as a pending report for independent review. A report never marks a
+puzzle as solved automatically.
 
 See [Continuous Client Runtime](docs/CLIENT_RUNTIME.md) for lifecycle,
 recovery, cancellation and security details.
