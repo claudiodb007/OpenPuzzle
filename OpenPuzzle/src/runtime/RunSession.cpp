@@ -532,6 +532,26 @@ ClientIterationResult RunSession::runOnce(
       const auto recovery =
           syncService.tick(server);
 
+      if (recovery.solutionFound) {
+        std::cout
+            << "\n"
+            << "SOLUTION FOUND\n"
+            << "--------------\n"
+            << "Solution file...... "
+            << recovery.solutionPath
+            << '\n'
+            << "Workspace.......... "
+            << existing->workspace
+            << '\n'
+            << "Local state........ preserved\n"
+            << "The private key was not read "
+            << "or uploaded by OpenPuzzle.\n";
+
+        return
+            ClientIterationResult::
+                solutionFound();
+      }
+
       if (!recovery.hasExitCode) {
         return ClientIterationResult::retry(
             "Execution stopped but exit.code "
