@@ -80,3 +80,43 @@ report had already been reviewed. Inspect the final `SELECT` before taking
 further action.
 
 Do not force an update by removing the `status = 'pending'` condition.
+
+## Mark a verified puzzle as solved
+
+This is a separate, final administrative operation. Perform it only after the
+report is `verified` and a public Bitcoin transaction independently confirms
+the solution.
+
+Open:
+
+```text
+server/database/operations/mark_verified_puzzle_solved.sql
+```
+
+Replace only:
+
+- `REPLACE_WITH_VERIFIED_REPORT_UUID`;
+- `REPLACE_WITH_64_CHARACTER_BITCOIN_TXID`.
+
+Then execute the complete transaction in phpMyAdmin.
+
+The operation proceeds only when the report exists, is `verified`, the puzzle
+is not already solved and the TXID contains exactly 64 hexadecimal
+characters.
+
+A successful result contains:
+
+```text
+puzzles_marked_solved = 1
+```
+
+The operation sets `solved`, `solved_at` and `solved_txid`. It leaves `active`
+unchanged so the solved puzzle remains available for public historical
+display.
+
+Assigned ranges for that puzzle are changed to `cancelled` and their leases
+are cleared. This makes active clients stop safely when their next progress
+request is rejected. Completed ranges and historical coverage are preserved.
+
+If `puzzles_marked_solved` is zero, do not remove any safety condition. Check
+the report UUID, report status and TXID before attempting the operation again.
