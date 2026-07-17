@@ -1,5 +1,7 @@
 #include "openpuzzle/client/ClientStateStore.hpp"
 
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -140,8 +142,12 @@ bool ClientStateStore::save(
   const auto statePath =
       path();
 
-  std::filesystem::create_directories(
-      statePath.parent_path());
+  try {
+    WorkspaceSecurity::prepare(
+        statePath.parent_path());
+  } catch (...) {
+    return false;
+  }
 
   const auto temporaryPath =
       statePath.string() +
@@ -152,6 +158,18 @@ bool ClientStateStore::save(
       std::ios::trunc);
 
   if (!output) {
+    return false;
+  }
+
+  try {
+    WorkspaceSecurity::protectFile(
+        temporaryPath);
+  } catch (...) {
+    output.close();
+
+    std::filesystem::remove(
+        temporaryPath);
+
     return false;
   }
 
@@ -248,8 +266,24 @@ bool ClientStateStore::save(
 
 std::optional<ClientExecutionState>
 ClientStateStore::load() {
+  const auto statePath =
+      path();
+
+  try {
+    WorkspaceSecurity::prepare(
+        statePath.parent_path());
+
+    if (std::filesystem::is_regular_file(
+            statePath)) {
+      WorkspaceSecurity::protectFile(
+          statePath);
+    }
+  } catch (...) {
+    return std::nullopt;
+  }
+
   std::ifstream input(
-      path());
+      statePath);
 
   if (!input) {
     return std::nullopt;

@@ -1,5 +1,7 @@
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+
 #include <cerrno>
 #include <csignal>
 #include <cstdlib>
@@ -73,11 +75,10 @@ bool ClientRuntimeControl::acquire() {
 
   std::error_code error;
 
-  std::filesystem::create_directories(
-      path.parent_path(),
-      error);
-
-  if (error) {
+  try {
+    WorkspaceSecurity::prepare(
+        path.parent_path());
+  } catch (...) {
     return false;
   }
 
@@ -90,7 +91,7 @@ bool ClientRuntimeControl::acquire() {
             O_WRONLY |
                 O_CREAT |
                 O_EXCL,
-            0644);
+            0600);
 
     if (descriptor >= 0) {
       const std::string value =

@@ -1,10 +1,35 @@
 #include "openpuzzle/database/Database.hpp"
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+#include <filesystem>
 #include <iostream>
 namespace openpuzzle {
 Database::~Database() { close(); }
 bool Database::open(const std::string &path) {
   close();
-  return sqlite3_open(path.c_str(), &db_) == SQLITE_OK;
+
+  if (
+      sqlite3_open(
+          path.c_str(),
+          &db_) != SQLITE_OK) {
+    close();
+
+    return false;
+  }
+
+  if (path == ":memory:") {
+    return true;
+  }
+
+  try {
+    WorkspaceSecurity::protectFile(
+        std::filesystem::path(path));
+  } catch (...) {
+    close();
+
+    return false;
+  }
+
+  return true;
 }
 void Database::close() {
   if (db_) {

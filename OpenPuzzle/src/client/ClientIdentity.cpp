@@ -1,5 +1,7 @@
 #include "openpuzzle/client/ClientIdentity.hpp"
 
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -84,6 +86,19 @@ std::string ClientIdentity::loadOrCreate() {
   const auto path =
       identityPath();
 
+  try {
+    WorkspaceSecurity::prepare(
+        path.parent_path());
+
+    if (std::filesystem::is_regular_file(
+            path)) {
+      WorkspaceSecurity::protectFile(
+          path);
+    }
+  } catch (...) {
+    return {};
+  }
+
   {
     std::ifstream input(path);
 
@@ -101,12 +116,18 @@ std::string ClientIdentity::loadOrCreate() {
   const std::string identity =
       generateUuid();
 
-  std::filesystem::create_directories(
-      path.parent_path());
-
-  std::ofstream output(path);
+  std::ofstream output(
+      path,
+      std::ios::trunc);
 
   if (!output) {
+    return {};
+  }
+
+  try {
+    WorkspaceSecurity::protectFile(
+        path);
+  } catch (...) {
     return {};
   }
 
@@ -114,7 +135,11 @@ std::string ClientIdentity::loadOrCreate() {
       << identity
       << '\n';
 
-  return identity;
+  output.close();
+
+  return output
+             ? identity
+             : std::string{};
 }
 
 } // namespace openpuzzle::client

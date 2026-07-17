@@ -1,4 +1,6 @@
 #include "openpuzzle/core/Application.hpp"
+
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/adapters/bitcrack/BitCrackOutputParser.hpp"
 #include "openpuzzle/allocator/RangeAllocator.hpp"
 #include "openpuzzle/core/EventBus.hpp"
@@ -60,7 +62,10 @@ std::string Application::dbPath() const {
   const char *h = getenv("HOME");
   fs::path p = h ? fs::path(h) : fs::current_path();
   p /= ".local/share/OpenPuzzle/openpuzzle.db";
-  fs::create_directories(p.parent_path());
+
+  WorkspaceSecurity::prepare(
+      p.parent_path());
+
   return p.string();
 }
 bool Application::ensureDb(Database &db) {

@@ -1,5 +1,7 @@
 #include "openpuzzle/config/ConfigurationManager.hpp"
 
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -109,7 +111,25 @@ std::string ConfigurationManager::configPath() {
 Configuration ConfigurationManager::load() {
   Configuration config;
 
-  const auto text = readFile(configPath());
+  const fs::path path =
+      configPath();
+
+  try {
+    WorkspaceSecurity::prepare(
+        path.parent_path());
+
+    if (fs::is_regular_file(
+            path)) {
+      WorkspaceSecurity::protectFile(
+          path);
+    }
+  } catch (...) {
+    return config;
+  }
+
+  const auto text =
+      readFile(
+          path.string());
 
   if (text.empty()) {
     return config;
@@ -157,11 +177,25 @@ Configuration ConfigurationManager::load() {
 bool ConfigurationManager::save(const Configuration &config) {
   const fs::path path = configPath();
 
-  fs::create_directories(path.parent_path());
+  try {
+    WorkspaceSecurity::prepare(
+        path.parent_path());
+  } catch (...) {
+    return false;
+  }
 
-  std::ofstream output(path);
+  std::ofstream output(
+      path,
+      std::ios::trunc);
 
   if (!output) {
+    return false;
+  }
+
+  try {
+    WorkspaceSecurity::protectFile(
+        path);
+  } catch (...) {
     return false;
   }
 
@@ -186,7 +220,10 @@ bool ConfigurationManager::save(const Configuration &config) {
          << "  }\n"
          << "}\n";
 
-  return true;
+  output.close();
+
+  return static_cast<bool>(
+      output);
 }
 
 } // namespace openpuzzle

@@ -1107,3 +1107,20 @@ add_test(
     NAME WorkspaceSecurityTests
     COMMAND WorkspaceSecurityTests
 )
+
+
+add_executable(
+    LocalStorageSecurityTests
+    runtime/LocalStorageSecurityTests.cpp
+)
+
+target_link_libraries(
+    LocalStorageSecurityTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME LocalStorageSecurityTests
+    COMMAND LocalStorageSecurityTests
+)
