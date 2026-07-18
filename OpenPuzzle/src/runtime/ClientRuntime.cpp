@@ -177,6 +177,7 @@ bool ClientRuntime::sleepInterruptibly(
 }
 
 int ClientRuntime::runContinuous(
+    const std::string &serverUrl,
     const std::function<ClientIterationResult()> &
         executeAssignment) const {
   if (!dependencies_.acquireRuntime()) {
@@ -205,11 +206,52 @@ int ClientRuntime::runContinuous(
   constexpr auto retryInterval =
       std::chrono::seconds(30);
 
+  /*
+   * Depois de uma atribuição terminar, o estado
+   * local é removido e o heartbeat passa a anunciar
+   * o cliente como idle.
+   *
+   * O servidor deve confirmar essa disponibilidade
+   * antes de o runtime pedir a atribuição seguinte.
+   */
+  bool availabilityHeartbeatRequired = false;
+
   while (true) {
     if (dependencies_.stopRequested()) {
       std::cout << "OpenPuzzle stopped.\n";
 
       return 0;
+    }
+
+    if (availabilityHeartbeatRequired) {
+      const auto heartbeat =
+          dependencies_.heartbeat(
+              serverUrl);
+
+      if (!heartbeat.success) {
+        std::cerr
+            << "Availability heartbeat failed.\n";
+
+        if (!heartbeat.error.empty()) {
+          std::cerr
+              << "Reason............. "
+              << heartbeat.error
+              << '\n';
+        }
+
+        std::cerr
+            << "Retrying........... in 30 seconds\n";
+
+        sleepInterruptibly(
+            retryInterval);
+
+        continue;
+      }
+
+      availabilityHeartbeatRequired = false;
+
+      std::cout
+          << "Client status....... idle\n";
     }
 
     const auto result =
@@ -225,8 +267,14 @@ int ClientRuntime::runContinuous(
 
     switch (result.status) {
     case ClientIterationStatus::Completed:
+      /*
+       * A conclusão remove client.state. O próximo
+       * heartbeat será portanto recolhido como idle.
+       */
+      availabilityHeartbeatRequired = true;
+
       std::cout
-          << "\nRequesting next assignment...\n";
+          << "\nPreparing next assignment...\n";
 
       continue;
 

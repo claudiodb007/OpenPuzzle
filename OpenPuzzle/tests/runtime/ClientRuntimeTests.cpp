@@ -666,6 +666,81 @@ int main() {
   }
 
   /*
+   * Depois de concluir uma atribuição, o runtime
+   * deve confirmar o heartbeat idle antes de chamar
+   * novamente o código que pede trabalho.
+   *
+   * Uma falha temporária repete apenas o heartbeat;
+   * não pode provocar outro claim prematuro.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    int executions = 0;
+    int heartbeatCalls = 0;
+    int sleepCalls = 0;
+    bool idleConfirmed = false;
+
+    dependencies.heartbeat =
+        [&](const std::string &server) {
+          assert(
+              server ==
+              "https://server.test");
+
+          ++heartbeatCalls;
+
+          client::ClientHeartbeatResult result;
+
+          if (heartbeatCalls == 1) {
+            result.success = false;
+            result.error =
+                "temporary heartbeat failure";
+          } else {
+            result.success = true;
+            idleConfirmed = true;
+          }
+
+          return result;
+        };
+
+    dependencies.sleep =
+        [&](std::chrono::seconds duration) {
+          assert(
+              duration ==
+              std::chrono::seconds(1));
+
+          ++sleepCalls;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    const int result =
+        runtime.runContinuous(
+            "https://server.test",
+            [&] {
+              ++executions;
+
+              if (executions == 1) {
+                return
+                    ClientIterationResult{};
+              }
+
+              assert(idleConfirmed);
+
+              return
+                  ClientIterationResult::
+                      solutionFound();
+            });
+
+    assert(result == 0);
+    assert(executions == 2);
+    assert(heartbeatCalls == 2);
+    assert(sleepCalls == 30);
+  }
+
+  /*
    * O ciclo contínuo termina normalmente quando
    * uma iteração comunica solução encontrada.
    */
@@ -680,6 +755,7 @@ int main() {
 
     const int result =
         runtime.runContinuous(
+            "https://server.test",
             [&] {
               ++executions;
 
@@ -912,6 +988,7 @@ int main() {
 
     const int result =
         runtime.runContinuous(
+            "https://server.test",
             [&] {
               ++executions;
               return ClientIterationResult{};
@@ -951,6 +1028,7 @@ int main() {
 
     const int result =
         runtime.runContinuous(
+            "https://server.test",
             [&] {
               ++executions;
 
@@ -980,6 +1058,7 @@ int main() {
 
     const int result =
         runtime.runContinuous(
+            "https://server.test",
             [] {
               return ClientIterationResult(7);
             });

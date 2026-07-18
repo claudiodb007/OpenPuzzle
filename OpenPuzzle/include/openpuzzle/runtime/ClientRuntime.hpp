@@ -120,6 +120,7 @@ public:
       ClientRuntimeDependencies dependencies);
 
   int runContinuous(
+      const std::string &serverUrl,
       const std::function<ClientIterationResult()> &
           executeAssignment) const;
 

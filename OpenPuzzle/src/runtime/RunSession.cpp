@@ -447,6 +447,7 @@ int RunSession::run(
   bool initializeClient = true;
 
   return runtime.runContinuous(
+      serverUrl(args),
       [this, &args, &initializeClient] {
         const auto result =
             runOnce(
