@@ -168,8 +168,38 @@ install(
     DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
 )
 
-set(CPACK_GENERATOR "TGZ")
+set(CPACK_GENERATOR "TGZ;DEB")
 set(CPACK_PACKAGE_NAME "OpenPuzzle")
+
+# Debian/Ubuntu package metadata.
+#
+# curl is currently used by the HTTP client process.
+# ca-certificates validates the HTTPS connection.
+# Shared library dependencies are detected by dpkg-shlibdeps.
+set(
+    CPACK_DEBIAN_PACKAGE_DEPENDS
+    "curl, ca-certificates"
+)
+set(
+    CPACK_DEBIAN_PACKAGE_MAINTAINER
+    "OpenPuzzle Project"
+)
+set(
+    CPACK_DEBIAN_PACKAGE_HOMEPAGE
+    "https://claudiodb.com"
+)
+set(
+    CPACK_DEBIAN_PACKAGE_SECTION
+    "utils"
+)
+set(
+    CPACK_DEBIAN_PACKAGE_PRIORITY
+    "optional"
+)
+set(
+    CPACK_DEBIAN_PACKAGE_SHLIBDEPS
+    ON
+)
 set(CPACK_PACKAGE_VENDOR "OpenPuzzle")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(
