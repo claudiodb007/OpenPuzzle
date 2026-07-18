@@ -20,9 +20,17 @@ BenchmarkRunner::run(const BenchmarkConfiguration &configuration,
       executionResult.success || executionResult.averageSpeed > 0.0;
 
   if (!executionResult.speedSamples.empty()) {
-    const auto startIndex = executionResult.speedSamples.size() > 1
-                                ? std::size_t{1}
-                                : std::size_t{0};
+    /*
+     * Ignore the first two readings while clocks,
+     * temperature and power state stabilize.
+     */
+    const auto startIndex =
+        executionResult.speedSamples.size() > 2
+            ? std::size_t{2}
+            : (
+                  executionResult.speedSamples.size() > 1
+                      ? std::size_t{1}
+                      : std::size_t{0});
 
     double sum = 0.0;
 

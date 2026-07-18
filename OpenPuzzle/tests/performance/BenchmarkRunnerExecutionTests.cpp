@@ -25,21 +25,33 @@ int main() {
   ctx.rangeId = 1001;
   ctx.engine = "BitCrack";
   ctx.workspace = temp.string();
-  ctx.command = "printf 'NVIDIA GeForce R 7918 / 11873MB | 1 target 1345.81 "
-                "MKey/s (104,958,263,296 total) [00:01:18]\\n'";
+  ctx.command =
+      "printf '"
+      "GPU | 900.00 MKey/s (1,000 total) [00:00:01]\\n"
+      "GPU | 1000.00 MKey/s (2,000 total) [00:00:02]\\n"
+      "GPU | 1300.00 MKey/s (3,000 total) [00:00:03]\\n"
+      "GPU | 1320.00 MKey/s (4,000 total) [00:00:04]\\n"
+      "GPU | 1280.00 MKey/s (5,000 total) [00:00:05]\\n"
+      "'";
   ctx.echoOutput = false;
 
   BenchmarkRunner runner;
-  auto result = runner.run(cfg, ctx, 5);
+  auto result = runner.run(cfg, ctx, 5, 5);
 
   if (!result.success)
     return 1;
-  if (result.speedMKeys != 1345.81)
+  if (result.speedMKeys != 1300.0)
     return 2;
-  if (result.configuration.blocks != 256)
+  if (result.minimumSpeed != 1280.0)
     return 3;
-  if (result.configuration.points != 1024)
+  if (result.maximumSpeed != 1320.0)
     return 4;
+  if (result.samples != 3)
+    return 5;
+  if (result.configuration.blocks != 256)
+    return 6;
+  if (result.configuration.points != 1024)
+    return 7;
 
   std::filesystem::remove_all(temp);
 

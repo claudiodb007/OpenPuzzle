@@ -1146,3 +1146,18 @@ add_test(
     NAME ApplicationCliTests
     COMMAND ApplicationCliTests
 )
+
+
+add_executable(GpuManagerTests
+    hardware/GpuManagerTests.cpp
+)
+
+target_link_libraries(GpuManagerTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME GpuManagerTests
+    COMMAND GpuManagerTests
+)

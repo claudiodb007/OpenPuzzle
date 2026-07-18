@@ -13,6 +13,7 @@
 - Added BitCrack execution monitoring and progress parsing.
 - Added Release-build test coverage for the public client.
 - Prepared a client-only source and binary distribution.
+- Added a safe, repeatable and stability-aware GPU benchmark.
 
 ## 0.10-dev — Foundation/Core
 
