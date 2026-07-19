@@ -113,6 +113,14 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
         backend);
   }
 
+  if (backend !=
+      ToolManager::bundledBackend()) {
+    throw std::runtime_error(
+        "This OpenPuzzle package only supports the " +
+        ToolManager::bundledBackend() +
+        " backend");
+  }
+
   const std::string backendLabel =
       backend == "opencl"
           ? "OpenCL"
@@ -188,46 +196,48 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
         *bitcrack);
   }
 
+  /*
+   * A public client starts with an empty local
+   * database. Benchmark execution must therefore
+   * never depend on puzzle, job or range records.
+   *
+   * The synthetic target has private key 1 while
+   * the benchmark starts at key 2. Consequently,
+   * no private key can be produced.
+   */
   Database &db = context.db;
 
-  auto puzzle = db.getPuzzleByNumber(getIntArg(args, "--puzzle", 71));
-  auto job = db.getJob(getIntArg(args, "--job", 1));
-
-  if (!puzzle || !job)
-    throw std::runtime_error("Puzzle/job not found");
-
-  auto range = db.getRange(job->rangeId);
-
-  if (!range)
-    throw std::runtime_error("Range not found");
-
-  /*
-   * Benchmark target with private key 1.
-   *
-   * The benchmark keyspace starts at 2, therefore
-   * the known key cannot be found and no private
-   * material can be produced by the benchmark.
-   */
-  PuzzleRecord benchmarkPuzzle = *puzzle;
+  PuzzleRecord benchmarkPuzzle{};
   benchmarkPuzzle.address =
       "1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH";
 
-  RangeRecord benchmarkRange = *range;
+  RangeRecord benchmarkRange{};
   benchmarkRange.startKey = "2";
+
   /*
-   * A 72-bit interval is large enough for any
-   * benchmark duration while remaining within
-   * BitCrack's normal operating range.
+   * A large synthetic interval prevents BitCrack
+   * from reaching the end during benchmarking.
    */
   benchmarkRange.endKey =
       "FFFFFFFFFFFFFFFFFF";
 
   Scheduler &scheduler = context.scheduler;
 
+  const char *home =
+      std::getenv("HOME");
+
+  if (
+      home == nullptr ||
+      *home == '\0') {
+    throw std::runtime_error(
+        "HOME is not available for benchmark workspace");
+  }
+
   const auto workspace =
-      fs::path(
-          scheduler.workspaceForJob(
-              job->id)) /
+      fs::path(home) /
+      ".local" /
+      "share" /
+      "OpenPuzzle" /
       "benchmark";
 
   WorkspaceSecurity::prepare(
@@ -258,9 +268,9 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
 
   ExecutionContext ctx;
   ctx.executionId = 0;
-  ctx.puzzleId = puzzle->id;
-  ctx.jobId = job->id;
-  ctx.rangeId = range->id;
+  ctx.puzzleId = 0;
+  ctx.jobId = 0;
+  ctx.rangeId = 0;
   ctx.engine = "BitCrack";
   ctx.workspace =
       workspace.string();

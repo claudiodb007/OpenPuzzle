@@ -8,6 +8,94 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(SQLite3 REQUIRED)
 
+set(
+    OPENPUZZLE_BUNDLED_BACKEND
+    "opencl"
+    CACHE STRING
+    "Bundled BitCrack backend: opencl or cuda"
+)
+
+set_property(
+    CACHE OPENPUZZLE_BUNDLED_BACKEND
+    PROPERTY STRINGS opencl cuda
+)
+
+if(NOT
+   OPENPUZZLE_BUNDLED_BACKEND STREQUAL "opencl" AND
+   NOT OPENPUZZLE_BUNDLED_BACKEND STREQUAL "cuda")
+    message(FATAL_ERROR
+        "OPENPUZZLE_BUNDLED_BACKEND must be opencl or cuda"
+    )
+endif()
+
+set(
+    OPENPUZZLE_BUNDLED_ENGINE
+    ""
+    CACHE FILEPATH
+    "Vetted OpenPuzzle-BitCrack executable"
+)
+
+if(OPENPUZZLE_BUNDLED_ENGINE STREQUAL "")
+    if(OPENPUZZLE_BUNDLED_BACKEND STREQUAL "opencl")
+        set(_openpuzzle_default_engine
+            "${CMAKE_SOURCE_DIR}/../OpenPuzzle-BitCrack/bin/clBitCrack"
+        )
+    else()
+        set(_openpuzzle_default_engine
+            "${CMAKE_SOURCE_DIR}/../OpenPuzzle-BitCrack/bin/cuBitCrack"
+        )
+    endif()
+
+    set(
+        OPENPUZZLE_BUNDLED_ENGINE
+        "${_openpuzzle_default_engine}"
+        CACHE FILEPATH
+        "Vetted OpenPuzzle-BitCrack executable"
+        FORCE
+    )
+endif()
+
+if(NOT EXISTS "${OPENPUZZLE_BUNDLED_ENGINE}")
+    message(FATAL_ERROR
+        "Bundled OpenPuzzle-BitCrack executable not found: "
+        "${OPENPUZZLE_BUNDLED_ENGINE}"
+    )
+endif()
+
+get_filename_component(
+    OPENPUZZLE_BUNDLED_ENGINE_DIRECTORY
+    "${OPENPUZZLE_BUNDLED_ENGINE}"
+    DIRECTORY
+)
+
+get_filename_component(
+    OPENPUZZLE_BITCRACK_SOURCE_DIRECTORY
+    "${OPENPUZZLE_BUNDLED_ENGINE_DIRECTORY}"
+    DIRECTORY
+)
+
+if(NOT EXISTS
+   "${OPENPUZZLE_BITCRACK_SOURCE_DIRECTORY}/LICENSE.MIT")
+    message(FATAL_ERROR
+        "OpenPuzzle-BitCrack LICENSE was not found: "
+        "${OPENPUZZLE_BITCRACK_SOURCE_DIRECTORY}/LICENSE.MIT"
+    )
+endif()
+
+if(OPENPUZZLE_BUNDLED_BACKEND STREQUAL "opencl")
+    set(OPENPUZZLE_BUNDLED_ENGINE_NAME "clBitCrack")
+    set(OPENPUZZLE_BUNDLED_BACKEND_LABEL "OpenCL")
+    set(OPENPUZZLE_BUNDLED_ENGINE_IDENTITY
+        "OpenPuzzle-BitCrack 1.0.0 OpenCL protocol 1"
+    )
+else()
+    set(OPENPUZZLE_BUNDLED_ENGINE_NAME "cuBitCrack")
+    set(OPENPUZZLE_BUNDLED_BACKEND_LABEL "CUDA")
+    set(OPENPUZZLE_BUNDLED_ENGINE_IDENTITY
+        "OpenPuzzle-BitCrack 1.0.0 CUDA protocol 1"
+    )
+endif()
+
 add_library(OpenPuzzleCore
     src/config/ConfigurationManager.cpp
     src/app/ApplicationContext.cpp
@@ -128,6 +216,33 @@ target_compile_options(OpenPuzzleCore
 target_compile_definitions(OpenPuzzleCore
     PUBLIC
         OPENPUZZLE_VERSION="${PROJECT_VERSION}"
+        OPENPUZZLE_BUNDLED_BACKEND="${OPENPUZZLE_BUNDLED_BACKEND}"
+        OPENPUZZLE_BUNDLED_ENGINE_NAME="${OPENPUZZLE_BUNDLED_ENGINE_NAME}"
+        OPENPUZZLE_BUNDLED_ENGINE_IDENTITY="${OPENPUZZLE_BUNDLED_ENGINE_IDENTITY}"
+)
+
+set(OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY
+    "${CMAKE_BINARY_DIR}/libexec/OpenPuzzle"
+)
+
+set(OPENPUZZLE_BUNDLED_ENGINE_BUILD_PATH
+    "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}/${OPENPUZZLE_BUNDLED_ENGINE_NAME}"
+)
+
+add_custom_command(
+    OUTPUT "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_PATH}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${OPENPUZZLE_BUNDLED_ENGINE}"
+        "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_PATH}"
+    DEPENDS "${OPENPUZZLE_BUNDLED_ENGINE}"
+    VERBATIM
+)
+
+add_custom_target(
+    OpenPuzzleBundledEngine ALL
+    DEPENDS "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_PATH}"
 )
 
 add_executable(OpenPuzzle
@@ -139,6 +254,8 @@ target_link_libraries(OpenPuzzle
         OpenPuzzleCore
 )
 
+add_dependencies(OpenPuzzle OpenPuzzleBundledEngine)
+
 include(CTest)
 enable_testing()
 
@@ -148,9 +265,29 @@ add_subdirectory(tests)
 # OpenPuzzle client installation and packaging
 include(GNUInstallDirs)
 
+set(
+    CMAKE_INSTALL_DEFAULT_DIRECTORY_PERMISSIONS
+    OWNER_READ
+    OWNER_WRITE
+    OWNER_EXECUTE
+    GROUP_READ
+    GROUP_EXECUTE
+    WORLD_READ
+    WORLD_EXECUTE
+)
+
 install(
     TARGETS OpenPuzzle
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(
+    PROGRAMS
+        "${OPENPUZZLE_BUNDLED_ENGINE}"
+    DESTINATION
+        "${CMAKE_INSTALL_LIBEXECDIR}/OpenPuzzle"
+    RENAME
+        "${OPENPUZZLE_BUNDLED_ENGINE_NAME}"
 )
 
 install(
@@ -168,18 +305,74 @@ install(
     DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
 )
 
+install(
+    FILES
+        docs/BUNDLED_ENGINE.md
+    DESTINATION
+        ${CMAKE_INSTALL_DOCDIR}/docs
+)
+
+install(
+    FILES
+        "${OPENPUZZLE_BITCRACK_SOURCE_DIRECTORY}/LICENSE.MIT"
+    DESTINATION
+        ${CMAKE_INSTALL_DOCDIR}/third-party/OpenPuzzle-BitCrack
+    RENAME
+        LICENSE
+)
+
+install(
+    FILES
+        "${OPENPUZZLE_BITCRACK_SOURCE_DIRECTORY}/OPENPUZZLE_PATCHES.md"
+    DESTINATION
+        ${CMAKE_INSTALL_DOCDIR}/third-party/OpenPuzzle-BitCrack
+)
+
 set(CPACK_GENERATOR "TGZ;DEB")
-set(CPACK_PACKAGE_NAME "OpenPuzzle")
+set(CPACK_PACKAGE_NAME
+    "OpenPuzzle-${OPENPUZZLE_BUNDLED_BACKEND_LABEL}"
+)
+set(CPACK_DEBIAN_PACKAGE_NAME
+    "openpuzzle-${OPENPUZZLE_BUNDLED_BACKEND}"
+)
+
+if(OPENPUZZLE_BUNDLED_BACKEND STREQUAL "opencl")
+    set(OPENPUZZLE_OTHER_BACKEND "cuda")
+else()
+    set(OPENPUZZLE_OTHER_BACKEND "opencl")
+endif()
+
+set(
+    CPACK_DEBIAN_PACKAGE_CONFLICTS
+    "openpuzzle, openpuzzle-${OPENPUZZLE_OTHER_BACKEND}"
+)
+
+set(
+    CPACK_DEBIAN_PACKAGE_REPLACES
+    "openpuzzle"
+)
+
+set(
+    CPACK_DEBIAN_PACKAGE_PROVIDES
+    "openpuzzle"
+)
 
 # Debian/Ubuntu package metadata.
 #
 # curl is currently used by the HTTP client process.
 # ca-certificates validates the HTTPS connection.
 # Shared library dependencies are detected by dpkg-shlibdeps.
-set(
-    CPACK_DEBIAN_PACKAGE_DEPENDS
-    "curl, ca-certificates"
-)
+if(OPENPUZZLE_BUNDLED_BACKEND STREQUAL "opencl")
+    set(
+        CPACK_DEBIAN_PACKAGE_DEPENDS
+        "curl, ca-certificates, ocl-icd-libopencl1"
+    )
+else()
+    set(
+        CPACK_DEBIAN_PACKAGE_DEPENDS
+        "curl, ca-certificates"
+    )
+endif()
 set(
     CPACK_DEBIAN_PACKAGE_MAINTAINER
     "OpenPuzzle Project"
@@ -208,7 +401,7 @@ set(
 )
 set(
     CPACK_PACKAGE_FILE_NAME
-    "OpenPuzzle-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
+    "OpenPuzzle-${PROJECT_VERSION}-${OPENPUZZLE_BUNDLED_BACKEND_LABEL}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
 )
 set(
     CPACK_PACKAGE_DIRECTORY

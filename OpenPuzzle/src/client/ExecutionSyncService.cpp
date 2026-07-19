@@ -60,7 +60,8 @@ bool ExecutionSyncService::readLatestProgress(
       "bitcrack.log";
 
   std::ifstream input(
-      logPath);
+      logPath,
+      std::ios::binary);
 
   if (!input) {
     return false;
@@ -70,32 +71,56 @@ bool ExecutionSyncService::readLatestProgress(
 
   bool found = false;
 
-  std::string line;
+  const auto parseRecord =
+      [&](const std::string& record) {
+        if (record.empty()) {
+          return;
+        }
 
-  while (std::getline(
-      input,
-      line)) {
-    const auto parsed =
-        parser.parseLine(line);
+        const auto parsed =
+            parser.parseLine(record);
 
-    if (!parsed) {
+        if (!parsed) {
+          return;
+        }
+
+        /*
+         * Apenas métricas públicas de progresso.
+         *
+         * Eventos Found, mensagens de erro e qualquer
+         * conteúdo potencialmente sensível são
+         * ignorados.
+         */
+        if (parsed->speedMKeys > 0.0 &&
+            !parsed->keysChecked.empty()) {
+          progress =
+              *parsed;
+
+          found = true;
+        }
+      };
+
+  /*
+   * BitCrack atualiza a mesma linha do terminal
+   * usando carriage return. Os logs podem, por isso,
+   * conter registos separados por CR, LF ou CRLF.
+   */
+  std::string record;
+  char character = '\0';
+
+  while (input.get(character)) {
+    if (
+        character == '\r' ||
+        character == '\n') {
+      parseRecord(record);
+      record.clear();
       continue;
     }
 
-    /*
-     * Apenas métricas públicas de progresso.
-     *
-     * Eventos Found, mensagens de erro e qualquer
-     * conteúdo potencialmente sensível são ignorados.
-     */
-    if (parsed->speedMKeys > 0.0 &&
-        !parsed->keysChecked.empty()) {
-      progress =
-          *parsed;
-
-      found = true;
-    }
+    record.push_back(character);
   }
+
+  parseRecord(record);
 
   return found;
 }

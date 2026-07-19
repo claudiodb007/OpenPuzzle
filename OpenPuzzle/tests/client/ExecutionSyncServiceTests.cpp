@@ -298,6 +298,43 @@ int main() {
         ClientStateStore::remove());
   }
 
+
+  /*
+   * BitCrack atualiza o progresso com carriage
+   * return. Deve ser usada a última amostra e não
+   * a primeira ocorrência da linha acumulada.
+   */
+  {
+    writeFile(
+        workspace / "bitcrack.log",
+        "AMD Radeon RX 57 | 1 target "
+        "400.00 MKey/s "
+        "(775,946,240 total) [00:00:01]\r"
+        "AMD Radeon RX 57 | 1 target "
+        "425.64 MKey/s "
+        "(15,518,924,800 total) [00:00:34]\r"
+        "AMD Radeon RX 57 | 1 target "
+        "428.23 MKey/s "
+        "(123,354,480,640 total) [00:04:48]\r");
+
+    const auto progress =
+        ExecutionSyncService::latestProgress(
+            workspace.string());
+
+    assert(progress);
+
+    assert(
+        progress->speedMKeys > 428.22 &&
+        progress->speedMKeys < 428.24);
+
+    assert(
+        progress->keysChecked ==
+        "123354480640");
+
+    std::filesystem::remove(
+        workspace / "bitcrack.log");
+  }
+
   std::filesystem::remove_all(
       temporaryHome);
 

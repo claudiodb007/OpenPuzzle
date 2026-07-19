@@ -85,7 +85,10 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
 
   if (!manual) {
 
-    auto gpu = GpuManager::currentGpu();
+    const auto gpu = GpuManager::currentGpu(
+        backend == "opencl"
+            ? "OpenCL"
+            : "CUDA");
 
     GpuProfileManager profiles(db);
 
@@ -118,21 +121,27 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
     throw std::runtime_error("Unsupported BitCrack backend: " + backend);
   }
 
-  auto bitcrack = context.bitcrack;
-
-  if (!bitcrack)
-    throw std::runtime_error("BitCrack CUDA executable not configured");
-
-  std::string executable = *bitcrack;
-
-  if (backend == "opencl") {
-    auto opencl = ToolManager::bitcrackOpenCLPath();
-
-    if (!opencl)
-      throw std::runtime_error("BitCrack OpenCL executable not configured");
-
-    executable = *opencl;
+  if (backend !=
+      ToolManager::bundledBackend()) {
+    throw std::runtime_error(
+        "This OpenPuzzle package only supports the " +
+        ToolManager::bundledBackend() +
+        " backend");
   }
+
+  const auto bitcrack =
+      backend == "opencl"
+          ? ToolManager::bitcrackOpenCLPath()
+          : ToolManager::bitcrackCudaPath();
+
+  if (!bitcrack) {
+    throw std::runtime_error(
+        "Bundled OpenPuzzle-BitCrack engine "
+        "is missing or invalid");
+  }
+
+  const std::string executable =
+      *bitcrack;
 
   auto result = scheduler.startJob(db, puzzle, job, engine, executable, device,
                                    blocks, threads, points, dryRun);

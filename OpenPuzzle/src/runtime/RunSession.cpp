@@ -162,7 +162,10 @@ std::optional<double> measuredSpeedMKeys(const std::vector<std::string> &args) {
 
   const std::string backend = getArgument(args, "--backend", configuredBackend);
 
-  const auto gpu = GpuManager::currentGpu();
+  const auto gpu = GpuManager::currentGpu(
+      backend == "opencl"
+          ? "OpenCL"
+          : "CUDA");
 
   GpuProfileManager profiles(context.db);
 
@@ -640,6 +643,29 @@ ClientIterationResult RunSession::runOnce(
     }
   }
 
+  if (subcommand == "run") {
+    const auto configuration =
+        ConfigurationManager::load();
+
+    const std::string requestedBackend =
+        getArgument(
+            args,
+            "--backend",
+            configuration.engine.backend.empty()
+                ? ToolManager::bundledBackend()
+                : configuration.engine.backend);
+
+    if (requestedBackend !=
+        ToolManager::bundledBackend()) {
+      std::cerr
+          << "This OpenPuzzle package only supports the "
+          << ToolManager::bundledBackend()
+          << " backend.\n";
+
+      return 1;
+    }
+  }
+
   const auto requestedDuration =
       requestedDurationMinutes(args);
 
@@ -720,7 +746,15 @@ ClientIterationResult RunSession::runOnce(
                                                 ? "cuda"
                                                 : configuration.engine.backend);
 
-    const auto gpu = GpuManager::currentGpu();
+    const auto executable =
+        backend == "opencl"
+            ? ToolManager::bitcrackOpenCLPath()
+            : ToolManager::bitcrackCudaPath();
+
+    const auto gpu = GpuManager::currentGpu(
+      backend == "opencl"
+          ? "OpenCL"
+          : "CUDA");
 
     std::cout << "\nLocal configuration\n"
               << "-------------------\n"
@@ -731,7 +765,9 @@ ClientIterationResult RunSession::runOnce(
               << '\n'
               << "Backend............ "
               << (backend == "opencl" ? "OpenCL" : "CUDA") << '\n'
-              << "Executable......... " << configuration.engine.executable
+              << "Executable......... "
+              << executable.value_or(
+                     "(bundled engine unavailable)")
               << "\n\n"
               << "Dry run only. "
               << "No assignment was requested.\n";
@@ -864,7 +900,10 @@ ClientIterationResult RunSession::runOnce(
       hasArgument(args, "--threads") || hasArgument(args, "--t") ||
       hasArgument(args, "--points") || hasArgument(args, "--p");
 
-  const auto gpu = GpuManager::currentGpu();
+  const auto gpu = GpuManager::currentGpu(
+      backend == "opencl"
+          ? "OpenCL"
+          : "CUDA");
 
   if (!manualProfile) {
     GpuProfileManager profiles(context.db);

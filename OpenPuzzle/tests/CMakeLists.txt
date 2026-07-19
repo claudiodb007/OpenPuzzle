@@ -1161,3 +1161,24 @@ add_test(
     NAME GpuManagerTests
     COMMAND GpuManagerTests
 )
+
+add_executable(
+    ToolManagerTests
+    tools/ToolManagerTests.cpp
+)
+
+target_link_libraries(
+    ToolManagerTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_dependencies(
+    ToolManagerTests
+    OpenPuzzleBundledEngine
+)
+
+add_test(
+    NAME ToolManagerTests
+    COMMAND ToolManagerTests
+)
