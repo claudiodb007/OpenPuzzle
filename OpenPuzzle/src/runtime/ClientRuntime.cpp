@@ -218,7 +218,7 @@ int ClientRuntime::runContinuous(
 
   while (true) {
     if (dependencies_.stopRequested()) {
-      std::cout << "OpenPuzzle stopped.\n";
+      std::cout << "openpuzzle stopped.\n";
 
       return 0;
     }

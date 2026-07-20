@@ -127,7 +127,7 @@ int selectedPuzzle(const std::vector<std::string> &args) {
   /*
    * Formato principal:
    *
-   *   OpenPuzzle run 71
+   *   openpuzzle run 71
    *
    * --puzzle permanece temporariamente disponível
    * para compatibilidade com scripts antigos.
@@ -468,9 +468,9 @@ ClientIterationResult RunSession::runOnce(
     bool initializeClient) const {
   if (args.empty()) {
     std::cerr << "Usage:\n"
-              << "  OpenPuzzle run <puzzle> [--dry-run]\n"
-              << "  OpenPuzzle status\n"
-              << "  OpenPuzzle stop\n";
+              << "  openpuzzle run <puzzle> [--dry-run]\n"
+              << "  openpuzzle status\n"
+              << "  openpuzzle stop\n";
 
     return 1;
   }
@@ -655,11 +655,11 @@ ClientIterationResult RunSession::runOnce(
                 ? ToolManager::bundledBackend()
                 : configuration.engine.backend);
 
-    if (requestedBackend !=
-        ToolManager::bundledBackend()) {
+    if (!ToolManager::supportsBackend(
+            requestedBackend)) {
       std::cerr
-          << "This OpenPuzzle package only supports the "
-          << ToolManager::bundledBackend()
+          << "This OpenPuzzle package does not support the "
+          << requestedBackend
           << " backend.\n";
 
       return 1;

@@ -190,7 +190,7 @@ ctest --output-on-failure
 ### Benchmark
 
 ``` bash
-./build/OpenPuzzle benchmark --real --auto --gpu 0
+./build/openpuzzle benchmark --real --auto --gpu 0
 ```
 
 ### Diagnostics
@@ -228,16 +228,16 @@ Implemented:
 The client can run autonomously:
 
 ```bash
-OpenPuzzle run
-OpenPuzzle run 71
-OpenPuzzle status
-OpenPuzzle stop
+openpuzzle run
+openpuzzle run 71
+openpuzzle status
+openpuzzle stop
 ```
 
 It requests random non-overlapping assignments, uploads progress, renews
 leases, recovers interrupted sessions and continues with new work.
 
-Potential solutions remain strictly local. OpenPuzzle stops execution and
+Potential solutions remain strictly local. openpuzzle stops execution and
 preserves the private `found.txt` workspace without reading, printing or
 uploading its contents. It submits only the assignment UUID and anonymous
 client UUID as a pending report for independent review. A report never marks a
@@ -294,3 +294,23 @@ Pull requests, issues and suggestions are welcome.
 ## License
 
 MIT License.
+
+------------------------------------------------------------------------
+
+## Simple installation
+
+After installing the Debian package, prepare the local client once:
+
+```bash
+openpuzzle install
+```
+
+OpenPuzzle automatically selects CUDA or OpenCL, validates the bundled
+engine, and runs the safe GPU benchmark only when a valid profile is not
+already available. This step does not request server work.
+
+Start continuous work with:
+
+```bash
+openpuzzle run
+```

@@ -9,6 +9,7 @@
 #include "openpuzzle/core/ProcessRunner.hpp"
 #include "openpuzzle/core/Scheduler.hpp"
 #include "openpuzzle/core/commands/BenchmarkCommand.hpp"
+#include "openpuzzle/core/commands/InstallCommand.hpp"
 #include "openpuzzle/core/commands/DispatchCommand.hpp"
 #include "openpuzzle/core/commands/ProfileCommand.hpp"
 #include "openpuzzle/core/commands/RangeCommand.hpp"
@@ -95,10 +96,11 @@ static void printApplicationHelp() {
       << "OpenPuzzle\n"
       << "----------\n"
       << "Usage:\n"
-      << "  OpenPuzzle [puzzle] [run options]\n"
-      << "  OpenPuzzle run [puzzle] [run options]\n"
-      << "  OpenPuzzle status\n"
-      << "  OpenPuzzle stop\n"
+      << "  openpuzzle install [--force]\n"
+      << "  openpuzzle [puzzle] [run options]\n"
+      << "  openpuzzle run [puzzle] [run options]\n"
+      << "  openpuzzle status\n"
+      << "  openpuzzle stop\n"
       << "\n"
       << "Global options:\n"
       << "  -h, --help       Show this help\n"
@@ -266,6 +268,8 @@ int Application::run(int argc, char **argv) {
     }
     if (cmd == "audit")
       return cmdAudit(r);
+    if (cmd == "install")
+      return InstallCommand().run(r);
     if (cmd == "benchmark")
       return BenchmarkCommand().run(r);
     if (cmd == "dispatch")

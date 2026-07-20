@@ -113,11 +113,10 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
         backend);
   }
 
-  if (backend !=
-      ToolManager::bundledBackend()) {
+  if (!ToolManager::supportsBackend(backend)) {
     throw std::runtime_error(
-        "This OpenPuzzle package only supports the " +
-        ToolManager::bundledBackend() +
+        "This OpenPuzzle package does not support the " +
+        backend +
         " backend");
   }
 

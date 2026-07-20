@@ -10,8 +10,16 @@ or from the user configuration file.
 OpenPuzzle is distributed as separate packages for
 the supported GPU backends:
 
-- OpenPuzzle OpenCL contains `clBitCrack`;
-- OpenPuzzle CUDA contains `cuBitCrack`.
+- OpenPuzzle AMD/Intel OpenCL contains `clBitCrack`;
+- OpenPuzzle NVIDIA CUDA contains `cuBitCrack`.
+
+The public package filenames make the intended GPU
+family explicit:
+
+```text
+OpenPuzzle-1.0.0-NVIDIA-CUDA-Linux-x86_64
+OpenPuzzle-1.0.0-AMD-Intel-OpenCL-Linux-x86_64
+```
 
 A package only enables the backend named in its
 filename. Selecting another backend is rejected
@@ -19,7 +27,7 @@ before any network assignment is requested.
 
 ## Runtime identity
 
-Before using the bundled executable, OpenPuzzle runs
+Before using the bundled executable, openpuzzle runs
 the private engine identity operation:
 
 ```text
@@ -49,14 +57,14 @@ vendor runtime must also expose the GPU:
 Device discovery can be checked with:
 
 ```text
-OpenPuzzle benchmark --backend opencl
+openpuzzle benchmark --backend opencl
 ```
 
 Run a real local benchmark before requesting network
 work:
 
 ```text
-OpenPuzzle benchmark --real --auto --backend opencl
+openpuzzle benchmark --real --auto --backend opencl
 ```
 
 ## OpenPuzzle-BitCrack source
@@ -75,3 +83,17 @@ language standard for compatibility across tested
 NVIDIA, AMD discrete and AMD integrated devices.
 CUDA search code is kept isolated from these OpenCL
 changes.
+
+## Unified package
+
+The public OpenPuzzle package contains both vetted GPU engines:
+
+- `cuBitCrack` for NVIDIA CUDA devices;
+- `clBitCrack` for AMD, Intel, and OpenCL devices.
+
+At runtime OpenPuzzle validates each engine independently. CUDA is
+preferred only when the CUDA engine reports a usable device; otherwise
+OpenCL is selected. External BitCrack executables remain rejected.
+
+CPU execution is reserved for a future separately audited bundled
+engine. The current release does not claim CPU search support.

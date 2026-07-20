@@ -17,7 +17,7 @@ OpenPuzzle client.
 
 ## Privacy and solution handling
 
-When the search engine writes a non-empty `found.txt`, OpenPuzzle stops
+When the search engine writes a non-empty `found.txt`, openpuzzle stops
 the engine and preserves the workspace and client state.
 
 OpenPuzzle does not read, display or upload the private key. Only
@@ -52,9 +52,9 @@ ctest --test-dir build --output-on-failure
 ```sh
 OpenPuzzle --version
 OpenPuzzle --help
-OpenPuzzle run
-OpenPuzzle status
-OpenPuzzle stop
+openpuzzle run
+openpuzzle status
+openpuzzle stop
 ```
 
-Use `OpenPuzzle run --once` to process only one assignment.
+Use `openpuzzle run --once` to process only one assignment.

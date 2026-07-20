@@ -10,10 +10,18 @@ namespace openpuzzle {
 
 bool FirstRunSetup::ensureConfigured() const {
   const std::string backend =
-      ToolManager::bundledBackend();
+      ToolManager::preferredBackend();
+
+  if (backend.empty()) {
+    std::cerr
+        << "No supported GPU backend was detected.\n";
+
+    return false;
+  }
 
   const auto executable =
-      ToolManager::bundledBitCrackPath();
+      ToolManager::bundledBitCrackPath(
+          backend);
 
   if (!executable) {
     std::cerr
@@ -36,14 +44,13 @@ bool FirstRunSetup::ensureConfigured() const {
   config.engine.backend = backend;
   config.engine.executable = *executable;
 
-  config.bitcrack.cudaPath.clear();
-  config.bitcrack.openclPath.clear();
+  config.bitcrack.cudaPath =
+      ToolManager::bitcrackCudaPath()
+          .value_or("");
 
-  if (backend == "opencl") {
-    config.bitcrack.openclPath = *executable;
-  } else {
-    config.bitcrack.cudaPath = *executable;
-  }
+  config.bitcrack.openclPath =
+      ToolManager::bitcrackOpenCLPath()
+          .value_or("");
 
   if (!ConfigurationManager::save(config)) {
     std::cerr << "Unable to save configuration.\n";

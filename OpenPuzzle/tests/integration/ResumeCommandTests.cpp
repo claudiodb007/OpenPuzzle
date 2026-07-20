@@ -33,7 +33,7 @@ int main() {
     state << "}\n";
   }
 
-  std::string command = "./OpenPuzzle resume --job 42 --base " + temp.string() +
+  std::string command = "./openpuzzle resume --job 42 --base " + temp.string() +
                         " > " + output.string();
 
   int code = std::system(command.c_str());

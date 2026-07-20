@@ -9,38 +9,38 @@ coordinates assignment lifecycle, progress, recovery and finalization.
 Start continuous execution using the lowest-numbered active unsolved puzzle:
 
 ```bash
-OpenPuzzle run
+openpuzzle run
 ```
 
 Request work for a specific puzzle:
 
 ```bash
-OpenPuzzle run 71
+openpuzzle run 71
 ```
 
 Execute only one assignment:
 
 ```bash
-OpenPuzzle run --once
+openpuzzle run --once
 ```
 
 Inspect local execution state:
 
 ```bash
-OpenPuzzle status
+openpuzzle status
 ```
 
 Stop the active runtime and cancel its current assignment safely:
 
 ```bash
-OpenPuzzle stop
+openpuzzle stop
 ```
 
 Preview local configuration without registration, heartbeat, assignment or
 lease creation:
 
 ```bash
-OpenPuzzle run --dry-run
+openpuzzle run --dry-run
 ```
 
 ## Continuous lifecycle
@@ -63,7 +63,7 @@ access or preferential treatment.
 
 ## Local states
 
-`OpenPuzzle status` can report:
+`openpuzzle status` can report:
 
 - `idle`: no runtime and no local execution;
 - `waiting`: the continuous runtime is waiting for work;
@@ -80,7 +80,7 @@ Assignment state is stored in:
 ```
 
 If OpenPuzzle terminates while the engine remains active, a later
-`OpenPuzzle run` attaches to the same process and assignment.
+`openpuzzle run` attaches to the same process and assignment.
 
 If the engine already terminated, OpenPuzzle synchronizes its final state
 before requesting new work. Temporary network failures retain local state and
@@ -91,7 +91,7 @@ locally. Invalid local or protocol state is preserved for diagnosis.
 
 ## Cancellation
 
-`Ctrl+C`, `SIGTERM` and `OpenPuzzle stop` request an orderly shutdown:
+`Ctrl+C`, `SIGTERM` and `openpuzzle stop` request an orderly shutdown:
 
 1. Synchronize final public progress when possible.
 2. Stop the complete engine process group.
@@ -99,7 +99,7 @@ locally. Invalid local or protocol state is preserved for diagnosis.
 4. Preserve searched coverage on the server.
 5. Remove local active state only after a safe final response.
 
-If the server already rejected or finalized the assignment, OpenPuzzle stops
+If the server already rejected or finalized the assignment, openpuzzle stops
 the engine without repeatedly submitting the same transition.
 
 ## Solution safety
@@ -120,7 +120,7 @@ When detected, OpenPuzzle:
 - displays only the solution file path;
 - submits only `assignment_id` and the anonymous `client_id` for review;
 - does not read, print or upload the private key;
-- prevents `OpenPuzzle stop` from deleting the preserved solution.
+- prevents `openpuzzle stop` from deleting the preserved solution.
 
 The operator should make a secure offline backup and verify the result with a
 trusted offline tool. Never paste a private key into a website, chat, issue,

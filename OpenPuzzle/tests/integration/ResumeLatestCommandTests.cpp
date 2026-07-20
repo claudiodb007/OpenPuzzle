@@ -37,7 +37,7 @@ int main() {
   writeState(temp / "jobs" / "00000042", "FINISHED", 1334.62);
 
   std::string command =
-      "./OpenPuzzle resume --base " + temp.string() + " > " + output.string();
+      "./openpuzzle resume --base " + temp.string() + " > " + output.string();
 
   int code = std::system(command.c_str());
 

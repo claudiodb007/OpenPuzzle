@@ -1175,10 +1175,25 @@ target_link_libraries(
 
 add_dependencies(
     ToolManagerTests
-    OpenPuzzleBundledEngine
+    OpenPuzzleBundledEngines
 )
 
 add_test(
     NAME ToolManagerTests
     COMMAND ToolManagerTests
+)
+
+
+add_executable(InstallCommandTests
+    core/InstallCommandTests.cpp
+)
+
+target_link_libraries(InstallCommandTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME InstallCommandTests
+    COMMAND InstallCommandTests
 )

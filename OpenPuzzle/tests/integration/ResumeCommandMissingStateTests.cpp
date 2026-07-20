@@ -8,7 +8,7 @@ int main() {
 
   std::filesystem::create_directories(temp / "jobs" / "00000042");
 
-  std::string command = "./OpenPuzzle resume --job 42 --base " + temp.string() +
+  std::string command = "./openpuzzle resume --job 42 --base " + temp.string() +
                         " > /tmp/openpuzzle_resume_missing_stdout.txt 2> "
                         "/tmp/openpuzzle_resume_missing_stderr.txt";
 

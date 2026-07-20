@@ -108,7 +108,7 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
     } else {
       std::cout << "\nNo GPU profile available\n";
       std::cout
-          << "Tip............... run: OpenPuzzle benchmark --real --auto --gpu "
+          << "Tip............... run: openpuzzle benchmark --real --auto --gpu "
           << device << "\n";
     }
   }
@@ -121,11 +121,10 @@ int StartJobCommand::run(const std::vector<std::string> &args) const {
     throw std::runtime_error("Unsupported BitCrack backend: " + backend);
   }
 
-  if (backend !=
-      ToolManager::bundledBackend()) {
+  if (!ToolManager::supportsBackend(backend)) {
     throw std::runtime_error(
-        "This OpenPuzzle package only supports the " +
-        ToolManager::bundledBackend() +
+        "This OpenPuzzle package does not support the " +
+        backend +
         " backend");
   }
 

@@ -17,14 +17,17 @@ namespace openpuzzle {
 
 namespace {
 
-constexpr const char *BundledBackend =
-    OPENPUZZLE_BUNDLED_BACKEND;
+constexpr const char *CudaEngineName =
+    OPENPUZZLE_CUDA_ENGINE_NAME;
 
-constexpr const char *BundledEngineName =
-    OPENPUZZLE_BUNDLED_ENGINE_NAME;
+constexpr const char *OpenClEngineName =
+    OPENPUZZLE_OPENCL_ENGINE_NAME;
 
-constexpr const char *BundledEngineIdentity =
-    OPENPUZZLE_BUNDLED_ENGINE_IDENTITY;
+constexpr const char *CudaEngineIdentity =
+    OPENPUZZLE_CUDA_ENGINE_IDENTITY;
+
+constexpr const char *OpenClEngineIdentity =
+    OPENPUZZLE_OPENCL_ENGINE_IDENTITY;
 
 bool executableFile(
     const fs::path &path) {
@@ -47,8 +50,9 @@ std::string trimRecord(
   return value;
 }
 
-std::optional<std::string> engineIdentity(
-    const fs::path &path) {
+std::optional<std::string> commandOutput(
+    const fs::path &path,
+    const std::string &argument) {
   int descriptors[2];
 
   if (pipe(descriptors) != 0) {
@@ -79,7 +83,7 @@ std::optional<std::string> engineIdentity(
     execl(
         executable.c_str(),
         argumentZero.c_str(),
-        "--openpuzzle-engine-version",
+        argument.c_str(),
         static_cast<char *>(nullptr));
 
     _exit(127);
@@ -88,9 +92,9 @@ std::optional<std::string> engineIdentity(
   close(descriptors[1]);
 
   std::string output;
-  std::array<char, 256> buffer{};
+  std::array<char, 512> buffer{};
 
-  while (output.size() < 4096) {
+  while (output.size() < 65536) {
     const ssize_t count = read(
         descriptors[0],
         buffer.data(),
@@ -140,6 +144,47 @@ std::optional<fs::path> runningExecutable() {
   return fs::path(buffer.data());
 }
 
+const char *engineName(
+    const std::string &backend) {
+  if (backend == "cuda") {
+    return CudaEngineName;
+  }
+
+  if (backend == "opencl") {
+    return OpenClEngineName;
+  }
+
+  return nullptr;
+}
+
+const char *expectedIdentity(
+    const std::string &backend) {
+  if (backend == "cuda") {
+    return CudaEngineIdentity;
+  }
+
+  if (backend == "opencl") {
+    return OpenClEngineIdentity;
+  }
+
+  return nullptr;
+}
+
+bool engineHasDevices(
+    const std::optional<std::string> &path) {
+  if (!path) {
+    return false;
+  }
+
+  const auto output = commandOutput(
+      *path,
+      "--list-devices");
+
+  return
+      output &&
+      output->find("ID:") != std::string::npos;
+}
+
 } // namespace
 
 std::string ToolManager::configPath() {
@@ -157,8 +202,16 @@ bool ToolManager::configureBitCrack(
   return false;
 }
 
-std::string ToolManager::bundledBackend() {
-  return BundledBackend;
+bool ToolManager::supportsBackend(
+    const std::string &backend) {
+  return
+      backend == "cuda" ||
+      backend == "opencl";
+}
+
+std::vector<std::string>
+ToolManager::bundledBackends() {
+  return {"cuda", "opencl"};
 }
 
 bool ToolManager::validateBitCrackEngine(
@@ -174,10 +227,12 @@ bool ToolManager::validateBitCrackEngine(
         return false;
       };
 
-  if (backend != BundledBackend) {
+  const char *identity =
+      expectedIdentity(backend);
+
+  if (identity == nullptr) {
     return fail(
-        "Engine backend does not match this "
-        "OpenPuzzle package");
+        "Unsupported bundled engine backend");
   }
 
   const fs::path executable(path);
@@ -187,11 +242,12 @@ bool ToolManager::validateBitCrackEngine(
         "Bundled engine is missing or not executable");
   }
 
-  const auto identity =
-      engineIdentity(executable);
+  const auto actualIdentity = commandOutput(
+      executable,
+      "--openpuzzle-engine-version");
 
-  if (!identity ||
-      *identity != BundledEngineIdentity) {
+  if (!actualIdentity ||
+      *actualIdentity != identity) {
     return fail(
         "Bundled engine identity was rejected");
   }
@@ -204,7 +260,14 @@ bool ToolManager::validateBitCrackEngine(
 }
 
 std::optional<std::string>
-ToolManager::bundledBitCrackPath() {
+ToolManager::bundledBitCrackPath(
+    const std::string &backend) {
+  const char *name = engineName(backend);
+
+  if (name == nullptr) {
+    return std::nullopt;
+  }
+
   const auto executable =
       runningExecutable();
 
@@ -219,18 +282,18 @@ ToolManager::bundledBitCrackPath() {
       directory /
           "libexec" /
           "OpenPuzzle" /
-          BundledEngineName,
+          name,
 
       directory.parent_path() /
           "libexec" /
           "OpenPuzzle" /
-          BundledEngineName,
+          name,
   };
 
   for (const auto &candidate : candidates) {
     if (validateBitCrackEngine(
             candidate.string(),
-            BundledBackend)) {
+            backend)) {
       return candidate.string();
     }
   }
@@ -238,23 +301,61 @@ ToolManager::bundledBitCrackPath() {
   return std::nullopt;
 }
 
-std::optional<std::string> ToolManager::bitcrackPath() {
-  return bundledBitCrackPath();
+std::optional<std::string>
+ToolManager::bitcrackCudaPath() {
+  return bundledBitCrackPath("cuda");
 }
 
-std::optional<std::string> ToolManager::bitcrackCudaPath() {
-  if (bundledBackend() != "cuda") {
+std::optional<std::string>
+ToolManager::bitcrackOpenCLPath() {
+  return bundledBitCrackPath("opencl");
+}
+
+std::string ToolManager::preferredBackend() {
+  if (engineHasDevices(
+          bitcrackCudaPath())) {
+    return "cuda";
+  }
+
+  if (engineHasDevices(
+          bitcrackOpenCLPath())) {
+    return "opencl";
+  }
+
+  /*
+   * This fallback keeps informational and isolated
+   * test commands deterministic on GPU-less hosts.
+   * Real setup/benchmark still fails at discovery.
+   */
+  if (bitcrackCudaPath()) {
+    return "cuda";
+  }
+
+  if (bitcrackOpenCLPath()) {
+    return "opencl";
+  }
+
+  return {};
+}
+
+std::string ToolManager::bundledBackend() {
+  return preferredBackend();
+}
+
+std::optional<std::string>
+ToolManager::bundledBitCrackPath() {
+  const std::string backend =
+      preferredBackend();
+
+  if (backend.empty()) {
     return std::nullopt;
   }
 
-  return bundledBitCrackPath();
+  return bundledBitCrackPath(backend);
 }
 
-std::optional<std::string> ToolManager::bitcrackOpenCLPath() {
-  if (bundledBackend() != "opencl") {
-    return std::nullopt;
-  }
-
+std::optional<std::string>
+ToolManager::bitcrackPath() {
   return bundledBitCrackPath();
 }
 
