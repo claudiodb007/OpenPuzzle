@@ -61,6 +61,14 @@ public:
   solutionFile(
       const std::string& workspace);
 
+  static bool hasCompletionProof(
+      const std::string& workspace);
+
+  static std::optional<std::string>
+  assignedKeyCount(
+      const std::string& start,
+      const std::string& end);
+
   static AssignmentUploadStatus
   classifyProgressError(
       const std::string& errorCode);

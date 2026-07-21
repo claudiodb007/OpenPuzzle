@@ -335,6 +335,60 @@ int main() {
         workspace / "bitcrack.log");
   }
 
+  /*
+   * Conclusão exige simultaneamente uma amostra real
+   * de progresso e o marcador final do BitCrack.
+   */
+  {
+    writeFile(
+        workspace / "bitcrack.log",
+        "[Info] Reached end of keyspace\n");
+
+    assert(
+        !ExecutionSyncService::hasCompletionProof(
+            workspace.string()));
+
+    writeFile(
+        workspace / "bitcrack.log",
+        "GPU | 1 target 425.64 MKey/s "
+        "(123,354,480,640 total) [00:04:48]\r");
+
+    assert(
+        !ExecutionSyncService::hasCompletionProof(
+            workspace.string()));
+
+    writeFile(
+        workspace / "bitcrack.log",
+        "GPU | 1 target 425.64 MKey/s "
+        "(123,354,480,640 total) [00:04:48]\r"
+        "[Info] Reached end of keyspace\n");
+
+    assert(
+        ExecutionSyncService::hasCompletionProof(
+            workspace.string()));
+
+    const auto count =
+        ExecutionSyncService::assignedKeyCount(
+            "400000000000000000",
+            "40000000FFFFFFFFFF");
+
+    assert(count);
+    assert(*count == "1099511627776");
+
+    assert(
+        !ExecutionSyncService::assignedKeyCount(
+            "20",
+            "10"));
+
+    assert(
+        !ExecutionSyncService::assignedKeyCount(
+            "not-hex",
+            "20"));
+
+    std::filesystem::remove(
+        workspace / "bitcrack.log");
+  }
+
   std::filesystem::remove_all(
       temporaryHome);
 

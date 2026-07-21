@@ -4,7 +4,10 @@
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
 
+#include <boost/multiprecision/cpp_int.hpp>
+
 #include <cerrno>
+#include <cctype>
 #include <csignal>
 #include <filesystem>
 #include <fstream>
@@ -139,6 +142,91 @@ ExecutionSyncService::latestProgress(
   return progress;
 }
 
+bool ExecutionSyncService::hasCompletionProof(
+    const std::string& workspace) {
+  if (!latestProgress(workspace)) {
+    return false;
+  }
+
+  const auto logPath =
+      std::filesystem::path(workspace) /
+      "bitcrack.log";
+
+  std::ifstream input(
+      logPath,
+      std::ios::binary);
+
+  if (!input) {
+    return false;
+  }
+
+  std::string line;
+
+  while (std::getline(input, line)) {
+    if (
+        line.find(
+            "Reached end of keyspace") !=
+        std::string::npos) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+std::optional<std::string>
+ExecutionSyncService::assignedKeyCount(
+    const std::string& start,
+    const std::string& end) {
+  using boost::multiprecision::cpp_int;
+
+  const auto parseHex =
+      [](const std::string& value)
+          -> std::optional<cpp_int> {
+        if (value.empty()) {
+          return std::nullopt;
+        }
+
+        cpp_int result = 0;
+
+        for (const unsigned char character : value) {
+          unsigned int digit = 0;
+
+          if (character >= '0' && character <= '9') {
+            digit = character - '0';
+          } else if (
+              character >= 'a' && character <= 'f') {
+            digit = character - 'a' + 10;
+          } else if (
+              character >= 'A' && character <= 'F') {
+            digit = character - 'A' + 10;
+          } else {
+            return std::nullopt;
+          }
+
+          result <<= 4;
+          result += digit;
+        }
+
+        return result;
+      };
+
+  const auto startValue = parseHex(start);
+  const auto endValue = parseHex(end);
+
+  if (
+      !startValue ||
+      !endValue ||
+      *endValue < *startValue) {
+    return std::nullopt;
+  }
+
+  const cpp_int count =
+      *endValue - *startValue + 1;
+
+  return count.str();
+}
+
 std::optional<std::string>
 ExecutionSyncService::solutionFile(
     const std::string& workspace) {
@@ -222,7 +310,8 @@ ExecutionSyncService::classifyCompletionError(
       errorCode == "invalid_status" ||
       errorCode == "invalid_completed_exit_code" ||
       errorCode == "invalid_final_exit_code" ||
-      errorCode == "invalid_keys_checked") {
+      errorCode == "invalid_keys_checked" ||
+      errorCode == "incomplete_assignment_coverage") {
     return
         AssignmentUploadStatus::
             PermanentFailure;
@@ -316,22 +405,63 @@ ExecutionSyncService::tick(
   result.hasExitCode = true;
   result.exitCode = exitCode;
 
+  const auto finalProgress =
+      latestProgress(
+          state->workspace);
+
+  const bool completed =
+      exitCode == 0;
+
+  std::string finalKeysChecked =
+      finalProgress
+          ? finalProgress->keysChecked
+          : "";
+
+  if (completed) {
+    if (!hasCompletionProof(state->workspace)) {
+      result.completionStatus =
+          AssignmentUploadStatus::PermanentFailure;
+
+      result.completionError =
+          "BitCrack did not provide complete-range proof; "
+          "local state was preserved";
+
+      return result;
+    }
+
+    const auto assignedKeys =
+        assignedKeyCount(
+            state->start,
+            state->end);
+
+    if (!assignedKeys) {
+      result.completionStatus =
+          AssignmentUploadStatus::PermanentFailure;
+
+      result.completionError =
+          "Assigned keyspace is invalid; "
+          "local state was preserved";
+
+      return result;
+    }
+
+    /*
+     * A última linha periódica do BitCrack pode ser
+     * anterior ao fim por alguns segundos. Depois do
+     * marcador de fim, o tamanho exato do assignment
+     * é a contagem final comprovada.
+     */
+    finalKeysChecked =
+        *assignedKeys;
+  }
+
   const std::string finalStatus =
-      exitCode == 0
+      completed
           ? "completed"
           : "failed";
 
   HttpRangeClient httpClient(
       serverUrl);
-
-  const auto finalProgress =
-      latestProgress(
-          state->workspace);
-
-  const std::string finalKeysChecked =
-      finalProgress
-          ? finalProgress->keysChecked
-          : "";
 
   result.completionUploaded =
       httpClient.complete(
