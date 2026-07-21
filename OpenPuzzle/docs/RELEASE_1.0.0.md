@@ -20,9 +20,11 @@ OpenPuzzle client.
 When the search engine writes a non-empty `found.txt`, openpuzzle stops
 the engine and preserves the workspace and client state.
 
-OpenPuzzle does not read, display or upload the private key. Only
-assignment metadata is used to notify the coordination service that a
-solution requires review.
+OpenPuzzle reads the structured engine result only on the local machine to
+validate the matched address and create a protected compressed-WIF export in
+`~/OpenPuzzle-Solutions`. The private key is never displayed or uploaded. Only
+assignment metadata notifies the coordination service that a solution requires
+review.
 
 ## Public release scope
 

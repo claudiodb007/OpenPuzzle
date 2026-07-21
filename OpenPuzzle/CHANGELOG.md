@@ -7,7 +7,7 @@
 - Added assignment completion, failure and cancellation reporting.
 - Added recovery of active and finished local executions.
 - Added `run`, `status`, `stop`, `--once`, `--help` and `--version` workflows.
-- Added safe local solution detection without displaying or uploading private keys.
+- Added protected local WIF export without displaying or uploading private keys.
 - Added metadata-only solution notification.
 - Added protected local runtime and assignment storage.
 - Added BitCrack execution monitoring and progress parsing.

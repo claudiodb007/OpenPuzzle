@@ -1197,3 +1197,17 @@ add_test(
     NAME InstallCommandTests
     COMMAND InstallCommandTests
 )
+
+add_executable(SolutionExporterTests
+    client/SolutionExporterTests.cpp
+)
+
+target_link_libraries(SolutionExporterTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME SolutionExporterTests
+    COMMAND SolutionExporterTests
+)

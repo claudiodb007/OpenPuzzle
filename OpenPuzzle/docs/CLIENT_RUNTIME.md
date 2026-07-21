@@ -117,14 +117,20 @@ When detected, OpenPuzzle:
 - stops continuous execution;
 - stops the engine if it is still active;
 - preserves `client.state`, `found.txt` and the entire workspace;
-- displays only the solution file path;
+- validates the structured result locally and checks that its address matches
+  the assignment;
+- creates `~/OpenPuzzle-Solutions/Puzzle-N/<assignment-id>/wallet-import.txt`
+  with a compressed WIF key;
+- protects solution directories with mode `700` and the wallet file with mode
+  `600`;
+- displays only filesystem paths and never displays or uploads the private key;
 - submits only `assignment_id` and the anonymous `client_id` for review;
-- does not read, print or upload the private key;
 - prevents `openpuzzle stop` from deleting the preserved solution.
 
-The operator should make a secure offline backup and verify the result with a
-trusted offline tool. Never paste a private key into a website, chat, issue,
-log or untrusted application.
+The wallet-import file is designed for local import into a trusted wallet. The
+operator should first make a secure offline backup and verify the address.
+Never paste a private key into a website, chat, issue, log or untrusted
+application.
 
 The metadata-only report is stored as `pending`. It does not complete the
 assignment, change range allocation, stop the scheduler or mark the puzzle as

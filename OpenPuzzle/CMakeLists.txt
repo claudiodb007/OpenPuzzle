@@ -57,11 +57,11 @@ set(OPENPUZZLE_CUDA_ENGINE_NAME "cuBitCrack")
 set(OPENPUZZLE_OPENCL_ENGINE_NAME "clBitCrack")
 
 set(OPENPUZZLE_CUDA_ENGINE_IDENTITY
-    "OpenPuzzle-BitCrack 1.0.0 CUDA protocol 1"
+    "OpenPuzzle-BitCrack 1.0.0 CUDA protocol 2"
 )
 
 set(OPENPUZZLE_OPENCL_ENGINE_IDENTITY
-    "OpenPuzzle-BitCrack 1.0.0 OpenCL protocol 1"
+    "OpenPuzzle-BitCrack 1.0.0 OpenCL protocol 2"
 )
 
 add_library(OpenPuzzleCore
@@ -130,6 +130,7 @@ add_library(OpenPuzzleCore
     src/client/ClientRegistrationService.cpp
     src/client/ClientStateStore.cpp
     src/client/ExecutionSyncService.cpp
+    src/client/SolutionExporter.cpp
     src/core/commands/CommandRegistry.cpp
     src/core/commands/StartJobCommand.cpp
     src/services/PuzzleService.cpp

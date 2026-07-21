@@ -4,6 +4,7 @@
 
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
+#include "openpuzzle/client/SolutionExporter.hpp"
 #include "openpuzzle/core/SignalHandler.hpp"
 #include "openpuzzle/runtime/ExecutionStopper.hpp"
 
@@ -367,6 +368,35 @@ int ClientRuntime::run(
             << "for retry\n";
       };
 
+  const auto exportDetectedSolution =
+      [&](const client::ExecutionSyncResult &solution) {
+        const auto exported =
+            client::SolutionExporter::exportSolution(
+                solution.state,
+                solution.solutionPath);
+
+        if (!exported.success) {
+          std::cerr
+              << "Wallet export..... failed\n"
+              << "Reason............. "
+              << exported.error
+              << '\n'
+              << "Engine result...... preserved\n";
+
+          return false;
+        }
+
+        std::cout
+            << "Wallet file........ "
+            << exported.walletPath
+            << '\n'
+            << "Format............. WIF (compressed)\n"
+            << "Permissions........ owner only\n"
+            << "Private key........ not displayed or uploaded\n";
+
+        return true;
+      };
+
   constexpr auto syncInterval =
       std::chrono::seconds(60);
 
@@ -385,15 +415,13 @@ int ClientRuntime::run(
             << "\n"
             << "SOLUTION FOUND\n"
             << "--------------\n"
-            << "Solution file...... "
+            << "Engine result...... "
             << finalSync.solutionPath
             << '\n'
             << "Workspace.......... "
             << workspace
             << '\n'
             << "Local state........ preserved\n"
-            << "The private key was not read "
-            << "or uploaded by OpenPuzzle.\n"
             << "Stopping BitCrack...\n";
 
         if (!dependencies_.stopExecution(
@@ -406,6 +434,7 @@ int ClientRuntime::run(
               << "BitCrack............ stopped\n";
         }
 
+        exportDetectedSolution(finalSync);
         reportDetectedSolution();
 
       return SolutionFoundExitCode;
@@ -520,15 +549,13 @@ int ClientRuntime::run(
           << "\n"
           << "SOLUTION FOUND\n"
           << "--------------\n"
-          << "Solution file...... "
+          << "Engine result...... "
           << result.solutionPath
           << '\n'
           << "Workspace.......... "
           << workspace
           << '\n'
-          << "Local state........ preserved\n"
-          << "The private key was not read "
-          << "or uploaded by OpenPuzzle.\n";
+          << "Local state........ preserved\n";
 
       if (result.running) {
         std::cout
@@ -545,6 +572,7 @@ int ClientRuntime::run(
         }
       }
 
+      exportDetectedSolution(result);
       reportDetectedSolution();
 
       return SolutionFoundExitCode;

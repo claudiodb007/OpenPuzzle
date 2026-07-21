@@ -97,3 +97,11 @@ OpenCL is selected. External BitCrack executables remain rejected.
 
 CPU execution is reserved for a future separately audited bundled
 engine. The current release does not claim CPU search support.
+
+## Solution result protocol
+
+Protocol 2 writes a structured local result containing the matched address, a
+compressed wallet-import-format key and the compression mode. OpenPuzzle
+validates this record locally and exports it to a protected file under
+`~/OpenPuzzle-Solutions`. Solution contents are never sent to the coordination
+service or printed by the client.
