@@ -115,11 +115,11 @@ add_library(OpenPuzzleCore
     src/core/commands/ApplicationTestCommands.cpp
     src/core/commands/ProfileCommand.cpp
     src/core/commands/BenchmarkCommand.cpp
-    src/core/commands/InstallCommand.cpp
     src/core/commands/DispatchCommand.cpp
     src/core/commands/WorkerRunCommand.cpp
     src/core/commands/RangeCommand.cpp
     src/runtime/RunSession.cpp
+    src/runtime/RunBenchmarkPreparation.cpp
     src/runtime/ClientRuntime.cpp
     src/runtime/ClientRuntimeControl.cpp
     src/runtime/WorkspaceSecurity.cpp

@@ -1184,18 +1184,19 @@ add_test(
 )
 
 
-add_executable(InstallCommandTests
-    core/InstallCommandTests.cpp
+
+add_executable(RunBenchmarkPreparationTests
+    runtime/RunBenchmarkPreparationTests.cpp
 )
 
-target_link_libraries(InstallCommandTests
+target_link_libraries(RunBenchmarkPreparationTests
     PRIVATE
         OpenPuzzleCore
 )
 
 add_test(
-    NAME InstallCommandTests
-    COMMAND InstallCommandTests
+    NAME RunBenchmarkPreparationTests
+    COMMAND RunBenchmarkPreparationTests
 )
 
 add_executable(SolutionExporterTests

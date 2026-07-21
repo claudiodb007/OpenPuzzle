@@ -12,6 +12,11 @@ Start continuous execution using the lowest-numbered active unsolved puzzle:
 openpuzzle run
 ```
 
+On first use, `run` selects an available bundled GPU backend and creates a
+validated local benchmark profile before any registration, heartbeat or
+assignment request. Later runs reuse that profile. `--dry-run` never starts
+the benchmark or contacts the server.
+
 Request work for a specific puzzle:
 
 ```bash
@@ -47,12 +52,13 @@ openpuzzle run --dry-run
 
 The continuous runtime performs this cycle:
 
-1. Register the client and publish its capabilities.
-2. Request a random non-overlapping assignment.
-3. Start the configured search engine.
-4. Upload public progress metrics and renew the assignment lease.
-5. Upload completion, failure or cancellation.
-6. Request another assignment.
+1. Validate local configuration and create a GPU profile when required.
+2. Register the client and publish its capabilities.
+3. Request a random non-overlapping assignment.
+4. Start the configured search engine.
+5. Upload public progress metrics and renew the assignment lease.
+6. Upload completion, failure or cancellation.
+7. Request another assignment.
 
 When no work is available, the client remains in the `waiting` state and
 retries without exiting.

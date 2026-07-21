@@ -14,6 +14,7 @@
 - Added Release-build test coverage for the public client.
 - Prepared a client-only source and binary distribution.
 - Added a safe, repeatable and stability-aware GPU benchmark.
+- Added automatic first-use benchmarking before any server work request.
 
 ## 0.10-dev — Foundation/Core
 

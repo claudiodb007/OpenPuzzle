@@ -60,8 +60,9 @@ Device discovery can be checked with:
 openpuzzle benchmark --backend opencl
 ```
 
-Run a real local benchmark before requesting network
-work:
+The first `openpuzzle run` automatically creates a validated local
+benchmark profile before requesting network work. The benchmark may also
+be repeated manually:
 
 ```text
 openpuzzle benchmark --real --auto --backend opencl

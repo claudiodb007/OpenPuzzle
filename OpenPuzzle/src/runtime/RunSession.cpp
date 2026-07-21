@@ -10,6 +10,7 @@
 #include "openpuzzle/client/ExecutionSyncService.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
 #include "openpuzzle/core/CommandContext.hpp"
+#include "openpuzzle/core/commands/BenchmarkCommand.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/models/Models.hpp"
@@ -19,6 +20,7 @@
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/runtime/ExecutionStopper.hpp"
+#include "openpuzzle/runtime/RunBenchmarkPreparation.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 #include "openpuzzle/workers/WorkerEngineCapability.hpp"
@@ -172,7 +174,11 @@ std::optional<double> measuredSpeedMKeys(const std::vector<std::string> &args) {
   const auto profile = profiles.chooseBest(
       gpu.name, backend == "opencl" ? "OpenCL" : "CUDA", "BitCrack");
 
-  if (!profile || profile->averageSpeed <= 0.0) {
+  if (!profile ||
+      profile->blocks <= 0 ||
+      profile->threads <= 0 ||
+      profile->points <= 0 ||
+      profile->averageSpeed <= 0.0) {
     return std::nullopt;
   }
 
@@ -663,6 +669,50 @@ ClientIterationResult RunSession::runOnce(
           << " backend.\n";
 
       return 1;
+    }
+
+    /*
+     * A fresh run must have a validated local GPU
+     * profile before registration, heartbeat or
+     * assignment requests. Existing executions are
+     * recovered above and dry-run remains local and
+     * non-benchmarking.
+     */
+    if (initializeClient && !dryRun) {
+      const int device =
+          getIntegerArgument(
+              args,
+              "--device",
+              GpuManager::selectedGpu());
+
+      RunBenchmarkPreparationDependencies
+          preparationDependencies;
+
+      preparationDependencies.hasValidProfile =
+          [&args] {
+            return
+                measuredSpeedMKeys(args)
+                    .has_value();
+          };
+
+      preparationDependencies.runBenchmark =
+          [&requestedBackend, device] {
+            return BenchmarkCommand().run({
+                "--real",
+                "--auto",
+                "--backend",
+                requestedBackend,
+                "--gpu",
+                std::to_string(device),
+            });
+          };
+
+      const RunBenchmarkPreparation preparation(
+          preparationDependencies);
+
+      if (!preparation.ensureProfile()) {
+        return 1;
+      }
     }
   }
 

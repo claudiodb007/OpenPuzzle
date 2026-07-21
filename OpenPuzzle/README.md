@@ -299,18 +299,34 @@ MIT License.
 
 ## Simple installation
 
-After installing the Debian package, prepare the local client once:
+Install the Debian package:
 
 ```bash
-openpuzzle install
+sudo apt install ./OpenPuzzle-1.0.0-Linux-x86_64.deb
 ```
 
-OpenPuzzle automatically selects CUDA or OpenCL, validates the bundled
-engine, and runs the safe GPU benchmark only when a valid profile is not
-already available. This step does not request server work.
-
-Start continuous work with:
+Start OpenPuzzle:
 
 ```bash
 openpuzzle run
 ```
+
+On first use, `run` automatically selects CUDA or OpenCL, validates the
+bundled engine and creates a safe GPU benchmark profile before contacting the
+coordination server. Later runs reuse the saved profile.
+
+The benchmark can be repeated manually when required:
+
+```bash
+openpuzzle benchmark --real --auto
+```
+
+Advanced users may install from source instead:
+
+```bash
+cmake -S OpenPuzzle -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+sudo cmake --install build
+```
+
+After a source installation, use the same `run` command.
