@@ -69,6 +69,8 @@ int main() {
   assert(!heartbeat.version.empty());
   assert(!heartbeat.platform.empty());
   assert(heartbeat.status == "idle");
+  assert(heartbeat.activeEngine.empty());
+  assert(heartbeat.activeBackend.empty());
 
   assert(!heartbeat.cpu.name.empty());
   assert(heartbeat.cpu.cores > 0);

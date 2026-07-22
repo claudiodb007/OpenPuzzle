@@ -29,7 +29,9 @@ private:
   static std::vector<ClientEngineCapability>
   engines();
 
-  static std::string executionStatus();
+  static std::string executionStatus(
+      std::string& activeEngine,
+      std::string& activeBackend);
 };
 
 } // namespace openpuzzle::client

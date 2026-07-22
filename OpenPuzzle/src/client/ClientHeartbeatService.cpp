@@ -276,17 +276,24 @@ ClientHeartbeatService::engines() {
 
 std::string
 ClientHeartbeatService::
-executionStatus() {
+executionStatus(
+    std::string& activeEngine,
+    std::string& activeBackend) {
+  activeEngine.clear();
+  activeBackend.clear();
+
   const auto state =
       ClientStateStore::load();
 
-  if (!state) {
+  if (!state ||
+      !processExists(state->pid)) {
     return "idle";
   }
 
-  return processExists(state->pid)
-      ? "running"
-      : "idle";
+  activeEngine = state->engine;
+  activeBackend = state->backend;
+
+  return "running";
 }
 
 ClientHeartbeat
@@ -309,7 +316,9 @@ collectLocalHeartbeat() {
       platform();
 
   heartbeat.status =
-      executionStatus();
+      executionStatus(
+          heartbeat.activeEngine,
+          heartbeat.activeBackend);
 
   heartbeat.cpu =
       cpu();
