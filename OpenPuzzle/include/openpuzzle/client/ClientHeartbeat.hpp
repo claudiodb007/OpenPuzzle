@@ -48,6 +48,9 @@ struct ClientHeartbeat {
   std::string platform;
   std::string status = "idle";
 
+  std::string activeEngine;
+  std::string activeBackend;
+
   ClientCpuCapability cpu;
   std::vector<ClientGpuCapability> gpus;
   std::vector<ClientEngineCapability> engines;
@@ -60,6 +63,13 @@ struct ClientHeartbeat {
              status == "idle" ||
              status == "running" ||
              status == "paused"
+           ) &&
+           (
+             status != "running" ||
+             (
+               !activeEngine.empty() &&
+               !activeBackend.empty()
+             )
            ) &&
            cpu.valid();
   }

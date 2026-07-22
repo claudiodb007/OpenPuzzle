@@ -30,6 +30,27 @@ int main() {
 
   assert(heartbeat.valid());
 
+  heartbeat.status =
+      "running";
+
+  assert(!heartbeat.valid());
+
+  heartbeat.activeEngine =
+      "BitCrack";
+
+  heartbeat.activeBackend =
+      "CUDA";
+
+  assert(heartbeat.valid());
+
+  heartbeat.status =
+      "idle";
+
+  heartbeat.activeEngine.clear();
+  heartbeat.activeBackend.clear();
+
+  assert(heartbeat.valid());
+
   ClientGpuCapability gpu;
 
   gpu.backend =
