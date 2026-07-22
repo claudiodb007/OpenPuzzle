@@ -22,6 +22,13 @@ set(
     "Vetted OpenPuzzle-BitCrack OpenCL executable"
 )
 
+set(
+    OPENPUZZLE_BUNDLED_KEYHUNT_ENGINE
+    "${CMAKE_SOURCE_DIR}/../../cpu-engine-lab/keyhunt/keyhunt"
+    CACHE FILEPATH
+    "Vetted KeyHunt CPU executable"
+)
+
 foreach(_openpuzzle_engine
         "${OPENPUZZLE_BUNDLED_CUDA_ENGINE}"
         "${OPENPUZZLE_BUNDLED_OPENCL_ENGINE}")
@@ -32,6 +39,27 @@ foreach(_openpuzzle_engine
         )
     endif()
 endforeach()
+
+if(NOT EXISTS "${OPENPUZZLE_BUNDLED_KEYHUNT_ENGINE}")
+    message(FATAL_ERROR
+        "Bundled KeyHunt executable not found: "
+        "${OPENPUZZLE_BUNDLED_KEYHUNT_ENGINE}"
+    )
+endif()
+
+get_filename_component(
+    OPENPUZZLE_KEYHUNT_SOURCE_DIRECTORY
+    "${OPENPUZZLE_BUNDLED_KEYHUNT_ENGINE}"
+    DIRECTORY
+)
+
+if(NOT EXISTS
+   "${OPENPUZZLE_KEYHUNT_SOURCE_DIRECTORY}/LICENSE")
+    message(FATAL_ERROR
+        "KeyHunt LICENSE was not found: "
+        "${OPENPUZZLE_KEYHUNT_SOURCE_DIRECTORY}/LICENSE"
+    )
+endif()
 
 get_filename_component(
     OPENPUZZLE_BITCRACK_BIN_DIRECTORY
@@ -55,6 +83,7 @@ endif()
 
 set(OPENPUZZLE_CUDA_ENGINE_NAME "cuBitCrack")
 set(OPENPUZZLE_OPENCL_ENGINE_NAME "clBitCrack")
+set(OPENPUZZLE_KEYHUNT_ENGINE_NAME "keyhunt")
 
 set(OPENPUZZLE_CUDA_ENGINE_IDENTITY
     "OpenPuzzle-BitCrack 1.0.0 CUDA protocol 2"
@@ -162,6 +191,7 @@ add_library(OpenPuzzleCore
     src/hardware/GpuManager.cpp
     src/adapters/bitcrack/BitCrackOutputParser.cpp
     src/adapters/bitcrack/BitCrackProgressParser.cpp
+    src/adapters/keyhunt/KeyHuntProgressParser.cpp
     src/performance/AutoTuner.cpp
 src/performance/BenchmarkRunner.cpp
     src/performance/GpuProfileManager.cpp
@@ -188,6 +218,7 @@ target_compile_definitions(OpenPuzzleCore
         OPENPUZZLE_VERSION="${PROJECT_VERSION}"
         OPENPUZZLE_CUDA_ENGINE_NAME="${OPENPUZZLE_CUDA_ENGINE_NAME}"
         OPENPUZZLE_OPENCL_ENGINE_NAME="${OPENPUZZLE_OPENCL_ENGINE_NAME}"
+        OPENPUZZLE_KEYHUNT_ENGINE_NAME="${OPENPUZZLE_KEYHUNT_ENGINE_NAME}"
         OPENPUZZLE_CUDA_ENGINE_IDENTITY="${OPENPUZZLE_CUDA_ENGINE_IDENTITY}"
         OPENPUZZLE_OPENCL_ENGINE_IDENTITY="${OPENPUZZLE_OPENCL_ENGINE_IDENTITY}"
 )
@@ -204,10 +235,15 @@ set(OPENPUZZLE_OPENCL_ENGINE_BUILD_PATH
     "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}/${OPENPUZZLE_OPENCL_ENGINE_NAME}"
 )
 
+set(OPENPUZZLE_KEYHUNT_ENGINE_BUILD_PATH
+    "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}/${OPENPUZZLE_KEYHUNT_ENGINE_NAME}"
+)
+
 add_custom_command(
     OUTPUT
         "${OPENPUZZLE_CUDA_ENGINE_BUILD_PATH}"
         "${OPENPUZZLE_OPENCL_ENGINE_BUILD_PATH}"
+        "${OPENPUZZLE_KEYHUNT_ENGINE_BUILD_PATH}"
     COMMAND ${CMAKE_COMMAND} -E make_directory
         "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -216,9 +252,13 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${OPENPUZZLE_BUNDLED_OPENCL_ENGINE}"
         "${OPENPUZZLE_OPENCL_ENGINE_BUILD_PATH}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${OPENPUZZLE_BUNDLED_KEYHUNT_ENGINE}"
+        "${OPENPUZZLE_KEYHUNT_ENGINE_BUILD_PATH}"
     DEPENDS
         "${OPENPUZZLE_BUNDLED_CUDA_ENGINE}"
         "${OPENPUZZLE_BUNDLED_OPENCL_ENGINE}"
+        "${OPENPUZZLE_BUNDLED_KEYHUNT_ENGINE}"
     VERBATIM
 )
 
@@ -227,6 +267,7 @@ add_custom_target(
     DEPENDS
         "${OPENPUZZLE_CUDA_ENGINE_BUILD_PATH}"
         "${OPENPUZZLE_OPENCL_ENGINE_BUILD_PATH}"
+        "${OPENPUZZLE_KEYHUNT_ENGINE_BUILD_PATH}"
 )
 
 add_executable(OpenPuzzle
@@ -276,6 +317,7 @@ install(
     PROGRAMS
         "${OPENPUZZLE_BUNDLED_CUDA_ENGINE}"
         "${OPENPUZZLE_BUNDLED_OPENCL_ENGINE}"
+        "${OPENPUZZLE_BUNDLED_KEYHUNT_ENGINE}"
     DESTINATION
         "${CMAKE_INSTALL_LIBEXECDIR}/OpenPuzzle"
 )
@@ -316,6 +358,13 @@ install(
         "${OPENPUZZLE_BITCRACK_SOURCE_DIRECTORY}/OPENPUZZLE_PATCHES.md"
     DESTINATION
         ${CMAKE_INSTALL_DOCDIR}/third-party/OpenPuzzle-BitCrack
+)
+
+install(
+    FILES
+        "${OPENPUZZLE_KEYHUNT_SOURCE_DIRECTORY}/LICENSE"
+    DESTINATION
+        ${CMAKE_INSTALL_DOCDIR}/third-party/KeyHunt
 )
 
 # One public package contains both vetted GPU backends.

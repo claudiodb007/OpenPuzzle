@@ -55,14 +55,16 @@ public:
 
   static std::optional<ExecutionProgress>
   latestProgress(
-      const std::string& workspace);
+      const std::string& workspace,
+      const std::string& engine = {});
 
   static std::optional<std::string>
   solutionFile(
       const std::string& workspace);
 
   static bool hasCompletionProof(
-      const std::string& workspace);
+      const std::string& workspace,
+      const std::string& engine = {});
 
   static std::optional<std::string>
   assignedKeyCount(
@@ -87,6 +89,7 @@ private:
 
   static bool readLatestProgress(
       const std::string& workspace,
+      const std::string& engine,
       ExecutionProgress& progress);
 };
 

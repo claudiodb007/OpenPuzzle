@@ -23,6 +23,9 @@ constexpr const char *CudaEngineName =
 constexpr const char *OpenClEngineName =
     OPENPUZZLE_OPENCL_ENGINE_NAME;
 
+constexpr const char *KeyHuntEngineName =
+    OPENPUZZLE_KEYHUNT_ENGINE_NAME;
+
 constexpr const char *CudaEngineIdentity =
     OPENPUZZLE_CUDA_ENGINE_IDENTITY;
 
@@ -144,6 +147,39 @@ std::optional<fs::path> runningExecutable() {
   return fs::path(buffer.data());
 }
 
+std::optional<std::string> bundledExecutable(
+    const char *name) {
+  const auto executable =
+      runningExecutable();
+
+  if (!executable) {
+    return std::nullopt;
+  }
+
+  const auto directory =
+      executable->parent_path();
+
+  const std::vector<fs::path> candidates = {
+      directory /
+          "libexec" /
+          "OpenPuzzle" /
+          name,
+
+      directory.parent_path() /
+          "libexec" /
+          "OpenPuzzle" /
+          name,
+  };
+
+  for (const auto &candidate : candidates) {
+    if (executableFile(candidate)) {
+      return candidate.string();
+    }
+  }
+
+  return std::nullopt;
+}
+
 const char *engineName(
     const std::string &backend) {
   if (backend == "cuda") {
@@ -206,12 +242,13 @@ bool ToolManager::supportsBackend(
     const std::string &backend) {
   return
       backend == "cuda" ||
-      backend == "opencl";
+      backend == "opencl" ||
+      backend == "cpu";
 }
 
 std::vector<std::string>
 ToolManager::bundledBackends() {
-  return {"cuda", "opencl"};
+  return {"cuda", "opencl", "cpu"};
 }
 
 bool ToolManager::validateBitCrackEngine(
@@ -357,6 +394,12 @@ ToolManager::bundledBitCrackPath() {
 std::optional<std::string>
 ToolManager::bitcrackPath() {
   return bundledBitCrackPath();
+}
+
+std::optional<std::string>
+ToolManager::keyhuntPath() {
+  return bundledExecutable(
+      KeyHuntEngineName);
 }
 
 } // namespace openpuzzle

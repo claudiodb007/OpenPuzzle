@@ -389,6 +389,55 @@ int main() {
         workspace / "bitcrack.log");
   }
 
+  /*
+   * KeyHunt usa um log próprio. A métrica pública
+   * conta dois hashes comprimidos por escalar; o
+   * parser devolve chaves privadas reais e exige End.
+   */
+  {
+    writeFile(
+        workspace / "keyhunt.log",
+        "[+] Total 12509184 keys in 2 seconds: "
+        "~6 Mkeys/s (6254592 keys/s)\r"
+        "End\n");
+
+    const auto progress =
+        ExecutionSyncService::latestProgress(
+            workspace.string(),
+            "KeyHunt");
+
+    assert(progress);
+    assert(
+        progress->keysChecked ==
+        "6254592");
+    assert(
+        progress->speedMKeys > 3.127295 &&
+        progress->speedMKeys < 3.127297);
+
+    assert(
+        ExecutionSyncService::hasCompletionProof(
+            workspace.string(),
+            "KeyHunt"));
+
+    assert(
+        !ExecutionSyncService::hasCompletionProof(
+            workspace.string(),
+            "BitCrack"));
+
+    writeFile(
+        workspace / "keyhunt.log",
+        "[+] Total 12509184 keys in 2 seconds: "
+        "~6 Mkeys/s (6254592 keys/s)\r");
+
+    assert(
+        !ExecutionSyncService::hasCompletionProof(
+            workspace.string(),
+            "KeyHunt"));
+
+    std::filesystem::remove(
+        workspace / "keyhunt.log");
+  }
+
   std::filesystem::remove_all(
       temporaryHome);
 

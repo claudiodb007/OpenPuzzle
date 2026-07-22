@@ -5,6 +5,26 @@
 
 namespace openpuzzle {
 
+namespace {
+
+std::string shellQuote(
+    const std::string& value) {
+  std::string quoted = "'";
+
+  for (const char character : value) {
+    if (character == '\'') {
+      quoted += "'\\''";
+    } else {
+      quoted += character;
+    }
+  }
+
+  quoted += "'";
+  return quoted;
+}
+
+} // namespace
+
 KeyHuntEngine::KeyHuntEngine(
     std::string executable)
     : executable_(std::move(executable)) {}
@@ -29,14 +49,26 @@ std::string KeyHuntEngine::buildCommand(
   std::ostringstream command;
 
   command
-      << executable_
+      << "cd "
+      << shellQuote(request.workspace)
+      << " && umask 077"
+      << " && : > KEYFOUNDKEYFOUND.txt"
+      << " && chmod 600 KEYFOUNDKEYFOUND.txt"
+      << " && ln -sfn KEYFOUNDKEYFOUND.txt found.txt"
+      << " && "
+      << shellQuote(executable_)
       << " -m address"
       << " -f "
-      << request.targetFile
+      << shellQuote(request.targetFile)
       << " -r "
-      << request.startKey
-      << ":"
-      << request.endKey;
+      << shellQuote(
+             request.startKey +
+             ":" +
+             request.endKey)
+      << " -l compress"
+      << " -n 1024"
+      << " -q"
+      << " -s 1";
 
   if (request.threads > 0) {
     command
@@ -45,8 +77,9 @@ std::string KeyHuntEngine::buildCommand(
   }
 
   command
-      << " 2>&1 | tee -a "
-      << request.logFile;
+      << " >> "
+      << shellQuote(request.logFile)
+      << " 2>&1";
 
   return command.str();
 }

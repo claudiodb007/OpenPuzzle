@@ -94,7 +94,10 @@ EngineLaunchBuilder::build(const PuzzleRecord &puzzle, const RangeRecord &range,
       (std::filesystem::path(workspace) / "found.txt").string();
 
   request.logFile =
-      (std::filesystem::path(workspace) / "bitcrack.log").string();
+      (
+          std::filesystem::path(workspace) /
+          (engineLogName + ".log")
+      ).string();
 
   return request;
 }

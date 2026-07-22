@@ -10,14 +10,15 @@ using namespace openpuzzle;
 int main() {
   assert(ToolManager::supportsBackend("cuda"));
   assert(ToolManager::supportsBackend("opencl"));
-  assert(!ToolManager::supportsBackend("cpu"));
+  assert(ToolManager::supportsBackend("cpu"));
 
   const auto backends =
       ToolManager::bundledBackends();
 
-  assert(backends.size() == 2);
+  assert(backends.size() == 3);
   assert(backends[0] == "cuda");
   assert(backends[1] == "opencl");
+  assert(backends[2] == "cpu");
 
   const auto cuda =
       ToolManager::bitcrackCudaPath();

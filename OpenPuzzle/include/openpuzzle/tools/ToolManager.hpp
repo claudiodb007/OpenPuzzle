@@ -47,6 +47,7 @@ public:
   static std::optional<std::string> bitcrackPath();
   static std::optional<std::string> bitcrackCudaPath();
   static std::optional<std::string> bitcrackOpenCLPath();
+  static std::optional<std::string> keyhuntPath();
 };
 
 } // namespace openpuzzle

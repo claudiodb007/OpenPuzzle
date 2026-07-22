@@ -1,6 +1,7 @@
 #include "openpuzzle/engines/EngineParserFactory.hpp"
 
 #include "openpuzzle/adapters/bitcrack/BitCrackProgressParser.hpp"
+#include "openpuzzle/adapters/keyhunt/KeyHuntProgressParser.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -30,6 +31,11 @@ EngineParserFactory::create(
   if (engineId == "bitcrack") {
     return std::make_unique<
         bitcrack::BitCrackProgressParser>();
+  }
+
+  if (engineId == "keyhunt") {
+    return std::make_unique<
+        keyhunt::KeyHuntProgressParser>();
   }
 
   return nullptr;

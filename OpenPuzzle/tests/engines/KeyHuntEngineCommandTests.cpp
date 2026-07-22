@@ -32,6 +32,9 @@ int main() {
   request.targetFile =
       "/tmp/openpuzzle-targets.txt";
 
+  request.workspace =
+      "/tmp/openpuzzle-workspace";
+
   request.logFile =
       "/tmp/keyhunt.log";
 
@@ -42,7 +45,27 @@ int main() {
 
   assert(contains(
       command,
-      "/tmp/keyhunt"));
+      "cd '/tmp/openpuzzle-workspace'"));
+
+  assert(contains(
+      command,
+      "umask 077"));
+
+  assert(contains(
+      command,
+      ": > KEYFOUNDKEYFOUND.txt"));
+
+  assert(contains(
+      command,
+      "chmod 600 KEYFOUNDKEYFOUND.txt"));
+
+  assert(contains(
+      command,
+      "ln -sfn KEYFOUNDKEYFOUND.txt found.txt"));
+
+  assert(contains(
+      command,
+      "'/tmp/keyhunt'"));
 
   assert(contains(
       command,
@@ -50,12 +73,28 @@ int main() {
 
   assert(contains(
       command,
-      "-f /tmp/openpuzzle-targets.txt"));
+      "-f '/tmp/openpuzzle-targets.txt'"));
 
   assert(contains(
       command,
-      "-r 400000000000000000:"
-      "40000000FFFFFFFFFF"));
+      "-r '400000000000000000:"
+      "40000000FFFFFFFFFF'"));
+
+  assert(contains(
+      command,
+      "-l compress"));
+
+  assert(contains(
+      command,
+      "-n 1024"));
+
+  assert(contains(
+      command,
+      "-q"));
+
+  assert(contains(
+      command,
+      "-s 1"));
 
   assert(contains(
       command,
@@ -63,7 +102,11 @@ int main() {
 
   assert(contains(
       command,
-      "tee -a /tmp/keyhunt.log"));
+      ">> '/tmp/keyhunt.log' 2>&1"));
+
+  assert(!contains(
+      command,
+      "tee"));
 
   assert(!contains(
       command,

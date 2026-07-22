@@ -78,6 +78,76 @@ bool hasArgument(const std::vector<std::string> &args,
   return false;
 }
 
+std::string selectedBackend(
+    const std::vector<std::string> &args) {
+  const auto configuration =
+      ConfigurationManager::load();
+
+  return getArgument(
+      args,
+      "--backend",
+      configuration.engine.backend.empty()
+          ? ToolManager::bundledBackend()
+          : configuration.engine.backend);
+}
+
+int logicalProcessorCount() {
+  const long processors =
+      sysconf(_SC_NPROCESSORS_ONLN);
+
+  return processors > 0
+      ? static_cast<int>(processors)
+      : 1;
+}
+
+int selectedCpuThreads(
+    const std::vector<std::string> &args) {
+  std::string value =
+      getArgument(args, "--threads");
+
+  if (value.empty()) {
+    value = getArgument(args, "--t");
+  }
+
+  const int available =
+      logicalProcessorCount();
+
+  if (value.empty()) {
+    if (
+        hasArgument(args, "--threads") ||
+        hasArgument(args, "--t")) {
+      throw std::runtime_error(
+          "CPU threads require a value between 1 and " +
+          std::to_string(available));
+    }
+
+    return available;
+  }
+
+  std::size_t consumed = 0;
+  long long requested = 0;
+
+  try {
+    requested =
+        std::stoll(value, &consumed);
+  } catch (...) {
+    throw std::runtime_error(
+        "CPU threads must be a whole number between 1 and " +
+        std::to_string(available));
+  }
+
+  if (
+      consumed != value.size() ||
+      requested < 1 ||
+      requested > available) {
+    throw std::runtime_error(
+        "CPU threads must be between 1 and " +
+        std::to_string(available));
+  }
+
+  return static_cast<int>(requested);
+}
+
 std::string serverUrl(const std::vector<std::string> &args) {
   std::string value = "https://claudiodb.com";
 
@@ -640,8 +710,44 @@ ClientIterationResult RunSession::runOnce(
 
   const bool dryRun = hasArgument(args, "--dry-run");
 
+  const std::string runBackend =
+      subcommand == "run"
+          ? selectedBackend(args)
+          : "";
+
+  if (
+      subcommand == "run" &&
+      !ToolManager::supportsBackend(
+          runBackend)) {
+    std::cerr
+        << "This OpenPuzzle package does not support the "
+        << runBackend
+        << " backend.\n";
+
+    return 1;
+  }
+
   if (subcommand == "run" &&
-      initializeClient) {
+      runBackend == "cpu") {
+    try {
+      (void) selectedCpuThreads(args);
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n';
+      return 1;
+    }
+
+    if (!ToolManager::keyhuntPath()) {
+      std::cerr
+          << "The bundled KeyHunt CPU engine is "
+          << "missing or invalid.\n";
+
+      return 1;
+    }
+  }
+
+  if (subcommand == "run" &&
+      initializeClient &&
+      runBackend != "cpu") {
     FirstRunSetup setup;
 
     if (!setup.ensureConfigured()) {
@@ -650,27 +756,6 @@ ClientIterationResult RunSession::runOnce(
   }
 
   if (subcommand == "run") {
-    const auto configuration =
-        ConfigurationManager::load();
-
-    const std::string requestedBackend =
-        getArgument(
-            args,
-            "--backend",
-            configuration.engine.backend.empty()
-                ? ToolManager::bundledBackend()
-                : configuration.engine.backend);
-
-    if (!ToolManager::supportsBackend(
-            requestedBackend)) {
-      std::cerr
-          << "This OpenPuzzle package does not support the "
-          << requestedBackend
-          << " backend.\n";
-
-      return 1;
-    }
-
     /*
      * A fresh run must have a validated local GPU
      * profile before registration, heartbeat or
@@ -678,7 +763,10 @@ ClientIterationResult RunSession::runOnce(
      * recovered above and dry-run remains local and
      * non-benchmarking.
      */
-    if (initializeClient && !dryRun) {
+    if (
+        initializeClient &&
+        !dryRun &&
+        runBackend != "cpu") {
       const int device =
           getIntegerArgument(
               args,
@@ -696,12 +784,12 @@ ClientIterationResult RunSession::runOnce(
           };
 
       preparationDependencies.runBenchmark =
-          [&requestedBackend, device] {
+          [&runBackend, device] {
             return BenchmarkCommand().run({
                 "--real",
                 "--auto",
                 "--backend",
-                requestedBackend,
+                runBackend,
                 "--gpu",
                 std::to_string(device),
             });
@@ -726,22 +814,34 @@ ClientIterationResult RunSession::runOnce(
   bool calibrationAssignment = false;
 
   if (subcommand == "run") {
-    const auto measured =
-        measuredSpeedMKeys(args);
-
-    if (measured) {
-      speedMKeys = *measured;
-    } else {
+    if (runBackend == "cpu") {
       /*
-       * Sem perfil medido, usar uma atribuição curta
-       * de calibração, exceto quando o utilizador
-       * definiu explicitamente a duração.
+       * KeyHunt does not require a benchmark. Until a
+       * completed CPU assignment provides live speed,
+       * request a short range unless the user selected
+       * a duration explicitly.
        */
       if (!requestedDuration) {
         targetDurationMinutes = 5;
       }
+    } else {
+      const auto measured =
+          measuredSpeedMKeys(args);
 
-      calibrationAssignment = true;
+      if (measured) {
+        speedMKeys = *measured;
+      } else {
+        /*
+         * Sem perfil medido, usar uma atribuição curta
+         * de calibração, exceto quando o utilizador
+         * definiu explicitamente a duração.
+         */
+        if (!requestedDuration) {
+          targetDurationMinutes = 5;
+        }
+
+        calibrationAssignment = true;
+      }
     }
   }
 
@@ -789,12 +889,34 @@ ClientIterationResult RunSession::runOnce(
    * não cria leases ou assignments no servidor.
    */
   if (subcommand == "run" && dryRun) {
-    const auto configuration = ConfigurationManager::load();
+    if (runBackend == "cpu") {
+      const int cpuThreads =
+          selectedCpuThreads(args);
 
-    const std::string backend = getArgument(args, "--backend",
-                                            configuration.engine.backend.empty()
-                                                ? "cuda"
-                                                : configuration.engine.backend);
+      std::cout << "\nLocal configuration\n"
+                << "-------------------\n"
+                << "CPU processors..... "
+                << logicalProcessorCount()
+                << '\n'
+                << "Engine............. KeyHunt\n"
+                << "Backend............ CPU\n"
+                << "Executable......... "
+                << *ToolManager::keyhuntPath()
+                << '\n'
+                << "Threads............ "
+                << cpuThreads
+                << "\n\n"
+                << "Dry run only. "
+                << "No assignment was requested.\n";
+
+      return 0;
+    }
+
+    const auto configuration =
+        ConfigurationManager::load();
+
+    const std::string backend =
+        runBackend;
 
     const auto executable =
         backend == "opencl"
@@ -910,56 +1032,114 @@ ClientIterationResult RunSession::runOnce(
 
   CommandContext context;
 
-  if (!context.initialize()) {
+  if (
+      runBackend != "cpu" &&
+      !context.initialize()) {
     std::cerr << context.lastError() << '\n';
 
     return 1;
   }
 
-  const std::string engine = getArgument(args, "--engine", "bitcrack");
+  const bool cpuBackend =
+      runBackend == "cpu";
 
-  const auto configuration = ConfigurationManager::load();
+  const std::string engine =
+      getArgument(
+          args,
+          "--engine",
+          cpuBackend
+              ? "keyhunt"
+              : "bitcrack");
 
-  const std::string configuredBackend = configuration.engine.backend.empty()
-                                            ? "cuda"
-                                            : configuration.engine.backend;
-
-  const std::string backend = getArgument(args, "--backend", configuredBackend);
-
-  if (engine != "bitcrack") {
-    throw std::runtime_error("Only BitCrack is currently enabled");
+  if (
+      (cpuBackend && engine != "keyhunt") ||
+      (!cpuBackend && engine != "bitcrack")) {
+    throw std::runtime_error(
+        "The " + runBackend +
+        " backend requires the " +
+        (cpuBackend
+             ? "KeyHunt"
+             : "BitCrack") +
+        " engine");
   }
 
-  if (backend != "cuda" && backend != "opencl") {
-    throw std::runtime_error("Unsupported BitCrack backend: " + backend);
-  }
+  int device =
+      cpuBackend
+          ? 0
+          : getIntegerArgument(
+                args,
+                "--device",
+                context.gpu);
 
-  int device = getIntegerArgument(args, "--device", context.gpu);
+  int blocks =
+      cpuBackend
+          ? 0
+          : getIntegerArgument(
+                args,
+                "--blocks",
+                getIntegerArgument(
+                    args,
+                    "--b",
+                    256));
 
-  int blocks = getIntegerArgument(args, "--blocks",
-                                  getIntegerArgument(args, "--b", 256));
+  int threads =
+      cpuBackend
+          ? selectedCpuThreads(args)
+          : getIntegerArgument(
+                args,
+                "--threads",
+                getIntegerArgument(
+                    args,
+                    "--t",
+                    256));
 
-  int threads = getIntegerArgument(args, "--threads",
-                                   getIntegerArgument(args, "--t", 256));
-
-  int points = getIntegerArgument(args, "--points",
-                                  getIntegerArgument(args, "--p", 256));
+  int points =
+      cpuBackend
+          ? 0
+          : getIntegerArgument(
+                args,
+                "--points",
+                getIntegerArgument(
+                    args,
+                    "--p",
+                    256));
 
   const bool manualProfile =
       hasArgument(args, "--blocks") || hasArgument(args, "--b") ||
       hasArgument(args, "--threads") || hasArgument(args, "--t") ||
       hasArgument(args, "--points") || hasArgument(args, "--p");
 
-  const auto gpu = GpuManager::currentGpu(
-      backend == "opencl"
-          ? "OpenCL"
-          : "CUDA");
+  std::string hardwareLabel = "CPU processors";
+  std::string hardwareValue =
+      std::to_string(
+          logicalProcessorCount());
 
-  if (!manualProfile) {
+  if (!cpuBackend) {
+    const auto gpu =
+        GpuManager::currentGpu(
+            runBackend == "opencl"
+                ? "OpenCL"
+                : "CUDA");
+
+    hardwareLabel = "GPU";
+    hardwareValue = gpu.name;
+  }
+
+  if (!cpuBackend && !manualProfile) {
     GpuProfileManager profiles(context.db);
 
+    const auto gpu =
+        GpuManager::currentGpu(
+            runBackend == "opencl"
+                ? "OpenCL"
+                : "CUDA");
+
     const auto profile = profiles.chooseBest(
-        gpu.name, backend == "opencl" ? "OpenCL" : "CUDA", "BitCrack");
+        gpu.name,
+        runBackend == "opencl"
+            ? "OpenCL"
+            : "CUDA",
+        "BitCrack");
 
     if (profile) {
       blocks = profile->blocks;
@@ -977,7 +1157,17 @@ ClientIterationResult RunSession::runOnce(
 
   std::string executable;
 
-  if (backend == "cuda") {
+  if (cpuBackend) {
+    const auto keyhunt =
+        ToolManager::keyhuntPath();
+
+    if (!keyhunt) {
+      throw std::runtime_error(
+          "KeyHunt CPU executable not configured");
+    }
+
+    executable = *keyhunt;
+  } else if (runBackend == "cuda") {
     if (!context.bitcrack) {
       throw std::runtime_error("BitCrack CUDA executable not configured");
     }
@@ -1031,9 +1221,18 @@ ClientIterationResult RunSession::runOnce(
 
   WorkerEngineCapability capability;
 
-  capability.engine = "BitCrack";
+  capability.engine =
+      cpuBackend
+          ? "KeyHunt"
+          : "BitCrack";
 
-  capability.backend = backend == "opencl" ? "OpenCL" : "CUDA";
+  capability.backend =
+      cpuBackend
+          ? "CPU"
+          : (
+                runBackend == "opencl"
+                    ? "OpenCL"
+                    : "CUDA");
 
   capability.device = device;
 
@@ -1061,21 +1260,35 @@ ClientIterationResult RunSession::runOnce(
 
   std::cout << "\nLocal configuration\n"
             << "-------------------\n"
-            << "GPU................ " << gpu.name << '\n'
+            << std::left
+            << std::setw(20)
+            << (hardwareLabel + "...")
+            << ' '
+            << hardwareValue
+            << '\n'
             << "Engine............. " << capability.engine << '\n'
             << "Backend............ " << capability.backend << '\n'
             << "Executable......... " << executable << '\n'
-            << "Device............. " << device << '\n'
-            << "Blocks............. " << blocks << '\n'
             << "Threads............ " << threads << '\n'
-            << "Points............. " << points << '\n'
-            << "Workspace.......... " << request.workspace << "\n\n"
+            << "Workspace.......... " << request.workspace << '\n';
+
+  if (!cpuBackend) {
+    std::cout
+        << "Device............. " << device << '\n'
+        << "Blocks............. " << blocks << '\n'
+        << "Points............. " << points << '\n';
+  }
+
+  std::cout << "\n"
             << "Command\n"
             << "-------\n"
             << request.command << "\n\n";
 
   if (dryRun) {
-    std::cout << "Dry run only. BitCrack was not started.\n";
+    std::cout
+        << "Dry run only. "
+        << capability.engine
+        << " was not started.\n";
 
     return 0;
   }
@@ -1112,7 +1325,7 @@ ClientIterationResult RunSession::runOnce(
     throw std::runtime_error("Unable to save local execution state");
   }
 
-  std::cout << "BitCrack started.\n"
+  std::cout << capability.engine << " started.\n"
             << "PID................ " << handle.pid << '\n'
             << "Monitoring.......... active\n\n";
 

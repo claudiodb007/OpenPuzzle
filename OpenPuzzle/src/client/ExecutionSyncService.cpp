@@ -1,11 +1,12 @@
 #include "openpuzzle/client/ExecutionSyncService.hpp"
 
-#include "openpuzzle/adapters/bitcrack/BitCrackProgressParser.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
+#include "openpuzzle/engines/EngineParserFactory.hpp"
 
 #include <boost/multiprecision/cpp_int.hpp>
 
+#include <algorithm>
 #include <cerrno>
 #include <cctype>
 #include <csignal>
@@ -57,10 +58,31 @@ bool ExecutionSyncService::readExitCode(
 
 bool ExecutionSyncService::readLatestProgress(
     const std::string& workspace,
+    const std::string& engine,
     ExecutionProgress& progress) {
+  std::string engineId = engine;
+
+  std::transform(
+      engineId.begin(),
+      engineId.end(),
+      engineId.begin(),
+      [](unsigned char character) {
+        return static_cast<char>(
+            std::tolower(character));
+      });
+
+  if (engineId.empty()) {
+    engineId = "bitcrack";
+  }
+
+  const std::string logName =
+      engineId == "keyhunt"
+          ? "keyhunt.log"
+          : "bitcrack.log";
+
   const auto logPath =
       std::filesystem::path(workspace) /
-      "bitcrack.log";
+      logName;
 
   std::ifstream input(
       logPath,
@@ -70,7 +92,13 @@ bool ExecutionSyncService::readLatestProgress(
     return false;
   }
 
-  bitcrack::BitCrackProgressParser parser;
+  auto parser =
+      EngineParserFactory::create(
+          engineId);
+
+  if (!parser) {
+    return false;
+  }
 
   bool found = false;
 
@@ -81,7 +109,7 @@ bool ExecutionSyncService::readLatestProgress(
         }
 
         const auto parsed =
-            parser.parseLine(record);
+            parser->parseLine(record);
 
         if (!parsed) {
           return;
@@ -130,11 +158,28 @@ bool ExecutionSyncService::readLatestProgress(
 
 std::optional<ExecutionProgress>
 ExecutionSyncService::latestProgress(
-    const std::string& workspace) {
+    const std::string& workspace,
+    const std::string& engine) {
+  if (engine.empty()) {
+    const auto bitcrack =
+        latestProgress(
+            workspace,
+            "BitCrack");
+
+    if (bitcrack) {
+      return bitcrack;
+    }
+
+    return latestProgress(
+        workspace,
+        "KeyHunt");
+  }
+
   ExecutionProgress progress;
 
   if (!readLatestProgress(
           workspace,
+          engine,
           progress)) {
     return std::nullopt;
   }
@@ -143,14 +188,45 @@ ExecutionSyncService::latestProgress(
 }
 
 bool ExecutionSyncService::hasCompletionProof(
-    const std::string& workspace) {
-  if (!latestProgress(workspace)) {
+    const std::string& workspace,
+    const std::string& engine) {
+  if (engine.empty()) {
+    return
+        hasCompletionProof(
+            workspace,
+            "BitCrack") ||
+        hasCompletionProof(
+            workspace,
+            "KeyHunt");
+  }
+
+  if (!latestProgress(
+          workspace,
+          engine)) {
     return false;
   }
 
+  std::string engineId = engine;
+
+  std::transform(
+      engineId.begin(),
+      engineId.end(),
+      engineId.begin(),
+      [](unsigned char character) {
+        return static_cast<char>(
+            std::tolower(character));
+      });
+
+  const bool keyhunt =
+      engineId == "keyhunt";
+
   const auto logPath =
       std::filesystem::path(workspace) /
-      "bitcrack.log";
+      (
+          keyhunt
+              ? "keyhunt.log"
+              : "bitcrack.log"
+      );
 
   std::ifstream input(
       logPath,
@@ -160,18 +236,37 @@ bool ExecutionSyncService::hasCompletionProof(
     return false;
   }
 
-  std::string line;
+  const auto provesCompletion =
+      [keyhunt](const std::string& record) {
+        if (keyhunt) {
+          return record == "End";
+        }
 
-  while (std::getline(input, line)) {
+        return
+            record.find(
+                "Reached end of keyspace") !=
+            std::string::npos;
+      };
+
+  std::string record;
+  char character = '\0';
+
+  while (input.get(character)) {
     if (
-        line.find(
-            "Reached end of keyspace") !=
-        std::string::npos) {
-      return true;
+        character == '\r' ||
+        character == '\n') {
+      if (provesCompletion(record)) {
+        return true;
+      }
+
+      record.clear();
+      continue;
     }
+
+    record.push_back(character);
   }
 
-  return false;
+  return provesCompletion(record);
 }
 
 std::optional<std::string>
@@ -362,6 +457,7 @@ ExecutionSyncService::tick(
 
     if (!readLatestProgress(
             state->workspace,
+            state->engine,
             progress)) {
       return result;
     }
@@ -407,7 +503,8 @@ ExecutionSyncService::tick(
 
   const auto finalProgress =
       latestProgress(
-          state->workspace);
+          state->workspace,
+          state->engine);
 
   const bool completed =
       exitCode == 0;
@@ -418,12 +515,15 @@ ExecutionSyncService::tick(
           : "";
 
   if (completed) {
-    if (!hasCompletionProof(state->workspace)) {
+    if (!hasCompletionProof(
+            state->workspace,
+            state->engine)) {
       result.completionStatus =
           AssignmentUploadStatus::PermanentFailure;
 
       result.completionError =
-          "BitCrack did not provide complete-range proof; "
+          state->engine +
+          " did not provide complete-range proof; "
           "local state was preserved";
 
       return result;
@@ -446,10 +546,10 @@ ExecutionSyncService::tick(
     }
 
     /*
-     * A última linha periódica do BitCrack pode ser
-     * anterior ao fim por alguns segundos. Depois do
-     * marcador de fim, o tamanho exato do assignment
-     * é a contagem final comprovada.
+     * A última linha periódica do motor pode ser
+     * anterior ao fim. Depois do marcador específico
+     * do motor, o tamanho exato do assignment é a
+     * contagem final comprovada.
      */
     finalKeysChecked =
         *assignedKeys;
