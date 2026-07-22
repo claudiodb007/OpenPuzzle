@@ -13,6 +13,7 @@ struct ClientExecutionState {
   int puzzle = 0;
   int rangeId = 0;
   int pid = 0;
+  int threads = 0;
 
   std::string target;
   std::string start;

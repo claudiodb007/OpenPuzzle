@@ -183,6 +183,9 @@ bool ClientStateStore::save(
       << '\n'
       << "pid="
       << state.pid
+      << '\n'
+      << "threads="
+      << state.threads
       << '\n';
 
   writeField(
@@ -350,6 +353,11 @@ ClientStateStore::load() {
       parseInteger(
           values,
           "pid");
+
+  state.threads =
+      parseInteger(
+          values,
+          "threads");
 
   state.target =
       valueOf(

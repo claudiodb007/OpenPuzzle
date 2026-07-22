@@ -1,4 +1,5 @@
 #include "openpuzzle/client/ClientHeartbeatService.hpp"
+#include "openpuzzle/client/ClientStateStore.hpp"
 
 #include <cassert>
 #include <cstdlib>
@@ -94,6 +95,44 @@ int main() {
       assert(engine.installed);
     }
   }
+
+  ClientExecutionState cpuState;
+
+  cpuState.active = true;
+  cpuState.assignmentId =
+      "11111111-1111-4111-8111-111111111111";
+  cpuState.clientId = heartbeat.clientId;
+  cpuState.puzzle = 71;
+  cpuState.rangeId = 238;
+  cpuState.pid = static_cast<int>(getpid());
+  cpuState.threads = 8;
+  cpuState.target =
+      "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU";
+  cpuState.start = "400000000000000000";
+  cpuState.end = "4000000000FFFFFFFF";
+  cpuState.engine = "KeyHunt";
+  cpuState.backend = "CPU";
+  cpuState.workspace =
+      temporaryHome.string();
+  cpuState.command =
+      "keyhunt -t 8";
+
+  assert(
+      ClientStateStore::save(
+          cpuState));
+
+  const auto cpuHeartbeat =
+      ClientHeartbeatService::
+          collectLocalHeartbeat();
+
+  assert(cpuHeartbeat.valid());
+  assert(cpuHeartbeat.status == "running");
+  assert(cpuHeartbeat.activeEngine == "KeyHunt");
+  assert(cpuHeartbeat.activeBackend == "CPU");
+  assert(cpuHeartbeat.cpu.threads == 8);
+
+  assert(
+      ClientStateStore::remove());
 
   ClientHeartbeatService service;
 

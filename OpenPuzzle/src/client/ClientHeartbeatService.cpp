@@ -278,9 +278,11 @@ std::string
 ClientHeartbeatService::
 executionStatus(
     std::string& activeEngine,
-    std::string& activeBackend) {
+    std::string& activeBackend,
+    int& activeCpuThreads) {
   activeEngine.clear();
   activeBackend.clear();
+  activeCpuThreads = 0;
 
   const auto state =
       ClientStateStore::load();
@@ -292,6 +294,13 @@ executionStatus(
 
   activeEngine = state->engine;
   activeBackend = state->backend;
+
+  if (
+      activeBackend == "CPU" ||
+      activeBackend == "cpu") {
+    activeCpuThreads =
+        state->threads;
+  }
 
   return "running";
 }
@@ -315,13 +324,25 @@ collectLocalHeartbeat() {
   heartbeat.platform =
       platform();
 
+  int activeCpuThreads = 0;
+
   heartbeat.status =
       executionStatus(
           heartbeat.activeEngine,
-          heartbeat.activeBackend);
+          heartbeat.activeBackend,
+          activeCpuThreads);
 
   heartbeat.cpu =
       cpu();
+
+  if (
+      activeCpuThreads > 0 &&
+      (
+          heartbeat.activeBackend == "CPU" ||
+          heartbeat.activeBackend == "cpu"
+      )) {
+    heartbeat.cpu.threads = activeCpuThreads;
+  }
 
   heartbeat.gpus =
       gpus();

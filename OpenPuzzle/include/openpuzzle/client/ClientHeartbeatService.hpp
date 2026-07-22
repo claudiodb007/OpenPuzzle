@@ -31,7 +31,8 @@ private:
 
   static std::string executionStatus(
       std::string& activeEngine,
-      std::string& activeBackend);
+      std::string& activeBackend,
+      int& activeCpuThreads);
 };
 
 } // namespace openpuzzle::client

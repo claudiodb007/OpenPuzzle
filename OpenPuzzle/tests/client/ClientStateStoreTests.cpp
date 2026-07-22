@@ -25,6 +25,7 @@ ClientExecutionState makeValidState() {
   state.puzzle = 71;
   state.rangeId = 84521;
   state.pid = 12345;
+  state.threads = 8;
 
   state.target =
       "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU";
@@ -68,6 +69,7 @@ void assertEqual(
   assert(actual.puzzle == expected.puzzle);
   assert(actual.rangeId == expected.rangeId);
   assert(actual.pid == expected.pid);
+  assert(actual.threads == expected.threads);
 
   assert(actual.target == expected.target);
   assert(actual.start == expected.start);

@@ -1306,6 +1306,7 @@ ClientIterationResult RunSession::runOnce(
   state.puzzle = assignment->puzzle;
   state.rangeId = assignment->rangeId;
   state.pid = handle.pid;
+  state.threads = threads;
 
   state.target = assignment->target;
   state.start = assignment->start;
