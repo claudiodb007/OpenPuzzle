@@ -12,6 +12,14 @@ public:
   int run(
       const std::vector<std::string> &args) const;
 
+  static std::vector<std::string>
+  concurrentGpuArguments(
+      const std::vector<std::string> &args);
+
+  static std::vector<std::string>
+  concurrentCpuArguments(
+      const std::vector<std::string> &args);
+
 private:
   ClientIterationResult runOnce(
       const std::vector<std::string> &args,

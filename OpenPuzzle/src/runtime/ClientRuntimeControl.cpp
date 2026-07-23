@@ -1,5 +1,6 @@
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 
+#include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 
 #include <cerrno>
@@ -15,6 +16,14 @@ namespace openpuzzle {
 
 std::filesystem::path
 ClientRuntimeControl::pidPath() {
+  return pidPath(
+      client::ClientStateStore::
+          executionSlot());
+}
+
+std::filesystem::path
+ClientRuntimeControl::pidPath(
+    const std::string& executionSlot) {
   const char *home =
       std::getenv("HOME");
 
@@ -26,18 +35,10 @@ ClientRuntimeControl::pidPath() {
   std::string filename =
       "runtime.pid";
 
-  const char* slotValue =
-      std::getenv(
-          "OPENPUZZLE_EXECUTION_SLOT");
-
-  if (slotValue != nullptr) {
-    const std::string slot(slotValue);
-
-    if (slot == "gpu") {
-      filename = "runtime-gpu.pid";
-    } else if (slot == "cpu") {
-      filename = "runtime-cpu.pid";
-    }
+  if (executionSlot == "gpu") {
+    filename = "runtime-gpu.pid";
+  } else if (executionSlot == "cpu") {
+    filename = "runtime-cpu.pid";
   }
 
   return root /
@@ -62,8 +63,16 @@ bool ClientRuntimeControl::processExists(
 
 std::optional<int>
 ClientRuntimeControl::runtimePid() {
+  return runtimePid(
+      client::ClientStateStore::
+          executionSlot());
+}
+
+std::optional<int>
+ClientRuntimeControl::runtimePid(
+    const std::string& executionSlot) {
   std::ifstream input(
-      pidPath());
+      pidPath(executionSlot));
 
   if (!input.is_open()) {
     return std::nullopt;
@@ -79,8 +88,15 @@ ClientRuntimeControl::runtimePid() {
 }
 
 bool ClientRuntimeControl::running() {
+  return running(
+      client::ClientStateStore::
+          executionSlot());
+}
+
+bool ClientRuntimeControl::running(
+    const std::string& executionSlot) {
   const auto pid =
-      runtimePid();
+      runtimePid(executionSlot);
 
   return pid &&
          processExists(*pid);
@@ -196,8 +212,15 @@ bool ClientRuntimeControl::release() {
 }
 
 bool ClientRuntimeControl::requestStop() {
+  return requestStop(
+      client::ClientStateStore::
+          executionSlot());
+}
+
+bool ClientRuntimeControl::requestStop(
+    const std::string& executionSlot) {
   const auto pid =
-      runtimePid();
+      runtimePid(executionSlot);
 
   if (!pid) {
     return false;
@@ -207,7 +230,7 @@ bool ClientRuntimeControl::requestStop() {
     std::error_code error;
 
     std::filesystem::remove(
-        pidPath(),
+        pidPath(executionSlot),
         error);
 
     return false;

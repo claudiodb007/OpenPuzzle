@@ -37,6 +37,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
 
@@ -98,6 +99,82 @@ int logicalProcessorCount() {
   return processors > 0
       ? static_cast<int>(processors)
       : 1;
+}
+
+std::vector<std::string>
+buildConcurrentArguments(
+    const std::vector<std::string>& args,
+    bool cpu) {
+  const std::string cpuThreads =
+      getArgument(
+          args,
+          "--cpu-threads");
+
+  if (cpu && cpuThreads.empty()) {
+    throw std::runtime_error(
+        "--with-cpu requires "
+        "--cpu-threads <number>");
+  }
+
+  std::vector<std::string> result;
+
+  const auto cpuOnlyOption =
+      [](const std::string& argument) {
+        return
+            argument == "--backend" ||
+            argument == "--device" ||
+            argument == "--gpu" ||
+            argument == "--blocks" ||
+            argument == "--b" ||
+            argument == "--threads" ||
+            argument == "--t" ||
+            argument == "--points" ||
+            argument == "--p";
+      };
+
+  for (std::size_t index = 0;
+       index < args.size();
+       ++index) {
+    const auto& argument =
+        args[index];
+
+    if (argument == "--with-cpu") {
+      continue;
+    }
+
+    if (argument == "--cpu-threads") {
+      if (index + 1 >= args.size()) {
+        throw std::runtime_error(
+            "--cpu-threads requires a value");
+      }
+
+      ++index;
+      continue;
+    }
+
+    if (cpu &&
+        cpuOnlyOption(argument)) {
+      if (index + 1 >= args.size()) {
+        throw std::runtime_error(
+            argument +
+            " requires a value");
+      }
+
+      ++index;
+      continue;
+    }
+
+    result.push_back(argument);
+  }
+
+  if (cpu) {
+    result.push_back("--backend");
+    result.push_back("cpu");
+    result.push_back("--threads");
+    result.push_back(cpuThreads);
+  }
+
+  return result;
 }
 
 int selectedCpuThreads(
@@ -303,6 +380,100 @@ void printAssignment(const client::RangeAssignment &assignment) {
 int showStatus(const std::vector<std::string> &args) {
   const std::string server = serverUrl(args);
 
+  const std::vector<std::string>
+      executionSlots = {
+          "gpu",
+          "cpu",
+      };
+
+  bool slotStateFound = false;
+
+  for (const auto& slot :
+       executionSlots) {
+    if (
+        client::ClientStateStore::
+            load(slot) ||
+        ClientRuntimeControl::
+            running(slot)) {
+      slotStateFound = true;
+      break;
+    }
+  }
+
+  if (slotStateFound) {
+    std::cout
+        << "OpenPuzzle Status\n"
+        << "-----------------\n";
+
+    for (const auto& slot :
+         executionSlots) {
+      const auto state =
+          client::ClientStateStore::
+              load(slot);
+
+      const auto runtimePid =
+          ClientRuntimeControl::
+              runtimePid(slot);
+
+      std::cout
+          << "\nSlot............... "
+          << slot
+          << '\n';
+
+      if (!state) {
+        std::cout
+            << "Status............. "
+            << (
+                   runtimePid &&
+                           ClientRuntimeControl::
+                               running(slot)
+                       ? "waiting"
+                       : "idle")
+            << '\n'
+            << "Execution.......... none\n";
+
+        continue;
+      }
+
+      std::cout
+          << "Status............. "
+          << (
+                 processExists(state->pid)
+                     ? "running"
+                     : "stopped")
+          << '\n'
+          << "Assignment......... "
+          << state->assignmentId
+          << '\n'
+          << "Puzzle............. "
+          << state->puzzle
+          << '\n'
+          << "Assignment number... "
+          << state->rangeId
+          << '\n'
+          << "PID................ "
+          << state->pid
+          << '\n'
+          << "Engine............. "
+          << state->engine
+          << '\n'
+          << "Backend............ "
+          << state->backend
+          << '\n';
+
+      if (
+          state->backend == "CPU" ||
+          state->backend == "cpu") {
+        std::cout
+            << "Threads............ "
+            << state->threads
+            << '\n';
+      }
+    }
+
+    return 0;
+  }
+
   client::ExecutionSyncService syncService;
 
   const auto result = syncService.tick(server);
@@ -444,6 +615,33 @@ int stopExecution() {
   std::cout << "OpenPuzzle\n"
             << "----------\n";
 
+  bool concurrentStopRequested =
+      false;
+
+  for (const std::string slot : {
+           "gpu",
+           "cpu",
+       }) {
+    if (
+        ClientRuntimeControl::
+            requestStop(slot)) {
+      concurrentStopRequested = true;
+
+      std::cout
+          << "Stop requested..... "
+          << slot
+          << '\n';
+    }
+  }
+
+  if (concurrentStopRequested) {
+    std::cout
+        << "The active runtimes are "
+        << "shutting down.\n";
+
+    return 0;
+  }
+
   /*
    * O runtime principal é responsável por sincronizar,
    * cancelar a atribuição e terminar o motor.
@@ -506,10 +704,209 @@ int stopExecution() {
   return 0;
 }
 
+int runConcurrent(
+    const std::vector<std::string>& args) {
+  const auto gpuArguments =
+      RunSession::
+          concurrentGpuArguments(args);
+
+  const auto cpuArguments =
+      RunSession::
+          concurrentCpuArguments(args);
+
+  if (
+      ClientRuntimeControl::
+          running("gpu") ||
+      ClientRuntimeControl::
+          running("cpu")) {
+    std::cerr
+        << "A concurrent OpenPuzzle runtime "
+        << "is already active.\n";
+
+    return 1;
+  }
+
+  const auto launch =
+      [](const std::string& slot,
+         const std::vector<std::string>&
+             childArguments) {
+        const pid_t pid =
+            fork();
+
+        if (pid != 0) {
+          return pid;
+        }
+
+        if (
+            setenv(
+                "OPENPUZZLE_EXECUTION_SLOT",
+                slot.c_str(),
+                1) != 0) {
+          _exit(1);
+        }
+
+        const int result =
+            RunSession().run(
+                childArguments);
+
+        std::cout.flush();
+        std::cerr.flush();
+        _exit(result);
+      };
+
+  const pid_t gpuPid =
+      launch(
+          "gpu",
+          gpuArguments);
+
+  if (gpuPid < 0) {
+    std::cerr
+        << "Unable to start GPU runtime.\n";
+
+    return 1;
+  }
+
+  const pid_t cpuPid =
+      launch(
+          "cpu",
+          cpuArguments);
+
+  if (cpuPid < 0) {
+    kill(gpuPid, SIGTERM);
+    waitpid(gpuPid, nullptr, 0);
+
+    std::cerr
+        << "Unable to start CPU runtime.\n";
+
+    return 1;
+  }
+
+  std::cout
+      << "OpenPuzzle concurrent execution\n"
+      << "-------------------------------\n"
+      << "GPU runtime PID.... "
+      << gpuPid
+      << '\n'
+      << "CPU runtime PID.... "
+      << cpuPid
+      << '\n'
+      << "CPU threads........ "
+      << getArgument(
+             args,
+             "--cpu-threads")
+      << "\n\n";
+
+  const bool finiteRun =
+      hasArgument(
+          args,
+          "--once") ||
+      hasArgument(
+          args,
+          "--dry-run");
+
+  signal(SIGINT, SIG_IGN);
+  signal(SIGTERM, SIG_IGN);
+
+  if (finiteRun) {
+    int gpuStatus = 0;
+    int cpuStatus = 0;
+
+    waitpid(
+        gpuPid,
+        &gpuStatus,
+        0);
+
+    waitpid(
+        cpuPid,
+        &cpuStatus,
+        0);
+
+    return
+        (
+            WIFEXITED(gpuStatus) &&
+            WEXITSTATUS(gpuStatus) == 0 &&
+            WIFEXITED(cpuStatus) &&
+            WEXITSTATUS(cpuStatus) == 0
+        )
+            ? 0
+            : 1;
+  }
+
+  int firstStatus = 0;
+
+  const pid_t firstPid =
+      waitpid(
+          -1,
+          &firstStatus,
+          0);
+
+  const pid_t remainingPid =
+      firstPid == gpuPid
+          ? cpuPid
+          : gpuPid;
+
+  if (remainingPid > 0) {
+    kill(
+        remainingPid,
+        SIGTERM);
+
+    waitpid(
+        remainingPid,
+        nullptr,
+        0);
+  }
+
+  if (
+      firstPid < 0 ||
+      !WIFEXITED(firstStatus)) {
+    return 1;
+  }
+
+  return WEXITSTATUS(firstStatus);
+}
+
 } // namespace
+
+std::vector<std::string>
+RunSession::concurrentGpuArguments(
+    const std::vector<std::string>& args) {
+  return buildConcurrentArguments(
+      args,
+      false);
+}
+
+std::vector<std::string>
+RunSession::concurrentCpuArguments(
+    const std::vector<std::string>& args) {
+  const auto result =
+      buildConcurrentArguments(
+          args,
+          true);
+
+  (void) selectedCpuThreads(result);
+
+  return result;
+}
 
 int RunSession::run(
     const std::vector<std::string> &args) const {
+  if (
+      !args.empty() &&
+      args.front() == "run" &&
+      hasArgument(
+          args,
+          "--with-cpu")) {
+    try {
+      return runConcurrent(args);
+    } catch (const std::exception& error) {
+      std::cerr
+          << error.what()
+          << '\n';
+
+      return 1;
+    }
+  }
+
   /*
    * status, stop e claim são operações únicas.
    * Apenas run entra no ciclo contínuo.

@@ -1,4 +1,5 @@
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
+#include "openpuzzle/runtime/RunSession.hpp"
 
 #include <cassert>
 #include <cstdlib>
@@ -46,6 +47,65 @@ int main() {
   assert(
       ClientRuntimeControl::pidPath()
           .filename() == "runtime.pid");
+
+  assert(
+      ClientRuntimeControl::
+          pidPath("gpu")
+              .filename() ==
+      "runtime-gpu.pid");
+
+  assert(
+      ClientRuntimeControl::
+          pidPath("cpu")
+              .filename() ==
+      "runtime-cpu.pid");
+
+  const std::vector<std::string>
+      concurrentArguments = {
+          "run",
+          "71",
+          "--with-cpu",
+          "--cpu-threads",
+          "1",
+          "--backend",
+          "cuda",
+          "--server",
+          "https://example.test",
+      };
+
+  const std::vector<std::string>
+      expectedGpuArguments = {
+          "run",
+          "71",
+          "--backend",
+          "cuda",
+          "--server",
+          "https://example.test",
+      };
+
+  const std::vector<std::string>
+      expectedCpuArguments = {
+          "run",
+          "71",
+          "--server",
+          "https://example.test",
+          "--backend",
+          "cpu",
+          "--threads",
+          "1",
+      };
+
+  assert(
+      RunSession::
+          concurrentGpuArguments(
+              concurrentArguments) ==
+      expectedGpuArguments);
+
+  assert(
+      RunSession::
+          concurrentCpuArguments(
+              concurrentArguments) ==
+      expectedCpuArguments);
 
   assert(
       setenv(
