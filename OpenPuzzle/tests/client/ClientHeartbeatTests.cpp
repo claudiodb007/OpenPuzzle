@@ -41,6 +41,11 @@ int main() {
   heartbeat.activeBackend =
       "CUDA";
 
+  heartbeat.activeBackends = {
+      "CUDA",
+      "CPU",
+  };
+
   assert(heartbeat.valid());
 
   heartbeat.status =

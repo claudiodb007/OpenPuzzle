@@ -1,6 +1,7 @@
 #include "openpuzzle/client/ClientHeartbeatService.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdlib>
 #include <filesystem>
@@ -119,7 +120,23 @@ int main() {
 
   assert(
       ClientStateStore::save(
-          cpuState));
+          cpuState,
+          "cpu"));
+
+  ClientExecutionState gpuState =
+      cpuState;
+  gpuState.assignmentId =
+      "33333333-3333-4333-8333-333333333333";
+  gpuState.rangeId = 239;
+  gpuState.threads = 0;
+  gpuState.engine = "BitCrack";
+  gpuState.backend = "CUDA";
+  gpuState.command = "cuBitCrack";
+
+  assert(
+      ClientStateStore::save(
+          gpuState,
+          "gpu"));
 
   const auto cpuHeartbeat =
       ClientHeartbeatService::
@@ -127,12 +144,27 @@ int main() {
 
   assert(cpuHeartbeat.valid());
   assert(cpuHeartbeat.status == "running");
-  assert(cpuHeartbeat.activeEngine == "KeyHunt");
-  assert(cpuHeartbeat.activeBackend == "CPU");
+  assert(cpuHeartbeat.activeEngine == "BitCrack");
+  assert(cpuHeartbeat.activeBackend == "CUDA");
+  assert(cpuHeartbeat.activeBackends.size() == 2);
+  assert(
+      std::find(
+          cpuHeartbeat.activeBackends.begin(),
+          cpuHeartbeat.activeBackends.end(),
+          "CUDA") !=
+      cpuHeartbeat.activeBackends.end());
+  assert(
+      std::find(
+          cpuHeartbeat.activeBackends.begin(),
+          cpuHeartbeat.activeBackends.end(),
+          "CPU") !=
+      cpuHeartbeat.activeBackends.end());
   assert(cpuHeartbeat.cpu.threads == 8);
 
   assert(
-      ClientStateStore::remove());
+      ClientStateStore::remove("gpu"));
+  assert(
+      ClientStateStore::remove("cpu"));
 
   ClientHeartbeatService service;
 

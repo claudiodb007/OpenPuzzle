@@ -1,5 +1,7 @@
 #include "openpuzzle/client/HttpRangeClient.hpp"
 
+#include "openpuzzle/client/ClientStateStore.hpp"
+
 #include <cstdio>
 #include <iomanip>
 #include <regex>
@@ -476,6 +478,23 @@ bool HttpRangeClient::heartbeat(const ClientHeartbeat &heartbeat) {
           << jsonEscape(heartbeat.activeEngine) << "\","
           << "\"active_backend\":\""
           << jsonEscape(heartbeat.activeBackend) << "\","
+          << "\"active_backends\":[";
+
+  for (std::size_t index = 0;
+       index < heartbeat.activeBackends.size();
+       ++index) {
+    if (index > 0) {
+      request << ',';
+    }
+
+    request
+        << "\""
+        << jsonEscape(
+               heartbeat.activeBackends[index])
+        << "\"";
+  }
+
+  request << "],"
           << "\"cpu\":{"
           << "\"name\":\"" << jsonEscape(heartbeat.cpu.name) << "\","
           << "\"cores\":" << heartbeat.cpu.cores << ","
@@ -613,6 +632,10 @@ HttpRangeClient::claim(const std::string &clientId, int puzzle,
   request << "{"
           << "\"client_id\":\"" << jsonEscape(clientId) << "\","
           << "\"puzzle\":" << puzzle << ","
+          << "\"execution_slot\":\""
+          << jsonEscape(
+                 ClientStateStore::executionSlot())
+          << "\","
           << "\"target_duration_minutes\":" << targetDurationMinutes << ","
           << "\"speed_mkeys\":" << std::fixed << std::setprecision(6)
           << speedMKeys << "}";

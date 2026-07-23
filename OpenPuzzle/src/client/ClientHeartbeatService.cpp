@@ -279,30 +279,54 @@ ClientHeartbeatService::
 executionStatus(
     std::string& activeEngine,
     std::string& activeBackend,
+    std::vector<std::string>& activeBackends,
     int& activeCpuThreads) {
   activeEngine.clear();
   activeBackend.clear();
+  activeBackends.clear();
   activeCpuThreads = 0;
 
-  const auto state =
-      ClientStateStore::load();
+  const std::vector<std::string> slots = {
+      "primary",
+      "gpu",
+      "cpu",
+  };
 
-  if (!state ||
-      !processExists(state->pid)) {
-    return "idle";
+  for (const auto& slot : slots) {
+    const auto state =
+        ClientStateStore::load(slot);
+
+    if (!state ||
+        !processExists(state->pid)) {
+      continue;
+    }
+
+    if (activeEngine.empty()) {
+      activeEngine = state->engine;
+      activeBackend = state->backend;
+    }
+
+    if (
+        std::find(
+            activeBackends.begin(),
+            activeBackends.end(),
+            state->backend) ==
+        activeBackends.end()) {
+      activeBackends.push_back(
+          state->backend);
+    }
+
+    if (
+        state->backend == "CPU" ||
+        state->backend == "cpu") {
+      activeCpuThreads +=
+          state->threads;
+    }
   }
 
-  activeEngine = state->engine;
-  activeBackend = state->backend;
-
-  if (
-      activeBackend == "CPU" ||
-      activeBackend == "cpu") {
-    activeCpuThreads =
-        state->threads;
-  }
-
-  return "running";
+  return activeBackends.empty()
+             ? "idle"
+             : "running";
 }
 
 ClientHeartbeat
@@ -330,18 +354,15 @@ collectLocalHeartbeat() {
       executionStatus(
           heartbeat.activeEngine,
           heartbeat.activeBackend,
+          heartbeat.activeBackends,
           activeCpuThreads);
 
   heartbeat.cpu =
       cpu();
 
-  if (
-      activeCpuThreads > 0 &&
-      (
-          heartbeat.activeBackend == "CPU" ||
-          heartbeat.activeBackend == "cpu"
-      )) {
-    heartbeat.cpu.threads = activeCpuThreads;
+  if (activeCpuThreads > 0) {
+    heartbeat.cpu.threads =
+        activeCpuThreads;
   }
 
   heartbeat.gpus =

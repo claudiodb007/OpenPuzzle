@@ -43,6 +43,18 @@ int main() {
 
   assert(!ClientRuntimeControl::running());
   assert(!ClientRuntimeControl::runtimePid());
+  assert(
+      ClientRuntimeControl::pidPath()
+          .filename() == "runtime.pid");
+
+  assert(
+      setenv(
+          "OPENPUZZLE_EXECUTION_SLOT",
+          "gpu",
+          1) == 0);
+  assert(
+      ClientRuntimeControl::pidPath()
+          .filename() == "runtime-gpu.pid");
 
   assert(ClientRuntimeControl::acquire());
   assert(ClientRuntimeControl::running());
@@ -82,6 +94,21 @@ int main() {
 
   assert(ClientRuntimeControl::acquire());
   assert(ClientRuntimeControl::release());
+
+  assert(
+      setenv(
+          "OPENPUZZLE_EXECUTION_SLOT",
+          "cpu",
+          1) == 0);
+  assert(
+      ClientRuntimeControl::pidPath()
+          .filename() == "runtime-cpu.pid");
+  assert(ClientRuntimeControl::acquire());
+  assert(ClientRuntimeControl::release());
+
+  assert(
+      unsetenv(
+          "OPENPUZZLE_EXECUTION_SLOT") == 0);
 
   std::filesystem::remove_all(
       temporaryHome);

@@ -116,8 +116,33 @@ std::string valueOf(
 
 } // namespace
 
+std::string
+ClientStateStore::executionSlot() {
+  const char* value =
+      std::getenv(
+          "OPENPUZZLE_EXECUTION_SLOT");
+
+  if (value != nullptr) {
+    const std::string slot(value);
+
+    if (slot == "gpu" ||
+        slot == "cpu") {
+      return slot;
+    }
+  }
+
+  return "primary";
+}
+
 std::filesystem::path
 ClientStateStore::path() {
+  return path(
+      executionSlot());
+}
+
+std::filesystem::path
+ClientStateStore::path(
+    const std::string& executionSlot) {
   const char* home =
       std::getenv("HOME");
 
@@ -126,21 +151,38 @@ ClientStateStore::path() {
           ? std::filesystem::path(home)
           : std::filesystem::current_path();
 
+  std::string filename =
+      "client.state";
+
+  if (executionSlot == "gpu") {
+    filename = "client-gpu.state";
+  } else if (executionSlot == "cpu") {
+    filename = "client-cpu.state";
+  }
+
   return root /
          ".local" /
          "share" /
          "OpenPuzzle" /
-         "client.state";
+         filename;
 }
 
 bool ClientStateStore::save(
     const ClientExecutionState& state) {
+  return save(
+      state,
+      executionSlot());
+}
+
+bool ClientStateStore::save(
+    const ClientExecutionState& state,
+    const std::string& executionSlot) {
   if (!state.valid()) {
     return false;
   }
 
   const auto statePath =
-      path();
+      path(executionSlot);
 
   try {
     WorkspaceSecurity::prepare(
@@ -269,8 +311,15 @@ bool ClientStateStore::save(
 
 std::optional<ClientExecutionState>
 ClientStateStore::load() {
+  return load(
+      executionSlot());
+}
+
+std::optional<ClientExecutionState>
+ClientStateStore::load(
+    const std::string& executionSlot) {
   const auto statePath =
-      path();
+      path(executionSlot);
 
   try {
     WorkspaceSecurity::prepare(
@@ -402,11 +451,17 @@ ClientStateStore::load() {
 }
 
 bool ClientStateStore::remove() {
+  return remove(
+      executionSlot());
+}
+
+bool ClientStateStore::remove(
+    const std::string& executionSlot) {
   std::error_code error;
 
   const bool removed =
       std::filesystem::remove(
-          path(),
+          path(executionSlot),
           error);
 
   return removed || !error;

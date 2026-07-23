@@ -50,6 +50,7 @@ struct ClientHeartbeat {
 
   std::string activeEngine;
   std::string activeBackend;
+  std::vector<std::string> activeBackends;
 
   ClientCpuCapability cpu;
   std::vector<ClientGpuCapability> gpus;

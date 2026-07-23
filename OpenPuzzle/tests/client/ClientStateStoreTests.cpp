@@ -122,6 +122,25 @@ int main() {
 
   assert(!ClientStateStore::load());
 
+  assert(
+      ClientStateStore::path("primary")
+          .filename() == "client.state");
+  assert(
+      ClientStateStore::path("gpu")
+          .filename() == "client-gpu.state");
+  assert(
+      ClientStateStore::path("cpu")
+          .filename() == "client-cpu.state");
+
+  assert(
+      setenv(
+          "OPENPUZZLE_EXECUTION_SLOT",
+          "gpu",
+          1) == 0);
+  assert(
+      ClientStateStore::executionSlot() ==
+      "gpu");
+
   auto state =
       makeValidState();
 
@@ -177,6 +196,14 @@ int main() {
    */
   assert(
       ClientStateStore::remove());
+
+  assert(
+      unsetenv(
+          "OPENPUZZLE_EXECUTION_SLOT") == 0);
+
+  assert(
+      ClientStateStore::executionSlot() ==
+      "primary");
 
   std::filesystem::remove_all(
       temporaryHome);

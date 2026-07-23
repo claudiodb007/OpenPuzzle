@@ -32,6 +32,7 @@ private:
   static std::string executionStatus(
       std::string& activeEngine,
       std::string& activeBackend,
+      std::vector<std::string>& activeBackends,
       int& activeCpuThreads);
 };
 

@@ -23,11 +23,28 @@ ClientRuntimeControl::pidPath() {
           ? std::filesystem::path(home)
           : std::filesystem::current_path();
 
+  std::string filename =
+      "runtime.pid";
+
+  const char* slotValue =
+      std::getenv(
+          "OPENPUZZLE_EXECUTION_SLOT");
+
+  if (slotValue != nullptr) {
+    const std::string slot(slotValue);
+
+    if (slot == "gpu") {
+      filename = "runtime-gpu.pid";
+    } else if (slot == "cpu") {
+      filename = "runtime-cpu.pid";
+    }
+  }
+
   return root /
          ".local" /
          "share" /
          "OpenPuzzle" /
-         "runtime.pid";
+         filename;
 }
 
 bool ClientRuntimeControl::processExists(
