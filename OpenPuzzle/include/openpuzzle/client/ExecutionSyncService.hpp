@@ -53,6 +53,10 @@ public:
   ExecutionSyncResult tick(
       const std::string& serverUrl) const;
 
+  ExecutionSyncResult tick(
+      const std::string& serverUrl,
+      const std::string& executionSlot) const;
+
   static std::optional<ExecutionProgress>
   latestProgress(
       const std::string& workspace,

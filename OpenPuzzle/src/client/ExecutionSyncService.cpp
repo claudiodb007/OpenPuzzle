@@ -420,10 +420,20 @@ ExecutionSyncService::classifyCompletionError(
 ExecutionSyncResult
 ExecutionSyncService::tick(
     const std::string& serverUrl) const {
+  return tick(
+      serverUrl,
+      ClientStateStore::executionSlot());
+}
+
+ExecutionSyncResult
+ExecutionSyncService::tick(
+    const std::string& serverUrl,
+    const std::string& executionSlot) const {
   ExecutionSyncResult result;
 
   const auto state =
-      ClientStateStore::load();
+      ClientStateStore::load(
+          executionSlot);
 
   if (!state) {
     return result;
@@ -584,7 +594,8 @@ ExecutionSyncService::tick(
         AssignmentUploadStatus::
             AssignmentRejected) {
       result.stateRemoved =
-          ClientStateStore::remove();
+          ClientStateStore::remove(
+          executionSlot);
 
       if (!result.stateRemoved) {
         result.completionError +=
@@ -600,7 +611,8 @@ ExecutionSyncService::tick(
       AssignmentUploadStatus::Uploaded;
 
   result.stateRemoved =
-      ClientStateStore::remove();
+      ClientStateStore::remove(
+          executionSlot);
 
   if (!result.stateRemoved) {
     result.completionError =

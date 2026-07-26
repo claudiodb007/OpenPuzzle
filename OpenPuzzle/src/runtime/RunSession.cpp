@@ -405,11 +405,15 @@ int showStatus(const std::vector<std::string> &args) {
         << "OpenPuzzle Status\n"
         << "-----------------\n";
 
+    client::ExecutionSyncService
+        syncService;
+
     for (const auto& slot :
          executionSlots) {
-      const auto state =
-          client::ClientStateStore::
-              load(slot);
+      const auto result =
+          syncService.tick(
+              server,
+              slot);
 
       const auto runtimePid =
           ClientRuntimeControl::
@@ -420,7 +424,7 @@ int showStatus(const std::vector<std::string> &args) {
           << slot
           << '\n';
 
-      if (!state) {
+      if (!result.hasState) {
         std::cout
             << "Status............. "
             << (
@@ -435,38 +439,127 @@ int showStatus(const std::vector<std::string> &args) {
         continue;
       }
 
+      const auto& state =
+          result.state;
+
       std::cout
           << "Status............. "
           << (
-                 processExists(state->pid)
-                     ? "running"
-                     : "stopped")
+                 result.solutionFound
+                     ? "solution found"
+                     : (
+                           result.running
+                               ? "running"
+                               : "stopped"))
           << '\n'
           << "Assignment......... "
-          << state->assignmentId
+          << state.assignmentId
           << '\n'
           << "Puzzle............. "
-          << state->puzzle
+          << state.puzzle
           << '\n'
           << "Assignment number... "
-          << state->rangeId
+          << state.rangeId
           << '\n'
           << "PID................ "
-          << state->pid
+          << state.pid
           << '\n'
           << "Engine............. "
-          << state->engine
+          << state.engine
           << '\n'
           << "Backend............ "
-          << state->backend
+          << state.backend
+          << '\n'
+          << "Start.............. "
+          << state.start
+          << '\n'
+          << "End................ "
+          << state.end
+          << '\n'
+          << "Workspace.......... "
+          << state.workspace
           << '\n';
 
       if (
-          state->backend == "CPU" ||
-          state->backend == "cpu") {
+          state.backend == "CPU" ||
+          state.backend == "cpu") {
         std::cout
             << "Threads............ "
-            << state->threads
+            << state.threads
+            << '\n';
+      }
+
+      if (result.solutionFound) {
+        std::cout
+            << "Solution file...... "
+            << result.solutionPath
+            << '\n'
+            << "Local state........ preserved\n"
+            << "Private key........ not displayed\n";
+
+        continue;
+      }
+
+      if (result.running) {
+        if (result.hasProgress) {
+          std::cout
+              << "Speed.............. "
+              << result.progress.speedMKeys
+              << " MKey/s\n"
+              << "Keys checked....... "
+              << result.progress.keysChecked
+              << '\n';
+
+          if (result.progressUploaded) {
+            std::cout
+                << "Progress........... uploaded\n";
+          } else {
+            std::cerr
+                << "Progress........... failed\n"
+                << "Upload error....... "
+                << result.progressError
+                << '\n';
+          }
+        } else {
+          std::cout
+              << "Progress........... "
+              << "waiting for engine output\n";
+        }
+
+        continue;
+      }
+
+      if (!result.hasExitCode) {
+        continue;
+      }
+
+      std::cout
+          << "Exit code.......... "
+          << result.exitCode
+          << '\n';
+
+      if (result.exitCode != 0) {
+        std::cout
+            << "Failure upload..... "
+            << (
+                   result.completionUploaded
+                       ? "uploaded"
+                       : "failed")
+            << '\n';
+      } else {
+        std::cout
+            << "Completion......... "
+            << (
+                   result.completionUploaded
+                       ? "uploaded"
+                       : "failed")
+            << '\n';
+      }
+
+      if (!result.completionError.empty()) {
+        std::cerr
+            << "Upload error....... "
+            << result.completionError
             << '\n';
       }
     }
