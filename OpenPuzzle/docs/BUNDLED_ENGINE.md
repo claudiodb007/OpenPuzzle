@@ -1,29 +1,26 @@
-# Bundled search engine
+# Bundled search engines
 
-OpenPuzzle 1.0 packages include a vetted
-OpenPuzzle-BitCrack executable. The client does not
-run an arbitrary BitCrack binary selected from PATH
-or from the user configuration file.
+The OpenPuzzle 1.0 package contains vetted engines for all supported
+local execution backends:
 
-## Backend-specific packages
+- `cuBitCrack` for NVIDIA CUDA GPUs;
+- `clBitCrack` for AMD, Intel and other compatible OpenCL GPUs;
+- `keyhunt` in range mode for x86-64 CPU execution.
 
-OpenPuzzle is distributed as separate packages for
-the supported GPU backends:
+OpenPuzzle does not run arbitrary engine binaries selected from `PATH`
+or from user configuration.
 
-- OpenPuzzle AMD/Intel OpenCL contains `clBitCrack`;
-- OpenPuzzle NVIDIA CUDA contains `cuBitCrack`.
+## Unified package
 
-The public package filenames make the intended GPU
-family explicit:
+The public Debian package is:
 
 ```text
-OpenPuzzle-1.0.0-NVIDIA-CUDA-Linux-x86_64
-OpenPuzzle-1.0.0-AMD-Intel-OpenCL-Linux-x86_64
+OpenPuzzle-1.0.0-Linux-x86_64.deb
 ```
 
-A package only enables the backend named in its
-filename. Selecting another backend is rejected
-before any network assignment is requested.
+CUDA is selected when the bundled CUDA engine reports a usable device.
+Otherwise, OpenCL can be selected for a compatible GPU. CPU execution
+is enabled explicitly and requires a thread count.
 
 ## Runtime identity
 
@@ -68,36 +65,42 @@ be repeated manually:
 openpuzzle benchmark --real --auto --backend opencl
 ```
 
-## OpenPuzzle-BitCrack source
+## Third-party engine sources
 
-OpenPuzzle-BitCrack is derived from the MIT-licensed
-BitCrack project. Its upstream license and the list
-of OpenPuzzle-specific changes are installed under:
+OpenPuzzle-BitCrack is derived from the MIT-licensed BitCrack project.
+KeyHunt is distributed under its upstream license. Package copies of
+these licenses are installed under:
 
 ```text
 share/doc/OpenPuzzle/third-party/OpenPuzzle-BitCrack
+share/doc/OpenPuzzle/third-party/KeyHunt
 ```
 
-The OpenCL fork corrects high-keyspace progress
-accounting and requests the OpenCL 1.2 kernel
-language standard for compatibility across tested
-NVIDIA, AMD discrete and AMD integrated devices.
-CUDA search code is kept isolated from these OpenCL
-changes.
+The OpenCL fork corrects high-keyspace progress accounting and requests
+the OpenCL 1.2 kernel language standard for compatibility across tested
+NVIDIA, AMD discrete and AMD integrated devices. CUDA search code is
+kept isolated from these OpenCL changes.
 
-## Unified package
+## CPU and concurrent execution
 
-The public OpenPuzzle package contains both vetted GPU engines:
+KeyHunt runs in bounded range mode. CPU execution does not use the GPU
+benchmark and always requires an explicit number of threads:
 
-- `cuBitCrack` for NVIDIA CUDA devices;
-- `clBitCrack` for AMD, Intel, and OpenCL devices.
+```text
+openpuzzle run --backend cpu --threads 8
+```
 
-At runtime OpenPuzzle validates each engine independently. CUDA is
-preferred only when the CUDA engine reports a usable device; otherwise
-OpenCL is selected. External BitCrack executables remain rejected.
+GPU and CPU can request and process independent assignments
+simultaneously:
 
-CPU execution is reserved for a future separately audited bundled
-engine. The current release does not claim CPU search support.
+```text
+openpuzzle run --with-cpu --cpu-threads 8
+```
+
+The two execution slots maintain separate assignment state, progress,
+checkpoints and lifecycle synchronization. `openpuzzle status` displays
+the GPU and CPU slots independently, and `openpuzzle stop` stops both
+slots safely.
 
 ## Solution result protocol
 

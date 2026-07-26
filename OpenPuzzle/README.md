@@ -203,23 +203,19 @@ ctest --output-on-failure
 
 ## Current Release
 
-### release/0.40
+### OpenPuzzle 1.0.0
 
 Implemented:
 
--   Dashboard Service
--   Dispatch Service
--   Graceful shutdown
--   Engine Framework
--   Engine Registry
--   Engine Discovery
--   Engine Manager
--   Engine Monitor
--   BitCrack Engine
--   Engine List
--   Engine Info
--   `start-job --engine`
--   BitCrack command generation tests
+-   Continuous anonymous assignment processing
+-   Unified CUDA and OpenCL GPU package
+-   Bundled KeyHunt CPU range backend
+-   Explicit CPU thread selection
+-   Concurrent GPU and CPU execution slots
+-   Per-slot progress, speed and checkpoint status
+-   Completion proof and full-range server validation
+-   Graceful stop, recovery and lease synchronization
+-   Protected local solution handling
 
 ------------------------------------------------------------------------
 
@@ -230,9 +226,15 @@ The client can run autonomously:
 ```bash
 openpuzzle run
 openpuzzle run 71
+openpuzzle run --backend cpu --threads 8
+openpuzzle run --with-cpu --cpu-threads 8
 openpuzzle status
 openpuzzle stop
 ```
+
+CPU execution uses KeyHunt range mode and requires an explicit thread
+count. `--with-cpu` starts independent GPU and CPU assignment slots.
+`openpuzzle status` reports each slot separately.
 
 It requests random non-overlapping assignments, uploads progress, renews
 leases, recovers interrupted sessions and continues with new work.
@@ -250,19 +252,12 @@ recovery, cancellation and security details.
 
 ## Roadmap
 
-### 0.50
+After 1.0:
 
--   KeyHunt engine
--   Multi-engine execution
--   Continuous workers
--   Improved dispatcher
-
-### 0.60
-
--   Distributed workers
--   REST API
--   Web dashboard
--   Multi-node clusters
+-   Windows client package
+-   Additional audited engine adapters
+-   Improved installation diagnostics
+-   Reproducible public release automation
 
 ------------------------------------------------------------------------
 
@@ -278,10 +273,17 @@ See:
 
 ## Requirements
 
--   Linux
--   GCC (C++20)
+Package installation:
+
+-   Ubuntu 24.04 or newer on x86-64
+-   NVIDIA CUDA or a compatible OpenCL runtime for GPU execution
+-   CPU execution is available through bundled KeyHunt range mode
+
+Source builds additionally require:
+
+-   GCC with C++20 support
 -   CMake 3.22+
--   SQLite3
+-   SQLite3 and Boost development libraries
 
 ------------------------------------------------------------------------
 
@@ -311,11 +313,19 @@ Start OpenPuzzle:
 openpuzzle run
 ```
 
-On first use, `run` automatically selects CUDA or OpenCL, validates the
-bundled engine and creates a safe GPU benchmark profile before contacting the
-coordination server. Later runs reuse the saved profile.
+On first use, GPU execution automatically selects CUDA or OpenCL,
+validates the bundled engine and creates a safe benchmark profile before
+contacting the coordination server. Later runs reuse the saved profile.
 
-The benchmark can be repeated manually when required:
+CPU execution uses bundled KeyHunt range mode and does not require a
+benchmark. The number of CPU threads must be selected explicitly:
+
+```bash
+openpuzzle run --backend cpu --threads 8
+openpuzzle run --with-cpu --cpu-threads 8
+```
+
+The GPU benchmark can be repeated manually when required:
 
 ```bash
 openpuzzle benchmark --real --auto
