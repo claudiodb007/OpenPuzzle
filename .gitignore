@@ -1,0 +1,4 @@
+# Local build and distribution artifacts
+/OpenPuzzle/build/
+/OpenPuzzle/build-*/
+/OpenPuzzle/dist/
