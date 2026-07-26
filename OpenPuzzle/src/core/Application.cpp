@@ -100,6 +100,7 @@ static void printApplicationHelp() {
       << "  openpuzzle run [puzzle] [run options]\n"
       << "  openpuzzle status\n"
       << "  openpuzzle stop\n"
+      << "  openpuzzle doctor\n"
       << "\n"
       << "Global options:\n"
       << "  -h, --help       Show this help\n"
@@ -301,11 +302,7 @@ int Application::run(int argc, char **argv) {
     }
 
     if (cmd == "doctor") {
-      Database db;
-      if (!ensureDb(db))
-        return 1;
-
-      DoctorService service(db);
+      DoctorService service;
       return service.execute(r);
     }
     if (cmd == "engine") {

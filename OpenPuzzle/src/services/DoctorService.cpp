@@ -1,97 +1,193 @@
 #include "openpuzzle/services/DoctorService.hpp"
 
-#include "openpuzzle/engines/EngineManager.hpp"
+#include "openpuzzle/hardware/GpuInfo.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
-#include "openpuzzle/performance/GpuProfileManager.hpp"
+#include "openpuzzle/tools/ToolManager.hpp"
 
+#include <filesystem>
 #include <iostream>
+#include <optional>
 #include <string>
+#include <system_error>
+#include <unistd.h>
+#include <vector>
 
 namespace openpuzzle {
 
-static std::string backendForGpu(const std::string& name) {
-    if (name.find("NVIDIA") != std::string::npos ||
-        name.find("RTX") != std::string::npos ||
-        name.find("GTX") != std::string::npos) {
-        return "CUDA";
-    }
+namespace {
 
-    return "OpenCL";
+int logicalProcessorCount() {
+  const long processors =
+      sysconf(_SC_NPROCESSORS_ONLN);
+
+  return processors > 0
+      ? static_cast<int>(processors)
+      : 1;
 }
 
-int DoctorService::execute(const std::vector<std::string>&) {
-    std::cout << "========================================\n";
-    std::cout << "         OpenPuzzle Doctor\n";
-    std::cout << "========================================\n\n";
+std::string availability(
+    bool available) {
+  return available
+      ? "READY"
+      : "NOT AVAILABLE";
+}
 
-    std::cout << "Database............. OK\n";
-    std::cout << "Configuration........ OK\n\n";
+void printEngine(
+    const std::string& label,
+    const std::optional<std::string>& path) {
+  std::cout
+      << label
+      << (path ? "OK" : "MISSING")
+      << '\n';
 
-    EngineManager manager;
+  if (path) {
+    std::cout
+        << "Executable.......... "
+        << *path
+        << '\n';
+  }
+}
 
-    std::cout << "Engines\n";
-    std::cout << "----------------------------------------\n";
+void printDevices(
+    const std::string& backend,
+    const std::vector<GpuInfo>& devices) {
+  std::cout
+      << backend
+      << " devices....... "
+      << devices.size()
+      << '\n';
 
-    for (const auto& engine : manager.registry().engines()) {
-        std::cout << engine.name << "............. "
-                  << (engine.runtime.installed ? "OK" : "NOT FOUND")
-                  << "\n";
+  for (const auto& device : devices) {
+    std::cout
+        << "Device.............. "
+        << device.device
+        << ": "
+        << device.name
+        << '\n';
 
-        if (engine.runtime.installed) {
-            std::cout << "Executable.......... "
-                      << engine.runtime.executable
-                      << "\n";
-        }
+    if (device.memoryMb > 0) {
+      std::cout
+          << "Memory.............. "
+          << device.memoryMb
+          << " MiB\n";
     }
+  }
+}
 
-    std::cout << "\nHardware\n";
-    std::cout << "----------------------------------------\n";
+} // namespace
 
-    auto gpus = GpuManager::listGpus();
+int DoctorService::execute(
+    const std::vector<std::string>&) const {
+  const auto cudaEngine =
+      ToolManager::bitcrackCudaPath();
 
-    if (gpus.empty()) {
-        std::cout << "GPUs................ NOT FOUND\n";
-    } else {
-        for (const auto& gpu : gpus) {
-            std::cout << "GPU " << gpu.device << "............... "
-                      << gpu.name << "\n";
-            std::cout << "Memory.............. "
-                      << std::to_string(gpu.memoryMb) + " MiB" << "\n";
-        }
-    }
+  const auto openclEngine =
+      ToolManager::bitcrackOpenCLPath();
 
-    std::cout << "\nProfiles\n";
-    std::cout << "----------------------------------------\n";
+  const auto cpuEngine =
+      ToolManager::keyhuntPath();
 
-    GpuProfileManager profiles(database_);
+  const auto cudaDevices =
+      GpuManager::listCudaGpus();
 
-    if (gpus.empty()) {
-        std::cout << "Profiles............ NOT AVAILABLE\n";
-    } else {
-        for (const auto& gpu : gpus) {
-            const auto backend = backendForGpu(gpu.name);
-            auto profile = profiles.chooseBest(gpu.name, backend, "BitCrack");
+  const auto openclDevices =
+      GpuManager::listOpenClGpus();
 
-            std::cout << gpu.name << "....... "
-                      << (profile ? "Available" : "Missing")
-                      << "\n";
+  const int processors =
+      logicalProcessorCount();
 
-            if (profile) {
-                std::cout << "  Backend........... " << profile->backend << "\n";
-                std::cout << "  Engine............ " << profile->engine << "\n";
-                std::cout << "  Blocks............ " << profile->blocks << "\n";
-                std::cout << "  Threads........... " << profile->threads << "\n";
-                std::cout << "  Points............ " << profile->points << "\n";
-                std::cout << "  Average........... "
-                          << profile->averageSpeed
-                          << " MKey/s\n";
-            }
-        }
-    }
+  const bool cudaReady =
+      cudaEngine.has_value() &&
+      !cudaDevices.empty();
 
-    std::cout << "\nStatus............... READY\n";
+  const bool openclReady =
+      openclEngine.has_value() &&
+      !openclDevices.empty();
 
-    return 0;
+  const bool cpuReady =
+      cpuEngine.has_value() &&
+      processors > 0;
+
+  const bool ready =
+      cudaReady ||
+      openclReady ||
+      cpuReady;
+
+  const auto configurationPath =
+      std::filesystem::path(
+          ToolManager::configPath());
+
+  std::error_code error;
+
+  const bool configurationPresent =
+      std::filesystem::is_regular_file(
+          configurationPath,
+          error);
+
+  std::cout
+      << "OpenPuzzle Doctor\n"
+      << "-----------------\n"
+      << "Configuration...... "
+      << (
+             configurationPresent
+                 ? "available"
+                 : "not created")
+      << '\n'
+      << "Configuration path. "
+      << configurationPath.string()
+      << "\n\n"
+      << "Bundled engines\n"
+      << "---------------\n";
+
+  printEngine(
+      "CUDA engine........ ",
+      cudaEngine);
+
+  printEngine(
+      "OpenCL engine...... ",
+      openclEngine);
+
+  printEngine(
+      "CPU engine......... ",
+      cpuEngine);
+
+  std::cout
+      << "\nHardware\n"
+      << "--------\n"
+      << "Logical processors. "
+      << processors
+      << '\n';
+
+  printDevices(
+      "CUDA",
+      cudaDevices);
+
+  printDevices(
+      "OpenCL",
+      openclDevices);
+
+  std::cout
+      << "\nUsable backends\n"
+      << "---------------\n"
+      << "CUDA backend....... "
+      << availability(cudaReady)
+      << '\n'
+      << "OpenCL backend..... "
+      << availability(openclReady)
+      << '\n'
+      << "CPU backend........ "
+      << availability(cpuReady)
+      << "\n\n"
+      << "Status............. "
+      << (
+             ready
+                 ? "READY"
+                 : "NOT READY")
+      << '\n';
+
+  return ready
+      ? 0
+      : 1;
 }
 
 } // namespace openpuzzle

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1 — Installation diagnostics
+
+- Added the local `openpuzzle doctor` command.
+- Added validation of the bundled CUDA, OpenCL and CPU engines.
+- Added separate CUDA and OpenCL device detection.
+- Added logical CPU count and usable-backend reporting.
+- Added configuration-path diagnostics without requiring registration.
+- Added help output and CLI regression coverage for `doctor`.
+- Preserved the 1.0 runtime and engine protocol compatibility.
+
 ## 1.0.0 — Continuous client
 
 - Added continuous assignment execution.

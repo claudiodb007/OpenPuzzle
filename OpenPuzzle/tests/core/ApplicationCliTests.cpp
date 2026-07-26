@@ -169,6 +169,41 @@ int main() {
         result.output);
   }
 
+  {
+    const auto result =
+        runApplication({
+            "OpenPuzzle",
+            "doctor"
+        });
+
+    assert(
+        result.exitCode == 0 ||
+        result.exitCode == 1);
+
+    assert(
+        result.output.find(
+            "OpenPuzzle Doctor") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
+            "CUDA backend") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
+            "OpenCL backend") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
+            "CPU backend") !=
+        std::string::npos);
+
+    assertNoExecution(
+        result.output);
+  }
+
   std::cout
       << "ApplicationCliTests passed\n";
 

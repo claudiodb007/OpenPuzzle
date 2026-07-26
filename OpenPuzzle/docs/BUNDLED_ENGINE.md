@@ -15,7 +15,7 @@ or from user configuration.
 The public Debian package is:
 
 ```text
-OpenPuzzle-1.0.0-Linux-x86_64.deb
+OpenPuzzle-1.0.1-Linux-x86_64.deb
 ```
 
 CUDA is selected when the bundled CUDA engine reports a usable device.

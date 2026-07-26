@@ -2,13 +2,13 @@
 
 ## Current release
 
-**OpenPuzzle 1.0.0** provides a continuous Linux client for requesting,
+**OpenPuzzle 1.0.1** provides a continuous Linux client for requesting,
 executing and synchronizing OpenPuzzle assignments.
 
 The public repository contains the client only. The coordination service
 and website infrastructure are not included.
 
-See [OpenPuzzle 1.0.0 release notes](docs/RELEASE_1.0.0.md) and the
+See [OpenPuzzle 1.0.1 release notes](docs/RELEASE_1.0.1.md) and the
 [Client Runtime guide](docs/CLIENT_RUNTIME.md).
 
 
@@ -203,7 +203,7 @@ ctest --output-on-failure
 
 ## Current Release
 
-### OpenPuzzle 1.0.0
+### OpenPuzzle 1.0.1
 
 Implemented:
 
@@ -304,7 +304,7 @@ MIT License.
 Install the Debian package:
 
 ```bash
-sudo apt install ./OpenPuzzle-1.0.0-Linux-x86_64.deb
+sudo apt install ./OpenPuzzle-1.0.1-Linux-x86_64.deb
 ```
 
 Start OpenPuzzle:
