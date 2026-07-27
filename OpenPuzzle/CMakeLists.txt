@@ -24,7 +24,7 @@ set(
 
 set(
     OPENPUZZLE_BUNDLED_KEYHUNT_ENGINE
-    "${CMAKE_SOURCE_DIR}/../../cpu-engine-lab/keyhunt/keyhunt"
+    "${CMAKE_SOURCE_DIR}/../../cpu-engine-lab/keyhunt-portable/keyhunt"
     CACHE FILEPATH
     "Vetted KeyHunt CPU executable"
 )
@@ -44,6 +44,27 @@ if(NOT EXISTS "${OPENPUZZLE_BUNDLED_KEYHUNT_ENGINE}")
     message(FATAL_ERROR
         "Bundled KeyHunt executable not found: "
         "${OPENPUZZLE_BUNDLED_KEYHUNT_ENGINE}"
+    )
+endif()
+
+set(
+    OPENPUZZLE_EXPECTED_KEYHUNT_SHA256
+    "ac31af4f8713b6cb6056973d16ba62b56eeae9588c3208a9714f3cd236287519"
+)
+
+file(
+    SHA256
+    "${OPENPUZZLE_BUNDLED_KEYHUNT_ENGINE}"
+    OPENPUZZLE_BUNDLED_KEYHUNT_SHA256
+)
+
+if(NOT
+   "${OPENPUZZLE_BUNDLED_KEYHUNT_SHA256}"
+   STREQUAL
+   "${OPENPUZZLE_EXPECTED_KEYHUNT_SHA256}")
+    message(FATAL_ERROR
+        "Bundled KeyHunt checksum mismatch: "
+        "${OPENPUZZLE_BUNDLED_KEYHUNT_SHA256}"
     )
 endif()
 
