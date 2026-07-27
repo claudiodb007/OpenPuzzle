@@ -1303,35 +1303,25 @@ ClientIterationResult RunSession::runOnce(
   double speedMKeys = 0.0;
   bool calibrationAssignment = false;
 
-  if (subcommand == "run") {
-    if (runBackend == "cpu") {
+  if (
+      subcommand == "run" &&
+      runBackend != "cpu") {
+    const auto measured =
+        measuredSpeedMKeys(args);
+
+    if (measured) {
+      speedMKeys = *measured;
+    } else {
       /*
-       * KeyHunt does not require a benchmark. Until a
-       * completed CPU assignment provides live speed,
-       * request a short range unless the user selected
-       * a duration explicitly.
+       * Sem perfil medido, usar uma atribuição curta
+       * de calibração, exceto quando o utilizador
+       * definiu explicitamente a duração.
        */
       if (!requestedDuration) {
         targetDurationMinutes = 5;
       }
-    } else {
-      const auto measured =
-          measuredSpeedMKeys(args);
 
-      if (measured) {
-        speedMKeys = *measured;
-      } else {
-        /*
-         * Sem perfil medido, usar uma atribuição curta
-         * de calibração, exceto quando o utilizador
-         * definiu explicitamente a duração.
-         */
-        if (!requestedDuration) {
-          targetDurationMinutes = 5;
-        }
-
-        calibrationAssignment = true;
-      }
+      calibrationAssignment = true;
     }
   }
 
