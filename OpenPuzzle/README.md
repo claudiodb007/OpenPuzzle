@@ -2,13 +2,13 @@
 
 ## Current release
 
-**OpenPuzzle 1.0.1** provides a continuous Linux client for requesting,
+**OpenPuzzle 1.0.2** provides a continuous Linux client for requesting,
 executing and synchronizing OpenPuzzle assignments.
 
 The public repository contains the client only. The coordination service
 and website infrastructure are not included.
 
-See [OpenPuzzle 1.0.1 release notes](docs/RELEASE_1.0.1.md) and the
+See [OpenPuzzle 1.0.2 release notes](docs/RELEASE_1.0.2.md) and the
 [Client Runtime guide](docs/CLIENT_RUNTIME.md).
 
 
@@ -203,9 +203,14 @@ ctest --output-on-failure
 
 ## Current Release
 
-### OpenPuzzle 1.0.1
+### OpenPuzzle 1.0.2
 
 Implemented:
+
+-   Automatic 60-minute CPU, CUDA and OpenCL assignments
+-   Backend-aware CPU range sizing using observed speed
+-   Equal assignment access independent of participant performance
+-   Portable x86-64-baseline KeyHunt without AVX-512
 
 -   Continuous anonymous assignment processing
 -   Unified CUDA and OpenCL GPU package
@@ -304,7 +309,7 @@ MIT License.
 Install the Debian package:
 
 ```bash
-sudo apt install ./OpenPuzzle-1.0.1-Linux-x86_64.deb
+sudo apt install ./OpenPuzzle-1.0.2-portable-16f5277f.deb
 ```
 
 Start OpenPuzzle:

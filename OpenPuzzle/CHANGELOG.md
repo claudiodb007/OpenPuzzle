@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.2 — CPU assignment sizing and portability
+
+- Changed automatic CPU assignments to target 60 minutes, matching CUDA
+  and OpenCL.
+- Preserved `--duration-minutes` as an explicit duration override.
+- Added the selected backend to assignment requests.
+- Added backend-aware CPU sizing for CPU-only clients using the primary
+  execution slot.
+- Used observed client speed only to size work, without changing
+  scheduling priority or assignment fairness.
+- Added compatibility with older clients that identify CPU execution
+  through the dedicated CPU slot.
+- Pinned the bundled KeyHunt executable to a portable
+  `x86-64-baseline` build without AVX-512 instructions.
+- Added an exact HTTP integration regression test for CPU backend
+  assignment requests.
+- Validated the release package with all 82 tests passing.
+- Verified continuous three-thread CPU execution beyond the previous
+  five-minute visibility window.
+
 ## 1.0.1 — Installation diagnostics
 
 - Added the local `openpuzzle doctor` command.
