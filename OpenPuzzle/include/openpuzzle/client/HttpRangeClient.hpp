@@ -22,13 +22,19 @@ public:
       const std::string &assignmentId,
       const std::string &clientId);
 
-  std::optional<RangeAssignment> claim(const std::string &clientId, int puzzle,
-                                       int targetDurationMinutes,
-                                       double speedMKeys = 0.0);
+  std::optional<RangeAssignment> claim(
+      const std::string &clientId,
+      int puzzle,
+      int targetDurationMinutes,
+      double speedMKeys = 0.0,
+      const std::string &backend = {});
 
-  RangeClaimResult claimResult(const std::string &clientId, int puzzle,
-                               int targetDurationMinutes,
-                               double speedMKeys = 0.0);
+  RangeClaimResult claimResult(
+      const std::string &clientId,
+      int puzzle,
+      int targetDurationMinutes,
+      double speedMKeys = 0.0,
+      const std::string &backend = {});
 
   bool complete(
       const std::string &assignmentId,

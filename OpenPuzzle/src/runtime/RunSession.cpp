@@ -1465,7 +1465,8 @@ ClientIterationResult RunSession::runOnce(
           clientId,
           puzzleNumber,
           targetDurationMinutes,
-          speedMKeys);
+          speedMKeys,
+          runBackend);
 
   if (claimResult.unavailable()) {
     if (subcommand == "claim") {

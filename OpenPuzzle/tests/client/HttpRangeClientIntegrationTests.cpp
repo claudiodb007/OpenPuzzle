@@ -330,6 +330,52 @@ int main() {
       "22222222-2222-4222-8222-222222222222";
 
   /*
+   * O pedido de atribuição identifica explicitamente
+   * o backend mesmo quando o slot local é primary.
+   */
+  {
+    const std::string expectedBody =
+        "{\"client_id\":"
+        "\"22222222-2222-4222-8222-222222222222\","
+        "\"puzzle\":71,"
+        "\"execution_slot\":\"primary\","
+        "\"backend\":\"cpu\","
+        "\"target_duration_minutes\":60,"
+        "\"speed_mkeys\":0.000000}";
+
+    OneShotHttpServer server(
+        "200 OK",
+        R"JSON({
+          "assignment_id":
+            "33333333-3333-4333-8333-333333333333",
+          "puzzle": 71,
+          "range_id": 591,
+          "target":
+            "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU",
+          "start": "400000000000000000",
+          "end": "400000000000000FFF"
+        })JSON",
+        "/api/range/claim",
+        expectedBody);
+
+    HttpRangeClient client(
+        server.url());
+
+    const auto assignment =
+        client.claim(
+            clientId,
+            71,
+            60,
+            0.0,
+            "cpu");
+
+    assert(assignment);
+    assert(client.lastError().empty());
+
+    server.wait();
+  }
+
+  /*
    * Rejeição de progresso atravessa o curl e
    * preserva o código JSON do servidor.
    */

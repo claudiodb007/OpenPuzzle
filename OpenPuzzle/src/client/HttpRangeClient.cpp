@@ -590,8 +590,12 @@ bool HttpRangeClient::heartbeat(const ClientHeartbeat &heartbeat) {
 }
 
 std::optional<RangeAssignment>
-HttpRangeClient::claim(const std::string &clientId, int puzzle,
-                       int targetDurationMinutes, double speedMKeys) {
+HttpRangeClient::claim(
+    const std::string &clientId,
+    int puzzle,
+    int targetDurationMinutes,
+    double speedMKeys,
+    const std::string &backend) {
   lastError_.clear();
 
   lastClaimStatus_ =
@@ -636,6 +640,7 @@ HttpRangeClient::claim(const std::string &clientId, int puzzle,
           << jsonEscape(
                  ClientStateStore::executionSlot())
           << "\","
+          << "\"backend\":\"" << jsonEscape(backend) << "\","
           << "\"target_duration_minutes\":" << targetDurationMinutes << ","
           << "\"speed_mkeys\":" << std::fixed << std::setprecision(6)
           << speedMKeys << "}";
@@ -709,13 +714,15 @@ RangeClaimResult HttpRangeClient::claimResult(
     const std::string &clientId,
     int puzzle,
     int targetDurationMinutes,
-    double speedMKeys) {
+    double speedMKeys,
+    const std::string &backend) {
   auto assignment =
       claim(
           clientId,
           puzzle,
           targetDurationMinutes,
-          speedMKeys);
+          speedMKeys,
+          backend);
 
   RangeClaimResult result;
 
