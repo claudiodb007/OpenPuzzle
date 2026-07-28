@@ -17,9 +17,11 @@ file(
 )
 
 set(OPENPUZZLE_REQUIRED_SERVICE_LINES
-    "ExecStart=/usr/bin/openpuzzle run --backend %i"
+    "ExecStart=/usr/bin/openpuzzle run --backend %i $OPENPUZZLE_SERVICE_ARGS"
     "ExecStop=/usr/bin/openpuzzle stop"
     "Environment=OPENPUZZLE_EXECUTION_SLOT=primary"
+    "Environment=OPENPUZZLE_SERVICE_ARGS="
+    "EnvironmentFile=-%h/.config/OpenPuzzle/%i.env"
     "Restart=on-failure"
     "TimeoutStopSec=180s"
     "KillMode=mixed"

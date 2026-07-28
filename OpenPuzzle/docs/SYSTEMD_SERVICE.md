@@ -27,6 +27,33 @@ Do not enable multiple `openpuzzle@` instances for the same user. The
 1.0.3 service template owns the primary execution slot and supports
 one selected backend per user.
 
+## Backend-specific arguments
+
+Each service instance reads an optional environment file named after
+its backend from `~/.config/OpenPuzzle`. Use it for local arguments
+that should not be hard-coded into the system service template.
+
+For example, limit a CPU client to three KeyHunt worker threads:
+
+```bash
+mkdir -p "$HOME/.config/OpenPuzzle"
+printf '%s\n' \
+    'OPENPUZZLE_SERVICE_ARGS=--threads 3' \
+    > "$HOME/.config/OpenPuzzle/cpu.env"
+chmod 600 "$HOME/.config/OpenPuzzle/cpu.env"
+```
+
+After changing an environment file, restart the matching instance:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user restart openpuzzle@cpu.service
+```
+
+Use `cuda.env` or `opencl.env` for the corresponding GPU backend.
+The arguments are appended to `openpuzzle run --backend <backend>`.
+The environment file is optional when no extra arguments are needed.
+
 ## Existing manual runtime
 
 Do not start the service while `openpuzzle run` is already active.

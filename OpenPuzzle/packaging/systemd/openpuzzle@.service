@@ -9,7 +9,9 @@ StartLimitBurst=5
 [Service]
 Type=simple
 Environment=OPENPUZZLE_EXECUTION_SLOT=primary
-ExecStart=/usr/bin/openpuzzle run --backend %i
+Environment=OPENPUZZLE_SERVICE_ARGS=
+EnvironmentFile=-%h/.config/OpenPuzzle/%i.env
+ExecStart=/usr/bin/openpuzzle run --backend %i $OPENPUZZLE_SERVICE_ARGS
 ExecStop=/usr/bin/openpuzzle stop
 Restart=on-failure
 RestartSec=30s

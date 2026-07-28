@@ -7,6 +7,8 @@ Linux clients.
 
 - Installs the `openpuzzle@.service` user-service template.
 - Supports one selected `cuda`, `opencl` or `cpu` backend per user.
+- Reads optional per-backend arguments from
+  `~/.config/OpenPuzzle/<backend>.env`.
 - Runs without keeping a terminal open.
 - Restarts the client after unexpected failures.
 - Preserves graceful `openpuzzle stop` handling.
