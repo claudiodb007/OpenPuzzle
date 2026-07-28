@@ -1,0 +1,24 @@
+[Unit]
+Description=OpenPuzzle continuous client (%i backend)
+Documentation=https://github.com/claudiodb007/OpenPuzzle
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+Environment=OPENPUZZLE_EXECUTION_SLOT=primary
+ExecStart=/usr/bin/openpuzzle run --backend %i
+ExecStop=/usr/bin/openpuzzle stop
+Restart=on-failure
+RestartSec=30s
+TimeoutStopSec=180s
+KillMode=mixed
+UMask=0077
+WorkingDirectory=%h
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(OpenPuzzle VERSION 1.0.2 LANGUAGES CXX)
+project(OpenPuzzle VERSION 1.0.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -314,6 +314,15 @@ enable_testing()
 
 add_subdirectory(tests)
 
+add_test(
+    NAME SystemdServiceUnitTests
+    COMMAND
+        ${CMAKE_COMMAND}
+        "-DOPENPUZZLE_SERVICE_FILE=${CMAKE_SOURCE_DIR}/packaging/systemd/openpuzzle@.service"
+        -P
+            ${CMAKE_SOURCE_DIR}/tests/cmake/SystemdServiceUnitTests.cmake
+)
+
 
 # OpenPuzzle client installation and packaging
 include(GNUInstallDirs)
@@ -332,6 +341,13 @@ set(
 install(
     TARGETS OpenPuzzle
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(
+    FILES
+        packaging/systemd/openpuzzle@.service
+    DESTINATION
+        lib/systemd/user
 )
 
 install(
@@ -356,6 +372,9 @@ install(
         docs/CLIENT_RUNTIME.md
         docs/RELEASE_1.0.0.md
         docs/RELEASE_1.0.1.md
+        docs/RELEASE_1.0.2.md
+        docs/RELEASE_1.0.3.md
+        docs/SYSTEMD_SERVICE.md
     DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
 )
 
