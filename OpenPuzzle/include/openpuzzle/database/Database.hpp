@@ -6,6 +6,18 @@
 #include <string>
 #include <vector>
 namespace openpuzzle {
+
+struct AuditLogRecord {
+  int id = 0;
+  int puzzleId = 0;
+  int rangeId = 0;
+  int jobId = 0;
+  int executionId = 0;
+  std::string event;
+  std::string message;
+  std::string createdAt;
+};
+
 class Database {
 public:
   ~Database();
@@ -38,6 +50,10 @@ public:
                      double progressPercent, const std::string &eta);
   bool insertAuditLog(int puzzleId, int rangeId, int jobId, int executionId,
                       const std::string &event, const std::string &message);
+  std::vector<AuditLogRecord> listAuditLog(
+      int limit,
+      std::optional<int> puzzleId = std::nullopt,
+      const std::string &event = {});
   bool updateRangeKeysChecked(int rangeId, const std::string &keysChecked);
   bool insertExternalRange(int puzzleId, const std::string &startKey,
                            const std::string &endKey, const std::string &source,

@@ -101,6 +101,7 @@ static void printApplicationHelp() {
       << "  openpuzzle status\n"
       << "  openpuzzle stop\n"
       << "  openpuzzle doctor\n"
+      << "  openpuzzle audit [--limit N] [--puzzle N] [--event NAME]\n"
       << "\n"
       << "Global options:\n"
       << "  -h, --help       Show this help\n"
@@ -660,10 +661,141 @@ int Application::cmdBitcrackCommand(const std::vector<std::string> &a) {
 }
 
 int Application::cmdAudit(const std::vector<std::string> &args) {
-  (void)args;
-  std::cout << "Audit log is stored in SQLite table: audit_log\n";
+  if (hasArg(args, "--help") || hasArg(args, "-h")) {
+    std::cout
+        << "OpenPuzzle Audit\n"
+        << "----------------\n"
+        << "Usage:\n"
+        << "  openpuzzle audit [--limit N] [--puzzle N] [--event NAME]\n"
+        << "\n"
+        << "Options:\n"
+        << "  --limit N       Maximum entries to show (default 50, maximum 1000)\n"
+        << "  --puzzle N      Show entries for one puzzle number\n"
+        << "  --event NAME    Show entries matching one event name\n"
+        << "  -h, --help      Show this help\n";
+    return 0;
+  }
+
+  for (std::size_t index = 0; index < args.size(); ++index) {
+    const auto &argument = args[index];
+
+    if (argument == "--limit" ||
+        argument == "--puzzle" ||
+        argument == "--event") {
+      if (index + 1 >= args.size()) {
+        throw std::runtime_error(
+            "Missing value for audit option: " + argument);
+      }
+
+      ++index;
+      continue;
+    }
+
+    throw std::runtime_error(
+        "Unknown audit option: " + argument);
+  }
+
+  const int limit = getIntArg(args, "--limit", 50);
+  const int puzzleNumber = getIntArg(args, "--puzzle", 0);
+  const std::string event = getArg(args, "--event");
+
+  if (limit < 1 || limit > 1000) {
+    throw std::runtime_error(
+        "Audit limit must be between 1 and 1000");
+  }
+
+  if (hasArg(args, "--puzzle") && puzzleNumber < 1) {
+    throw std::runtime_error(
+        "Audit puzzle number must be positive");
+  }
+
+  Database db;
+
+  if (!ensureDb(db)) {
+    std::cerr << "Could not open the OpenPuzzle database\n";
+    return 1;
+  }
+
+  std::optional<int> puzzleId;
+
+  if (puzzleNumber > 0) {
+    const auto puzzle = db.getPuzzleByNumber(puzzleNumber);
+
+    if (!puzzle) {
+      throw std::runtime_error(
+          "Puzzle not found: " + std::to_string(puzzleNumber));
+    }
+
+    puzzleId = puzzle->id;
+  }
+
+  const auto entries =
+      db.listAuditLog(limit, puzzleId, event);
+
   std::cout
-      << "Detailed audit listing will be implemented in the next build.\n";
+      << "OpenPuzzle Audit\n"
+      << "----------------\n"
+      << "Database............ " << dbPath() << "\n"
+      << "Limit............... " << limit << "\n"
+      << "Puzzle.............. ";
+
+  if (puzzleNumber > 0) {
+    std::cout << "#" << puzzleNumber << "\n";
+  } else {
+    std::cout << "all\n";
+  }
+
+  std::cout << "Event............... "
+            << (event.empty() ? "all" : event) << "\n"
+            << "Entries............. " << entries.size() << "\n";
+
+  if (entries.empty()) {
+    std::cout << "\nNo audit entries found.\n";
+    return 0;
+  }
+
+  for (const auto &entry : entries) {
+    std::cout
+        << "\nAudit #" << entry.id << "\n"
+        << "Time................ " << entry.createdAt << "\n"
+        << "Event............... " << entry.event << "\n"
+        << "Puzzle.............. ";
+
+    if (entry.puzzleId > 0) {
+      const auto puzzle = db.getPuzzleById(entry.puzzleId);
+
+      if (puzzle) {
+        std::cout << "#" << puzzle->number
+                  << " (database ID " << entry.puzzleId << ")\n";
+      } else {
+        std::cout << "database ID " << entry.puzzleId << "\n";
+      }
+    } else {
+      std::cout << "-\n";
+    }
+
+    const auto printIdentifier =
+        [](const char *label, int value) {
+          std::cout << label;
+
+          if (value > 0) {
+            std::cout << value;
+          } else {
+            std::cout << "-";
+          }
+
+          std::cout << "\n";
+        };
+
+    printIdentifier("Range............... ", entry.rangeId);
+    printIdentifier("Job................. ", entry.jobId);
+    printIdentifier("Execution........... ", entry.executionId);
+
+    std::cout << "Message............. "
+              << (entry.message.empty() ? "-" : entry.message)
+              << "\n";
+  }
+
   return 0;
 }
 

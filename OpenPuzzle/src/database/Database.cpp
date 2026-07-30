@@ -60,6 +60,10 @@ CREATE TABLE IF NOT EXISTS statistics(id INTEGER PRIMARY KEY AUTOINCREMENT,execu
 CREATE TABLE IF NOT EXISTS external_ranges(id INTEGER PRIMARY KEY AUTOINCREMENT,puzzle_id INTEGER NOT NULL,start_key TEXT NOT NULL,end_key TEXT NOT NULL,source TEXT,confidence TEXT,notes TEXT,imported_at TEXT DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(puzzle_id) REFERENCES puzzles(id));
 CREATE TABLE IF NOT EXISTS workers(id INTEGER PRIMARY KEY AUTOINCREMENT,machine TEXT NOT NULL,gpu_name TEXT NOT NULL,backend TEXT NOT NULL,engine TEXT NOT NULL,status TEXT DEFAULT 'idle',speed_mkeys REAL DEFAULT 0,temperature_c REAL DEFAULT 0,power_w REAL DEFAULT 0,last_seen TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(machine,gpu_name,backend,engine));
 CREATE TABLE IF NOT EXISTS gpu_profiles(id INTEGER PRIMARY KEY AUTOINCREMENT,gpu_name TEXT NOT NULL,backend TEXT NOT NULL,engine TEXT NOT NULL,blocks INTEGER NOT NULL,threads INTEGER NOT NULL,points INTEGER NOT NULL,average_speed REAL NOT NULL,minimum_speed REAL DEFAULT 0,maximum_speed REAL DEFAULT 0,samples INTEGER DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(gpu_name,backend,engine));
+CREATE TABLE IF NOT EXISTS audit_log(id INTEGER PRIMARY KEY AUTOINCREMENT,puzzle_id INTEGER,range_id INTEGER,job_id INTEGER,execution_id INTEGER,event TEXT NOT NULL,message TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(puzzle_id) REFERENCES puzzles(id),FOREIGN KEY(range_id) REFERENCES ranges(id),FOREIGN KEY(job_id) REFERENCES jobs(id),FOREIGN KEY(execution_id) REFERENCES executions(id));
+CREATE INDEX IF NOT EXISTS audit_log_created_at_idx ON audit_log(created_at);
+CREATE INDEX IF NOT EXISTS audit_log_puzzle_id_idx ON audit_log(puzzle_id);
+CREATE INDEX IF NOT EXISTS audit_log_event_idx ON audit_log(event);
 )SQL");
 
   char *migrationError = nullptr;
@@ -93,6 +97,151 @@ CREATE TABLE IF NOT EXISTS gpu_profiles(id INTEGER PRIMARY KEY AUTOINCREMENT,gpu
 
   return ok;
 }
+bool Database::insertAuditLog(
+    int puzzleId,
+    int rangeId,
+    int jobId,
+    int executionId,
+    const std::string &event,
+    const std::string &message) {
+  if (!db_ || event.empty()) {
+    return false;
+  }
+
+  const char *sql =
+      "INSERT INTO audit_log("
+      "puzzle_id,range_id,job_id,execution_id,event,message"
+      ") VALUES(?,?,?,?,?,?)";
+
+  sqlite3_stmt *statement = nullptr;
+
+  if (sqlite3_prepare_v2(
+          db_, sql, -1, &statement, nullptr) != SQLITE_OK) {
+    return false;
+  }
+
+  const auto bindIdentifier =
+      [statement](int index, int value) {
+        if (value > 0) {
+          sqlite3_bind_int(statement, index, value);
+        } else {
+          sqlite3_bind_null(statement, index);
+        }
+      };
+
+  bindIdentifier(1, puzzleId);
+  bindIdentifier(2, rangeId);
+  bindIdentifier(3, jobId);
+  bindIdentifier(4, executionId);
+
+  sqlite3_bind_text(
+      statement, 5, event.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(
+      statement, 6, message.c_str(), -1, SQLITE_TRANSIENT);
+
+  const bool inserted =
+      sqlite3_step(statement) == SQLITE_DONE;
+
+  sqlite3_finalize(statement);
+
+  return inserted;
+}
+
+std::vector<AuditLogRecord> Database::listAuditLog(
+    int limit,
+    std::optional<int> puzzleId,
+    const std::string &event) {
+  std::vector<AuditLogRecord> entries;
+
+  if (!db_ || limit < 1) {
+    return entries;
+  }
+
+  if (limit > 1000) {
+    limit = 1000;
+  }
+
+  std::string sql =
+      "SELECT "
+      "id,"
+      "COALESCE(puzzle_id,0),"
+      "COALESCE(range_id,0),"
+      "COALESCE(job_id,0),"
+      "COALESCE(execution_id,0),"
+      "event,"
+      "COALESCE(message,''),"
+      "created_at "
+      "FROM audit_log";
+
+  bool hasWhere = false;
+
+  if (puzzleId) {
+    sql += " WHERE puzzle_id=?";
+    hasWhere = true;
+  }
+
+  if (!event.empty()) {
+    sql += hasWhere ? " AND event=?" : " WHERE event=?";
+  }
+
+  sql += " ORDER BY id DESC LIMIT ?";
+
+  sqlite3_stmt *statement = nullptr;
+
+  if (sqlite3_prepare_v2(
+          db_, sql.c_str(), -1, &statement, nullptr) != SQLITE_OK) {
+    return entries;
+  }
+
+  int parameter = 1;
+
+  if (puzzleId) {
+    sqlite3_bind_int(statement, parameter++, *puzzleId);
+  }
+
+  if (!event.empty()) {
+    sqlite3_bind_text(
+        statement,
+        parameter++,
+        event.c_str(),
+        -1,
+        SQLITE_TRANSIENT);
+  }
+
+  sqlite3_bind_int(statement, parameter, limit);
+
+  while (sqlite3_step(statement) == SQLITE_ROW) {
+    AuditLogRecord entry;
+
+    entry.id = sqlite3_column_int(statement, 0);
+    entry.puzzleId = sqlite3_column_int(statement, 1);
+    entry.rangeId = sqlite3_column_int(statement, 2);
+    entry.jobId = sqlite3_column_int(statement, 3);
+    entry.executionId = sqlite3_column_int(statement, 4);
+
+    const auto textAt =
+        [statement](int column) {
+          const auto *value =
+              sqlite3_column_text(statement, column);
+
+          return value
+                     ? std::string{
+                           reinterpret_cast<const char *>(value)}
+                     : std::string{};
+        };
+
+    entry.event = textAt(5);
+    entry.message = textAt(6);
+    entry.createdAt = textAt(7);
+
+    entries.push_back(entry);
+  }
+
+  sqlite3_finalize(statement);
+
+  return entries;
+}
+
 bool Database::upsertPuzzle(const PuzzleRecord &p) {
   const char *sql =
       "INSERT INTO "

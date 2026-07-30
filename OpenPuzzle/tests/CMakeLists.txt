@@ -1212,3 +1212,19 @@ add_test(
     NAME SolutionExporterTests
     COMMAND SolutionExporterTests
 )
+
+add_executable(
+    AuditLogTests
+    database/AuditLogTests.cpp
+)
+
+target_link_libraries(
+    AuditLogTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME AuditLogTests
+    COMMAND AuditLogTests
+)
