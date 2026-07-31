@@ -1067,6 +1067,13 @@ if(PHP_EXECUTABLE)
             ${PHP_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/server/tests/search/RangeCoverageCalculatorTests.php
     )
+
+    add_test(
+        NAME HexKeyMathRangeCompatibilityTests
+        COMMAND
+            ${PHP_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/server/tests/search/HexKeyMathRangeCompatibilityTests.php
+    )
 endif()
 
 find_program(
