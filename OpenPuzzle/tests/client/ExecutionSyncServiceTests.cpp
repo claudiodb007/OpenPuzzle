@@ -336,16 +336,22 @@ int main() {
   }
 
   /*
-   * Conclusão exige simultaneamente uma amostra real
-   * de progresso e o marcador final do BitCrack.
+   * Um range curto pode terminar antes da primeira
+   * linha periódica. O marcador final continua a ser
+   * prova válida; progresso sem o marcador não é.
    */
   {
     writeFile(
         workspace / "bitcrack.log",
+        "[Info] Starting at: "
+        "000000000000000000000000000000000000000000000076000ED8CC0DF8627A\n"
+        "[Info] Ending at:   "
+        "000000000000000000000000000000000000000000000076000ED8CC9DF86279\n"
+        "[Info] Done\n"
         "[Info] Reached end of keyspace\n");
 
     assert(
-        !ExecutionSyncService::hasCompletionProof(
+        ExecutionSyncService::hasCompletionProof(
             workspace.string()));
 
     writeFile(

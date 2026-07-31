@@ -200,12 +200,15 @@ bool ExecutionSyncService::hasCompletionProof(
             "KeyHunt");
   }
 
-  if (!latestProgress(
-          workspace,
-          engine)) {
-    return false;
-  }
-
+  /*
+   * O marcador final do motor é independente das
+   * amostras periódicas. Um range curto pode terminar
+   * antes de BitCrack imprimir MKey/s e total.
+   *
+   * tick() só usa esta prova depois de confirmar
+   * exit.code=0 e calcula a contagem final diretamente
+   * a partir do range atribuído.
+   */
   std::string engineId = engine;
 
   std::transform(
