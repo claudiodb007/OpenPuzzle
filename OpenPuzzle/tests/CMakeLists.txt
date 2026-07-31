@@ -1074,6 +1074,13 @@ if(PHP_EXECUTABLE)
             ${PHP_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/server/tests/search/HexKeyMathRangeCompatibilityTests.php
     )
+
+    add_test(
+        NAME TerminalRangeStatusResolverTests
+        COMMAND
+            ${PHP_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/server/tests/search/TerminalRangeStatusResolverTests.php
+    )
 endif()
 
 find_program(
