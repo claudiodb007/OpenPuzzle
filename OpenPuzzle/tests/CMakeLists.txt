@@ -1089,6 +1089,14 @@ if(PHP_EXECUTABLE)
             ${CMAKE_SOURCE_DIR}/server/tests/audit/RangeIntegrityAuditorTests.php
     )
 
+
+    add_test(
+        NAME PublicApiDeduplicationTests
+        COMMAND
+            ${PHP_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/server/tests/http/PublicApiDeduplicationTests.php
+    )
+
 endif()
 
 find_program(
