@@ -2,3 +2,5 @@
 # Local OpenPuzzle 0.12 build and distribution artifacts
 /OpenPuzzle/build-release-unified/
 /OpenPuzzle/dist/
+
+/OpenPuzzle/server/
