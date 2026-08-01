@@ -1081,6 +1081,14 @@ if(PHP_EXECUTABLE)
             ${PHP_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/server/tests/search/TerminalRangeStatusResolverTests.php
     )
+
+    add_test(
+        NAME RangeIntegrityAuditorTests
+        COMMAND
+            ${PHP_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/server/tests/audit/RangeIntegrityAuditorTests.php
+    )
+
 endif()
 
 find_program(
