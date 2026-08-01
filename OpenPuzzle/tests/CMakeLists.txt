@@ -1,3 +1,12 @@
+# The current standalone tests use the standard assert macro for both
+# validation and some setup/cleanup calls. Release builds define NDEBUG,
+# which would otherwise remove those calls and make the tests invalid.
+if(MSVC)
+    add_compile_options(/UNDEBUG)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-UNDEBUG)
+endif()
+
 add_executable(EventBusTests
     core/EventBusTests.cpp
 )
@@ -1055,49 +1064,6 @@ add_test(
     COMMAND ClientRuntimeControlTests
 )
 
-find_program(
-    PHP_EXECUTABLE
-    NAMES php
-)
-
-if(PHP_EXECUTABLE)
-    add_test(
-        NAME RangeCoverageCalculatorTests
-        COMMAND
-            ${PHP_EXECUTABLE}
-            ${CMAKE_SOURCE_DIR}/server/tests/search/RangeCoverageCalculatorTests.php
-    )
-
-    add_test(
-        NAME HexKeyMathRangeCompatibilityTests
-        COMMAND
-            ${PHP_EXECUTABLE}
-            ${CMAKE_SOURCE_DIR}/server/tests/search/HexKeyMathRangeCompatibilityTests.php
-    )
-
-    add_test(
-        NAME TerminalRangeStatusResolverTests
-        COMMAND
-            ${PHP_EXECUTABLE}
-            ${CMAKE_SOURCE_DIR}/server/tests/search/TerminalRangeStatusResolverTests.php
-    )
-
-    add_test(
-        NAME RangeIntegrityAuditorTests
-        COMMAND
-            ${PHP_EXECUTABLE}
-            ${CMAKE_SOURCE_DIR}/server/tests/audit/RangeIntegrityAuditorTests.php
-    )
-
-
-    add_test(
-        NAME PublicApiDeduplicationTests
-        COMMAND
-            ${PHP_EXECUTABLE}
-            ${CMAKE_SOURCE_DIR}/server/tests/http/PublicApiDeduplicationTests.php
-    )
-
-endif()
 
 find_program(
     OPENPUZZLE_CURL_EXECUTABLE
@@ -1155,15 +1121,6 @@ add_test(
     COMMAND LocalStorageSecurityTests
 )
 
-
-if(PHP_EXECUTABLE)
-    add_test(
-        NAME SolutionReportRequestTests
-        COMMAND
-            ${PHP_EXECUTABLE}
-            ${CMAKE_SOURCE_DIR}/server/tests/solutions/SolutionReportRequestTests.php
-    )
-endif()
 
 
 add_executable(

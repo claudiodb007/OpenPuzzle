@@ -23,28 +23,21 @@ ticket, a chat, an issue or a log.
 
 ## List pending reports
 
-Open this repository file:
+Use the private server operation named
+`list_pending_solution_reports.sql`. Server database operations are
+intentionally maintained outside the public OpenPuzzle client repository.
 
-```text
-server/database/operations/list_pending_solution_reports.sql
-```
-
-Copy its SQL into phpMyAdmin and execute it. The result contains identifiers
-and public range metadata only.
+Copy its reviewed SQL into phpMyAdmin and execute it. The result contains
+identifiers and public range metadata only.
 
 ## Verify a report
 
 Independent verification must happen before approval, using trusted offline
 tooling and public blockchain information.
 
-Open:
-
-```text
-server/database/operations/verify_solution_report.sql
-```
-
-Replace only `REPLACE_WITH_REPORT_UUID` with the report UUID and execute the
-complete transaction in phpMyAdmin.
+Use the private server operation named
+`verify_solution_report.sql`. Replace only `REPLACE_WITH_REPORT_UUID` with the
+report UUID and execute the complete reviewed transaction in phpMyAdmin.
 
 A successful update returns:
 
@@ -57,13 +50,9 @@ mark the puzzle as solved. That remains a separate administrative action.
 
 ## Reject a report
 
-Open:
-
-```text
-server/database/operations/reject_solution_report.sql
-```
-
-Replace only `REPLACE_WITH_REPORT_UUID` and execute the complete transaction.
+Use the private server operation named
+`reject_solution_report.sql`. Replace only `REPLACE_WITH_REPORT_UUID` and
+execute the complete reviewed transaction.
 
 A successful update returns:
 
@@ -87,13 +76,8 @@ This is a separate, final administrative operation. Perform it only after the
 report is `verified` and a public Bitcoin transaction independently confirms
 the solution.
 
-Open:
-
-```text
-server/database/operations/mark_verified_puzzle_solved.sql
-```
-
-Replace only:
+Use the private server operation named
+`mark_verified_puzzle_solved.sql`. Replace only:
 
 - `REPLACE_WITH_VERIFIED_REPORT_UUID`;
 - `REPLACE_WITH_64_CHARACTER_BITCOIN_TXID`.
