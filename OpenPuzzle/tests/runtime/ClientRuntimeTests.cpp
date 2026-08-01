@@ -62,6 +62,11 @@ ClientRuntimeDependencies makeDependencies() {
         return true;
       };
 
+  dependencies.hasState =
+      [] {
+        return false;
+      };
+
   dependencies.acquireRuntime =
       [] {
         return true;
@@ -73,6 +78,16 @@ ClientRuntimeDependencies makeDependencies() {
   dependencies.stopRequested =
       [] {
         return false;
+      };
+
+  dependencies.safeStopRequested =
+      [] {
+        return false;
+      };
+
+  dependencies.clearSafeStop =
+      [] {
+        return true;
       };
 
   dependencies.prepareSignals =
@@ -996,6 +1011,98 @@ int main() {
 
     assert(result == 0);
     assert(executions == 2);
+  }
+
+  /*
+   * safestop pedido durante uma atribuição:
+   * a conclusão normal é preservada e nenhuma
+   * atribuição seguinte é executada.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    int executions = 0;
+    bool safeStop = false;
+    bool markerCleared = false;
+    bool statePresent = true;
+
+    dependencies.safeStopRequested =
+        [&] {
+          return safeStop;
+        };
+
+    dependencies.hasState =
+        [&] {
+          return statePresent;
+        };
+
+    dependencies.clearSafeStop =
+        [&] {
+          markerCleared = true;
+          safeStop = false;
+          return true;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    const int result =
+        runtime.runContinuous(
+            "https://server.test",
+            [&] {
+              ++executions;
+              safeStop = true;
+              statePresent = false;
+              return ClientIterationResult{};
+            });
+
+    assert(result == 0);
+    assert(executions == 1);
+    assert(markerCleared);
+  }
+
+  /*
+   * Um pedido já presente sem atribuição ativa
+   * termina antes de qualquer claim.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    int executions = 0;
+    bool markerCleared = false;
+
+    dependencies.safeStopRequested =
+        [] {
+          return true;
+        };
+
+    dependencies.hasState =
+        [] {
+          return false;
+        };
+
+    dependencies.clearSafeStop =
+        [&] {
+          markerCleared = true;
+          return true;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    const int result =
+        runtime.runContinuous(
+            "https://server.test",
+            [&] {
+              ++executions;
+              return ClientIterationResult{};
+            });
+
+    assert(result == 0);
+    assert(executions == 0);
+    assert(markerCleared);
   }
 
   /*

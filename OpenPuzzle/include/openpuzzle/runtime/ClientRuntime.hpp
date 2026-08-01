@@ -99,10 +99,14 @@ struct ClientRuntimeDependencies {
 
   std::function<bool()> removeState;
 
+  std::function<bool()> hasState;
+
   std::function<bool()> acquireRuntime;
   std::function<void()> releaseRuntime;
 
   std::function<bool()> stopRequested;
+  std::function<bool()> safeStopRequested;
+  std::function<bool()> clearSafeStop;
   std::function<void()> prepareSignals;
 
   std::function<void(

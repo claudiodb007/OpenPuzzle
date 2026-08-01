@@ -100,6 +100,7 @@ static void printApplicationHelp() {
       << "  openpuzzle run [puzzle] [run options]\n"
       << "  openpuzzle status\n"
       << "  openpuzzle stop\n"
+      << "  openpuzzle safestop\n"
       << "  openpuzzle doctor\n"
       << "  openpuzzle audit [--limit N] [--puzzle N] [--event NAME]\n"
       << "\n"
@@ -300,6 +301,10 @@ int Application::run(int argc, char **argv) {
 
     if (cmd == "stop") {
       return RangeCommand().run({"stop"});
+    }
+
+    if (cmd == "safestop") {
+      return RangeCommand().run({"safestop"});
     }
 
     if (cmd == "doctor") {

@@ -31,9 +31,12 @@ ClientRuntime::ClientRuntime(
       !dependencies_.finalizeAssignment ||
       !dependencies_.finalKeysChecked ||
       !dependencies_.removeState ||
+      !dependencies_.hasState ||
       !dependencies_.acquireRuntime ||
       !dependencies_.releaseRuntime ||
       !dependencies_.stopRequested ||
+      !dependencies_.safeStopRequested ||
+      !dependencies_.clearSafeStop ||
       !dependencies_.prepareSignals ||
       !dependencies_.sleep) {
     throw std::invalid_argument(
@@ -132,6 +135,13 @@ ClientRuntime::productionDependencies() {
         return client::ClientStateStore::remove();
       };
 
+  dependencies.hasState =
+      [] {
+        return
+            client::ClientStateStore::load()
+                .has_value();
+      };
+
   dependencies.acquireRuntime =
       [] {
         return ClientRuntimeControl::acquire();
@@ -145,6 +155,20 @@ ClientRuntime::productionDependencies() {
   dependencies.stopRequested =
       [] {
         return SignalHandler::stopRequested();
+      };
+
+  dependencies.safeStopRequested =
+      [] {
+        return
+            ClientRuntimeControl::
+                safeStopRequested();
+      };
+
+  dependencies.clearSafeStop =
+      [] {
+        return
+            ClientRuntimeControl::
+                clearSafeStop();
       };
 
   dependencies.prepareSignals =
@@ -194,6 +218,7 @@ int ClientRuntime::runContinuous(
         dependencies;
 
     ~RuntimeReleaseGuard() {
+      dependencies.clearSafeStop();
       dependencies.releaseRuntime();
     }
   };
@@ -220,6 +245,17 @@ int ClientRuntime::runContinuous(
   while (true) {
     if (dependencies_.stopRequested()) {
       std::cout << "openpuzzle stopped.\n";
+
+      return 0;
+    }
+
+    if (
+        dependencies_.safeStopRequested() &&
+        !dependencies_.hasState()) {
+      std::cout
+          << "Safe stop.......... complete\n"
+          << "New assignment..... blocked\n"
+          << "openpuzzle stopped.\n";
 
       return 0;
     }
@@ -272,6 +308,15 @@ int ClientRuntime::runContinuous(
        * A conclusão remove client.state. O próximo
        * heartbeat será portanto recolhido como idle.
        */
+      if (dependencies_.safeStopRequested()) {
+        std::cout
+            << "\nSafe stop.......... complete\n"
+            << "Current assignment. completed\n"
+            << "New assignment..... blocked\n";
+
+        return 0;
+      }
+
       availabilityHeartbeatRequired = true;
 
       std::cout

@@ -60,6 +60,18 @@ int main() {
               .filename() ==
       "runtime-cpu.pid");
 
+  assert(
+      ClientRuntimeControl::
+          safeStopPath("gpu")
+              .filename() ==
+      "safestop-gpu.requested");
+
+  assert(
+      ClientRuntimeControl::
+          safeStopPath("cpu")
+              .filename() ==
+      "safestop-cpu.requested");
+
   const std::vector<std::string>
       concurrentArguments = {
           "run",
@@ -125,6 +137,19 @@ int main() {
   assert(pid);
   assert(*pid == static_cast<int>(getpid()));
 
+  assert(
+      ClientRuntimeControl::
+          requestSafeStop());
+  assert(
+      ClientRuntimeControl::
+          safeStopRequested());
+  assert(
+      ClientRuntimeControl::
+          clearSafeStop());
+  assert(
+      !ClientRuntimeControl::
+           safeStopRequested());
+
   /*
    * A mesma ou outra instância não pode adquirir
    * o controlo enquanto o PID estiver ativo.
@@ -134,6 +159,10 @@ int main() {
   assert(ClientRuntimeControl::release());
   assert(!ClientRuntimeControl::runtimePid());
   assert(!ClientRuntimeControl::running());
+
+  assert(
+      !ClientRuntimeControl::
+           requestSafeStop());
 
   /*
    * Um PID obsoleto é limpo automaticamente.

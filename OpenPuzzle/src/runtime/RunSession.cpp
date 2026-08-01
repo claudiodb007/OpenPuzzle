@@ -797,6 +797,86 @@ int stopExecution() {
   return 0;
 }
 
+int safeStopExecution() {
+  std::cout << "OpenPuzzle Safe Stop\n"
+            << "--------------------\n";
+
+  std::vector<std::string> activeSlots;
+
+  for (const std::string slot : {
+           "gpu",
+           "cpu",
+       }) {
+    if (
+        ClientRuntimeControl::
+            running(slot)) {
+      activeSlots.push_back(slot);
+    }
+  }
+
+  if (!activeSlots.empty()) {
+    std::vector<std::string> requestedSlots;
+
+    for (const auto& slot : activeSlots) {
+      if (!ClientRuntimeControl::
+               requestSafeStop(slot)) {
+        for (const auto& requested :
+             requestedSlots) {
+          ClientRuntimeControl::
+              clearSafeStop(requested);
+        }
+
+        std::cerr
+            << "Unable to request safe stop for "
+            << slot
+            << ".\n"
+            << "No partial safe-stop request "
+            << "was retained.\n";
+
+        return 1;
+      }
+
+      requestedSlots.push_back(slot);
+
+      std::cout
+          << "Safe stop requested. "
+          << slot
+          << '\n';
+    }
+
+    std::cout
+        << "Current ranges...... will finish\n"
+        << "New assignments..... blocked\n"
+        << "Runtime exit........ automatic\n";
+
+    return 0;
+  }
+
+  if (ClientRuntimeControl::running()) {
+    if (!ClientRuntimeControl::
+             requestSafeStop()) {
+      std::cerr
+          << "Unable to create the safe-stop "
+          << "request.\n";
+
+      return 1;
+    }
+
+    std::cout
+        << "Safe stop requested. primary\n"
+        << "Current range....... will finish\n"
+        << "New assignment...... blocked\n"
+        << "Runtime exit........ automatic\n";
+
+    return 0;
+  }
+
+  std::cout
+      << "No active OpenPuzzle runtime.\n";
+
+  return 0;
+}
+
 int runConcurrent(
     const std::vector<std::string>& args) {
   const auto gpuArguments =
@@ -938,7 +1018,38 @@ int runConcurrent(
           ? cpuPid
           : gpuPid;
 
+  const std::string remainingSlot =
+      firstPid == gpuPid
+          ? "cpu"
+          : "gpu";
+
   if (remainingPid > 0) {
+    if (
+        ClientRuntimeControl::
+            safeStopRequested(
+                remainingSlot)) {
+      int remainingStatus = 0;
+
+      if (
+          waitpid(
+              remainingPid,
+              &remainingStatus,
+              0) != remainingPid) {
+        return 1;
+      }
+
+      return
+          (
+              firstPid > 0 &&
+              WIFEXITED(firstStatus) &&
+              WEXITSTATUS(firstStatus) == 0 &&
+              WIFEXITED(remainingStatus) &&
+              WEXITSTATUS(remainingStatus) == 0
+          )
+              ? 0
+              : 1;
+    }
+
     kill(
         remainingPid,
         SIGTERM);
@@ -1001,7 +1112,7 @@ int RunSession::run(
   }
 
   /*
-   * status, stop e claim são operações únicas.
+   * status, stop, safestop e claim são operações únicas.
    * Apenas run entra no ciclo contínuo.
    */
   if (args.empty() ||
@@ -1036,7 +1147,8 @@ ClientIterationResult RunSession::runOnce(
     std::cerr << "Usage:\n"
               << "  openpuzzle run <puzzle> [--dry-run]\n"
               << "  openpuzzle status\n"
-              << "  openpuzzle stop\n";
+              << "  openpuzzle stop\n"
+              << "  openpuzzle safestop\n";
 
     return 1;
   }
@@ -1049,6 +1161,10 @@ ClientIterationResult RunSession::runOnce(
 
   if (subcommand == "stop") {
     return stopExecution();
+  }
+
+  if (subcommand == "safestop") {
+    return safeStopExecution();
   }
 
   if (subcommand != "claim" && subcommand != "run") {
