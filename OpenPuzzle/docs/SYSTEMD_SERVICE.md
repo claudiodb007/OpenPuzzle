@@ -57,7 +57,13 @@ The environment file is optional when no extra arguments are needed.
 ## Existing manual runtime
 
 Do not start the service while `openpuzzle run` is already active.
-Allow the current assignment to finish or stop it gracefully first:
+Allow the current assignment to finish before the runtime exits:
+
+```bash
+openpuzzle safestop
+```
+
+To stop immediately and cancel the active assignment instead:
 
 ```bash
 openpuzzle stop

@@ -99,6 +99,11 @@ int main() {
             "--version") !=
         std::string::npos);
 
+    assert(
+        result.output.find(
+            "openpuzzle safestop") !=
+        std::string::npos);
+
     assertNoExecution(
         result.output);
   }

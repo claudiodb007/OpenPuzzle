@@ -13,12 +13,32 @@ public:
   static std::filesystem::path pidPath(
       const std::string& executionSlot);
 
+  static std::filesystem::path safeStopPath();
+
+  static std::filesystem::path safeStopPath(
+      const std::string& executionSlot);
+
   static bool acquire();
   static bool release();
 
   static bool requestStop();
 
   static bool requestStop(
+      const std::string& executionSlot);
+
+  static bool requestSafeStop();
+
+  static bool requestSafeStop(
+      const std::string& executionSlot);
+
+  static bool safeStopRequested();
+
+  static bool safeStopRequested(
+      const std::string& executionSlot);
+
+  static bool clearSafeStop();
+
+  static bool clearSafeStop(
       const std::string& executionSlot);
 
   static std::optional<int> runtimePid();

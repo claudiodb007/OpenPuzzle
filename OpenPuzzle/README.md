@@ -2,7 +2,7 @@
 
 ## Current release
 
-**OpenPuzzle 1.0.2** provides a continuous Linux client for requesting,
+**OpenPuzzle 1.0.6** provides a continuous Linux client for requesting,
 executing and synchronizing OpenPuzzle assignments.
 
 The public repository contains the client only. The coordination service
@@ -234,12 +234,15 @@ openpuzzle run 71
 openpuzzle run --backend cpu --threads 8
 openpuzzle run --with-cpu --cpu-threads 8
 openpuzzle status
+openpuzzle safestop
 openpuzzle stop
 ```
 
 CPU execution uses KeyHunt range mode and requires an explicit thread
 count. `--with-cpu` starts independent GPU and CPU assignment slots.
 `openpuzzle status` reports each slot separately.
+
+`openpuzzle safestop` lets every active assignment finish and then exits before requesting new work. With concurrent GPU and CPU slots, each slot drains independently. `openpuzzle stop` remains the immediate cancellation command.
 
 It requests random non-overlapping assignments, uploads progress, renews
 leases, recovers interrupted sessions and continues with new work.

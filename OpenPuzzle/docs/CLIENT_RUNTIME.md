@@ -35,7 +35,13 @@ Inspect local execution state:
 openpuzzle status
 ```
 
-Stop the active runtime and cancel its current assignment safely:
+Request shutdown after every active assignment finishes:
+
+```bash
+openpuzzle safestop
+```
+
+Stop the active runtime and cancel its current assignment immediately:
 
 ```bash
 openpuzzle stop
@@ -94,6 +100,12 @@ are retried.
 
 Assignments rejected permanently by the server are stopped and released
 locally. Invalid local or protocol state is preserved for diagnosis.
+
+## Graceful safestop
+
+`openpuzzle safestop` writes a local request for each active runtime slot. The current assignment continues normally, including progress and completion synchronization. After finalization, the slot exits before claiming another assignment. In concurrent GPU and CPU mode, both slots finish independently. Repeating the command is safe.
+
+The request does not terminate an engine and does not cancel searched coverage. If no runtime is active, the command reports that there is nothing to stop.
 
 ## Cancellation
 
