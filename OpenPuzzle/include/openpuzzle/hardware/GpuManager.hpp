@@ -31,6 +31,10 @@ public:
 
   static GpuInfo currentGpu(
       const std::string &backend);
+
+  static GpuInfo currentGpu(
+      const std::string &backend,
+      int device);
 };
 
 } // namespace openpuzzle

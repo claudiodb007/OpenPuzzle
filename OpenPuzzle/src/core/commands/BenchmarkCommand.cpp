@@ -6,6 +6,7 @@
 #include "openpuzzle/core/Scheduler.hpp"
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
+#include "openpuzzle/hardware/RusticlEnvironment.hpp"
 #include "openpuzzle/performance/AutoTuner.hpp"
 #include "openpuzzle/performance/BenchmarkRunner.hpp"
 #include "openpuzzle/performance/GpuProfileManager.hpp"
@@ -113,6 +114,30 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
         backend);
   }
 
+  if (gpu < 0) {
+    throw std::runtime_error(
+        "GPU device must not be negative");
+  }
+
+  const bool hasRusticlSelector =
+      hasArg(args, "--rusticl-enable");
+
+  const std::string rusticlSelector =
+      getStringArg(
+          args,
+          "--rusticl-enable",
+          "");
+
+  if (hasRusticlSelector) {
+    if (backend != "opencl") {
+      throw std::runtime_error(
+          "--rusticl-enable requires the OpenCL backend");
+    }
+
+    RusticlEnvironment::apply(
+        rusticlSelector);
+  }
+
   if (!ToolManager::supportsBackend(backend)) {
     throw std::runtime_error(
         "This OpenPuzzle package does not support the " +
@@ -154,7 +179,8 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
   std::cout << "====================================\n\n";
   const auto gpuInfo =
       GpuManager::currentGpu(
-          backendLabel);
+          backendLabel,
+          gpu);
 
   std::cout << "Backend......... "
             << backendLabel

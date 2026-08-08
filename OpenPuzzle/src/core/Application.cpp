@@ -111,6 +111,10 @@ static void printApplicationHelp() {
       << "Run options:\n"
       << "  --once           Execute one assignment\n"
       << "  --dry-run        Show local configuration only\n"
+      << "  --backend NAME   Select cuda, opencl or cpu\n"
+      << "  --device N       Select the GPU device index\n"
+      << "  --rusticl-enable LIST\n"
+      << "                   Enable Rusticl OpenCL drivers\n"
       << "  --server URL     Select the coordination server\n"
       << "  --duration-minutes N\n"
       << "                   Target assignment duration\n";

@@ -471,13 +471,19 @@ GpuInfo GpuManager::currentGpu() {
 
 GpuInfo GpuManager::currentGpu(
     const std::string &backend) {
-  const int selected =
-      selectedGpu();
+  return currentGpu(
+      backend,
+      selectedGpu());
+}
+
+GpuInfo GpuManager::currentGpu(
+    const std::string &backend,
+    int device) {
 
   for (const auto &gpu :
        listAllGpus()) {
     if (
-        gpu.device == selected &&
+        gpu.device == device &&
         gpu.backend == backend) {
       return gpu;
     }
@@ -485,10 +491,10 @@ GpuInfo GpuManager::currentGpu(
 
   GpuInfo fallback;
 
-  fallback.device = selected;
+  fallback.device = device;
   fallback.name =
       "GPU " +
-      std::to_string(selected);
+      std::to_string(device);
   fallback.backend = backend;
   fallback.cuda =
       backend == "CUDA";

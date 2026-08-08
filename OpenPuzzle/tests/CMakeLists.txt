@@ -1163,6 +1163,22 @@ add_test(
 )
 
 add_executable(
+    RusticlEnvironmentTests
+    hardware/RusticlEnvironmentTests.cpp
+)
+
+target_link_libraries(
+    RusticlEnvironmentTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME RusticlEnvironmentTests
+    COMMAND RusticlEnvironmentTests
+)
+
+add_executable(
     ToolManagerTests
     tools/ToolManagerTests.cpp
 )

@@ -13,6 +13,7 @@
 #include "openpuzzle/core/commands/BenchmarkCommand.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
+#include "openpuzzle/hardware/RusticlEnvironment.hpp"
 #include "openpuzzle/models/Models.hpp"
 #include "openpuzzle/performance/GpuProfileManager.hpp"
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
@@ -124,6 +125,7 @@ buildConcurrentArguments(
             argument == "--backend" ||
             argument == "--device" ||
             argument == "--gpu" ||
+            argument == "--rusticl-enable" ||
             argument == "--blocks" ||
             argument == "--b" ||
             argument == "--threads" ||
@@ -311,10 +313,17 @@ std::optional<double> measuredSpeedMKeys(const std::vector<std::string> &args) {
 
   const std::string backend = getArgument(args, "--backend", configuredBackend);
 
+  const int device =
+      getIntegerArgument(
+          args,
+          "--device",
+          GpuManager::selectedGpu());
+
   const auto gpu = GpuManager::currentGpu(
       backend == "opencl"
           ? "OpenCL"
-          : "CUDA");
+          : "CUDA",
+      device);
 
   GpuProfileManager profiles(context.db);
 
@@ -1321,6 +1330,49 @@ ClientIterationResult RunSession::runOnce(
           ? selectedBackend(args)
           : "";
 
+  const int runDevice =
+      subcommand == "run" &&
+              runBackend != "cpu"
+          ? getIntegerArgument(
+                args,
+                "--device",
+                GpuManager::selectedGpu())
+          : 0;
+
+  if (
+      subcommand == "run" &&
+      runDevice < 0) {
+    std::cerr
+        << "GPU device must not be negative.\n";
+
+    return 1;
+  }
+
+  if (
+      subcommand == "run" &&
+      hasArgument(
+          args,
+          "--rusticl-enable")) {
+    if (runBackend != "opencl") {
+      std::cerr
+          << "--rusticl-enable requires the "
+          << "OpenCL backend.\n";
+
+      return 1;
+    }
+
+    try {
+      RusticlEnvironment::apply(
+          getArgument(
+              args,
+              "--rusticl-enable"));
+    } catch (const std::exception &error) {
+      std::cerr << error.what() << '\n';
+
+      return 1;
+    }
+  }
+
   if (
       subcommand == "run" &&
       !ToolManager::supportsBackend(
@@ -1373,12 +1425,6 @@ ClientIterationResult RunSession::runOnce(
         initializeClient &&
         !dryRun &&
         runBackend != "cpu") {
-      const int device =
-          getIntegerArgument(
-              args,
-              "--device",
-              GpuManager::selectedGpu());
-
       RunBenchmarkPreparationDependencies
           preparationDependencies;
 
@@ -1390,14 +1436,14 @@ ClientIterationResult RunSession::runOnce(
           };
 
       preparationDependencies.runBenchmark =
-          [&runBackend, device] {
+          [&runBackend, runDevice] {
             return BenchmarkCommand().run({
                 "--real",
                 "--auto",
                 "--backend",
                 runBackend,
                 "--gpu",
-                std::to_string(device),
+                std::to_string(runDevice),
             });
           };
 
@@ -1522,7 +1568,8 @@ ClientIterationResult RunSession::runOnce(
     const auto gpu = GpuManager::currentGpu(
       backend == "opencl"
           ? "OpenCL"
-          : "CUDA");
+          : "CUDA",
+      runDevice);
 
     std::cout << "\nLocal configuration\n"
               << "-------------------\n"
@@ -1663,10 +1710,7 @@ ClientIterationResult RunSession::runOnce(
   int device =
       cpuBackend
           ? 0
-          : getIntegerArgument(
-                args,
-                "--device",
-                context.gpu);
+          : runDevice;
 
   int blocks =
       cpuBackend
@@ -1716,7 +1760,8 @@ ClientIterationResult RunSession::runOnce(
         GpuManager::currentGpu(
             runBackend == "opencl"
                 ? "OpenCL"
-                : "CUDA");
+                : "CUDA",
+            device);
 
     hardwareLabel = "GPU";
     hardwareValue = gpu.name;
@@ -1729,7 +1774,8 @@ ClientIterationResult RunSession::runOnce(
         GpuManager::currentGpu(
             runBackend == "opencl"
                 ? "OpenCL"
-                : "CUDA");
+                : "CUDA",
+            device);
 
     const auto profile = profiles.chooseBest(
         gpu.name,

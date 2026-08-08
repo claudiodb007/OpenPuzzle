@@ -104,6 +104,11 @@ int main() {
             "openpuzzle safestop") !=
         std::string::npos);
 
+    assert(
+        result.output.find(
+            "--rusticl-enable") !=
+        std::string::npos);
+
     assertNoExecution(
         result.output);
   }
