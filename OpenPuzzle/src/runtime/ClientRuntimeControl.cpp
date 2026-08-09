@@ -39,6 +39,10 @@ ClientRuntimeControl::pidPath(
     filename = "runtime-gpu.pid";
   } else if (executionSlot == "cpu") {
     filename = "runtime-cpu.pid";
+  } else if (executionSlot == "cuda") {
+    filename = "runtime-cuda.pid";
+  } else if (executionSlot == "opencl") {
+    filename = "runtime-opencl.pid";
   }
 
   return root /
@@ -73,6 +77,10 @@ ClientRuntimeControl::safeStopPath(
     filename = "safestop-gpu.requested";
   } else if (executionSlot == "cpu") {
     filename = "safestop-cpu.requested";
+  } else if (executionSlot == "cuda") {
+    filename = "safestop-cuda.requested";
+  } else if (executionSlot == "opencl") {
+    filename = "safestop-opencl.requested";
   }
 
   return root /

@@ -179,6 +179,111 @@ buildConcurrentArguments(
   return result;
 }
 
+std::vector<std::string>
+buildCudaOpenclArguments(
+    const std::vector<std::string>& args,
+    bool opencl) {
+  if (selectedBackend(args) != "cuda") {
+    throw std::runtime_error(
+        "--with-opencl requires "
+        "--backend cuda");
+  }
+
+  const std::string openclDevice =
+      getArgument(
+          args,
+          "--opencl-device");
+
+  if (openclDevice.empty()) {
+    throw std::runtime_error(
+        "--with-opencl requires "
+        "--opencl-device <number>");
+  }
+
+  std::size_t consumed = 0;
+  long long parsedDevice = -1;
+
+  try {
+    parsedDevice =
+        std::stoll(
+            openclDevice,
+            &consumed);
+  } catch (...) {
+    throw std::runtime_error(
+        "OpenCL device must be a "
+        "non-negative whole number");
+  }
+
+  if (
+      consumed != openclDevice.size() ||
+      parsedDevice < 0) {
+    throw std::runtime_error(
+        "OpenCL device must be a "
+        "non-negative whole number");
+  }
+
+  const std::string rusticlDrivers =
+      getArgument(
+          args,
+          "--rusticl-enable");
+
+  std::vector<std::string> result;
+
+  for (std::size_t index = 0;
+       index < args.size();
+       ++index) {
+    const auto& argument = args[index];
+
+    if (argument == "--with-opencl") {
+      continue;
+    }
+
+    if (
+        argument == "--opencl-device" ||
+        argument == "--rusticl-enable") {
+      if (index + 1 >= args.size()) {
+        throw std::runtime_error(
+            argument + " requires a value");
+      }
+
+      ++index;
+      continue;
+    }
+
+    if (
+        opencl &&
+        (
+            argument == "--backend" ||
+            argument == "--device" ||
+            argument == "--gpu"
+        )) {
+      if (index + 1 >= args.size()) {
+        throw std::runtime_error(
+            argument + " requires a value");
+      }
+
+      ++index;
+      continue;
+    }
+
+    result.push_back(argument);
+  }
+
+  if (opencl) {
+    result.push_back("--backend");
+    result.push_back("opencl");
+    result.push_back("--device");
+    result.push_back(openclDevice);
+
+    if (!rusticlDrivers.empty()) {
+      result.push_back("--rusticl-enable");
+      result.push_back(rusticlDrivers);
+    }
+  }
+
+  return result;
+}
+
 int selectedCpuThreads(
     const std::vector<std::string> &args) {
   std::string value =
@@ -393,6 +498,8 @@ int showStatus(const std::vector<std::string> &args) {
       executionSlots = {
           "gpu",
           "cpu",
+          "cuda",
+          "opencl",
       };
 
   bool slotStateFound = false;
@@ -427,6 +534,16 @@ int showStatus(const std::vector<std::string> &args) {
       const auto runtimePid =
           ClientRuntimeControl::
               runtimePid(slot);
+
+      if (
+          !result.hasState &&
+          !(
+              runtimePid &&
+              ClientRuntimeControl::
+                  running(slot)
+          )) {
+        continue;
+      }
 
       std::cout
           << "\nSlot............... "
@@ -723,6 +840,8 @@ int stopExecution() {
   for (const std::string slot : {
            "gpu",
            "cpu",
+           "cuda",
+           "opencl",
        }) {
     if (
         ClientRuntimeControl::
@@ -815,6 +934,8 @@ int safeStopExecution() {
   for (const std::string slot : {
            "gpu",
            "cpu",
+           "cuda",
+           "opencl",
        }) {
     if (
         ClientRuntimeControl::
@@ -888,32 +1009,71 @@ int safeStopExecution() {
 
 int runConcurrent(
     const std::vector<std::string>& args) {
-  const auto gpuArguments =
-      RunSession::
-          concurrentGpuArguments(args);
+  const bool withCpu =
+      hasArgument(args, "--with-cpu");
 
-  const auto cpuArguments =
-      RunSession::
-          concurrentCpuArguments(args);
+  const bool withOpencl =
+      hasArgument(args, "--with-opencl");
 
-  if (
-      ClientRuntimeControl::
-          running("gpu") ||
-      ClientRuntimeControl::
-          running("cpu")) {
-    std::cerr
-        << "A concurrent OpenPuzzle runtime "
-        << "is already active.\n";
+  if (withCpu == withOpencl) {
+    throw std::runtime_error(
+        "Concurrent execution requires exactly "
+        "one of --with-cpu or --with-opencl");
+  }
 
-    return 1;
+  const std::string firstSlot =
+      withOpencl ? "cuda" : "gpu";
+
+  const std::string secondSlot =
+      withOpencl ? "opencl" : "cpu";
+
+  const std::string firstLabel =
+      withOpencl ? "CUDA" : "GPU";
+
+  const std::string secondLabel =
+      withOpencl ? "OpenCL" : "CPU";
+
+  const auto firstArguments =
+      withOpencl
+          ? RunSession::
+                concurrentCudaArguments(args)
+          : RunSession::
+                concurrentGpuArguments(args);
+
+  const auto secondArguments =
+      withOpencl
+          ? RunSession::
+                concurrentOpenclArguments(args)
+          : RunSession::
+                concurrentCpuArguments(args);
+
+  const std::vector<std::string> allSlots = {
+      "primary",
+      "gpu",
+      "cpu",
+      "cuda",
+      "opencl",
+      "cuda",
+      "opencl",
+  };
+
+  for (const auto& slot : allSlots) {
+    if (ClientRuntimeControl::running(slot)) {
+      std::cerr
+          << "An OpenPuzzle runtime is already "
+          << "active in slot "
+          << slot
+          << ".\n";
+
+      return 1;
+    }
   }
 
   const auto launch =
       [](const std::string& slot,
          const std::vector<std::string>&
              childArguments) {
-        const pid_t pid =
-            fork();
+        const pid_t pid = fork();
 
         if (pid != 0) {
           return pid;
@@ -936,29 +1096,33 @@ int runConcurrent(
         _exit(result);
       };
 
-  const pid_t gpuPid =
+  const pid_t firstPid =
       launch(
-          "gpu",
-          gpuArguments);
+          firstSlot,
+          firstArguments);
 
-  if (gpuPid < 0) {
+  if (firstPid < 0) {
     std::cerr
-        << "Unable to start GPU runtime.\n";
+        << "Unable to start "
+        << firstLabel
+        << " runtime.\n";
 
     return 1;
   }
 
-  const pid_t cpuPid =
+  const pid_t secondPid =
       launch(
-          "cpu",
-          cpuArguments);
+          secondSlot,
+          secondArguments);
 
-  if (cpuPid < 0) {
-    kill(gpuPid, SIGTERM);
-    waitpid(gpuPid, nullptr, 0);
+  if (secondPid < 0) {
+    kill(firstPid, SIGTERM);
+    waitpid(firstPid, nullptr, 0);
 
     std::cerr
-        << "Unable to start CPU runtime.\n";
+        << "Unable to start "
+        << secondLabel
+        << " runtime.\n";
 
     return 1;
   }
@@ -966,71 +1130,72 @@ int runConcurrent(
   std::cout
       << "OpenPuzzle concurrent execution\n"
       << "-------------------------------\n"
-      << "GPU runtime PID.... "
-      << gpuPid
+      << firstLabel
+      << " runtime PID.... "
+      << firstPid
       << '\n'
-      << "CPU runtime PID.... "
-      << cpuPid
-      << '\n'
-      << "CPU threads........ "
-      << getArgument(
-             args,
-             "--cpu-threads")
-      << "\n\n";
+      << secondLabel
+      << " runtime PID.... "
+      << secondPid
+      << '\n';
+
+  if (withCpu) {
+    std::cout
+        << "CPU threads........ "
+        << getArgument(
+               args,
+               "--cpu-threads")
+        << '\n';
+  } else {
+    std::cout
+        << "OpenCL device...... "
+        << getArgument(
+               args,
+               "--opencl-device")
+        << '\n';
+  }
+
+  std::cout << '\n';
 
   const bool finiteRun =
-      hasArgument(
-          args,
-          "--once") ||
-      hasArgument(
-          args,
-          "--dry-run");
+      hasArgument(args, "--once") ||
+      hasArgument(args, "--dry-run");
 
   signal(SIGINT, SIG_IGN);
   signal(SIGTERM, SIG_IGN);
 
   if (finiteRun) {
-    int gpuStatus = 0;
-    int cpuStatus = 0;
+    int firstStatus = 0;
+    int secondStatus = 0;
 
-    waitpid(
-        gpuPid,
-        &gpuStatus,
-        0);
-
-    waitpid(
-        cpuPid,
-        &cpuStatus,
-        0);
+    waitpid(firstPid, &firstStatus, 0);
+    waitpid(secondPid, &secondStatus, 0);
 
     return
         (
-            WIFEXITED(gpuStatus) &&
-            WEXITSTATUS(gpuStatus) == 0 &&
-            WIFEXITED(cpuStatus) &&
-            WEXITSTATUS(cpuStatus) == 0
+            WIFEXITED(firstStatus) &&
+            WEXITSTATUS(firstStatus) == 0 &&
+            WIFEXITED(secondStatus) &&
+            WEXITSTATUS(secondStatus) == 0
         )
             ? 0
             : 1;
   }
 
-  int firstStatus = 0;
+  int completedStatus = 0;
 
-  const pid_t firstPid =
-      waitpid(
-          -1,
-          &firstStatus,
-          0);
+  const pid_t completedPid =
+      waitpid(-1, &completedStatus, 0);
 
   const pid_t remainingPid =
-      firstPid == gpuPid
-          ? cpuPid
-          : gpuPid;
+      completedPid == firstPid
+          ? secondPid
+          : firstPid;
 
   const std::string remainingSlot =
-      firstPid == gpuPid
-          ? "cpu"
-          : "gpu";
+      completedPid == firstPid
+          ? secondSlot
+          : firstSlot;
 
   if (remainingPid > 0) {
     if (
@@ -1049,9 +1214,9 @@ int runConcurrent(
 
       return
           (
-              firstPid > 0 &&
-              WIFEXITED(firstStatus) &&
-              WEXITSTATUS(firstStatus) == 0 &&
+              completedPid > 0 &&
+              WIFEXITED(completedStatus) &&
+              WEXITSTATUS(completedStatus) == 0 &&
               WIFEXITED(remainingStatus) &&
               WEXITSTATUS(remainingStatus) == 0
           )
@@ -1059,23 +1224,17 @@ int runConcurrent(
               : 1;
     }
 
-    kill(
-        remainingPid,
-        SIGTERM);
-
-    waitpid(
-        remainingPid,
-        nullptr,
-        0);
+    kill(remainingPid, SIGTERM);
+    waitpid(remainingPid, nullptr, 0);
   }
 
   if (
-      firstPid < 0 ||
-      !WIFEXITED(firstStatus)) {
+      completedPid < 0 ||
+      !WIFEXITED(completedStatus)) {
     return 1;
   }
 
-  return WEXITSTATUS(firstStatus);
+  return WEXITSTATUS(completedStatus);
 }
 
 } // namespace
@@ -1101,14 +1260,36 @@ RunSession::concurrentCpuArguments(
   return result;
 }
 
+
+std::vector<std::string>
+RunSession::concurrentCudaArguments(
+    const std::vector<std::string>& args) {
+  return buildCudaOpenclArguments(
+      args,
+      false);
+}
+
+std::vector<std::string>
+RunSession::concurrentOpenclArguments(
+    const std::vector<std::string>& args) {
+  return buildCudaOpenclArguments(
+      args,
+      true);
+}
+
 int RunSession::run(
     const std::vector<std::string> &args) const {
   if (
       !args.empty() &&
       args.front() == "run" &&
-      hasArgument(
-          args,
-          "--with-cpu")) {
+      (
+          hasArgument(
+              args,
+              "--with-cpu") ||
+          hasArgument(
+              args,
+              "--with-opencl")
+      )) {
     try {
       return runConcurrent(args);
     } catch (const std::exception& error) {

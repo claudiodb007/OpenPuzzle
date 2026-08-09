@@ -290,6 +290,8 @@ executionStatus(
       "primary",
       "gpu",
       "cpu",
+      "cuda",
+      "opencl",
   };
 
   for (const auto& slot : slots) {

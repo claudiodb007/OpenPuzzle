@@ -131,6 +131,12 @@ int main() {
   assert(
       ClientStateStore::path("cpu")
           .filename() == "client-cpu.state");
+  assert(
+      ClientStateStore::path("cuda")
+          .filename() == "client-cuda.state");
+  assert(
+      ClientStateStore::path("opencl")
+          .filename() == "client-opencl.state");
 
   assert(
       setenv(

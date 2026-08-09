@@ -59,6 +59,16 @@ int main() {
           pidPath("cpu")
               .filename() ==
       "runtime-cpu.pid");
+  assert(
+      ClientRuntimeControl::
+          pidPath("cuda")
+              .filename() ==
+      "runtime-cuda.pid");
+  assert(
+      ClientRuntimeControl::
+          pidPath("opencl")
+              .filename() ==
+      "runtime-opencl.pid");
 
   assert(
       ClientRuntimeControl::
@@ -71,6 +81,16 @@ int main() {
           safeStopPath("cpu")
               .filename() ==
       "safestop-cpu.requested");
+  assert(
+      ClientRuntimeControl::
+          safeStopPath("cuda")
+              .filename() ==
+      "safestop-cuda.requested");
+  assert(
+      ClientRuntimeControl::
+          safeStopPath("opencl")
+              .filename() ==
+      "safestop-opencl.requested");
 
   const std::vector<std::string>
       concurrentArguments = {
@@ -126,6 +146,61 @@ int main() {
           concurrentCpuArguments(
               concurrentArguments) ==
       expectedCpuArguments);
+
+  const std::vector<std::string>
+      cudaOpenclArguments = {
+          "run",
+          "71",
+          "--backend",
+          "cuda",
+          "--device",
+          "0",
+          "--with-opencl",
+          "--opencl-device",
+          "0",
+          "--rusticl-enable",
+          "radeonsi",
+          "--server",
+          "https://example.test",
+      };
+
+  const std::vector<std::string>
+      expectedCudaArguments = {
+          "run",
+          "71",
+          "--backend",
+          "cuda",
+          "--device",
+          "0",
+          "--server",
+          "https://example.test",
+      };
+
+  const std::vector<std::string>
+      expectedOpenclArguments = {
+          "run",
+          "71",
+          "--server",
+          "https://example.test",
+          "--backend",
+          "opencl",
+          "--device",
+          "0",
+          "--rusticl-enable",
+          "radeonsi",
+      };
+
+  assert(
+      RunSession::
+          concurrentCudaArguments(
+              cudaOpenclArguments) ==
+      expectedCudaArguments);
+
+  assert(
+      RunSession::
+          concurrentOpenclArguments(
+              cudaOpenclArguments) ==
+      expectedOpenclArguments);
 
   assert(
       setenv(

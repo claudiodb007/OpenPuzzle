@@ -126,7 +126,9 @@ ClientStateStore::executionSlot() {
     const std::string slot(value);
 
     if (slot == "gpu" ||
-        slot == "cpu") {
+        slot == "cpu" ||
+        slot == "cuda" ||
+        slot == "opencl") {
       return slot;
     }
   }
@@ -158,6 +160,10 @@ ClientStateStore::path(
     filename = "client-gpu.state";
   } else if (executionSlot == "cpu") {
     filename = "client-cpu.state";
+  } else if (executionSlot == "cuda") {
+    filename = "client-cuda.state";
+  } else if (executionSlot == "opencl") {
+    filename = "client-opencl.state";
   }
 
   return root /

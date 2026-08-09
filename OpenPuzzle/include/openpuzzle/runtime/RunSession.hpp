@@ -20,6 +20,14 @@ public:
   concurrentCpuArguments(
       const std::vector<std::string> &args);
 
+  static std::vector<std::string>
+  concurrentCudaArguments(
+      const std::vector<std::string> &args);
+
+  static std::vector<std::string>
+  concurrentOpenclArguments(
+      const std::vector<std::string> &args);
+
 private:
   ClientIterationResult runOnce(
       const std::vector<std::string> &args,
