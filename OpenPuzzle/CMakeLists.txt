@@ -165,6 +165,7 @@ add_library(OpenPuzzleCore
     src/core/commands/ApplicationTestCommands.cpp
     src/core/commands/ProfileCommand.cpp
     src/core/commands/BenchmarkCommand.cpp
+    src/core/commands/SelfTestCommand.cpp
     src/core/commands/DispatchCommand.cpp
     src/core/commands/WorkerRunCommand.cpp
     src/core/commands/RangeCommand.cpp

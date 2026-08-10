@@ -106,6 +106,11 @@ int main() {
 
     assert(
         result.output.find(
+            "openpuzzle selftest") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
             "--rusticl-enable") !=
         std::string::npos);
 
@@ -177,6 +182,73 @@ int main() {
 
     assertNoExecution(
         result.output);
+  }
+
+  {
+    const auto result =
+        runApplication({
+            "OpenPuzzle",
+            "selftest"
+        });
+
+    assert(result.exitCode != 0);
+    assert(
+        result.output.find(
+            "selftest requires --backend") !=
+        std::string::npos);
+    assertNoExecution(result.output);
+  }
+
+  {
+    const auto result =
+        runApplication({
+            "OpenPuzzle",
+            "selftest",
+            "--backend",
+            "all"
+        });
+
+    assert(result.exitCode != 0);
+    assert(
+        result.output.find(
+            "Unsupported selftest backend") !=
+        std::string::npos);
+    assertNoExecution(result.output);
+  }
+
+  {
+    /*
+     * Public solved puzzle-20 regression test. The CPU
+     * selftest must accept KeyHunt's successful hit from
+     * its protected engine log.
+     */
+    const auto result =
+        runApplication({
+            "OpenPuzzle",
+            "selftest",
+            "--backend",
+            "cpu",
+            "--threads",
+            "1"
+        });
+
+    assert(result.exitCode == 0);
+    assert(
+        result.output.find(
+            "Backend............ cpu") !=
+        std::string::npos);
+    assert(
+        result.output.find(
+            "Puzzle............. 20") !=
+        std::string::npos);
+    assert(
+        result.output.find(
+            "Result............. passed") !=
+        std::string::npos);
+    assert(
+        result.output.find(
+            "Diagnostics.........") ==
+        std::string::npos);
   }
 
   {
