@@ -9,6 +9,7 @@
 #include "openpuzzle/core/ProcessRunner.hpp"
 #include "openpuzzle/core/Scheduler.hpp"
 #include "openpuzzle/core/commands/BenchmarkCommand.hpp"
+#include "openpuzzle/core/commands/UpdateCommand.hpp"
 #include "openpuzzle/core/commands/DispatchCommand.hpp"
 #include "openpuzzle/core/commands/ProfileCommand.hpp"
 #include "openpuzzle/core/commands/RangeCommand.hpp"
@@ -97,6 +98,7 @@ static void printApplicationHelp() {
       << "----------\n"
       << "Usage:\n"
       << "  openpuzzle benchmark [benchmark options]\n"
+      << "  openpuzzle update [--check|--download-only]\n"
       << "  openpuzzle selftest --backend cuda|opencl|cpu [options]\n"
       << "  openpuzzle [puzzle] [run options]\n"
       << "  openpuzzle run [puzzle] [run options]\n"
@@ -281,6 +283,8 @@ int Application::run(int argc, char **argv) {
       return cmdAudit(r);
     if (cmd == "benchmark")
       return BenchmarkCommand().run(r);
+    if (cmd == "update")
+      return UpdateCommand().run(r);
     if (cmd == "selftest")
       return SelfTestCommand().run(r);
     if (cmd == "dispatch")

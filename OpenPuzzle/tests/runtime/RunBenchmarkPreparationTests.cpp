@@ -2,6 +2,8 @@
 
 #include <cassert>
 #include <iostream>
+#include <sstream>
+#include <string>
 #include <utility>
 
 using namespace openpuzzle;
@@ -15,6 +17,26 @@ struct State {
   int profileChecks = 0;
   int benchmarkCalls = 0;
 };
+
+struct CapturedPreparation {
+  bool success = false;
+  std::string output;
+};
+
+CapturedPreparation runCaptured(
+    const RunBenchmarkPreparation &preparation) {
+  std::ostringstream output;
+  auto *oldOutput = std::cout.rdbuf(output.rdbuf());
+  auto *oldError = std::cerr.rdbuf(output.rdbuf());
+
+  const bool success =
+      preparation.ensureProfile();
+
+  std::cout.rdbuf(oldOutput);
+  std::cerr.rdbuf(oldError);
+
+  return {success, output.str()};
+}
 
 RunBenchmarkPreparation makePreparation(
     State &state) {
@@ -71,7 +93,13 @@ int main() {
 
     const auto preparation = makePreparation(state);
 
-    assert(!preparation.ensureProfile());
+    const auto captured =
+        runCaptured(preparation);
+
+    assert(!captured.success);
+    assert(captured.output.find("OP-BENCH-001") != std::string::npos);
+    assert(captured.output.find("openpuzzle doctor") != std::string::npos);
+    assert(captured.output.find("openpuzzle benchmark --real --auto") != std::string::npos);
     assert(state.profileChecks == 1);
     assert(state.benchmarkCalls == 1);
   }
@@ -83,7 +111,12 @@ int main() {
 
     const auto preparation = makePreparation(state);
 
-    assert(!preparation.ensureProfile());
+    const auto captured =
+        runCaptured(preparation);
+
+    assert(!captured.success);
+    assert(captured.output.find("OP-BENCH-002") != std::string::npos);
+    assert(captured.output.find("openpuzzle doctor") != std::string::npos);
     assert(state.profileChecks == 2);
     assert(state.benchmarkCalls == 1);
   }

@@ -9,6 +9,8 @@ namespace openpuzzle::client {
 struct SolutionExportResult {
   bool success = false;
   std::string walletPath;
+  std::string noticePath;
+  std::string warning;
   std::string error;
 };
 

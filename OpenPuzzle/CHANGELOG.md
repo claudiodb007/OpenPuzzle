@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.10 — Simpler benchmark, recovery, errors and updates
+
+- Expanded the automatic GPU benchmark matrix across more block and point
+  values, with bounded CUDA-only 512-thread candidates.
+- Preserved the VRAM safety cap and portable OpenCL thread matrix.
+- Added an explicit private-key-found banner, protected wallet export and a
+  visible key-found notice without private-key material.
+- Added stable actionable error codes to first-use, benchmark, engine,
+  configuration and doctor failures.
+- Added `openpuzzle update`, `--check` and `--download-only`.
+- Added HTTPS manifest retrieval, strict release filename parsing, SHA-256
+  verification and Debian package metadata validation.
+- Prevented installation while any assignment state or runtime marker is
+  active; OpenPuzzle never stops active work automatically.
+- Added regression and integration coverage for the new workflows.
+
 ## 1.0.2 — CPU assignment sizing and portability
 
 - Changed automatic CPU assignments to target 60 minutes, matching CUDA

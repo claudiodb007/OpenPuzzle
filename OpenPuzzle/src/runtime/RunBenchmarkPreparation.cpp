@@ -34,16 +34,28 @@ bool RunBenchmarkPreparation::ensureProfile() const {
 
   if (result != 0) {
     std::cerr
-        << "Automatic benchmark failed.\n"
-        << "No server assignment was requested.\n";
+        << "Automatic benchmark failed\n"
+        << "--------------------------\n"
+        << "Error code......... OP-BENCH-001\n"
+        << "Problem............ benchmark command returned "
+        << result
+        << '\n'
+        << "Assignment......... not requested\n"
+        << "Action 1........... run: openpuzzle doctor\n"
+        << "Action 2........... run: openpuzzle benchmark --real --auto\n";
 
     return false;
   }
 
   if (!dependencies_.hasValidProfile()) {
     std::cerr
-        << "Benchmark completed without a valid GPU profile.\n"
-        << "No server assignment was requested.\n";
+        << "Automatic benchmark failed\n"
+        << "--------------------------\n"
+        << "Error code......... OP-BENCH-002\n"
+        << "Problem............ benchmark did not save a valid GPU profile\n"
+        << "Assignment......... not requested\n"
+        << "Action 1........... run: openpuzzle doctor\n"
+        << "Action 2........... run: openpuzzle benchmark --real --auto\n";
 
     return false;
   }

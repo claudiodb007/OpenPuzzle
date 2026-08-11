@@ -17,7 +17,8 @@ public:
   std::vector<BenchmarkResult>
   defaultMatrix(
       int computeUnits = 0,
-      int memoryMb = 0) const;
+      int memoryMb = 0,
+      bool includeHighThreadCandidates = false) const;
 
   BenchmarkResult selectBest(
       const std::vector<BenchmarkResult> &results) const;

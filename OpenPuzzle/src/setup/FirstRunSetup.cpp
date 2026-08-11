@@ -14,7 +14,12 @@ bool FirstRunSetup::ensureConfigured() const {
 
   if (backend.empty()) {
     std::cerr
-        << "No supported GPU backend was detected.\n";
+        << "OpenPuzzle setup failed\n"
+        << "-----------------------\n"
+        << "Error code......... OP-SETUP-001\n"
+        << "Problem............ no supported GPU backend was detected\n"
+        << "Action 1........... verify the NVIDIA/OpenCL driver\n"
+        << "Action 2........... run: openpuzzle doctor\n";
 
     return false;
   }
@@ -25,9 +30,14 @@ bool FirstRunSetup::ensureConfigured() const {
 
   if (!executable) {
     std::cerr
-        << "The bundled OpenPuzzle-BitCrack "
+        << "OpenPuzzle setup failed\n"
+        << "-----------------------\n"
+        << "Error code......... OP-ENGINE-001\n"
+        << "Problem............ bundled OpenPuzzle-BitCrack "
         << (backend == "opencl" ? "OpenCL" : "CUDA")
-        << " engine is missing or invalid.\n";
+        << " engine is missing or invalid\n"
+        << "Action 1........... reinstall the OpenPuzzle package\n"
+        << "Action 2........... run: openpuzzle doctor\n";
 
     return false;
   }
@@ -53,7 +63,15 @@ bool FirstRunSetup::ensureConfigured() const {
           .value_or("");
 
   if (!ConfigurationManager::save(config)) {
-    std::cerr << "Unable to save configuration.\n";
+    std::cerr
+        << "OpenPuzzle setup failed\n"
+        << "-----------------------\n"
+        << "Error code......... OP-CONFIG-001\n"
+        << "Problem............ unable to save the local configuration\n"
+        << "Configuration...... "
+        << ToolManager::configPath()
+        << '\n'
+        << "Action............. check ownership and write permissions\n";
 
     return false;
   }

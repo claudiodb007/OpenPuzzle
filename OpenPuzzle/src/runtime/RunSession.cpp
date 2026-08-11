@@ -1,4 +1,5 @@
 #include "openpuzzle/runtime/RunSession.hpp"
+#include "openpuzzle/client/SolutionExporter.hpp"
 
 #include "openpuzzle/config/ConfigurationManager.hpp"
 #include "openpuzzle/setup/FirstRunSetup.hpp"
@@ -1410,19 +1411,55 @@ ClientIterationResult RunSession::runOnce(
           syncService.tick(server);
 
       if (recovery.solutionFound) {
+        const auto exported =
+            client::SolutionExporter::exportSolution(
+                recovery.state,
+                recovery.solutionPath);
+
         std::cout
             << "\n"
-            << "SOLUTION FOUND\n"
-            << "--------------\n"
-            << "Solution file...... "
+            << "========================================\n"
+            << "PRIVATE KEY FOUND - ACTION REQUIRED\n"
+            << "========================================\n"
+            << "Engine result...... "
             << recovery.solutionPath
             << '\n'
             << "Workspace.......... "
             << existing->workspace
             << '\n'
-            << "Local state........ preserved\n"
-            << "The private key was not read "
-            << "or uploaded by OpenPuzzle.\n";
+            << "Local state........ preserved\n";
+
+        if (exported.success) {
+          std::cout
+              << "Wallet file........ "
+              << exported.walletPath
+              << '\n';
+
+          if (!exported.noticePath.empty()) {
+            std::cout
+                << "Visible notice..... "
+                << exported.noticePath
+                << '\n';
+          }
+
+          std::cout
+              << "Private key........ not displayed or uploaded\n"
+              << "Action............. protect the wallet file now\n";
+
+          if (!exported.warning.empty()) {
+            std::cerr
+                << "Notice warning..... "
+                << exported.warning
+                << '\n';
+          }
+        } else {
+          std::cerr
+              << "Wallet export..... failed\n"
+              << "Reason............. "
+              << exported.error
+              << '\n'
+              << "Engine result...... preserved for recovery\n";
+        }
 
         return
             ClientIterationResult::

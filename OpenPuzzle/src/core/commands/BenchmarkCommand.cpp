@@ -61,6 +61,18 @@ static std::string getStringArg(
   return fallback;
 }
 
+static std::runtime_error benchmarkError(
+    const std::string &code,
+    const std::string &problem,
+    const std::string &action) {
+  return std::runtime_error(
+      "OpenPuzzle benchmark failed\n"
+      "---------------------------\n"
+      "Error code......... " + code + "\n"
+      "Problem............ " + problem + "\n"
+      "Action............. " + action);
+}
+
 static std::string normalizeBackend(
     std::string backend) {
   std::transform(
@@ -79,7 +91,14 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
   CommandContext context;
 
   if (!context.initialize()) {
-    std::cerr << context.lastError() << "\n";
+    std::cerr
+        << "OpenPuzzle benchmark failed\n"
+        << "---------------------------\n"
+        << "Error code......... OP-BENCH-000\n"
+        << "Problem............ "
+        << context.lastError()
+        << '\n'
+        << "Action............. run: openpuzzle doctor\n";
     return 1;
   }
 
@@ -109,14 +128,17 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
   if (
       backend != "cuda" &&
       backend != "opencl") {
-    throw std::runtime_error(
-        "Unsupported BitCrack backend: " +
-        backend);
+    throw benchmarkError(
+        "OP-BENCH-003",
+        "unsupported BitCrack backend: " + backend,
+        "use --backend cuda or --backend opencl");
   }
 
   if (gpu < 0) {
-    throw std::runtime_error(
-        "GPU device must not be negative");
+    throw benchmarkError(
+        "OP-BENCH-004",
+        "GPU device must not be negative",
+        "use --gpu followed by a non-negative device number");
   }
 
   const bool hasRusticlSelector =
@@ -130,8 +152,10 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
 
   if (hasRusticlSelector) {
     if (backend != "opencl") {
-      throw std::runtime_error(
-          "--rusticl-enable requires the OpenCL backend");
+      throw benchmarkError(
+          "OP-BENCH-005",
+          "--rusticl-enable requires the OpenCL backend",
+          "add --backend opencl or remove --rusticl-enable");
     }
 
     RusticlEnvironment::apply(
@@ -139,10 +163,10 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
   }
 
   if (!ToolManager::supportsBackend(backend)) {
-    throw std::runtime_error(
-        "This OpenPuzzle package does not support the " +
-        backend +
-        " backend");
+    throw benchmarkError(
+        "OP-ENGINE-002",
+        "this package does not support the " + backend + " backend",
+        "run: openpuzzle doctor");
   }
 
   const std::string backendLabel =
@@ -160,18 +184,24 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
   int points = getIntArg(args, "--points", getIntArg(args, "--p", 256));
 
   if (seconds < 10 || seconds > 300) {
-    throw std::runtime_error(
-        "Benchmark duration must be between 10 and 300 seconds");
+    throw benchmarkError(
+        "OP-BENCH-006",
+        "duration must be between 10 and 300 seconds",
+        "use --seconds with a value from 10 to 300");
   }
 
   if (samples < 4 || samples > 60) {
-    throw std::runtime_error(
-        "Benchmark samples must be between 4 and 60");
+    throw benchmarkError(
+        "OP-BENCH-007",
+        "samples must be between 4 and 60",
+        "use --samples with a value from 4 to 60");
   }
 
   if (blocks <= 0 || threads <= 0 || points <= 0) {
-    throw std::runtime_error(
-        "Benchmark launch parameters must be positive");
+    throw benchmarkError(
+        "OP-BENCH-008",
+        "launch parameters must be positive",
+        "use positive --blocks, --threads and --points values");
   }
 
   std::cout << "====================================\n";
@@ -205,20 +235,19 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
           : ToolManager::bitcrackCudaPath();
 
   if (!bitcrack) {
-    throw std::runtime_error(
-        "BitCrack " +
-        backendLabel +
-        " executable not configured");
+    throw benchmarkError(
+        "OP-ENGINE-003",
+        "BitCrack " + backendLabel + " executable is not configured",
+        "run: openpuzzle doctor");
   }
 
   if (
       !fs::is_regular_file(
           *bitcrack)) {
-    throw std::runtime_error(
-        "BitCrack " +
-        backendLabel +
-        " executable was not found: " +
-        *bitcrack);
+    throw benchmarkError(
+        "OP-ENGINE-004",
+        "BitCrack " + backendLabel + " executable was not found: " + *bitcrack,
+        "reinstall OpenPuzzle and run: openpuzzle doctor");
   }
 
   /*
@@ -254,8 +283,10 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
   if (
       home == nullptr ||
       *home == '\0') {
-    throw std::runtime_error(
-        "HOME is not available for benchmark workspace");
+    throw benchmarkError(
+        "OP-ENV-001",
+        "HOME is not available for the benchmark workspace",
+        "run OpenPuzzle from a normal user login session");
   }
 
   const auto workspace =
@@ -314,7 +345,8 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
     const auto candidates =
         tuner.defaultMatrix(
             gpuInfo.computeUnits,
-            gpuInfo.memoryMb);
+            gpuInfo.memoryMb,
+            backend == "cuda");
 
     std::vector<BenchmarkResult> results;
 

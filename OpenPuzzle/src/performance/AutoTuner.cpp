@@ -110,12 +110,13 @@ int AutoTuner::estimatedMemoryMb(
 std::vector<BenchmarkResult>
 AutoTuner::defaultMatrix(
     int computeUnits,
-    int memoryMb) const {
+    int memoryMb,
+    bool includeHighThreadCandidates) const {
   std::vector<int> blockValues;
 
   if (computeUnits > 0) {
     for (const int multiplier :
-         {2, 4, 8}) {
+         {1, 2, 3, 4, 5, 6, 8}) {
       blockValues.push_back(
           computeUnits *
           multiplier);
@@ -138,8 +139,29 @@ AutoTuner::defaultMatrix(
       configurations;
 
   /*
-   * First cover block scaling using BitCrack's
-   * conventional 256-thread launch.
+   * Cover block scaling using BitCrack's
+   * conventional 256-thread and 512-point
+   * launch. Values remain tied to the reported
+   * compute-unit count so every device explores
+   * its natural occupancy multiples.
+   */
+  for (const int blocks :
+       blockValues) {
+    addUnique(
+        configurations,
+        {
+            blocks,
+            256,
+            512
+        },
+        memoryMb);
+  }
+
+  /*
+   * Explore lower thread occupancy across the
+   * complete block range. This adds both moderate
+   * and large point batches while remaining a
+   * bounded matrix rather than a Cartesian product.
    */
   for (const int blocks :
        blockValues) {
@@ -149,6 +171,39 @@ AutoTuner::defaultMatrix(
           configurations,
           {
               blocks,
+              128,
+              points
+          },
+          memoryMb);
+    }
+  }
+
+  /*
+   * Probe smaller point batches and large point
+   * batches around the centre of the block range.
+   * Neighbouring anchors prevent a single central
+   * value from hiding a better configuration.
+   */
+  const auto centre =
+      blockValues.size() / 2;
+  const auto firstAnchor =
+      centre > 0
+          ? centre - 1
+          : centre;
+  const auto lastAnchor =
+      std::min(
+          blockValues.size() - 1,
+          centre + 1);
+
+  for (auto anchor = firstAnchor;
+       anchor <= lastAnchor;
+       ++anchor) {
+    for (const int points :
+         {256, 1024}) {
+      addUnique(
+          configurations,
+          {
+              blockValues[anchor],
               256,
               points
           },
@@ -157,32 +212,20 @@ AutoTuner::defaultMatrix(
   }
 
   /*
-   * Explore thread occupancy around the central
-   * block count without creating a huge Cartesian
-   * product.
+   * CUDA devices can try high-thread launch
+   * candidates. OpenCL keeps the portable matrix
+   * because some implementations reject 512-thread
+   * work groups. Failed CUDA candidates are ignored
+   * by the existing benchmark selection logic.
    */
-  const int centralBlocks =
-      blockValues[
-          blockValues.size() / 2];
-
-  /*
-   * 128 threads explores lower occupancy safely.
-   *
-   * 512-thread launches remain available through
-   * explicit command-line options, but are omitted
-   * from the portable automatic matrix because
-   * several BitCrack backends reject them or need
-   * disproportionately large working buffers.
-   */
-  for (const int threads :
-       {128}) {
+  if (includeHighThreadCandidates) {
     for (const int points :
-         {512, 1024}) {
+         {256, 512}) {
       addUnique(
           configurations,
           {
-              centralBlocks,
-              threads,
+              blockValues[centre],
+              512,
               points
           },
           memoryMb);

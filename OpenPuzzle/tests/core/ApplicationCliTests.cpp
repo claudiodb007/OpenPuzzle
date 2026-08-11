@@ -106,6 +106,11 @@ int main() {
 
     assert(
         result.output.find(
+            "openpuzzle update") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
             "openpuzzle selftest") !=
         std::string::npos);
 
@@ -255,6 +260,21 @@ int main() {
     const auto result =
         runApplication({
             "OpenPuzzle",
+            "benchmark",
+            "--backend",
+            "invalid"
+        });
+
+    assert(result.exitCode != 0);
+    assert(result.output.find("OP-BENCH-003") != std::string::npos);
+    assert(result.output.find("Action.............") != std::string::npos);
+    assertNoExecution(result.output);
+  }
+
+  {
+    const auto result =
+        runApplication({
+            "OpenPuzzle",
             "doctor"
         });
 
@@ -281,6 +301,12 @@ int main() {
         result.output.find(
             "CPU backend") !=
         std::string::npos);
+
+    if (result.exitCode == 1) {
+      assert(
+          result.output.find("OP-DOCTOR-001") !=
+          std::string::npos);
+    }
 
     assertNoExecution(
         result.output);

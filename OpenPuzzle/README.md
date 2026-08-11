@@ -2,13 +2,14 @@
 
 ## Current release
 
-**OpenPuzzle 1.0.6** provides a continuous Linux client for requesting,
-executing and synchronizing OpenPuzzle assignments.
+**OpenPuzzle 1.0.10** provides a simpler continuous Linux client with a broader
+GPU benchmark, visible protected solution recovery, actionable errors and a
+verified update command.
 
 The public repository contains the client only. The coordination service
 and website infrastructure are not included.
 
-See [OpenPuzzle 1.0.2 release notes](docs/RELEASE_1.0.2.md) and the
+See [OpenPuzzle 1.0.10 release notes](docs/RELEASE_1.0.10.md) and the
 [Client Runtime guide](docs/CLIENT_RUNTIME.md).
 
 
@@ -203,9 +204,16 @@ ctest --output-on-failure
 
 ## Current Release
 
-### OpenPuzzle 1.0.2
+### OpenPuzzle 1.0.10
 
-Implemented:
+New in this release:
+
+-   Wider automatic GPU benchmark matrix with bounded CUDA 512-thread tests
+-   Explicit private-key-found banner and visible protected solution notice
+-   Stable actionable error codes for setup, engines, benchmark and doctor
+-   Verified `openpuzzle update` workflow that refuses active runtimes
+
+The release retains:
 
 -   Automatic 60-minute CPU, CUDA and OpenCL assignments
 -   Backend-aware CPU range sizing using observed speed
@@ -312,12 +320,26 @@ MIT License.
 Install the Debian package:
 
 ```bash
-sudo apt install ./OpenPuzzle-1.0.2-portable-16f5277f.deb
+sudo apt install ./OpenPuzzle-1.0.10-portable-XXXXXXXX.deb
 ```
 
 Start OpenPuzzle:
 
 ```bash
+openpuzzle run
+```
+
+From 1.0.10 onward, check for later releases with:
+
+```bash
+openpuzzle update --check
+```
+
+When an update is available, let active work finish before installation:
+
+```bash
+openpuzzle safestop
+openpuzzle update
 openpuzzle run
 ```
 

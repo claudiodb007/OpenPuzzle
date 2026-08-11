@@ -432,12 +432,33 @@ int ClientRuntime::run(
         }
 
         std::cout
+            << "\n"
+            << "========================================\n"
+            << "PRIVATE KEY FOUND - ACTION REQUIRED\n"
+            << "========================================\n"
             << "Wallet file........ "
             << exported.walletPath
-            << '\n'
+            << '\n';
+
+        if (!exported.noticePath.empty()) {
+          std::cout
+              << "Visible notice..... "
+              << exported.noticePath
+              << '\n';
+        }
+
+        std::cout
             << "Format............. WIF (compressed)\n"
             << "Permissions........ owner only\n"
-            << "Private key........ not displayed or uploaded\n";
+            << "Private key........ not displayed or uploaded\n"
+            << "Action............. protect the wallet file now\n";
+
+        if (!exported.warning.empty()) {
+          std::cerr
+              << "Notice warning..... "
+              << exported.warning
+              << '\n';
+        }
 
         return true;
       };

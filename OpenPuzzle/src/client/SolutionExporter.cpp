@@ -129,6 +129,125 @@ bool writeAll(
   return true;
 }
 
+bool publishProtectedTextFile(
+    const fs::path &destination,
+    const std::string &content,
+    std::string &error) {
+  std::error_code filesystemError;
+  const auto status =
+      fs::symlink_status(
+          destination,
+          filesystemError);
+
+  if (!filesystemError &&
+      fs::exists(status)) {
+    if (fs::is_symlink(status) ||
+        !fs::is_regular_file(status)) {
+      error = "Unsafe solution notice path";
+      return false;
+    }
+
+    fs::permissions(
+        destination,
+        fs::perms::owner_read |
+            fs::perms::owner_write,
+        fs::perm_options::replace,
+        filesystemError);
+
+    if (filesystemError) {
+      error = "Unable to protect solution notice";
+      return false;
+    }
+
+    return true;
+  }
+
+  if (filesystemError &&
+      filesystemError !=
+          std::errc::no_such_file_or_directory) {
+    error = "Unable to inspect solution notice path";
+    return false;
+  }
+
+  const fs::path temporary =
+      destination.parent_path() /
+      ("." +
+       destination.filename().string() +
+       ".tmp-" +
+       std::to_string(
+           static_cast<long long>(
+               ::getpid())));
+
+  fs::remove(
+      temporary,
+      filesystemError);
+  filesystemError.clear();
+
+  const int descriptor =
+      ::open(
+          temporary.c_str(),
+          O_WRONLY |
+              O_CREAT |
+              O_EXCL |
+              O_NOFOLLOW,
+          S_IRUSR |
+              S_IWUSR);
+
+  if (descriptor < 0) {
+    error = "Unable to create protected solution notice";
+    return false;
+  }
+
+  const bool written =
+      writeAll(
+          descriptor,
+          content);
+
+  const bool synchronized =
+      written &&
+      ::fsync(descriptor) == 0;
+
+  const bool closed =
+      ::close(descriptor) == 0;
+
+  if (!written ||
+      !synchronized ||
+      !closed) {
+    fs::remove(
+        temporary,
+        filesystemError);
+    error = "Unable to write protected solution notice";
+    return false;
+  }
+
+  fs::rename(
+      temporary,
+      destination,
+      filesystemError);
+
+  if (filesystemError) {
+    fs::remove(
+        temporary,
+        filesystemError);
+    error = "Unable to publish solution notice";
+    return false;
+  }
+
+  fs::permissions(
+      destination,
+      fs::perms::owner_read |
+          fs::perms::owner_write,
+      fs::perm_options::replace,
+      filesystemError);
+
+  if (filesystemError) {
+    error = "Unable to protect solution notice";
+    return false;
+  }
+
+  return true;
+}
+
 std::vector<std::string> readRecord(
     const fs::path &path,
     std::string &error) {
@@ -197,6 +316,47 @@ bool valueAfter(
 
   value = line.substr(prefix.size());
   return !value.empty();
+}
+
+void publishSolutionNotice(
+    const ClientExecutionState &state,
+    const fs::path &root,
+    SolutionExportResult &result) {
+  const fs::path notice =
+      root /
+      ("KEY-FOUND-Puzzle-" +
+       std::to_string(state.puzzle) +
+       "-" +
+       state.assignmentId +
+       ".txt");
+
+  std::ostringstream content;
+  content
+      << "OPENPUZZLE - PRIVATE KEY FOUND\n"
+      << "================================\n"
+      << "Puzzle: "
+      << state.puzzle
+      << "\n"
+      << "Address: "
+      << state.target
+      << "\n\n"
+      << "The private key is stored in the protected wallet file:\n"
+      << result.walletPath
+      << "\n\n"
+      << "The private key is not included in this notice and was not uploaded.\n";
+
+  std::string noticeError;
+
+  if (!publishProtectedTextFile(
+          notice,
+          content.str(),
+          noticeError)) {
+    result.warning = noticeError;
+    return;
+  }
+
+  result.noticePath =
+      notice.string();
 }
 
 } // namespace
@@ -330,6 +490,10 @@ SolutionExporter::exportSolution(
     result.success = true;
     result.walletPath =
         destination.string();
+    publishSolutionNotice(
+        state,
+        root,
+        result);
     return result;
   }
 
@@ -432,6 +596,10 @@ SolutionExporter::exportSolution(
   result.success = true;
   result.walletPath =
       destination.string();
+  publishSolutionNotice(
+      state,
+      root,
+      result);
   return result;
 }
 

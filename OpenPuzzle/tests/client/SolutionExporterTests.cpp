@@ -132,19 +132,36 @@ int main() {
       expectedAssignment /
       "wallet-import.txt";
 
+  const fs::path expectedNotice =
+      expectedRoot /
+      ("KEY-FOUND-Puzzle-20-" +
+       state.assignmentId +
+       ".txt");
+
   assert(
       exported.walletPath ==
       expectedWallet.string());
 
+  assert(
+      exported.noticePath ==
+      expectedNotice.string());
+
+  assert(exported.warning.empty());
+
   assert(fs::is_regular_file(expectedWallet));
+  assert(fs::is_regular_file(expectedNotice));
   assert(fs::is_regular_file(engineResult));
   assert(ownerOnly(expectedRoot, true));
   assert(ownerOnly(expectedPuzzle, true));
   assert(ownerOnly(expectedAssignment, true));
   assert(ownerOnly(expectedWallet, false));
+  assert(ownerOnly(expectedNotice, false));
 
   const auto walletContent =
       readFile(expectedWallet);
+
+  const auto noticeContent =
+      readFile(expectedNotice);
 
   assert(
       walletContent.find(state.target) !=
@@ -152,6 +169,14 @@ int main() {
 
   assert(
       walletContent.find(syntheticWif) !=
+      std::string::npos);
+
+  assert(
+      noticeContent.find(expectedWallet.string()) !=
+      std::string::npos);
+
+  assert(
+      noticeContent.find(syntheticWif) ==
       std::string::npos);
 
   const auto repeated =
@@ -163,6 +188,10 @@ int main() {
   assert(
       repeated.walletPath ==
       expectedWallet.string());
+  assert(
+      repeated.noticePath ==
+      expectedNotice.string());
+  assert(repeated.warning.empty());
 
   const fs::path wrongAddress =
       fs::path(state.workspace) /

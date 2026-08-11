@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(OpenPuzzle VERSION 1.0.9 LANGUAGES CXX)
+project(OpenPuzzle VERSION 1.0.10 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -165,6 +165,7 @@ add_library(OpenPuzzleCore
     src/core/commands/ApplicationTestCommands.cpp
     src/core/commands/ProfileCommand.cpp
     src/core/commands/BenchmarkCommand.cpp
+    src/core/commands/UpdateCommand.cpp
     src/core/commands/SelfTestCommand.cpp
     src/core/commands/DispatchCommand.cpp
     src/core/commands/WorkerRunCommand.cpp
@@ -380,6 +381,7 @@ install(
         docs/RELEASE_1.0.7.md
         docs/RELEASE_1.0.8.md
         docs/RELEASE_1.0.9.md
+        docs/RELEASE_1.0.10.md
         docs/SYSTEMD_SERVICE.md
     DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
 )

@@ -13,12 +13,18 @@ int main() {
   const auto matrix =
       tuner.defaultMatrix(
           56,
-          12288);
+          12288,
+          true);
 
   if (matrix.empty())
     return 1;
 
+  if (matrix.size() < 15)
+    return 20;
+
   bool foundRecommended = false;
+  bool foundHighThreads = false;
+  bool foundLowBlocks = false;
 
   for (const auto &candidate :
        matrix) {
@@ -52,10 +58,30 @@ int main() {
         configuration.points == 1024) {
       foundRecommended = true;
     }
+
+    if (
+        configuration.blocks == 224 &&
+        configuration.threads == 512 &&
+        configuration.points == 256) {
+      foundHighThreads = true;
+    }
+
+    if (
+        configuration.blocks == 56 &&
+        configuration.threads == 256 &&
+        configuration.points == 512) {
+      foundLowBlocks = true;
+    }
+
+    if (configuration.threads > 512)
+      return 21;
   }
 
   if (!foundRecommended)
     return 5;
+
+  if (!foundHighThreads || !foundLowBlocks)
+    return 22;
 
   /*
    * The estimate must cover fixed backend overhead
@@ -100,20 +126,8 @@ int main() {
     return 17;
   }
 
-  for (const auto &candidate :
-       matrix) {
-    /*
-     * 512-thread configurations may still be run
-     * manually but are not portable auto choices.
-     */
-    if (
-        candidate.configuration.threads >
-        256) {
-      return 18;
-    }
-
-    if (
-        candidate.configuration.blocks == 448 &&
+  for (const auto &candidate : matrix) {
+    if (candidate.configuration.blocks == 448 &&
         candidate.configuration.threads == 256 &&
         candidate.configuration.points == 1024) {
       return 19;
@@ -127,7 +141,8 @@ int main() {
   const auto smallMemory =
       tuner.defaultMatrix(
           20,
-          2048);
+          2048,
+          false);
 
   if (smallMemory.empty())
     return 6;
@@ -139,6 +154,12 @@ int main() {
             candidate.configuration) >
         2048 * 70 / 100) {
       return 7;
+    }
+
+    if (
+        candidate.configuration.threads >
+        256) {
+      return 23;
     }
   }
 

@@ -185,6 +185,16 @@ int DoctorService::execute(
                  : "NOT READY")
       << '\n';
 
+  if (!ready) {
+    std::cout
+        << "\nRecovery\n"
+        << "--------\n"
+        << "Error code......... OP-DOCTOR-001\n"
+        << "Problem............ no usable compute backend is available\n"
+        << "Action 1........... verify the GPU/CPU drivers\n"
+        << "Action 2........... reinstall the OpenPuzzle package\n";
+  }
+
   return ready
       ? 0
       : 1;

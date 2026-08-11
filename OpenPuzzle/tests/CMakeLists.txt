@@ -1244,3 +1244,17 @@ add_test(
     NAME AuditLogTests
     COMMAND AuditLogTests
 )
+
+add_executable(UpdateCommandTests
+    core/UpdateCommandTests.cpp
+)
+
+target_link_libraries(UpdateCommandTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME UpdateCommandTests
+    COMMAND UpdateCommandTests
+)
