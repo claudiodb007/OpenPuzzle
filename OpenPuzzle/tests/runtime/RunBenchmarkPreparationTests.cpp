@@ -81,9 +81,16 @@ int main() {
 
     const auto preparation = makePreparation(state);
 
-    assert(preparation.ensureProfile());
+    const auto captured =
+        runCaptured(preparation);
+
+    assert(captured.success);
     assert(state.profileChecks == 2);
     assert(state.benchmarkCalls == 1);
+    assert(captured.output.find("[1/4] Hardware and engine") != std::string::npos);
+    assert(captured.output.find("[3/4] Safe benchmark....... complete") != std::string::npos);
+    assert(captured.output.find("[4/4] Server contact....... ready") != std::string::npos);
+    assert(captured.output.find("OpenPuzzle will now request work") != std::string::npos);
   }
 
   {
@@ -100,6 +107,7 @@ int main() {
     assert(captured.output.find("OP-BENCH-001") != std::string::npos);
     assert(captured.output.find("openpuzzle doctor") != std::string::npos);
     assert(captured.output.find("openpuzzle benchmark --real --auto") != std::string::npos);
+    assert(captured.output.find("Server contact not started") != std::string::npos);
     assert(state.profileChecks == 1);
     assert(state.benchmarkCalls == 1);
   }

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.11 — Clear one-command onboarding
+
+- Kept `openpuzzle run` as the only command required after installation.
+- Added explicit first-use stages for hardware readiness, GPU profile creation,
+  safe benchmarking and permission to contact the coordination server.
+- Confirmed that assignments are not requested when automatic benchmarking
+  fails and retained exact recovery commands with stable error codes.
+- Added regression coverage for successful and failed onboarding output.
+- Preserved automatic profile reuse without repeating onboarding on later runs.
+
 ## 1.0.10 — Simpler benchmark, recovery, errors and updates
 
 - Expanded the automatic GPU benchmark matrix across more block and point

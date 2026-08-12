@@ -2,14 +2,13 @@
 
 ## Current release
 
-**OpenPuzzle 1.0.10** provides a simpler continuous Linux client with a broader
-GPU benchmark, visible protected solution recovery, actionable errors and a
-verified update command.
+**OpenPuzzle 1.0.11** keeps the one-command Linux client and makes first use
+clearer with explicit local setup, safe benchmark and server-contact stages.
 
 The public repository contains the client only. The coordination service
 and website infrastructure are not included.
 
-See [OpenPuzzle 1.0.10 release notes](docs/RELEASE_1.0.10.md) and the
+See [OpenPuzzle 1.0.11 release notes](docs/RELEASE_1.0.11.md) and the
 [Client Runtime guide](docs/CLIENT_RUNTIME.md).
 
 
@@ -204,14 +203,14 @@ ctest --output-on-failure
 
 ## Current Release
 
-### OpenPuzzle 1.0.10
+### OpenPuzzle 1.0.11
 
 New in this release:
 
--   Wider automatic GPU benchmark matrix with bounded CUDA 512-thread tests
--   Explicit private-key-found banner and visible protected solution notice
--   Stable actionable error codes for setup, engines, benchmark and doctor
--   Verified `openpuzzle update` workflow that refuses active runtimes
+-   One-command first-use flow through `openpuzzle run`
+-   Explicit hardware, GPU profile, safe benchmark and server-contact stages
+-   Clear confirmation that no assignment is requested after benchmark failure
+-   Exact recovery commands while retaining all 1.0.10 safety improvements
 
 The release retains:
 
