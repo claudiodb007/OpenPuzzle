@@ -12,9 +12,20 @@ struct UpdateRelease {
   std::string version;
 };
 
+struct UpdateOptions {
+  bool checkOnly = false;
+  bool downloadOnly = false;
+  bool safe = false;
+};
+
 class UpdateCommand {
 public:
   int run(const std::vector<std::string>& args) const;
+
+  static std::optional<UpdateOptions>
+  parseOptions(
+      const std::vector<std::string>& args,
+      std::string& error);
 
   static std::optional<UpdateRelease>
   parseReleaseManifest(

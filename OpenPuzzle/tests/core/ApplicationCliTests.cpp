@@ -111,6 +111,11 @@ int main() {
 
     assert(
         result.output.find(
+            "--safe") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
             "openpuzzle selftest") !=
         std::string::npos);
 

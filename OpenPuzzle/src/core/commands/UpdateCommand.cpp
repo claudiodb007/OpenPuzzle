@@ -7,8 +7,10 @@
 #include <array>
 #include <cerrno>
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <fcntl.h>
 #include <fstream>
 #include <iostream>
 #include <regex>
@@ -16,6 +18,7 @@
 #include <stdexcept>
 #include <string>
 #include <signal.h>
+#include <thread>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -30,6 +33,9 @@ namespace {
 constexpr const char* kManifestUrl =
     "https://github.com/claudiodb007/OpenPuzzle/"
     "releases/latest/download/SHA256SUMS.txt";
+
+constexpr std::array<const char*, 5> kExecutionSlots = {
+    "primary", "gpu", "cpu", "cuda", "opencl"};
 
 struct ProcessResult {
   int exitCode = 1;
@@ -158,10 +164,7 @@ bool processExists(int pid) {
 }
 
 std::optional<std::string> activeExecution() {
-  static const std::array<const char*, 5> slots = {
-      "primary", "gpu", "cpu", "cuda", "opencl"};
-
-  for (const char* slot : slots) {
+  for (const char* slot : kExecutionSlots) {
     const auto state = client::ClientStateStore::load(slot);
     if (state && processExists(state->pid)) {
       std::ostringstream description;
@@ -183,6 +186,93 @@ std::optional<std::string> activeExecution() {
     }
   }
   return std::nullopt;
+}
+
+std::vector<std::string> runningRuntimeSlots() {
+  std::vector<std::string> slots;
+  for (const char* slot : kExecutionSlots) {
+    if (ClientRuntimeControl::running(slot)) {
+      slots.emplace_back(slot);
+    }
+  }
+  return slots;
+}
+
+bool requestSafeStopAndWait(std::string& error) {
+  const auto slots = runningRuntimeSlots();
+  if (slots.empty()) {
+    error = "an execution is active but no controllable runtime was found";
+    return false;
+  }
+
+  std::vector<std::string> requested;
+  for (const auto& slot : slots) {
+    if (!ClientRuntimeControl::requestSafeStop(slot)) {
+      for (const auto& previous : requested) {
+        ClientRuntimeControl::clearSafeStop(previous);
+      }
+      error = "unable to request safe stop for runtime slot " + slot;
+      return false;
+    }
+    requested.push_back(slot);
+  }
+
+  std::cout
+      << "Safe stop........... requested\n"
+      << "Active ranges....... finishing normally\n"
+      << "New assignments..... blocked\n";
+
+  const auto started = std::chrono::steady_clock::now();
+  auto nextNotice = started;
+  const auto deadline = started + std::chrono::hours(24);
+
+  while (const auto active = activeExecution()) {
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= deadline) {
+      error = "safe update waited 24 hours but work is still active (" +
+          *active + ")";
+      return false;
+    }
+    if (now >= nextNotice) {
+      const auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(
+          now - started).count();
+      std::cout
+          << "Waiting............. current range ("
+          << elapsed << " min, " << *active << ")\n";
+      nextNotice = now + std::chrono::minutes(1);
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+  }
+
+  while (!runningRuntimeSlots().empty()) {
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= deadline) {
+      error = "safe update waited 24 hours but the runtime is still shutting down";
+      return false;
+    }
+    if (now >= nextNotice) {
+      const auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(
+          now - started).count();
+      std::cout
+          << "Waiting............. runtime shutdown ("
+          << elapsed << " min)\n";
+      nextNotice = now + std::chrono::minutes(1);
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  }
+
+  std::cout << "Runtime............. stopped safely\n";
+  return true;
+}
+
+bool waitForRuntimeStart() {
+  for (int attempt = 0; attempt < 24; ++attempt) {
+    if (!runningRuntimeSlots().empty()) {
+      return true;
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+  }
+  return false;
 }
 
 void printError(
@@ -230,6 +320,58 @@ bool privateDirectory(const fs::path& path) {
   return !error;
 }
 
+bool startRuntimeDetached(
+    const fs::path& logPath,
+    std::string& error) {
+  if (!privateDirectory(logPath.parent_path())) {
+    error = "unable to prepare the runtime log directory";
+    return false;
+  }
+
+  const pid_t child = fork();
+  if (child < 0) {
+    error = "unable to fork the OpenPuzzle runtime";
+    return false;
+  }
+
+  if (child == 0) {
+    if (setsid() < 0) {
+      _exit(126);
+    }
+    const int nullDescriptor = open("/dev/null", O_RDONLY);
+    const int logDescriptor = open(
+        logPath.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0600);
+    if (nullDescriptor < 0 || logDescriptor < 0) {
+      _exit(126);
+    }
+    dup2(nullDescriptor, STDIN_FILENO);
+    dup2(logDescriptor, STDOUT_FILENO);
+    dup2(logDescriptor, STDERR_FILENO);
+    close(nullDescriptor);
+    close(logDescriptor);
+    execlp(
+        "openpuzzle", "openpuzzle", "run",
+        static_cast<char*>(nullptr));
+    _exit(127);
+  }
+
+  if (!waitForRuntimeStart()) {
+    error = "OpenPuzzle did not report a running runtime within 120 seconds";
+    return false;
+  }
+  return true;
+}
+
+bool resumeRuntime(
+    const fs::path& updateRoot,
+    std::string& error) {
+  const fs::path logPath = updateRoot / "openpuzzle-update-resume.log";
+  std::cout
+      << "Resuming............ openpuzzle run\n"
+      << "Runtime log......... " << logPath << '\n';
+  return startRuntimeDetached(logPath, error);
+}
+
 bool safeDownloadedFile(const fs::path& path) {
   std::error_code error;
   if (!fs::is_regular_file(path, error) || error) {
@@ -252,6 +394,35 @@ std::string currentVersion() {
 }
 
 } // namespace
+
+std::optional<UpdateOptions>
+UpdateCommand::parseOptions(
+    const std::vector<std::string>& args,
+    std::string& error) {
+  UpdateOptions options;
+  for (const auto& argument : args) {
+    if (argument == "--check") {
+      options.checkOnly = true;
+    } else if (argument == "--download-only") {
+      options.downloadOnly = true;
+    } else if (argument == "--safe") {
+      options.safe = true;
+    } else {
+      error = "unknown option: " + argument;
+      return std::nullopt;
+    }
+  }
+
+  const int selectedModes =
+      static_cast<int>(options.checkOnly) +
+      static_cast<int>(options.downloadOnly) +
+      static_cast<int>(options.safe);
+  if (selectedModes > 1) {
+    error = "--check, --download-only and --safe cannot be combined";
+    return std::nullopt;
+  }
+  return options;
+}
 
 std::optional<UpdateRelease>
 UpdateCommand::parseReleaseManifest(
@@ -315,30 +486,17 @@ int UpdateCommand::compareVersions(
 
 int UpdateCommand::run(
     const std::vector<std::string>& args) const {
-  bool checkOnly = false;
-  bool downloadOnly = false;
-  for (const auto& argument : args) {
-    if (argument == "--check") {
-      checkOnly = true;
-    } else if (argument == "--download-only") {
-      downloadOnly = true;
-    } else {
-      printError(
-          "OP-UPDATE-000",
-          "unknown option: " + argument,
-          "Use: openpuzzle update [--check|--download-only]");
-      return 1;
-    }
-  }
-  if (checkOnly && downloadOnly) {
+  std::string optionError;
+  const auto options = parseOptions(args, optionError);
+  if (!options) {
     printError(
         "OP-UPDATE-000",
-        "--check and --download-only cannot be combined",
-        "Choose only one update mode.");
+        optionError,
+        "Use: openpuzzle update [--check|--download-only|--safe]");
     return 1;
   }
 
-  if (!checkOnly && !downloadOnly) {
+  if (!options->checkOnly && !options->downloadOnly && !options->safe) {
     if (const auto active = activeExecution()) {
       printError(
           "OP-UPDATE-001",
@@ -349,11 +507,14 @@ int UpdateCommand::run(
   }
 
   std::vector<std::string> requiredCommands = {"curl"};
-  if (!checkOnly) {
+  if (!options->checkOnly) {
     requiredCommands.emplace_back("sha256sum");
     requiredCommands.emplace_back("dpkg-deb");
-    if (!downloadOnly) {
+    if (!options->downloadOnly) {
       requiredCommands.emplace_back("apt-get");
+      if (geteuid() != 0) {
+        requiredCommands.emplace_back("sudo");
+      }
     }
   }
 
@@ -441,7 +602,7 @@ int UpdateCommand::run(
     std::cout << "Result.............. already up to date\n";
     return 0;
   }
-  if (checkOnly) {
+  if (options->checkOnly) {
     std::cout << "Result.............. update available\n";
     return 0;
   }
@@ -498,13 +659,53 @@ int UpdateCommand::run(
       << "Package............. " << packageName.output
       << "Architecture........ " << trim(packageArchitecture.output) << '\n';
 
-  if (downloadOnly) {
+  if (options->downloadOnly) {
     cleanup.preserve = true;
     std::cout
         << "Result.............. downloaded and verified\n"
         << "Package path........ " << packagePath << '\n';
     return 0;
   }
+
+  bool resumeAfterUpdate = false;
+  if (options->safe) {
+    if (const auto active = activeExecution()) {
+      std::cout
+          << "Safe update......... active work detected\n"
+          << "Execution........... " << *active << '\n';
+      std::string safeStopError;
+      if (!requestSafeStopAndWait(safeStopError)) {
+        printError(
+            "OP-UPDATE-006",
+            safeStopError,
+            "Keep the terminal open, inspect 'openpuzzle status' and retry safely.");
+        return 1;
+      }
+      resumeAfterUpdate = true;
+    }
+  }
+
+  if (const auto active = activeExecution()) {
+    printError(
+        "OP-UPDATE-001",
+        "an OpenPuzzle execution became active before installation (" +
+            *active + ")",
+        "Wait for idle state and retry the update.");
+    return 1;
+  }
+
+  const auto tryResume = [&]() {
+    if (!resumeAfterUpdate) {
+      return true;
+    }
+    std::string resumeError;
+    if (!resumeRuntime(updateRoot, resumeError)) {
+      std::cerr << "Resume warning...... " << resumeError << '\n';
+      return false;
+    }
+    std::cout << "Runtime............. resumed\n";
+    return true;
+  };
 
   std::vector<std::string> installCommand;
   if (geteuid() != 0) {
@@ -527,17 +728,48 @@ int UpdateCommand::run(
       << "The administrator password may be requested.\n";
   const auto install = runProcess(installCommand, false);
   if (install.exitCode != 0) {
+    const bool resumed = tryResume();
     printError(
         "OP-UPDATE-005",
         "the package manager did not install the update",
-        "Read the apt error above, correct it, then rerun 'openpuzzle update'.");
+        resumed
+            ? "The previous version was resumed; correct the apt error and retry."
+            : "Correct the apt error, then run 'openpuzzle run'.");
+    return 1;
+  }
+
+  const auto installedVersion =
+      runProcess({"openpuzzle", "--version"}, true);
+  const std::string expectedVersion =
+      "OpenPuzzle " + release->version;
+  if (installedVersion.exitCode != 0 ||
+      trim(installedVersion.output) != expectedVersion) {
+    const bool resumed = tryResume();
+    printError(
+        "OP-UPDATE-005",
+        "the installed client did not report " + expectedVersion,
+        resumed
+            ? "The runtime was resumed; inspect the package installation and retry."
+            : "Run 'openpuzzle run' after repairing the package installation.");
+    return 1;
+  }
+
+  if (!tryResume()) {
+    printError(
+        "OP-UPDATE-007",
+        "the update was installed but OpenPuzzle did not resume",
+        "Inspect the runtime log and run 'openpuzzle run'.");
     return 1;
   }
 
   std::cout
       << "Result.............. updated successfully\n"
-      << "Version............. " << release->version << '\n'
-      << "Next action......... openpuzzle run\n";
+      << "Version............. " << release->version << '\n';
+  if (resumeAfterUpdate) {
+    std::cout << "Next action......... none; OpenPuzzle resumed\n";
+  } else {
+    std::cout << "Next action......... openpuzzle run\n";
+  }
   return 0;
 }
 

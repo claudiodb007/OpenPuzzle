@@ -98,7 +98,7 @@ static void printApplicationHelp() {
       << "----------\n"
       << "Usage:\n"
       << "  openpuzzle benchmark [benchmark options]\n"
-      << "  openpuzzle update [--check|--download-only]\n"
+      << "  openpuzzle update [--check|--download-only|--safe]\n"
       << "  openpuzzle selftest --backend cuda|opencl|cpu [options]\n"
       << "  openpuzzle [puzzle] [run options]\n"
       << "  openpuzzle run [puzzle] [run options]\n"

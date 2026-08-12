@@ -51,6 +51,49 @@ int main() {
   }
   assert(rejected);
 
+  {
+    std::string error;
+    const auto options = UpdateCommand::parseOptions({}, error);
+    assert(options);
+    assert(!options->checkOnly);
+    assert(!options->downloadOnly);
+    assert(!options->safe);
+    assert(error.empty());
+  }
+
+  {
+    std::string error;
+    const auto options = UpdateCommand::parseOptions({"--safe"}, error);
+    assert(options);
+    assert(options->safe);
+    assert(!options->checkOnly);
+    assert(!options->downloadOnly);
+  }
+
+  {
+    std::string error;
+    const auto options = UpdateCommand::parseOptions(
+        {"--check", "--safe"}, error);
+    assert(!options);
+    assert(error.find("cannot be combined") != std::string::npos);
+  }
+
+  {
+    std::string error;
+    const auto options = UpdateCommand::parseOptions(
+        {"--download-only", "--safe"}, error);
+    assert(!options);
+    assert(error.find("cannot be combined") != std::string::npos);
+  }
+
+  {
+    std::string error;
+    const auto options = UpdateCommand::parseOptions(
+        {"--unknown"}, error);
+    assert(!options);
+    assert(error.find("unknown option") != std::string::npos);
+  }
+
   std::cout << "UpdateCommandTests passed\n";
   return 0;
 }
