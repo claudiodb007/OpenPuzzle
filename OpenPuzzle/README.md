@@ -2,13 +2,13 @@
 
 ## Current release
 
-**OpenPuzzle 1.0.12** adds a safe automatic update mode that finishes active
-work normally, installs the verified release and resumes OpenPuzzle automatically.
+**OpenPuzzle 1.0.13** adds comprehensive, actionable diagnostics through
+`openpuzzle doctor`, including a safe server check that never requests work.
 
 The public repository contains the client only. The coordination service
 and website infrastructure are not included.
 
-See [OpenPuzzle 1.0.12 release notes](docs/RELEASE_1.0.12.md) and the
+See [OpenPuzzle 1.0.13 release notes](docs/RELEASE_1.0.13.md) and the
 [Client Runtime guide](docs/CLIENT_RUNTIME.md).
 
 
@@ -203,16 +203,23 @@ ctest --output-on-failure
 
 ## Current Release
 
-### OpenPuzzle 1.0.12
+### OpenPuzzle 1.0.13
 
 New in this release:
 
--   Safe automatic updates through `openpuzzle update --safe`
--   Active ranges finish normally while new assignments remain blocked
--   Complete runtime shutdown is confirmed before package installation
--   The installed version is verified and prior work resumes automatically
+-   Complete readiness diagnostics through `openpuzzle doctor`
+-   Local configuration, storage, engine, hardware and runtime-state checks
+-   Selected-backend profile policy without false warnings for optional profiles
+-   Safe coordination-server reachability probe using `HEAD` only
+-   Offline diagnostics through `openpuzzle doctor --offline`
+-   Stable diagnostic codes with concrete recovery actions
 
 The release retains:
+
+-   Safe automatic updates through `openpuzzle update --safe`
+-   Active ranges finish normally while new assignments remain blocked
+-   Complete runtime shutdown confirmation before package installation
+-   Installed-version verification and automatic work resumption
 
 -   Automatic 60-minute CPU, CUDA and OpenCL assignments
 -   Backend-aware CPU range sizing using observed speed

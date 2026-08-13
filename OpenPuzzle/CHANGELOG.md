@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.13 — Actionable diagnostics
+
+- Expanded `openpuzzle doctor` into a complete local readiness report.
+- Added configuration, private local storage, bundled engine, hardware, backend, profile and runtime-state checks.
+- Added a safe coordination-server probe using `HEAD` only; no assignment is requested.
+- Added offline diagnostics through `openpuzzle doctor --offline`.
+- Report selected and optional GPU profiles separately to avoid false warnings.
+- Added stable codes `OP-DOCTOR-001` through `OP-DOCTOR-006` with recovery guidance.
+- Extended CLI regression coverage for offline diagnostics and result fields.
+
 ## 1.0.12 — Safe automatic updates
 
 - Added `openpuzzle update --safe` for updates while work is active.
