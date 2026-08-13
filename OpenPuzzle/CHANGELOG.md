@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.12 — Safe automatic updates
+
+- Added `openpuzzle update --safe` for updates while work is active.
+- Finish the current range normally and block new assignments before installing.
+- Wait for complete runtime shutdown to avoid confusing the old and new client.
+- Verify the installed version and resume OpenPuzzle automatically.
+- Attempt to resume work after installation or validation failures and provide
+  actionable `OP-UPDATE-005`, `OP-UPDATE-006` and `OP-UPDATE-007` errors.
+- Preserved the existing `--check`, `--download-only` and guarded default modes.
+
 ## 1.0.11 — Clear one-command onboarding
 
 - Kept `openpuzzle run` as the only command required after installation.

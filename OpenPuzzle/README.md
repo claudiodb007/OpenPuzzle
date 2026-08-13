@@ -2,13 +2,13 @@
 
 ## Current release
 
-**OpenPuzzle 1.0.11** keeps the one-command Linux client and makes first use
-clearer with explicit local setup, safe benchmark and server-contact stages.
+**OpenPuzzle 1.0.12** adds a safe automatic update mode that finishes active
+work normally, installs the verified release and resumes OpenPuzzle automatically.
 
 The public repository contains the client only. The coordination service
 and website infrastructure are not included.
 
-See [OpenPuzzle 1.0.11 release notes](docs/RELEASE_1.0.11.md) and the
+See [OpenPuzzle 1.0.12 release notes](docs/RELEASE_1.0.12.md) and the
 [Client Runtime guide](docs/CLIENT_RUNTIME.md).
 
 
@@ -203,14 +203,14 @@ ctest --output-on-failure
 
 ## Current Release
 
-### OpenPuzzle 1.0.11
+### OpenPuzzle 1.0.12
 
 New in this release:
 
--   One-command first-use flow through `openpuzzle run`
--   Explicit hardware, GPU profile, safe benchmark and server-contact stages
--   Clear confirmation that no assignment is requested after benchmark failure
--   Exact recovery commands while retaining all 1.0.10 safety improvements
+-   Safe automatic updates through `openpuzzle update --safe`
+-   Active ranges finish normally while new assignments remain blocked
+-   Complete runtime shutdown is confirmed before package installation
+-   The installed version is verified and prior work resumes automatically
 
 The release retains:
 
