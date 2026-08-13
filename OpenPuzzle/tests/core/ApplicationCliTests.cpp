@@ -280,7 +280,8 @@ int main() {
     const auto result =
         runApplication({
             "OpenPuzzle",
-            "doctor"
+            "doctor",
+            "--offline"
         });
 
     assert(
@@ -305,6 +306,56 @@ int main() {
     assert(
         result.output.find(
             "CPU backend") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
+            "Version............") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
+            "Local storage......") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
+            "Server connection.. SKIPPED") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
+            "no assignment requested") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
+            "Benchmark profiles") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
+            "Selected backend...") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
+            "Runtime state") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
+            "Summary") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
+            "Warnings...........") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
+            "Errors.............") !=
         std::string::npos);
 
     if (result.exitCode == 1) {

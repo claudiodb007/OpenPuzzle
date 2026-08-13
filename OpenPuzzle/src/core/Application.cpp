@@ -105,7 +105,7 @@ static void printApplicationHelp() {
       << "  openpuzzle status\n"
       << "  openpuzzle stop\n"
       << "  openpuzzle safestop\n"
-      << "  openpuzzle doctor\n"
+      << "  openpuzzle doctor [--offline]\n"
       << "  openpuzzle audit [--limit N] [--puzzle N] [--event NAME]\n"
       << "\n"
       << "Global options:\n"
