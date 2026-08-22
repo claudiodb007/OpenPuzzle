@@ -216,6 +216,8 @@ add_library(OpenPuzzleCore
     src/adapters/bitcrack/BitCrackOutputParser.cpp
     src/adapters/bitcrack/BitCrackProgressParser.cpp
     src/adapters/keyhunt/KeyHuntProgressParser.cpp
+    src/performance/AdaptiveCalibration.cpp
+    src/performance/AdaptiveProfileUpdater.cpp
     src/performance/AutoTuner.cpp
 src/performance/BenchmarkRunner.cpp
     src/performance/GpuProfileManager.cpp

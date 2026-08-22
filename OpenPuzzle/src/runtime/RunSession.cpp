@@ -2167,7 +2167,14 @@ ClientIterationResult RunSession::runOnce(
   state.puzzle = assignment->puzzle;
   state.rangeId = assignment->rangeId;
   state.pid = handle.pid;
+  state.device = device;
+  state.blocks = blocks;
   state.threads = threads;
+  state.points = points;
+  state.profileManaged =
+      !cpuBackend && !manualProfile;
+  state.gpuName =
+      cpuBackend ? std::string{} : hardwareValue;
 
   state.target = assignment->target;
   state.start = assignment->start;

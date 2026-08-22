@@ -444,6 +444,35 @@ add_test(
     NAME AutoTunerTests
     COMMAND AutoTunerTests
 )
+
+add_executable(AdaptiveCalibrationTests
+    performance/AdaptiveCalibrationTests.cpp
+)
+
+target_link_libraries(AdaptiveCalibrationTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME AdaptiveCalibrationTests
+    COMMAND AdaptiveCalibrationTests
+)
+
+
+add_executable(AdaptiveProfileUpdaterTests
+    performance/AdaptiveProfileUpdaterTests.cpp
+)
+
+target_link_libraries(AdaptiveProfileUpdaterTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME AdaptiveProfileUpdaterTests
+    COMMAND AdaptiveProfileUpdaterTests
+)
 add_executable(BenchmarkRunnerTests
     performance/BenchmarkRunnerTests.cpp
 )

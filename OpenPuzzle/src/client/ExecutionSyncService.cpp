@@ -3,6 +3,8 @@
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
 #include "openpuzzle/engines/EngineParserFactory.hpp"
+#include "openpuzzle/database/Database.hpp"
+#include "openpuzzle/performance/AdaptiveProfileUpdater.hpp"
 
 #include <boost/multiprecision/cpp_int.hpp>
 
@@ -10,6 +12,7 @@
 #include <cerrno>
 #include <cctype>
 #include <csignal>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -325,6 +328,85 @@ ExecutionSyncService::assignedKeyCount(
   return count.str();
 }
 
+
+std::vector<double>
+ExecutionSyncService::speedSamples(
+    const std::string& workspace,
+    const std::string& engine) {
+  std::string engineId = engine;
+
+  std::transform(
+      engineId.begin(),
+      engineId.end(),
+      engineId.begin(),
+      [](unsigned char character) {
+        return static_cast<char>(
+            std::tolower(character));
+      });
+
+  if (engineId.empty()) {
+    engineId = "bitcrack";
+  }
+
+  const auto logPath =
+      std::filesystem::path(workspace) /
+      (engineId == "keyhunt"
+           ? "keyhunt.log"
+           : "bitcrack.log");
+
+  std::ifstream input(
+      logPath,
+      std::ios::binary);
+
+  if (!input) {
+    return {};
+  }
+
+  auto parser =
+      EngineParserFactory::create(
+          engineId);
+
+  if (!parser) {
+    return {};
+  }
+
+  std::vector<double> samples;
+
+  const auto parseRecord =
+      [&](const std::string& record) {
+        if (record.empty()) {
+          return;
+        }
+
+        const auto parsed =
+            parser->parseLine(record);
+
+        if (parsed &&
+            parsed->speedMKeys > 0.0 &&
+            !parsed->keysChecked.empty()) {
+          samples.push_back(
+              parsed->speedMKeys);
+        }
+      };
+
+  std::string record;
+  char character = '\0';
+
+  while (input.get(character)) {
+    if (character == '\r' ||
+        character == '\n') {
+      parseRecord(record);
+      record.clear();
+      continue;
+    }
+
+    record.push_back(character);
+  }
+
+  parseRecord(record);
+  return samples;
+}
+
 std::optional<std::string>
 ExecutionSyncService::solutionFile(
     const std::string& workspace) {
@@ -612,6 +694,48 @@ ExecutionSyncService::tick(
 
   result.completionStatus =
       AssignmentUploadStatus::Uploaded;
+
+  if (completed && state->profileManaged) {
+    result.calibrationAttempted = true;
+
+    const char* home =
+        std::getenv("HOME");
+
+    if (home == nullptr) {
+      result.calibrationError =
+          "HOME is not set";
+    } else {
+      Database database;
+
+      const std::string databasePath =
+          std::string(home) +
+          "/.local/share/OpenPuzzle/openpuzzle.db";
+
+      if (!database.open(databasePath) ||
+          !database.createSchema()) {
+        result.calibrationError =
+            "Unable to open the local profile database";
+      } else {
+        performance::AdaptiveProfileUpdater updater(
+            database);
+
+        const auto update = updater.update(
+            *state,
+            speedSamples(
+                state->workspace,
+                state->engine));
+
+        result.calibrationUpdated =
+            update.updated;
+        result.calibratedPlanningSpeed =
+            update.calibratedPlanningSpeed;
+        result.calibrationSamples =
+            update.acceptedSamples;
+        result.calibrationError =
+            update.error;
+      }
+    }
+  }
 
   result.stateRemoved =
       ClientStateStore::remove(

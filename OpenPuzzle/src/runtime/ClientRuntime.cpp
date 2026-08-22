@@ -887,6 +887,28 @@ int ClientRuntime::run(
       return 1;
     }
 
+    if (result.calibrationAttempted) {
+      if (result.calibrationUpdated) {
+        std::cout
+            << "Profile calibration updated\n"
+            << "Planning speed..... "
+            << result.calibratedPlanningSpeed
+            << " MKey/s\n"
+            << "Accepted samples... "
+            << result.calibrationSamples
+            << '\n';
+      } else {
+        std::cout
+            << "Profile calibration skipped\n";
+        if (!result.calibrationError.empty()) {
+          std::cout
+              << "Reason............. "
+              << result.calibrationError
+              << '\n';
+        }
+      }
+    }
+
     std::cout
         << "Completion......... uploaded\n"
         << "Assignment complete.\n";

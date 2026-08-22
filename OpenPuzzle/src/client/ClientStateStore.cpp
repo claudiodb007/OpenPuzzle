@@ -232,8 +232,20 @@ bool ClientStateStore::save(
       << "pid="
       << state.pid
       << '\n'
+      << "device="
+      << state.device
+      << '\n'
+      << "blocks="
+      << state.blocks
+      << '\n'
       << "threads="
       << state.threads
+      << '\n'
+      << "points="
+      << state.points
+      << '\n'
+      << "profile_managed="
+      << (state.profileManaged ? 1 : 0)
       << '\n';
 
   writeField(
@@ -270,6 +282,11 @@ bool ClientStateStore::save(
       output,
       "backend",
       state.backend);
+
+  writeField(
+      output,
+      "gpu_name",
+      state.gpuName);
 
   writeField(
       output,
@@ -409,10 +426,30 @@ ClientStateStore::load(
           values,
           "pid");
 
+  state.device =
+      parseInteger(
+          values,
+          "device");
+
+  state.blocks =
+      parseInteger(
+          values,
+          "blocks");
+
   state.threads =
       parseInteger(
           values,
           "threads");
+
+  state.points =
+      parseInteger(
+          values,
+          "points");
+
+  state.profileManaged =
+      valueOf(
+          values,
+          "profile_managed") == "1";
 
   state.target =
       valueOf(
@@ -438,6 +475,11 @@ ClientStateStore::load(
       valueOf(
           values,
           "backend");
+
+  state.gpuName =
+      valueOf(
+          values,
+          "gpu_name");
 
   state.workspace =
       valueOf(

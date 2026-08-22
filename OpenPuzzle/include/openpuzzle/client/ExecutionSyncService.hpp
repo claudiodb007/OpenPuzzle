@@ -5,6 +5,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace openpuzzle::client {
 
@@ -46,6 +47,12 @@ struct ExecutionSyncResult {
 
   bool stateRemoved = false;
   std::string completionError;
+
+  bool calibrationAttempted = false;
+  bool calibrationUpdated = false;
+  double calibratedPlanningSpeed = 0.0;
+  std::size_t calibrationSamples = 0;
+  std::string calibrationError;
 };
 
 class ExecutionSyncService {
@@ -59,6 +66,11 @@ public:
 
   static std::optional<ExecutionProgress>
   latestProgress(
+      const std::string& workspace,
+      const std::string& engine = {});
+
+  static std::vector<double>
+  speedSamples(
       const std::string& workspace,
       const std::string& engine = {});
 

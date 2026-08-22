@@ -13,7 +13,12 @@ struct ClientExecutionState {
   int puzzle = 0;
   int rangeId = 0;
   int pid = 0;
+  int device = 0;
+  int blocks = 0;
   int threads = 0;
+  int points = 0;
+
+  bool profileManaged = false;
 
   std::string target;
   std::string start;
@@ -21,6 +26,7 @@ struct ClientExecutionState {
 
   std::string engine;
   std::string backend;
+  std::string gpuName;
 
   std::string workspace;
   std::string command;

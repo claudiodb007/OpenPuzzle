@@ -25,7 +25,12 @@ ClientExecutionState makeValidState() {
   state.puzzle = 71;
   state.rangeId = 84521;
   state.pid = 12345;
-  state.threads = 8;
+  state.device = 0;
+  state.blocks = 224;
+  state.threads = 128;
+  state.points = 1024;
+  state.profileManaged = true;
+  state.gpuName = "NVIDIA GeForce RTX 4070 SUPER";
 
   state.target =
       "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU";
@@ -69,7 +74,12 @@ void assertEqual(
   assert(actual.puzzle == expected.puzzle);
   assert(actual.rangeId == expected.rangeId);
   assert(actual.pid == expected.pid);
+  assert(actual.device == expected.device);
+  assert(actual.blocks == expected.blocks);
   assert(actual.threads == expected.threads);
+  assert(actual.points == expected.points);
+  assert(actual.profileManaged == expected.profileManaged);
+  assert(actual.gpuName == expected.gpuName);
 
   assert(actual.target == expected.target);
   assert(actual.start == expected.start);
