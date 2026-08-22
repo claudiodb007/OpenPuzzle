@@ -2,15 +2,16 @@
 
 ## Current release
 
-**OpenPuzzle 1.0.13** adds comprehensive, actionable diagnostics through
-`openpuzzle doctor`, including a safe server check that never requests work.
+**OpenPuzzle 1.0.14** adds conservative adaptive calibration for automatically
+managed CUDA and OpenCL profiles. After a successful assignment, sustained
+engine telemetry refines the speed used to size future work without changing
+GPU launch parameters, client priority or assignment access.
 
 The public repository contains the client only. The coordination service
 and website infrastructure are not included.
 
-See [OpenPuzzle 1.0.13 release notes](docs/RELEASE_1.0.13.md) and the
+See [OpenPuzzle 1.0.14 release notes](docs/RELEASE_1.0.14.md) and the
 [Client Runtime guide](docs/CLIENT_RUNTIME.md).
-
 
 ## Open-source orchestration platform for cryptographic keyspace exploration
 
@@ -202,6 +203,17 @@ ctest --output-on-failure
 ------------------------------------------------------------------------
 
 ## Current Release
+
+### OpenPuzzle 1.0.14
+
+New in this release:
+
+-   Adaptive speed calibration after confirmed successful GPU assignments
+-   Median sustained-speed estimation after two warm-up readings
+-   Conservative 0.97 planning factor, 25% blending and 15% adjustment limit
+-   Exact GPU/backend/engine profile updates with launch settings preserved
+-   Safe skips for CPU, manual, failed, cancelled and legacy executions
+-   Equal scheduling rights preserved; speed affects only future range size
 
 ### OpenPuzzle 1.0.13
 

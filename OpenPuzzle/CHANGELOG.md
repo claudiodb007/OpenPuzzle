@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.14 — Adaptive GPU calibration
+
+- Added conservative post-assignment calibration for automatically managed CUDA and OpenCL profiles.
+- Ignore warm-up readings, require sustained samples and use their median to resist transient spikes.
+- Apply a 0.97 planning factor, blend 25% live data with 75% previous history and limit each adjustment to 15%.
+- Preserve the selected blocks, threads and points; calibration changes only the speed used to size future work.
+- Update only the exact GPU, backend and engine profile after confirmed successful completion.
+- Skip CPU runs, manual GPU launches, failures, cancellations and legacy runtime states safely.
+- Keep assignment access and scheduling priority equal for every client; performance is used only for range sizing.
+- Added focused calibration, profile-update, state-storage and completion regression coverage.
+
 ## 1.0.13 — Actionable diagnostics
 
 - Expanded `openpuzzle doctor` into a complete local readiness report.
