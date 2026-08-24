@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <unistd.h>
 
@@ -157,7 +158,7 @@ int main() {
           "0",
           "--with-opencl",
           "--opencl-device",
-          "0",
+          "1",
           "--rusticl-enable",
           "radeonsi",
           "--server",
@@ -185,7 +186,7 @@ int main() {
           "--backend",
           "opencl",
           "--device",
-          "0",
+          "1",
           "--rusticl-enable",
           "radeonsi",
       };
@@ -201,6 +202,118 @@ int main() {
           concurrentOpenclArguments(
               cudaOpenclArguments) ==
       expectedOpenclArguments);
+
+  auto expectedCudaPreflight =
+      expectedCudaArguments;
+
+  expectedCudaPreflight.push_back(
+      "--preflight-only");
+
+  assert(
+      RunSession::
+          concurrentPreflightArguments(
+              expectedCudaArguments) ==
+      expectedCudaPreflight);
+
+  GpuInfo cudaDevice;
+  cudaDevice.device = 0;
+  cudaDevice.name =
+      "NVIDIA GeForce RTX 4070 SUPER";
+  cudaDevice.backend = "CUDA";
+  cudaDevice.memoryMb = 12282;
+  cudaDevice.cuda = true;
+
+  GpuInfo openclNvidia;
+  openclNvidia.device = 0;
+  openclNvidia.name =
+      "NVIDIA GeForce RTX 4070 SUPER";
+  openclNvidia.backend = "OpenCL";
+  openclNvidia.memoryMb = 11876;
+  openclNvidia.opencl = true;
+
+  GpuInfo openclAmd;
+  openclAmd.device = 1;
+  openclAmd.name =
+      "AMD Radeon RX 5500 XT "
+      "(radeonsi, navi14, ACO)";
+  openclAmd.backend = "OpenCL";
+  openclAmd.memoryMb = 8192;
+  openclAmd.opencl = true;
+
+  const std::vector<GpuInfo> cudaDevices = {
+      cudaDevice,
+  };
+
+  const std::vector<GpuInfo> openclDevices = {
+      openclNvidia,
+      openclAmd,
+  };
+
+  RunSession::validateConcurrentGpuSelection(
+      expectedCudaArguments,
+      expectedOpenclArguments,
+      cudaDevices,
+      openclDevices);
+
+  auto sameGpuOpenclArguments =
+      expectedOpenclArguments;
+
+  for (std::size_t index = 0;
+       index + 1 < sameGpuOpenclArguments.size();
+       ++index) {
+    if (sameGpuOpenclArguments[index] ==
+        "--device") {
+      sameGpuOpenclArguments[index + 1] = "0";
+      break;
+    }
+  }
+
+  bool sameGpuRejected = false;
+
+  try {
+    RunSession::validateConcurrentGpuSelection(
+        expectedCudaArguments,
+        sameGpuOpenclArguments,
+        cudaDevices,
+        openclDevices);
+  } catch (const std::runtime_error &error) {
+    sameGpuRejected =
+        std::string(error.what()).find(
+            "same physical GPU") !=
+        std::string::npos;
+  }
+
+  assert(sameGpuRejected);
+
+  auto missingOpenclArguments =
+      expectedOpenclArguments;
+
+  for (std::size_t index = 0;
+       index + 1 < missingOpenclArguments.size();
+       ++index) {
+    if (missingOpenclArguments[index] ==
+        "--device") {
+      missingOpenclArguments[index + 1] = "2";
+      break;
+    }
+  }
+
+  bool missingGpuRejected = false;
+
+  try {
+    RunSession::validateConcurrentGpuSelection(
+        expectedCudaArguments,
+        missingOpenclArguments,
+        cudaDevices,
+        openclDevices);
+  } catch (const std::runtime_error &error) {
+    missingGpuRejected =
+        std::string(error.what()).find(
+            "OpenCL device 2 was not found") !=
+        std::string::npos;
+  }
+
+  assert(missingGpuRejected);
 
   assert(
       setenv(

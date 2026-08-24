@@ -28,6 +28,7 @@
 #include "openpuzzle/workers/WorkerEngineCapability.hpp"
 
 #include <cerrno>
+#include <cctype>
 #include <cmath>
 #include <csignal>
 #include <cstdlib>
@@ -36,6 +37,7 @@
 #include <iomanip>
 #include <iostream>
 #include <optional>
+#include <algorithm>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -79,6 +81,103 @@ bool hasArgument(const std::vector<std::string> &args,
   }
 
   return false;
+}
+
+int selectedGpuDevice(
+    const std::vector<std::string> &args,
+    int fallback) {
+  const std::string value =
+      getArgument(
+          args,
+          "--device");
+
+  if (value.empty()) {
+    return fallback;
+  }
+
+  std::size_t consumed = 0;
+  long long parsed = -1;
+
+  try {
+    parsed = std::stoll(value, &consumed);
+  } catch (...) {
+    throw std::runtime_error(
+        "GPU device must be a "
+        "non-negative whole number");
+  }
+
+  if (
+      consumed != value.size() ||
+      parsed < 0 ||
+      parsed > 2147483647LL) {
+    throw std::runtime_error(
+        "GPU device must be a "
+        "non-negative whole number");
+  }
+
+  return static_cast<int>(parsed);
+}
+
+const GpuInfo *findGpuDevice(
+    const std::vector<GpuInfo> &devices,
+    int device) {
+  const auto found =
+      std::find_if(
+          devices.begin(),
+          devices.end(),
+          [device](const GpuInfo &gpu) {
+            return gpu.device == device;
+          });
+
+  return found == devices.end()
+      ? nullptr
+      : &*found;
+}
+
+std::string normalizedGpuName(
+    const std::string &name) {
+  std::string result;
+
+  for (const char character : name) {
+    const auto value =
+        static_cast<unsigned char>(character);
+
+    if (std::isalnum(value)) {
+      result.push_back(
+          static_cast<char>(
+              std::tolower(value)));
+    }
+  }
+
+  return result;
+}
+
+void requireUsableGpuDevice(
+    const std::vector<GpuInfo> &devices,
+    int device,
+    const std::string &backend) {
+  const auto *gpu =
+      findGpuDevice(
+          devices,
+          device);
+
+  if (!gpu) {
+    throw std::runtime_error(
+        backend +
+        " device " +
+        std::to_string(device) +
+        " was not found");
+  }
+
+  if (
+      gpu->name.empty() ||
+      gpu->memoryMb <= 0) {
+    throw std::runtime_error(
+        backend +
+        " device " +
+        std::to_string(device) +
+        " did not report usable hardware details");
+  }
 }
 
 std::string selectedBackend(
@@ -1070,6 +1169,74 @@ int runConcurrent(
     }
   }
 
+  if (withOpencl) {
+    const std::string rusticlDrivers =
+        getArgument(
+            args,
+            "--rusticl-enable");
+
+    if (!rusticlDrivers.empty()) {
+      RusticlEnvironment::apply(
+          rusticlDrivers);
+    }
+
+    try {
+      RunSession::
+          validateConcurrentGpuSelection(
+              firstArguments,
+              secondArguments,
+              GpuManager::listCudaGpus(),
+              GpuManager::listOpenClGpus());
+    } catch (const std::exception &error) {
+      std::cerr
+          << "OpenPuzzle concurrent GPU preflight failed\n"
+          << "------------------------------------------\n"
+          << "Error code......... OP-GPU-001\n"
+          << "Problem............ "
+          << error.what()
+          << '\n'
+          << "Assignment......... not requested\n"
+          << "Action 1........... run: "
+          << "openpuzzle doctor --offline\n"
+          << "Action 2........... verify --device and "
+          << "--opencl-device\n";
+
+      return 1;
+    }
+  }
+
+  const auto preflight =
+      [](const std::string &label,
+         const std::vector<std::string> &childArguments) {
+        const int result =
+            RunSession().run(
+                RunSession::
+                    concurrentPreflightArguments(
+                        childArguments));
+
+        if (result != 0) {
+          std::cerr
+              << "Concurrent "
+              << label
+              << " preflight failed.\n"
+              << "Assignment......... not requested\n";
+        }
+
+        return result == 0;
+      };
+
+  if (!preflight(
+          firstLabel,
+          firstArguments)) {
+    return 1;
+  }
+
+  if (!preflight(
+          secondLabel,
+          secondArguments)) {
+    return 1;
+  }
+
   const auto launch =
       [](const std::string& slot,
          const std::vector<std::string>&
@@ -1278,6 +1445,72 @@ RunSession::concurrentOpenclArguments(
       true);
 }
 
+std::vector<std::string>
+RunSession::concurrentPreflightArguments(
+    const std::vector<std::string>& args) {
+  auto result = args;
+
+  if (!hasArgument(
+          result,
+          "--preflight-only")) {
+    result.push_back(
+        "--preflight-only");
+  }
+
+  return result;
+}
+
+void RunSession::validateConcurrentGpuSelection(
+    const std::vector<std::string> &cudaArguments,
+    const std::vector<std::string> &openclArguments,
+    const std::vector<GpuInfo> &cudaDevices,
+    const std::vector<GpuInfo> &openclDevices) {
+  const int cudaDevice =
+      selectedGpuDevice(
+          cudaArguments,
+          GpuManager::selectedGpu());
+
+  const int openclDevice =
+      selectedGpuDevice(
+          openclArguments,
+          GpuManager::selectedGpu());
+
+  requireUsableGpuDevice(
+      cudaDevices,
+      cudaDevice,
+      "CUDA");
+
+  requireUsableGpuDevice(
+      openclDevices,
+      openclDevice,
+      "OpenCL");
+
+  const auto *cudaGpu =
+      findGpuDevice(
+          cudaDevices,
+          cudaDevice);
+
+  const auto *openclGpu =
+      findGpuDevice(
+          openclDevices,
+          openclDevice);
+
+  const std::string cudaName =
+      normalizedGpuName(cudaGpu->name);
+
+  const std::string openclName =
+      normalizedGpuName(openclGpu->name);
+
+  if (
+      !cudaName.empty() &&
+      cudaName == openclName) {
+    throw std::runtime_error(
+        "CUDA and OpenCL resolve to the same "
+        "physical GPU: " +
+        cudaGpu->name);
+  }
+}
+
 int RunSession::run(
     const std::vector<std::string> &args) const {
   if (
@@ -1309,6 +1542,7 @@ int RunSession::run(
   if (args.empty() ||
       args.front() != "run" ||
       hasArgument(args, "--dry-run") ||
+      hasArgument(args, "--preflight-only") ||
       hasArgument(args, "--once")) {
     return runOnce(args).exitCode;
   }
@@ -1543,6 +1777,11 @@ ClientIterationResult RunSession::runOnce(
 
   const bool dryRun = hasArgument(args, "--dry-run");
 
+  const bool preflightOnly =
+      hasArgument(
+          args,
+          "--preflight-only");
+
   const std::string runBackend =
       subcommand == "run"
           ? selectedBackend(args)
@@ -1621,6 +1860,38 @@ ClientIterationResult RunSession::runOnce(
     }
   }
 
+  if (
+      subcommand == "run" &&
+      runBackend != "cpu") {
+    try {
+      const auto devices =
+          runBackend == "opencl"
+              ? GpuManager::listOpenClGpus()
+              : GpuManager::listCudaGpus();
+
+      requireUsableGpuDevice(
+          devices,
+          runDevice,
+          runBackend == "opencl"
+              ? "OpenCL"
+              : "CUDA");
+    } catch (const std::exception &error) {
+      std::cerr
+          << "OpenPuzzle GPU validation failed\n"
+          << "--------------------------------\n"
+          << "Error code......... OP-GPU-001\n"
+          << "Problem............ "
+          << error.what()
+          << '\n'
+          << "Assignment......... not requested\n"
+          << "Action 1........... run: "
+          << "openpuzzle doctor --offline\n"
+          << "Action 2........... verify --device\n";
+
+      return 1;
+    }
+  }
+
   if (subcommand == "run" &&
       initializeClient &&
       runBackend != "cpu") {
@@ -1672,6 +1943,38 @@ ClientIterationResult RunSession::runOnce(
         return 1;
       }
     }
+  }
+
+  if (
+      subcommand == "run" &&
+      preflightOnly) {
+    std::cout
+        << "\nOpenPuzzle local preflight\n"
+        << "--------------------------\n"
+        << "Backend............ "
+        << (
+              runBackend == "opencl"
+                  ? "OpenCL"
+                  : (
+                        runBackend == "cpu"
+                            ? "CPU"
+                            : "CUDA"
+                    )
+           )
+        << '\n';
+
+    if (runBackend != "cpu") {
+      std::cout
+          << "Device............. "
+          << runDevice
+          << '\n';
+    }
+
+    std::cout
+        << "Status............. READY\n"
+        << "Assignment......... not requested\n\n";
+
+    return 0;
   }
 
   const auto requestedDuration =

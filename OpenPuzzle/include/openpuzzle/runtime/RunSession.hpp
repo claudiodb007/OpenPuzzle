@@ -1,5 +1,6 @@
 #pragma once
 
+#include "openpuzzle/hardware/GpuInfo.hpp"
 #include "openpuzzle/runtime/ClientRuntime.hpp"
 
 #include <string>
@@ -27,6 +28,16 @@ public:
   static std::vector<std::string>
   concurrentOpenclArguments(
       const std::vector<std::string> &args);
+
+  static std::vector<std::string>
+  concurrentPreflightArguments(
+      const std::vector<std::string> &args);
+
+  static void validateConcurrentGpuSelection(
+      const std::vector<std::string> &cudaArguments,
+      const std::vector<std::string> &openclArguments,
+      const std::vector<GpuInfo> &cudaDevices,
+      const std::vector<GpuInfo> &openclDevices);
 
 private:
   ClientIterationResult runOnce(
