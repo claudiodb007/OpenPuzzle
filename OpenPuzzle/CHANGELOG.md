@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.15 — Safe concurrent CUDA and OpenCL GPUs
+
+- Added concurrent CUDA and OpenCL execution from one `openpuzzle run` command.
+- Added strict local validation of both GPU selections before any server assignment is requested.
+- Reject invalid device indexes with actionable `OP-GPU-001` diagnostics.
+- Reject CUDA and OpenCL selections that resolve to the same physical GPU.
+- Apply the requested Rusticl driver selection before OpenCL device discovery.
+- Keep independent runtime slots, assignments, workspaces and completion reporting for both GPUs.
+- Preserve equal assignment access; hardware performance remains limited to range sizing.
+- Added focused negative-path coverage and retained all 88 automated tests.
+
 ## 1.0.14 — Adaptive GPU calibration
 
 - Added conservative post-assignment calibration for automatically managed CUDA and OpenCL profiles.

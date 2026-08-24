@@ -2,16 +2,19 @@
 
 ## Current release
 
-**OpenPuzzle 1.0.14** adds conservative adaptive calibration for automatically
-managed CUDA and OpenCL profiles. After a successful assignment, sustained
-engine telemetry refines the speed used to size future work without changing
-GPU launch parameters, client priority or assignment access.
+**OpenPuzzle 1.0.15** adds safe concurrent CUDA and OpenCL GPU
+execution. A single command can now use a CUDA GPU and a separate OpenCL GPU,
+while validating both devices locally before any work is requested.
+
+Invalid indexes and attempts to select the same physical GPU twice are rejected
+with actionable diagnostics. CUDA and OpenCL keep independent assignments,
+workspaces and completion reporting.
 
 The public repository contains the client only. The coordination service
 and website infrastructure are not included.
 
-See [OpenPuzzle 1.0.14 release notes](docs/RELEASE_1.0.14.md) and the
-[Client Runtime guide](docs/CLIENT_RUNTIME.md).
+See [OpenPuzzle 1.0.15 release notes](docs/RELEASE_1.0.15.md) and the
+[client runtime guide](docs/CLIENT_RUNTIME.md).
 
 ## Open-source orchestration platform for cryptographic keyspace exploration
 
@@ -203,6 +206,17 @@ ctest --output-on-failure
 ------------------------------------------------------------------------
 
 ## Current Release
+
+### OpenPuzzle 1.0.15
+
+New in this release:
+
+-   Concurrent CUDA and OpenCL execution using separate physical GPUs
+-   Local validation of both devices before contacting the assignment server
+-   Actionable errors for invalid indexes and duplicate physical GPU selection
+-   Rusticl driver selection before OpenCL discovery
+-   Independent assignments, workspaces and completion for both GPU slots
+-   Equal assignment access preserved for every client
 
 ### OpenPuzzle 1.0.14
 
