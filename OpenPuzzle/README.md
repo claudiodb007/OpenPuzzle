@@ -2,18 +2,18 @@
 
 ## Current release
 
-**OpenPuzzle 1.0.15** adds safe concurrent CUDA and OpenCL GPU
-execution. A single command can now use a CUDA GPU and a separate OpenCL GPU,
-while validating both devices locally before any work is requested.
+**OpenPuzzle 1.0.16** adds resilient recovery for interrupted
+client executions while preserving safe concurrent CUDA and OpenCL operation.
 
-Invalid indexes and attempts to select the same physical GPU twice are rejected
-with actionable diagnostics. CUDA and OpenCL keep independent assignments,
-workspaces and completion reporting.
+After a reboot, power loss or other abrupt shutdown, stale CUDA and OpenCL
+assignments can be recovered independently. Interrupted work is reported
+safely without losing local state during temporary coordination-server
+failures.
 
 The public repository contains the client only. The coordination service
 and website infrastructure are not included.
 
-See [OpenPuzzle 1.0.15 release notes](docs/RELEASE_1.0.15.md) and the
+See [OpenPuzzle 1.0.16 release notes](docs/RELEASE_1.0.16.md) and the
 [client runtime guide](docs/CLIENT_RUNTIME.md).
 
 ## Open-source orchestration platform for cryptographic keyspace exploration
@@ -206,6 +206,15 @@ ctest --output-on-failure
 ------------------------------------------------------------------------
 
 ## Current Release
+
+### OpenPuzzle 1.0.16
+
+Version 1.0.16 adds resilient recovery for executions interrupted before the
+background supervisor can write `exit.code`. Interrupted assignments are
+reported safely as cancelled, temporary synchronization failures preserve
+local state, and concurrent CUDA/OpenCL slots recover independently.
+
+See [the 1.0.16 release notes](docs/RELEASE_1.0.16.md).
 
 ### OpenPuzzle 1.0.15
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.16 — Resilient execution recovery
+
+- Detect executions interrupted by reboot, power loss or abrupt shutdown when
+  the stored process is gone and `exit.code` was never written.
+- Report interrupted assignments as `cancelled` with internal exit code `-3`.
+- Preserve the latest available progress when reporting interrupted work.
+- Keep local assignment state when synchronization temporarily fails.
+- Remove recovered state only after accepted completion reporting or explicit
+  assignment rejection.
+- Recover CUDA and OpenCL runtime slots independently without cross-slot state
+  removal.
+- Added HTTP and dual-slot recovery regression coverage while retaining all 88
+  automated tests.
+
 ## 1.0.15 — Safe concurrent CUDA and OpenCL GPUs
 
 - Added concurrent CUDA and OpenCL execution from one `openpuzzle run` command.
