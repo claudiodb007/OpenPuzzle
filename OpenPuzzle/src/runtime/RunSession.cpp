@@ -2474,6 +2474,17 @@ ClientIterationResult RunSession::runOnce(
   state.puzzle = assignment->puzzle;
   state.rangeId = assignment->rangeId;
   state.pid = handle.pid;
+  state.bootId =
+      client::ClientStateStore::currentBootId();
+
+  if (state.bootId.empty()) {
+    ExecutionStopper stopper;
+    stopper.stop(handle.workspace);
+
+    throw std::runtime_error(
+        "Unable to determine Linux boot identity");
+  }
+
   state.device = device;
   state.blocks = blocks;
   state.threads = threads;

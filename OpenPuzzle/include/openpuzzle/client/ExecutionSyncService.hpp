@@ -105,6 +105,9 @@ private:
   static bool processExists(
       int pid);
 
+  static bool processIdentityMatches(
+      const ClientExecutionState& state);
+
   static bool readExitCode(
       const std::string& workspace,
       int& exitCode);

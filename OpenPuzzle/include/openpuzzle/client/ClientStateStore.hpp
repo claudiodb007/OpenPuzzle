@@ -12,6 +12,13 @@ class ClientStateStore {
 public:
   static std::string executionSlot();
 
+  /*
+   * Returns /proc/sys/kernel/random/boot_id on Linux.
+   *
+   * An empty value means that the boot identity could not be read.
+   */
+  static std::string currentBootId();
+
   static std::filesystem::path path();
 
   static std::filesystem::path path(

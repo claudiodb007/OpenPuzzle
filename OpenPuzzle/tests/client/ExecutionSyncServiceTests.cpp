@@ -329,6 +329,8 @@ ClientExecutionState makeState(
   state.puzzle = 71;
   state.rangeId = 999999;
   state.pid = pid;
+  state.bootId =
+      ClientStateStore::currentBootId();
 
   state.target =
       "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU";
@@ -604,6 +606,140 @@ int main() {
 
     assert(
         ClientStateStore::remove());
+  }
+
+
+
+
+  /*
+   * Estado legado <= 1.0.16:
+   *
+   * não existe boot_id, portanto mesmo que o PID numérico exista não há
+   * prova de que seja o supervisor original. Deve entrar em recuperação.
+   */
+  {
+    const auto workspace =
+        temporaryHome /
+        "workspace-legacy-state";
+
+    std::filesystem::create_directories(
+        workspace);
+
+    std::filesystem::remove(
+        workspace / "exit.code");
+
+    auto state =
+        makeState(
+            workspace,
+            static_cast<int>(getpid()));
+
+    state.bootId.clear();
+
+    assert(
+        ClientStateStore::save(
+            state));
+
+    const auto result =
+        service.tick(
+            "http://127.0.0.1:1");
+
+    assert(result.hasState);
+    assert(!result.running);
+    assert(result.interrupted);
+    assert(result.hasExitCode);
+    assert(result.exitCode == -3);
+
+    assert(!result.completionUploaded);
+
+    assert(
+        result.completionStatus ==
+        AssignmentUploadStatus::TemporaryFailure);
+
+    /*
+     * A API indisponível não pode destruir o estado legado.
+     */
+    const auto preserved =
+        ClientStateStore::load();
+
+    assert(preserved);
+    assert(preserved->bootId.empty());
+
+    assert(
+        ClientStateStore::remove());
+
+    std::filesystem::remove_all(
+        workspace);
+  }
+
+
+  /*
+   * PID reutilizado depois de reboot:
+   *
+   * o PID existe no sistema atual, mas pertence a um boot diferente.
+   * Não pode ser tratado como a execução antiga ainda ativa.
+   */
+  {
+    const auto workspace =
+        temporaryHome /
+        "workspace-pid-reuse-after-reboot";
+
+    std::filesystem::create_directories(
+        workspace);
+
+    std::filesystem::remove(
+        workspace / "exit.code");
+
+    auto state =
+        makeState(
+            workspace,
+            static_cast<int>(getpid()));
+
+    state.bootId =
+        "00000000-0000-0000-0000-000000000000";
+
+    assert(
+        state.bootId !=
+        ClientStateStore::currentBootId());
+
+    assert(
+        ClientStateStore::save(
+            state));
+
+    const auto result =
+        service.tick(
+            "http://127.0.0.1:1");
+
+    assert(result.hasState);
+
+    /*
+     * getpid() existe, mas o boot_id não corresponde.
+     */
+    assert(!result.running);
+    assert(result.interrupted);
+    assert(result.hasExitCode);
+    assert(result.exitCode == -3);
+
+    assert(!result.completionUploaded);
+    assert(
+        result.completionStatus ==
+        AssignmentUploadStatus::TemporaryFailure);
+
+    /*
+     * A falha temporária da API continua a preservar o estado.
+     */
+    const auto preserved =
+        ClientStateStore::load();
+
+    assert(preserved);
+    assert(
+        preserved->bootId ==
+        state.bootId);
+
+    assert(
+        ClientStateStore::remove());
+
+    std::filesystem::remove_all(
+        workspace);
   }
 
 

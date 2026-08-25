@@ -25,6 +25,7 @@ ClientExecutionState makeValidState() {
   state.puzzle = 71;
   state.rangeId = 84521;
   state.pid = 12345;
+  state.bootId = "11111111-2222-3333-4444-555555555555";
   state.device = 0;
   state.blocks = 224;
   state.threads = 128;
@@ -74,6 +75,7 @@ void assertEqual(
   assert(actual.puzzle == expected.puzzle);
   assert(actual.rangeId == expected.rangeId);
   assert(actual.pid == expected.pid);
+  assert(actual.bootId == expected.bootId);
   assert(actual.device == expected.device);
   assert(actual.blocks == expected.blocks);
   assert(actual.threads == expected.threads);
@@ -131,6 +133,11 @@ int main() {
           1) == 0);
 
   assert(!ClientStateStore::load());
+
+  const auto bootId =
+      ClientStateStore::currentBootId();
+
+  assert(!bootId.empty());
 
   assert(
       ClientStateStore::path("primary")

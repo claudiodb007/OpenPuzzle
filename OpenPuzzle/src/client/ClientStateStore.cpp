@@ -136,6 +136,31 @@ ClientStateStore::executionSlot() {
   return "primary";
 }
 
+std::string ClientStateStore::currentBootId() {
+  std::ifstream input(
+      "/proc/sys/kernel/random/boot_id");
+
+  if (!input) {
+    return {};
+  }
+
+  std::string bootId;
+
+  if (!std::getline(input, bootId)) {
+    return {};
+  }
+
+  while (!bootId.empty() &&
+         (bootId.back() == '\r' ||
+          bootId.back() == '\n' ||
+          bootId.back() == ' ' ||
+          bootId.back() == '\t')) {
+    bootId.pop_back();
+  }
+
+  return bootId;
+}
+
 std::filesystem::path
 ClientStateStore::path() {
   return path(
@@ -231,7 +256,14 @@ bool ClientStateStore::save(
       << '\n'
       << "pid="
       << state.pid
-      << '\n'
+      << '\n';
+
+  writeField(
+      output,
+      "boot_id",
+      state.bootId);
+
+  output
       << "device="
       << state.device
       << '\n'
@@ -425,6 +457,11 @@ ClientStateStore::load(
       parseInteger(
           values,
           "pid");
+
+  state.bootId =
+      valueOf(
+          values,
+          "boot_id");
 
   state.device =
       parseInteger(

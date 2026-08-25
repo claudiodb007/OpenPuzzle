@@ -13,6 +13,15 @@ struct ClientExecutionState {
   int puzzle = 0;
   int rangeId = 0;
   int pid = 0;
+
+  /*
+   * Linux boot identifier captured when the execution starts.
+   *
+   * A PID alone is not a stable process identity across reboots because
+   * Linux may reuse the same numeric PID after the machine starts again.
+   */
+  std::string bootId;
+
   int device = 0;
   int blocks = 0;
   int threads = 0;

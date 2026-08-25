@@ -34,6 +34,37 @@ bool ExecutionSyncService::processExists(
   return errno == EPERM;
 }
 
+bool ExecutionSyncService::processIdentityMatches(
+    const ClientExecutionState& state) {
+  /*
+   * State written by OpenPuzzle <= 1.0.16 has no boot_id.
+   *
+   * A numeric PID alone is not sufficient process identity because Linux
+   * may reuse that PID after reboot. Fail closed: an old state without a
+   * boot identity must enter recovery instead of being assumed alive.
+   */
+  if (state.bootId.empty()) {
+    return false;
+  }
+
+  const auto currentBootId =
+      ClientStateStore::currentBootId();
+
+  if (currentBootId.empty()) {
+    /*
+     * Fail closed. If the system identity cannot be read, do not trust a
+     * numeric PID as proof that the original execution is still alive.
+     */
+    return false;
+  }
+
+  if (state.bootId != currentBootId) {
+    return false;
+  }
+
+  return processExists(state.pid);
+}
+
 bool ExecutionSyncService::readExitCode(
     const std::string& workspace,
     int& exitCode) {
@@ -528,8 +559,8 @@ ExecutionSyncService::tick(
   result.state = *state;
 
   result.running =
-      processExists(
-          state->pid);
+      processIdentityMatches(
+          *state);
 
   const auto detectedSolution =
       solutionFile(
