@@ -129,6 +129,39 @@ ClientRuntimeControl::runtimePid(
   return pid;
 }
 
+std::optional<std::string>
+ClientRuntimeControl::runtimeBootId() {
+  return runtimeBootId(
+      client::ClientStateStore::
+          executionSlot());
+}
+
+std::optional<std::string>
+ClientRuntimeControl::runtimeBootId(
+    const std::string& executionSlot) {
+  std::ifstream input(
+      pidPath(executionSlot));
+
+  if (!input.is_open()) {
+    return std::nullopt;
+  }
+
+  int pid = 0;
+
+  if (!(input >> pid) || pid <= 0) {
+    return std::nullopt;
+  }
+
+  std::string bootId;
+
+  if (!(input >> bootId) ||
+      bootId.empty()) {
+    return std::nullopt;
+  }
+
+  return bootId;
+}
+
 bool ClientRuntimeControl::running() {
   return running(
       client::ClientStateStore::
@@ -140,8 +173,19 @@ bool ClientRuntimeControl::running(
   const auto pid =
       runtimePid(executionSlot);
 
-  return pid &&
-         processExists(*pid);
+  const auto bootId =
+      runtimeBootId(executionSlot);
+
+  const auto currentBootId =
+      client::ClientStateStore::
+          currentBootId();
+
+  return
+      pid &&
+      bootId &&
+      !currentBootId.empty() &&
+      *bootId == currentBootId &&
+      processExists(*pid);
 }
 
 bool ClientRuntimeControl::acquire() {
@@ -157,11 +201,7 @@ bool ClientRuntimeControl::acquire() {
     return false;
   }
 
-  const auto active =
-      runtimePid();
-
-  if (active &&
-      processExists(*active)) {
+  if (running()) {
     return false;
   }
 
@@ -181,8 +221,24 @@ bool ClientRuntimeControl::acquire() {
             0600);
 
     if (descriptor >= 0) {
+      const auto bootId =
+          client::ClientStateStore::
+              currentBootId();
+
+      if (bootId.empty()) {
+        close(descriptor);
+
+        std::filesystem::remove(
+            path,
+            error);
+
+        return false;
+      }
+
       const std::string value =
           std::to_string(getpid()) +
+          "\n" +
+          bootId +
           "\n";
 
       const auto written =
@@ -212,16 +268,13 @@ bool ClientRuntimeControl::acquire() {
       return false;
     }
 
-    const auto existing =
-        runtimePid();
-
-    if (existing &&
-        processExists(*existing)) {
+    if (running()) {
       return false;
     }
 
     /*
-     * PID inválido ou processo já terminado.
+     * Marcador inválido, pertencente a outro boot
+     * ou processo já terminado.
      */
     std::filesystem::remove(
         path,
@@ -249,6 +302,19 @@ bool ClientRuntimeControl::release() {
    */
   if (*existing !=
       static_cast<int>(getpid())) {
+    return false;
+  }
+
+  const auto bootId =
+      runtimeBootId();
+
+  const auto currentBootId =
+      client::ClientStateStore::
+          currentBootId();
+
+  if (!bootId ||
+      currentBootId.empty() ||
+      *bootId != currentBootId) {
     return false;
   }
 
@@ -280,7 +346,7 @@ bool ClientRuntimeControl::requestStop(
     return false;
   }
 
-  if (!processExists(*pid)) {
+  if (!running(executionSlot)) {
     std::error_code error;
 
     std::filesystem::remove(

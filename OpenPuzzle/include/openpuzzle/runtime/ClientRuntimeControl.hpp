@@ -46,6 +46,11 @@ public:
   static std::optional<int> runtimePid(
       const std::string& executionSlot);
 
+  static std::optional<std::string> runtimeBootId();
+
+  static std::optional<std::string> runtimeBootId(
+      const std::string& executionSlot);
+
   static bool running();
 
   static bool running(

@@ -1,7 +1,9 @@
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/RunSession.hpp"
+#include "openpuzzle/client/ClientStateStore.hpp"
 
 #include <cassert>
+#include <csignal>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -333,6 +335,14 @@ int main() {
   assert(pid);
   assert(*pid == static_cast<int>(getpid()));
 
+  const auto runtimeBootId =
+      ClientRuntimeControl::runtimeBootId();
+
+  assert(runtimeBootId);
+  assert(
+      *runtimeBootId ==
+      client::ClientStateStore::currentBootId());
+
   assert(
       ClientRuntimeControl::
           requestSafeStop());
@@ -361,6 +371,44 @@ int main() {
            requestSafeStop());
 
   /*
+   * PID existente mas pertencente a outro boot:
+   *
+   * nunca pode ser considerado runtime ativo e
+   * nunca pode receber SIGTERM/safestop.
+   */
+  {
+    std::ofstream output(
+        ClientRuntimeControl::pidPath());
+
+    output
+        << static_cast<int>(getpid())
+        << "\n"
+        << "00000000-0000-0000-0000-000000000000"
+        << "\n";
+  }
+
+  assert(!ClientRuntimeControl::running());
+
+  assert(
+      !ClientRuntimeControl::
+           requestSafeStop());
+
+  /*
+   * requestStop apenas remove o marcador obsoleto.
+   * O processo atual obviamente continua vivo.
+   */
+  assert(
+      !ClientRuntimeControl::
+           requestStop());
+
+  assert(!ClientRuntimeControl::runtimePid());
+
+  assert(
+      kill(
+          static_cast<int>(getpid()),
+          0) == 0);
+
+  /*
    * Um PID obsoleto é limpo automaticamente.
    */
   std::filesystem::create_directories(
@@ -371,11 +419,34 @@ int main() {
     std::ofstream output(
         ClientRuntimeControl::pidPath());
 
-    output << "999999999\n";
+    output
+        << "999999999\n"
+        << client::ClientStateStore::currentBootId()
+        << "\n";
   }
 
   assert(!ClientRuntimeControl::requestStop());
   assert(!ClientRuntimeControl::runtimePid());
+
+  /*
+   * Marcador legado <= 1.0.16 contém apenas PID.
+   * Não é identidade suficiente e deve ser limpo.
+   */
+  {
+    std::ofstream output(
+        ClientRuntimeControl::pidPath());
+
+    output
+        << static_cast<int>(getpid())
+        << "\n";
+  }
+
+  assert(!ClientRuntimeControl::running());
+  assert(!ClientRuntimeControl::requestStop());
+  assert(!ClientRuntimeControl::runtimePid());
+
+  assert(ClientRuntimeControl::acquire());
+  assert(ClientRuntimeControl::release());
 
   assert(ClientRuntimeControl::acquire());
   assert(ClientRuntimeControl::release());

@@ -165,8 +165,18 @@ bool processExists(int pid) {
 
 std::optional<std::string> activeExecution() {
   for (const char* slot : kExecutionSlots) {
-    const auto state = client::ClientStateStore::load(slot);
-    if (state && processExists(state->pid)) {
+    const auto state =
+        client::ClientStateStore::load(slot);
+
+    const auto currentBootId =
+        client::ClientStateStore::
+            currentBootId();
+
+    if (state &&
+        !state->bootId.empty() &&
+        !currentBootId.empty() &&
+        state->bootId == currentBootId &&
+        processExists(state->pid)) {
       std::ostringstream description;
       description << "slot " << slot << ", PID " << state->pid;
       if (!state->assignmentId.empty()) {

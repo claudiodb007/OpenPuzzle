@@ -568,6 +568,24 @@ bool processExists(int pid) {
   return errno == EPERM;
 }
 
+bool processIdentityMatches(
+    const client::ClientExecutionState& state) {
+  if (state.bootId.empty()) {
+    return false;
+  }
+
+  const auto currentBootId =
+      client::ClientStateStore::
+          currentBootId();
+
+  if (currentBootId.empty() ||
+      state.bootId != currentBootId) {
+    return false;
+  }
+
+  return processExists(state.pid);
+}
+
 ClientIterationResult monitoredResult(
     int exitCode) {
   if (
@@ -1000,7 +1018,7 @@ int stopExecution() {
     return 0;
   }
 
-  if (!processExists(state->pid)) {
+  if (!processIdentityMatches(*state)) {
     client::ClientStateStore::remove();
 
     std::cout << "Execution is no longer running.\n"
@@ -1609,7 +1627,7 @@ ClientIterationResult RunSession::runOnce(
     const auto existing = client::ClientStateStore::load();
 
     if (existing &&
-        processExists(existing->pid)) {
+        processIdentityMatches(*existing)) {
       std::cout
           << "Recovering active execution...\n"
           << "PID................ "
