@@ -71,6 +71,23 @@ bool processExists(
   return errno == EPERM;
 }
 
+bool processIdentityMatches(
+    const ClientExecutionState& state) {
+  if (state.bootId.empty()) {
+    return false;
+  }
+
+  const auto currentBootId =
+      ClientStateStore::currentBootId();
+
+  if (currentBootId.empty() ||
+      state.bootId != currentBootId) {
+    return false;
+  }
+
+  return processExists(state.pid);
+}
+
 } // namespace
 
 std::string
@@ -299,7 +316,7 @@ executionStatus(
         ClientStateStore::load(slot);
 
     if (!state ||
-        !processExists(state->pid)) {
+        !processIdentityMatches(*state)) {
       continue;
     }
 

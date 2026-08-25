@@ -106,6 +106,8 @@ int main() {
   cpuState.puzzle = 71;
   cpuState.rangeId = 238;
   cpuState.pid = static_cast<int>(getpid());
+  cpuState.bootId =
+      ClientStateStore::currentBootId();
   cpuState.threads = 8;
   cpuState.target =
       "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU";
@@ -160,6 +162,85 @@ int main() {
           "CPU") !=
       cpuHeartbeat.activeBackends.end());
   assert(cpuHeartbeat.cpu.threads == 8);
+
+  /*
+   * Um PID numericamente válido pertencente a outro boot
+   * não pode ser anunciado ao servidor como execução ativa.
+   */
+  ClientExecutionState staleState =
+      cpuState;
+
+  staleState.assignmentId =
+      "55555555-5555-4555-8555-555555555555";
+
+  staleState.rangeId = 240;
+
+  staleState.bootId =
+      "00000000-0000-0000-0000-000000000000";
+
+  staleState.engine = "BitCrack";
+  staleState.backend = "OpenCL";
+  staleState.threads = 0;
+
+  assert(
+      ClientStateStore::save(
+          staleState,
+          "opencl"));
+
+  const auto heartbeatWithStalePid =
+      ClientHeartbeatService::
+          collectLocalHeartbeat();
+
+  assert(
+      heartbeatWithStalePid.status ==
+      "running");
+
+  assert(
+      std::find(
+          heartbeatWithStalePid.activeBackends.begin(),
+          heartbeatWithStalePid.activeBackends.end(),
+          "OpenCL") ==
+      heartbeatWithStalePid.activeBackends.end());
+
+  assert(
+      ClientStateStore::remove(
+          "opencl"));
+
+  /*
+   * Estado legado <= 1.0.16 sem boot_id também não pode
+   * ser tratado como execução ativa pelo heartbeat.
+   */
+  ClientExecutionState legacyState =
+      cpuState;
+
+  legacyState.assignmentId =
+      "66666666-6666-4666-8666-666666666666";
+
+  legacyState.rangeId = 241;
+  legacyState.bootId.clear();
+  legacyState.engine = "BitCrack";
+  legacyState.backend = "OpenCL";
+  legacyState.threads = 0;
+
+  assert(
+      ClientStateStore::save(
+          legacyState,
+          "opencl"));
+
+  const auto heartbeatWithLegacyPid =
+      ClientHeartbeatService::
+          collectLocalHeartbeat();
+
+  assert(
+      std::find(
+          heartbeatWithLegacyPid.activeBackends.begin(),
+          heartbeatWithLegacyPid.activeBackends.end(),
+          "OpenCL") ==
+      heartbeatWithLegacyPid.activeBackends.end());
+
+  assert(
+      ClientStateStore::remove(
+          "opencl"));
 
   assert(
       ClientStateStore::remove("gpu"));
