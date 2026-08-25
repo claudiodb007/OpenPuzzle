@@ -2,18 +2,18 @@
 
 ## Current release
 
-**OpenPuzzle 1.0.16** adds resilient recovery for interrupted
-client executions while preserving safe concurrent CUDA and OpenCL operation.
+**OpenPuzzle 1.0.17** hardens persistent process identity across
+reboots, power loss and Linux PID reuse.
 
-After a reboot, power loss or other abrupt shutdown, stale CUDA and OpenCL
-assignments can be recovered independently. Interrupted work is reported
-safely without losing local state during temporary coordination-server
-failures.
+Execution state, runtime-control markers and background engine supervisors
+are now bound to the current Linux `boot_id`. A numerically reused PID from
+an earlier boot is never trusted as proof that an OpenPuzzle execution is
+still active.
 
 The public repository contains the client only. The coordination service
 and website infrastructure are not included.
 
-See [OpenPuzzle 1.0.16 release notes](docs/RELEASE_1.0.16.md) and the
+See [OpenPuzzle 1.0.17 release notes](docs/RELEASE_1.0.17.md) and the
 [client runtime guide](docs/CLIENT_RUNTIME.md).
 
 ## Open-source orchestration platform for cryptographic keyspace exploration
@@ -206,6 +206,19 @@ ctest --output-on-failure
 ------------------------------------------------------------------------
 
 ## Current Release
+
+### OpenPuzzle 1.0.17
+
+Version 1.0.17 binds persistent execution identity to the Linux system
+`boot_id` as well as the PID. Reused PIDs from a previous boot are rejected
+by execution recovery, runtime control, engine-supervisor monitoring, update
+safety checks and client heartbeat reporting.
+
+Legacy state written by OpenPuzzle 1.0.16 or earlier does not contain a
+`boot_id` and is therefore handled conservatively rather than trusted by PID
+alone.
+
+See [the 1.0.17 release notes](docs/RELEASE_1.0.17.md).
 
 ### OpenPuzzle 1.0.16
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.17 — Boot-bound process identity
+
+- Bind persisted client execution state to the current Linux `boot_id` in
+  addition to the numeric PID.
+- Treat state written by OpenPuzzle 1.0.16 or earlier without `boot_id` as
+  untrusted for process-liveness decisions.
+- Bind runtime-control markers to system boot identity so stale PID files
+  cannot stop or block unrelated reused processes after a reboot.
+- Bind background engine-supervisor workspaces to `process.boot_id` before
+  they are trusted for monitoring or signalling.
+- Validate boot identity in recovery, stop, update-safety and client-heartbeat
+  paths before accepting a persisted PID as active.
+- Preserve direct signalling only for child processes created by the current
+  process and therefore not recovered from persistent state.
+- Added regression coverage for reused live PIDs, mismatched boot identities
+  and legacy PID-only state while retaining all 88 automated tests.
+
 ## 1.0.16 — Resilient execution recovery
 
 - Detect executions interrupted by reboot, power loss or abrupt shutdown when
