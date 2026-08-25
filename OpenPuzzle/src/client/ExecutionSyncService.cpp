@@ -587,10 +587,20 @@ ExecutionSyncService::tick(
 
   int exitCode = 0;
 
+  /*
+   * O launcher escreve exit.code antes de o processo
+   * supervisor terminar. Se o processo já desapareceu
+   * e esse ficheiro não existe, a execução foi
+   * interrompida abruptamente, por exemplo por falha
+   * elétrica ou reinício do sistema.
+   *
+   * Nunca considerar este caso como conclusão.
+   */
   if (!readExitCode(
           state->workspace,
           exitCode)) {
-    return result;
+    result.interrupted = true;
+    exitCode = -3;
   }
 
   result.hasExitCode = true;
@@ -653,7 +663,11 @@ ExecutionSyncService::tick(
   const std::string finalStatus =
       completed
           ? "completed"
-          : "failed";
+          : (
+                result.interrupted
+                    ? "cancelled"
+                    : "failed"
+            );
 
   HttpRangeClient httpClient(
       serverUrl);

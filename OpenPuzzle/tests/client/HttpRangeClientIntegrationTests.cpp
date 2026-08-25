@@ -446,6 +446,51 @@ int main() {
 
 
   /*
+   * Interrupção abrupta usa cancelled + exit_code -3.
+   * O payload deve atravessar uma ligação HTTP real
+   * exatamente com estes valores.
+   */
+  {
+    const std::string expectedBody =
+        "{\"assignment_id\":"
+        "\"11111111-1111-4111-8111-111111111111\","
+        "\"client_id\":"
+        "\"22222222-2222-4222-8222-222222222222\","
+        "\"exit_code\":-3,"
+        "\"status\":\"cancelled\","
+        "\"keys_checked\":\"123456789\"}";
+
+    OneShotHttpServer server(
+        "200 OK",
+        R"JSON({
+          "success": true,
+          "status": "cancelled"
+        })JSON",
+        "/api/range/complete",
+        expectedBody);
+
+    HttpRangeClient client(
+        server.url());
+
+    assert(
+        client.complete(
+            assignmentId,
+            clientId,
+            -3,
+            "cancelled",
+            "123456789"));
+
+    assert(
+        client.lastError().empty());
+
+    assert(
+        client.lastErrorCode().empty());
+
+    server.wait();
+  }
+
+
+  /*
    * O relatório de solução atravessa uma ligação
    * HTTP real com somente assignment_id e client_id.
    */

@@ -1700,12 +1700,6 @@ ClientIterationResult RunSession::runOnce(
                 solutionFound();
       }
 
-      if (!recovery.hasExitCode) {
-        return ClientIterationResult::retry(
-            "Execution stopped but exit.code "
-            "is not available yet");
-      }
-
       if (
           recovery.completionStatus ==
           client::AssignmentUploadStatus::
@@ -1755,19 +1749,29 @@ ClientIterationResult RunSession::runOnce(
                   : recovery.completionError);
         }
 
-        if (recovery.exitCode != 0) {
+        if (recovery.interrupted) {
           std::cerr
-              << "Recovered failure.. uploaded\n"
-              << "Exit code.......... "
-              << recovery.exitCode
-              << '\n';
+              << "Recovered interruption\n"
+              << "Cause.............. engine stopped "
+                 "without exit.code\n"
+              << "Assignment......... cancelled\n"
+              << "Last progress...... preserved\n"
+              << "Local state........ removed\n\n";
+        } else {
+          if (recovery.exitCode != 0) {
+            std::cerr
+                << "Recovered failure.. uploaded\n"
+                << "Exit code.......... "
+                << recovery.exitCode
+                << '\n';
 
-          return recovery.exitCode;
+            return recovery.exitCode;
+          }
+
+          std::cout
+              << "Recovered completion uploaded.\n"
+              << "Local state........ removed\n\n";
         }
-
-        std::cout
-            << "Recovered completion uploaded.\n"
-            << "Local state........ removed\n\n";
       }
     }
   }

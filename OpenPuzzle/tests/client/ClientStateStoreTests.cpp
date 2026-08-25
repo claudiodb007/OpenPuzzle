@@ -188,6 +188,94 @@ int main() {
           invalid));
 
   /*
+   * Estados concorrentes CUDA e OpenCL devem ser
+   * completamente independentes. Remover um slot
+   * nunca pode alterar o outro.
+   */
+  {
+    auto cudaState =
+        makeValidState();
+
+    cudaState.assignmentId =
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    cudaState.rangeId = 910001;
+    cudaState.backend = "CUDA";
+    cudaState.device = 0;
+    cudaState.workspace =
+        "/tmp/openpuzzle-client-state-cuda";
+
+    auto openclState =
+        makeValidState();
+
+    openclState.assignmentId =
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    openclState.rangeId = 910002;
+    openclState.backend = "OpenCL";
+    openclState.device = 1;
+    openclState.workspace =
+        "/tmp/openpuzzle-client-state-opencl";
+
+    assert(
+        ClientStateStore::save(
+            cudaState,
+            "cuda"));
+
+    assert(
+        ClientStateStore::save(
+            openclState,
+            "opencl"));
+
+    const auto loadedCuda =
+        ClientStateStore::load(
+            "cuda");
+
+    const auto loadedOpencl =
+        ClientStateStore::load(
+            "opencl");
+
+    assert(loadedCuda);
+    assert(loadedOpencl);
+
+    assert(
+        loadedCuda->assignmentId ==
+        cudaState.assignmentId);
+
+    assert(
+        loadedOpencl->assignmentId ==
+        openclState.assignmentId);
+
+    assert(
+        loadedCuda->assignmentId !=
+        loadedOpencl->assignmentId);
+
+    assert(
+        ClientStateStore::remove(
+            "cuda"));
+
+    assert(
+        !ClientStateStore::load(
+            "cuda"));
+
+    const auto openclAfterCudaRemoval =
+        ClientStateStore::load(
+            "opencl");
+
+    assert(openclAfterCudaRemoval);
+
+    assert(
+        openclAfterCudaRemoval->assignmentId ==
+        openclState.assignmentId);
+
+    assert(
+        ClientStateStore::remove(
+            "opencl"));
+
+    assert(
+        !ClientStateStore::load(
+            "opencl"));
+  }
+
+  /*
    * O estado válido anterior não pode ser
    * destruído por uma tentativa inválida.
    */
