@@ -2,6 +2,7 @@
 
 #include "openpuzzle/core/ExecutionRecord.hpp"
 #include "openpuzzle/database/Database.hpp"
+#include "openpuzzle/client/ClientStateStore.hpp"
 
 #include <cerrno>
 #include <csignal>
@@ -45,6 +46,54 @@ int ExecutionProcessMonitor::readExitCode(const std::string& workspace) {
   return code;
 }
 
+static std::string readProcessBootId(
+    const std::string& workspace) {
+  const auto path =
+      std::filesystem::path(workspace) /
+      "process.boot_id";
+
+  std::ifstream input(path);
+
+  if (!input.is_open()) {
+    return {};
+  }
+
+  std::string bootId;
+
+  if (!(input >> bootId)) {
+    return {};
+  }
+
+  return bootId;
+}
+
+static bool processIdentityMatches(
+    const std::string& workspace,
+    int pid) {
+  const auto storedBootId =
+      readProcessBootId(workspace);
+
+  const auto currentBootId =
+      client::ClientStateStore::
+          currentBootId();
+
+  if (storedBootId.empty() ||
+      currentBootId.empty() ||
+      storedBootId != currentBootId) {
+    return false;
+  }
+
+  if (pid <= 0) {
+    return false;
+  }
+
+  if (kill(pid, 0) == 0) {
+    return true;
+  }
+
+  return errno == EPERM;
+}
+
 bool ExecutionProcessMonitor::processExists(int pid) {
   if (pid <= 0) {
     return false;
@@ -78,7 +127,9 @@ ExecutionProcessMonitorSummary ExecutionProcessMonitor::poll() {
       continue;
     }
 
-    if (processExists(pid)) {
+    if (processIdentityMatches(
+            execution.workspace,
+            pid)) {
       continue;
     }
 

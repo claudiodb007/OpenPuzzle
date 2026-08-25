@@ -1,6 +1,7 @@
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
 
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+#include "openpuzzle/client/ClientStateStore.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -26,8 +27,25 @@ ExecutionHandle BackgroundExecutionLauncher::start(
   auto workspacePath = std::filesystem::path(request.workspace);
 
   auto pidFile = (workspacePath / "process.pid").string();
+  auto bootIdFile =
+      (workspacePath / "process.boot_id").string();
   auto exitFile = (workspacePath / "exit.code").string();
   auto logFile = (workspacePath / "bitcrack.log").string();
+
+  /*
+   * Determine system identity before starting the supervisor.
+   *
+   * If boot identity cannot be established, no process may be launched:
+   * otherwise we could create an execution that cannot later be identified
+   * safely.
+   */
+  const auto bootId =
+      client::ClientStateStore::currentBootId();
+
+  if (bootId.empty()) {
+    throw std::runtime_error(
+        "Failed to determine process boot identity");
+  }
 
   std::ostringstream shell;
   shell << "umask 077; setsid sh -c '("
@@ -77,6 +95,25 @@ ExecutionHandle BackgroundExecutionLauncher::start(
 
   WorkspaceSecurity::protectFile(
       pidFile);
+
+  std::ofstream bootOut(
+      bootIdFile);
+
+  if (!bootOut.is_open()) {
+    throw std::runtime_error(
+        "Failed to create process boot id file");
+  }
+
+  bootOut << bootId << "\n";
+  bootOut.close();
+
+  if (!bootOut) {
+    throw std::runtime_error(
+        "Failed to write process boot id file");
+  }
+
+  WorkspaceSecurity::protectFile(
+      bootIdFile);
 
   ExecutionHandle handle;
   handle.executionId = request.executionId;

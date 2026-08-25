@@ -1,4 +1,5 @@
 #include "openpuzzle/runtime/ExecutionStopper.hpp"
+#include "openpuzzle/client/ClientStateStore.hpp"
 
 #include <cerrno>
 #include <csignal>
@@ -22,6 +23,54 @@ int ExecutionStopper::readPid(const std::string& workspace) {
   in >> pid;
 
   return pid;
+}
+
+static std::string readBootId(
+    const std::string& workspace) {
+  const auto path =
+      std::filesystem::path(workspace) /
+      "process.boot_id";
+
+  std::ifstream input(path);
+
+  if (!input.is_open()) {
+    return {};
+  }
+
+  std::string bootId;
+
+  if (!(input >> bootId)) {
+    return {};
+  }
+
+  return bootId;
+}
+
+static bool processIdentityMatches(
+    const std::string& workspace,
+    int pid) {
+  const auto storedBootId =
+      readBootId(workspace);
+
+  const auto currentBootId =
+      client::ClientStateStore::
+          currentBootId();
+
+  if (storedBootId.empty() ||
+      currentBootId.empty() ||
+      storedBootId != currentBootId) {
+    return false;
+  }
+
+  if (pid <= 0) {
+    return false;
+  }
+
+  if (kill(pid, 0) == 0) {
+    return true;
+  }
+
+  return errno == EPERM;
 }
 
 bool ExecutionStopper::processExists(int pid) {
@@ -56,6 +105,12 @@ bool ExecutionStopper::stop(const std::string& workspace) const {
   int pid = readPid(workspace);
 
   if (pid <= 0) {
+    return false;
+  }
+
+  if (!processIdentityMatches(
+          workspace,
+          pid)) {
     return false;
   }
 

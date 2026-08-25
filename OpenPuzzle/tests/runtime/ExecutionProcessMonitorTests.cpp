@@ -1,5 +1,6 @@
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/runtime/ExecutionProcessMonitor.hpp"
+#include "openpuzzle/client/ClientStateStore.hpp"
 
 #include <cassert>
 #include <filesystem>
@@ -79,6 +80,9 @@ static void testFinished() {
   int executionId = createRunningExecution(db, workspace.string());
 
   writeFile(workspace / "process.pid", "999999999\n");
+  writeFile(
+      workspace / "process.boot_id",
+      client::ClientStateStore::currentBootId() + "\n");
   writeFile(workspace / "exit.code", "0\n");
 
   ExecutionProcessMonitor monitor(db);
@@ -107,6 +111,9 @@ static void testFailed() {
   int executionId = createRunningExecution(db, workspace.string());
 
   writeFile(workspace / "process.pid", "999999999\n");
+  writeFile(
+      workspace / "process.boot_id",
+      client::ClientStateStore::currentBootId() + "\n");
   writeFile(workspace / "exit.code", "5\n");
 
   ExecutionProcessMonitor monitor(db);
@@ -135,6 +142,9 @@ static void testCancelled() {
   int executionId = createRunningExecution(db, workspace.string());
 
   writeFile(workspace / "process.pid", "999999999\n");
+  writeFile(
+      workspace / "process.boot_id",
+      client::ClientStateStore::currentBootId() + "\n");
   writeFile(workspace / "exit.code", "-2\n");
 
   ExecutionProcessMonitor monitor(db);
@@ -151,6 +161,56 @@ static void testCancelled() {
   assert(execution->exitCode == -2);
 
   std::filesystem::remove_all(workspace);
+}
+
+static void testReusedPidFromPreviousBoot() {
+  Database db;
+  assert(db.open(":memory:"));
+  assert(db.createSchema());
+
+  auto workspace =
+      makeWorkspace("reused-pid");
+
+  int executionId =
+      createRunningExecution(
+          db,
+          workspace.string());
+
+  writeFile(
+      workspace / "process.pid",
+      std::to_string(
+          static_cast<int>(getpid())) +
+          "\n");
+
+  writeFile(
+      workspace / "process.boot_id",
+      "00000000-0000-0000-0000-000000000000\n");
+
+  writeFile(
+      workspace / "exit.code",
+      "5\n");
+
+  ExecutionProcessMonitor monitor(db);
+
+  auto summary =
+      monitor.poll();
+
+  assert(summary.running == 1);
+  assert(summary.finished == 0);
+  assert(summary.failed == 1);
+
+  auto execution =
+      db.getExecution(executionId);
+
+  assert(execution);
+  assert(
+      execution->status ==
+      ExecutionRecordStatus::Failed);
+
+  assert(execution->exitCode == 5);
+
+  std::filesystem::remove_all(
+      workspace);
 }
 
 static void testMissingPid() {
@@ -181,6 +241,7 @@ int main() {
   testFinished();
   testFailed();
   testCancelled();
+  testReusedPidFromPreviousBoot();
   testMissingPid();
 
   std::cout << "ExecutionProcessMonitorTests passed\n";
