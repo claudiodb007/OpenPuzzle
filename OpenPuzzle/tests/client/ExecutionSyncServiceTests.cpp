@@ -1,5 +1,6 @@
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/ExecutionSyncService.hpp"
+#include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 
 #include <arpa/inet.h>
 #include <cassert>
@@ -331,6 +332,14 @@ ClientExecutionState makeState(
   state.pid = pid;
   state.bootId =
       ClientStateStore::currentBootId();
+  const auto stateStartTime =
+      openpuzzle::LinuxProcessIdentity::
+          startTime(state.pid);
+
+  if (stateStartTime) {
+    state.processStartTime =
+        *stateStartTime;
+  }
 
   state.target =
       "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU";
@@ -1383,6 +1392,140 @@ int main() {
     assert(
         unsetenv("HOME") == 0);
   }
+
+  /*
+   * Same-boot PID reuse:
+   *
+   * PID exists and boot_id matches, but starttime belongs to a different
+   * process instance. The state must enter recovery instead of being
+   * considered an active execution.
+   */
+  {
+    const auto workspace =
+        temporaryHome /
+        "workspace-same-boot-pid-reuse";
+
+    std::filesystem::create_directories(
+        workspace);
+
+    std::filesystem::remove(
+        workspace / "exit.code");
+
+    auto state =
+        makeState(
+            workspace,
+            static_cast<int>(getpid()));
+
+    const auto currentStartTime =
+        openpuzzle::LinuxProcessIdentity::
+            startTime(state.pid);
+
+    assert(currentStartTime);
+    assert(*currentStartTime > 0);
+
+    state.processStartTime =
+        *currentStartTime + 1;
+
+    assert(
+        ClientStateStore::save(
+            state));
+
+    const auto result =
+        service.tick(
+            "http://127.0.0.1:1");
+
+    assert(result.hasState);
+    assert(!result.running);
+    assert(result.interrupted);
+    assert(result.hasExitCode);
+    assert(result.exitCode == -3);
+
+    assert(!result.completionUploaded);
+
+    assert(
+        result.completionStatus ==
+        AssignmentUploadStatus::
+            TemporaryFailure);
+
+    const auto preserved =
+        ClientStateStore::load();
+
+    assert(preserved);
+
+    assert(
+        preserved->processStartTime ==
+        state.processStartTime);
+
+    assert(
+        ClientStateStore::remove());
+
+    std::filesystem::remove_all(
+        workspace);
+  }
+
+
+  /*
+   * OpenPuzzle 1.0.17 state:
+   *
+   * PID and boot_id may still be valid, but process_start_time does not
+   * exist. The incomplete identity must fail closed and enter recovery.
+   */
+  {
+    const auto workspace =
+        temporaryHome /
+        "workspace-legacy-1.0.17-starttime";
+
+    std::filesystem::create_directories(
+        workspace);
+
+    std::filesystem::remove(
+        workspace / "exit.code");
+
+    auto state =
+        makeState(
+            workspace,
+            static_cast<int>(getpid()));
+
+    assert(!state.bootId.empty());
+
+    state.processStartTime = 0;
+
+    assert(
+        ClientStateStore::save(
+            state));
+
+    const auto result =
+        service.tick(
+            "http://127.0.0.1:1");
+
+    assert(result.hasState);
+    assert(!result.running);
+    assert(result.interrupted);
+    assert(result.hasExitCode);
+    assert(result.exitCode == -3);
+
+    assert(!result.completionUploaded);
+
+    assert(
+        result.completionStatus ==
+        AssignmentUploadStatus::
+            TemporaryFailure);
+
+    const auto preserved =
+        ClientStateStore::load();
+
+    assert(preserved);
+    assert(!preserved->bootId.empty());
+    assert(
+        preserved->processStartTime == 0);
+
+    assert(
+        ClientStateStore::remove());
+
+    std::filesystem::remove_all(
+        workspace);
+  }
+
 
   std::cout
       << "ExecutionSyncServiceTests passed\n";

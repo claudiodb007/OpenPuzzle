@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.18 — Full Linux process identity
+
+- Bind persisted Linux execution identity to boot ID, PID and process
+  start time from `/proc/<pid>/stat`.
+- Reject legacy or incomplete process identities as proof of a live
+  execution.
+- Persist `process.start_time` in execution workspaces.
+- Harden execution sync, heartbeat, monitoring and recovery against
+  same-boot PID reuse.
+- Revalidate process identity throughout stop and escalation paths.
+- Extend runtime markers with process start time.
+- Use pidfd signalling for runtime SIGTERM delivery after identity
+  validation.
+- Harden update active-execution detection against same-boot PID reuse.
+- Add regression coverage for legacy 1.0.17 markers, same-boot PID reuse
+  and pidfd signalling.
+- 89 automated tests passing.
+
 ## 1.0.17 — Boot-bound process identity
 
 - Bind persisted client execution state to the current Linux `boot_id` in

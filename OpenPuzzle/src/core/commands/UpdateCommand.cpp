@@ -2,6 +2,7 @@
 
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
+#include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 
 #include <algorithm>
 #include <array>
@@ -172,16 +173,39 @@ std::optional<std::string> activeExecution() {
         client::ClientStateStore::
             currentBootId();
 
+    bool executionIdentityMatches = false;
+
     if (state &&
         !state->bootId.empty() &&
+        state->processStartTime != 0 &&
         !currentBootId.empty() &&
         state->bootId == currentBootId &&
         processExists(state->pid)) {
+      const auto currentStartTime =
+          LinuxProcessIdentity::
+              startTime(state->pid);
+
+      executionIdentityMatches =
+          currentStartTime &&
+          *currentStartTime ==
+              state->processStartTime;
+    }
+
+    if (state &&
+        executionIdentityMatches) {
       std::ostringstream description;
-      description << "slot " << slot << ", PID " << state->pid;
+      description
+          << "slot "
+          << slot
+          << ", PID "
+          << state->pid;
+
       if (!state->assignmentId.empty()) {
-        description << ", assignment " << state->assignmentId;
+        description
+            << ", assignment "
+            << state->assignmentId;
       }
+
       return description.str();
     }
 

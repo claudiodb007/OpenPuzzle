@@ -1084,6 +1084,20 @@ add_test(
     COMMAND ClientRuntimeTests
 )
 
+add_executable(LinuxProcessIdentityTests
+    runtime/LinuxProcessIdentityTests.cpp
+)
+
+target_link_libraries(LinuxProcessIdentityTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME LinuxProcessIdentityTests
+    COMMAND LinuxProcessIdentityTests
+)
+
 add_executable(ClientRuntimeControlTests
     runtime/ClientRuntimeControlTests.cpp
 )

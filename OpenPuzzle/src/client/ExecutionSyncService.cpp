@@ -5,6 +5,7 @@
 #include "openpuzzle/engines/EngineParserFactory.hpp"
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/performance/AdaptiveProfileUpdater.hpp"
+#include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 
 #include <boost/multiprecision/cpp_int.hpp>
 
@@ -37,32 +38,37 @@ bool ExecutionSyncService::processExists(
 bool ExecutionSyncService::processIdentityMatches(
     const ClientExecutionState& state) {
   /*
-   * State written by OpenPuzzle <= 1.0.16 has no boot_id.
+   * OpenPuzzle <= 1.0.16 has no boot_id and OpenPuzzle <= 1.0.17 has no
+   * process_start_time.
    *
-   * A numeric PID alone is not sufficient process identity because Linux
-   * may reuse that PID after reboot. Fail closed: an old state without a
-   * boot identity must enter recovery instead of being assumed alive.
+   * Both are incomplete identities. Fail closed so legacy execution state
+   * enters recovery rather than trusting a recycled numeric PID.
    */
-  if (state.bootId.empty()) {
+  if (state.bootId.empty() ||
+      state.processStartTime == 0) {
     return false;
   }
 
   const auto currentBootId =
       ClientStateStore::currentBootId();
 
-  if (currentBootId.empty()) {
-    /*
-     * Fail closed. If the system identity cannot be read, do not trust a
-     * numeric PID as proof that the original execution is still alive.
-     */
+  if (currentBootId.empty() ||
+      state.bootId != currentBootId) {
     return false;
   }
 
-  if (state.bootId != currentBootId) {
+  if (!processExists(state.pid)) {
     return false;
   }
 
-  return processExists(state.pid);
+  const auto currentStartTime =
+      openpuzzle::LinuxProcessIdentity::
+          startTime(state.pid);
+
+  return
+      currentStartTime &&
+      *currentStartTime ==
+          state.processStartTime;
 }
 
 bool ExecutionSyncService::readExitCode(

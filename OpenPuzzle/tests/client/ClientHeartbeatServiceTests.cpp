@@ -1,5 +1,6 @@
 #include "openpuzzle/client/ClientHeartbeatService.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
+#include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -108,6 +109,10 @@ int main() {
   cpuState.pid = static_cast<int>(getpid());
   cpuState.bootId =
       ClientStateStore::currentBootId();
+  const auto cpuStateStartTime =
+      openpuzzle::LinuxProcessIdentity::startTime(cpuState.pid);
+  assert(cpuStateStartTime);
+  cpuState.processStartTime = *cpuStateStartTime;
   cpuState.threads = 8;
   cpuState.target =
       "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU";

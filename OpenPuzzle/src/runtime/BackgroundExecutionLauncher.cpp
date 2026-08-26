@@ -1,5 +1,6 @@
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
 
+#include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
 
@@ -29,6 +30,10 @@ ExecutionHandle BackgroundExecutionLauncher::start(
   auto pidFile = (workspacePath / "process.pid").string();
   auto bootIdFile =
       (workspacePath / "process.boot_id").string();
+
+  auto startTimeFile =
+      (workspacePath / "process.start_time").string();
+
   auto exitFile = (workspacePath / "exit.code").string();
   auto logFile = (workspacePath / "bitcrack.log").string();
 
@@ -78,6 +83,20 @@ ExecutionHandle BackgroundExecutionLauncher::start(
 
   int pid = std::stoi(output);
 
+  /*
+   * Capture the identity of this exact process instance immediately
+   * after launch. If the process has already disappeared, do not create
+   * an incomplete identity marker.
+   */
+  const auto processStartTime =
+      LinuxProcessIdentity::startTime(pid);
+
+  if (!processStartTime ||
+      *processStartTime == 0) {
+    throw std::runtime_error(
+        "Failed to determine process start identity");
+  }
+
   std::ofstream out(pidFile);
 
   if (!out.is_open()) {
@@ -114,6 +133,28 @@ ExecutionHandle BackgroundExecutionLauncher::start(
 
   WorkspaceSecurity::protectFile(
       bootIdFile);
+
+  std::ofstream startTimeOut(
+      startTimeFile);
+
+  if (!startTimeOut.is_open()) {
+    throw std::runtime_error(
+        "Failed to create process start time file");
+  }
+
+  startTimeOut
+      << *processStartTime
+      << "\n";
+
+  startTimeOut.close();
+
+  if (!startTimeOut) {
+    throw std::runtime_error(
+        "Failed to write process start time file");
+  }
+
+  WorkspaceSecurity::protectFile(
+      startTimeFile);
 
   ExecutionHandle handle;
   handle.executionId = request.executionId;

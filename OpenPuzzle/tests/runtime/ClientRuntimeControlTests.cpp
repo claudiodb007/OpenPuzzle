@@ -1,5 +1,6 @@
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/RunSession.hpp"
+#include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
 
 #include <cassert>
@@ -10,6 +11,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <sys/wait.h>
 #include <unistd.h>
 
 using namespace openpuzzle;
@@ -343,6 +345,23 @@ int main() {
       *runtimeBootId ==
       client::ClientStateStore::currentBootId());
 
+  const auto runtimeStartTime =
+      ClientRuntimeControl::
+          runtimeStartTime();
+
+  const auto selfStartTime =
+      LinuxProcessIdentity::
+          startTime(
+              static_cast<int>(
+                  getpid()));
+
+  assert(runtimeStartTime);
+  assert(selfStartTime);
+
+  assert(
+      *runtimeStartTime ==
+      *selfStartTime);
+
   assert(
       ClientRuntimeControl::
           requestSafeStop());
@@ -429,6 +448,49 @@ int main() {
   assert(!ClientRuntimeControl::runtimePid());
 
   /*
+   * Marcador OpenPuzzle 1.0.17:
+   *
+   * PID + boot_id sem starttime já não constitui identidade completa.
+   * Mesmo apontando para este processo vivo, deve falhar fechado e ser
+   * tratado como marcador obsoleto.
+   */
+  {
+    std::ofstream output(
+        ClientRuntimeControl::pidPath());
+
+    output
+        << static_cast<int>(getpid())
+        << "\n"
+        << client::ClientStateStore::
+               currentBootId()
+        << "\n";
+  }
+
+  assert(
+      !ClientRuntimeControl::running());
+
+  assert(
+      !ClientRuntimeControl::
+           runtimeStartTime());
+
+  assert(
+      !ClientRuntimeControl::
+           requestSafeStop());
+
+  assert(
+      !ClientRuntimeControl::
+           requestStop());
+
+  assert(
+      !ClientRuntimeControl::
+           runtimePid());
+
+  assert(
+      kill(
+          static_cast<int>(getpid()),
+          0) == 0);
+
+  /*
    * Marcador legado <= 1.0.16 contém apenas PID.
    * Não é identidade suficiente e deve ser limpo.
    */
@@ -444,6 +506,135 @@ int main() {
   assert(!ClientRuntimeControl::running());
   assert(!ClientRuntimeControl::requestStop());
   assert(!ClientRuntimeControl::runtimePid());
+
+  /*
+   * Real pidfd stop path.
+   *
+   * Persist the exact identity of a child and verify that requestStop()
+   * terminates that process through pidfd signalling.
+   */
+  {
+    const pid_t child =
+        fork();
+
+    assert(child >= 0);
+
+    if (child == 0) {
+      for (;;) {
+        pause();
+      }
+    }
+
+    std::optional<
+        LinuxProcessIdentity::StartTime>
+        childStartTime;
+
+    for (int attempt = 0;
+         attempt < 100 &&
+         !childStartTime;
+         ++attempt) {
+      childStartTime =
+          LinuxProcessIdentity::
+              startTime(
+                  static_cast<int>(
+                      child));
+
+      if (!childStartTime) {
+        usleep(10000);
+      }
+    }
+
+    assert(childStartTime);
+
+    {
+      std::ofstream output(
+          ClientRuntimeControl::pidPath());
+
+      output
+          << static_cast<int>(child)
+          << "\n"
+          << client::ClientStateStore::
+                 currentBootId()
+          << "\n"
+          << *childStartTime
+          << "\n";
+    }
+
+    assert(
+        ClientRuntimeControl::running());
+
+    assert(
+        ClientRuntimeControl::
+            requestStop());
+
+    int status = 0;
+
+    assert(
+        waitpid(
+            child,
+            &status,
+            0) == child);
+
+    assert(WIFSIGNALED(status));
+    assert(
+        WTERMSIG(status) ==
+        SIGTERM);
+
+    std::error_code error;
+
+    std::filesystem::remove(
+        ClientRuntimeControl::pidPath(),
+        error);
+  }
+
+
+  /*
+   * Same-boot PID reuse:
+   *
+   * PID and boot_id both match this live process but starttime does not.
+   * running() must reject it and requestStop() must never signal us.
+   */
+  {
+    const auto currentStartTime =
+        LinuxProcessIdentity::
+            startTime(
+                static_cast<int>(
+                    getpid()));
+
+    assert(currentStartTime);
+
+    std::ofstream output(
+        ClientRuntimeControl::pidPath());
+
+    output
+        << static_cast<int>(getpid())
+        << "\n"
+        << client::ClientStateStore::
+               currentBootId()
+        << "\n"
+        << (*currentStartTime + 1)
+        << "\n";
+  }
+
+  assert(
+      !ClientRuntimeControl::running());
+
+  assert(
+      !ClientRuntimeControl::
+           requestSafeStop());
+
+  assert(
+      !ClientRuntimeControl::
+           requestStop());
+
+  assert(
+      !ClientRuntimeControl::
+           runtimePid());
+
+  assert(
+      kill(
+          static_cast<int>(getpid()),
+          0) == 0);
 
   assert(ClientRuntimeControl::acquire());
   assert(ClientRuntimeControl::release());

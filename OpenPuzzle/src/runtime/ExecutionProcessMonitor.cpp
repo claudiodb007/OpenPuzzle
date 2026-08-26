@@ -3,11 +3,13 @@
 #include "openpuzzle/core/ExecutionRecord.hpp"
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
+#include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 
 #include <cerrno>
 #include <csignal>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <unistd.h>
 
@@ -67,6 +69,27 @@ static std::string readProcessBootId(
   return bootId;
 }
 
+static std::optional<
+    LinuxProcessIdentity::StartTime>
+readProcessStartTime(
+    const std::string& workspace) {
+  const auto path =
+      std::filesystem::path(workspace) /
+      "process.start_time";
+
+  std::ifstream input(path);
+
+  LinuxProcessIdentity::StartTime value = 0;
+
+  if (!input.is_open() ||
+      !(input >> value) ||
+      value == 0) {
+    return std::nullopt;
+  }
+
+  return value;
+}
+
 static bool processIdentityMatches(
     const std::string& workspace,
     int pid) {
@@ -87,11 +110,26 @@ static bool processIdentityMatches(
     return false;
   }
 
-  if (kill(pid, 0) == 0) {
-    return true;
+  const auto storedStartTime =
+      readProcessStartTime(workspace);
+
+  if (!storedStartTime) {
+    return false;
   }
 
-  return errno == EPERM;
+  if (kill(pid, 0) != 0 &&
+      errno != EPERM) {
+    return false;
+  }
+
+  const auto currentStartTime =
+      LinuxProcessIdentity::
+          startTime(pid);
+
+  return
+      currentStartTime &&
+      *currentStartTime ==
+          *storedStartTime;
 }
 
 bool ExecutionProcessMonitor::processExists(int pid) {

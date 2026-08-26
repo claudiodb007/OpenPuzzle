@@ -2,7 +2,7 @@
 
 ## Current release
 
-**OpenPuzzle 1.0.17** hardens persistent process identity across
+**OpenPuzzle 1.0.18** hardens persistent Linux process identity against
 reboots, power loss and Linux PID reuse.
 
 Execution state, runtime-control markers and background engine supervisors
@@ -13,7 +13,7 @@ still active.
 The public repository contains the client only. The coordination service
 and website infrastructure are not included.
 
-See [OpenPuzzle 1.0.17 release notes](docs/RELEASE_1.0.17.md) and the
+See [OpenPuzzle 1.0.18 release notes](docs/RELEASE_1.0.18.md) and the
 [client runtime guide](docs/CLIENT_RUNTIME.md).
 
 ## Open-source orchestration platform for cryptographic keyspace exploration
@@ -206,6 +206,19 @@ ctest --output-on-failure
 ------------------------------------------------------------------------
 
 ## Current Release
+
+### OpenPuzzle 1.0.18
+
+Version 1.0.18 extends Linux process identity from `boot_id + PID` to
+`boot_id + PID + process_start_time`, preventing a PID reused during the
+same boot from being mistaken for an existing OpenPuzzle execution.
+
+Execution state, workspace process markers, runtime control, heartbeat,
+monitoring, stopping and update safety now validate the process start
+time. Runtime SIGTERM delivery uses Linux pidfds after identity
+validation.
+
+See [the 1.0.18 release notes](docs/RELEASE_1.0.18.md).
 
 ### OpenPuzzle 1.0.17
 

@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <unistd.h>
@@ -26,6 +27,7 @@ ClientExecutionState makeValidState() {
   state.rangeId = 84521;
   state.pid = 12345;
   state.bootId = "11111111-2222-3333-4444-555555555555";
+  state.processStartTime = 123456789ULL;
   state.device = 0;
   state.blocks = 224;
   state.threads = 128;
@@ -76,6 +78,9 @@ void assertEqual(
   assert(actual.rangeId == expected.rangeId);
   assert(actual.pid == expected.pid);
   assert(actual.bootId == expected.bootId);
+  assert(
+      actual.processStartTime ==
+      expected.processStartTime);
   assert(actual.device == expected.device);
   assert(actual.blocks == expected.blocks);
   assert(actual.threads == expected.threads);
@@ -133,6 +138,55 @@ int main() {
           1) == 0);
 
   assert(!ClientStateStore::load());
+
+
+  /*
+   * OpenPuzzle <= 1.0.17 state has no process_start_time.
+   * It must remain loadable for recovery, but the missing identity
+   * component is represented by zero so consumers can fail closed.
+   */
+  {
+    const auto statePath =
+        ClientStateStore::path();
+
+    {
+      std::ofstream output(
+          statePath,
+          std::ios::trunc);
+
+      assert(output);
+
+      output
+          << "active=1\n"
+          << "puzzle=71\n"
+          << "range_id=123\n"
+          << "pid="
+          << static_cast<int>(getpid())
+          << "\n"
+          << "boot_id=legacy-boot-id\n"
+          << "device=0\n"
+          << "blocks=256\n"
+          << "threads=256\n"
+          << "points=1024\n"
+          << "profile_managed=0\n"
+          << "assignment_id=legacy-assignment\n"
+          << "client_id=legacy-client\n"
+          << "target=legacy-target\n"
+          << "start=1\n"
+          << "end=2\n"
+          << "engine=BitCrack\n"
+          << "backend=CUDA\n"
+          << "gpu_name=legacy-gpu\n"
+          << "workspace=/tmp/legacy-workspace\n"
+          << "command=legacy-command\n";
+    }
+
+    const auto legacy =
+        ClientStateStore::load();
+
+    assert(legacy);
+    assert(legacy->processStartTime == 0);
+  }
 
   const auto bootId =
       ClientStateStore::currentBootId();

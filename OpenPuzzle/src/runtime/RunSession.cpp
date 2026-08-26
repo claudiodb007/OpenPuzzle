@@ -22,6 +22,7 @@
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/runtime/ExecutionStopper.hpp"
+#include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 #include "openpuzzle/runtime/RunBenchmarkPreparation.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
@@ -570,7 +571,8 @@ bool processExists(int pid) {
 
 bool processIdentityMatches(
     const client::ClientExecutionState& state) {
-  if (state.bootId.empty()) {
+  if (state.bootId.empty() ||
+      state.processStartTime == 0) {
     return false;
   }
 
@@ -583,7 +585,18 @@ bool processIdentityMatches(
     return false;
   }
 
-  return processExists(state.pid);
+  if (!processExists(state.pid)) {
+    return false;
+  }
+
+  const auto currentStartTime =
+      LinuxProcessIdentity::
+          startTime(state.pid);
+
+  return
+      currentStartTime &&
+      *currentStartTime ==
+          state.processStartTime;
 }
 
 ClientIterationResult monitoredResult(
@@ -2502,6 +2515,22 @@ ClientIterationResult RunSession::runOnce(
     throw std::runtime_error(
         "Unable to determine Linux boot identity");
   }
+
+  const auto processStartTime =
+      LinuxProcessIdentity::startTime(
+          handle.pid);
+
+  if (!processStartTime ||
+      *processStartTime == 0) {
+    ExecutionStopper stopper;
+    stopper.stop(handle.workspace);
+
+    throw std::runtime_error(
+        "Unable to determine Linux process start identity");
+  }
+
+  state.processStartTime =
+      *processStartTime;
 
   state.device = device;
   state.blocks = blocks;

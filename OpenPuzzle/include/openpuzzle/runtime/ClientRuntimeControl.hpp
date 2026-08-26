@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -49,6 +50,13 @@ public:
   static std::optional<std::string> runtimeBootId();
 
   static std::optional<std::string> runtimeBootId(
+      const std::string& executionSlot);
+
+  static std::optional<std::uint64_t>
+  runtimeStartTime();
+
+  static std::optional<std::uint64_t>
+  runtimeStartTime(
       const std::string& executionSlot);
 
   static bool running();

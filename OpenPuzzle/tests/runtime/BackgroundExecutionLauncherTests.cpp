@@ -1,6 +1,7 @@
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
 
 #include <cassert>
+#include <cstdint>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -102,7 +103,7 @@ int main() {
           workspace /
           "found.txt"
       ).string() +
-      "; exit 7";
+      "; sleep 1; exit 7";
 
   BackgroundExecutionLauncher launcher;
 
@@ -121,6 +122,10 @@ int main() {
       workspace /
       "process.pid";
 
+  const auto startTimePath =
+      workspace /
+      "process.start_time";
+
   const auto exitPath =
       workspace /
       "exit.code";
@@ -136,6 +141,11 @@ int main() {
   assert(
       waitForFile(
           pidPath,
+          std::chrono::seconds(2)));
+
+  assert(
+      waitForFile(
+          startTimePath,
           std::chrono::seconds(2)));
 
   assert(
@@ -157,6 +167,9 @@ int main() {
       pidPath);
 
   assertPrivateFile(
+      startTimePath);
+
+  assertPrivateFile(
       exitPath);
 
   assertPrivateFile(
@@ -173,6 +186,17 @@ int main() {
   }
 
   assert(storedPid == handle.pid);
+
+  std::uint64_t storedStartTime = 0;
+
+  {
+    std::ifstream input(
+        startTimePath);
+
+    input >> storedStartTime;
+  }
+
+  assert(storedStartTime > 0);
 
   int exitCode = -9999;
 

@@ -5,6 +5,7 @@
 #include "openpuzzle/client/HttpRangeClient.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
+#include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -73,7 +74,8 @@ bool processExists(
 
 bool processIdentityMatches(
     const ClientExecutionState& state) {
-  if (state.bootId.empty()) {
+  if (state.bootId.empty() ||
+      state.processStartTime == 0) {
     return false;
   }
 
@@ -85,7 +87,18 @@ bool processIdentityMatches(
     return false;
   }
 
-  return processExists(state.pid);
+  if (!processExists(state.pid)) {
+    return false;
+  }
+
+  const auto currentStartTime =
+      openpuzzle::LinuxProcessIdentity::
+          startTime(state.pid);
+
+  return
+      currentStartTime &&
+      *currentStartTime ==
+          state.processStartTime;
 }
 
 } // namespace

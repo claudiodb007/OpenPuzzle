@@ -1,6 +1,7 @@
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/runtime/ExecutionProcessMonitor.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
+#include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 
 #include <cassert>
 #include <filesystem>
@@ -213,6 +214,73 @@ static void testReusedPidFromPreviousBoot() {
       workspace);
 }
 
+static void testReusedPidWithinSameBoot() {
+  Database db;
+  assert(db.open(":memory:"));
+  assert(db.createSchema());
+
+  auto workspace =
+      makeWorkspace(
+          "same-boot-reused-pid");
+
+  int executionId =
+      createRunningExecution(
+          db,
+          workspace.string());
+
+  const int pid =
+      static_cast<int>(getpid());
+
+  const auto startTime =
+      LinuxProcessIdentity::
+          startTime(pid);
+
+  assert(startTime);
+
+  writeFile(
+      workspace / "process.pid",
+      std::to_string(pid) + "\n");
+
+  writeFile(
+      workspace / "process.boot_id",
+      client::ClientStateStore::
+          currentBootId() +
+          "\n");
+
+  writeFile(
+      workspace / "process.start_time",
+      std::to_string(
+          *startTime + 1) +
+          "\n");
+
+  writeFile(
+      workspace / "exit.code",
+      "5\n");
+
+  ExecutionProcessMonitor monitor(db);
+
+  const auto summary =
+      monitor.poll();
+
+  assert(summary.running == 1);
+  assert(summary.finished == 0);
+  assert(summary.failed == 1);
+
+  const auto execution =
+      db.getExecution(executionId);
+
+  assert(execution);
+
+  assert(
+      execution->status ==
+      ExecutionRecordStatus::Failed);
+
+  assert(execution->exitCode == 5);
+
+  std::filesystem::remove_all(
+      workspace);
+}
+
 static void testMissingPid() {
   Database db;
   assert(db.open(":memory:"));
@@ -242,6 +310,7 @@ int main() {
   testFailed();
   testCancelled();
   testReusedPidFromPreviousBoot();
+  testReusedPidWithinSameBoot();
   testMissingPid();
 
   std::cout << "ExecutionProcessMonitorTests passed\n";

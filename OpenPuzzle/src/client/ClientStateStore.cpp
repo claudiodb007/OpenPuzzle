@@ -2,6 +2,7 @@
 
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -96,6 +97,37 @@ int parseInteger(
   try {
     return std::stoi(
         iterator->second);
+  } catch (...) {
+    return 0;
+  }
+}
+
+std::uint64_t parseUnsigned64(
+    const std::map<std::string, std::string>& values,
+    const std::string& name) {
+  const auto iterator =
+      values.find(name);
+
+  if (iterator == values.end() ||
+      iterator->second.empty()) {
+    return 0;
+  }
+
+  try {
+    std::size_t consumed = 0;
+
+    const auto value =
+        std::stoull(
+            iterator->second,
+            &consumed,
+            10);
+
+    if (consumed !=
+        iterator->second.size()) {
+      return 0;
+    }
+
+    return value;
   } catch (...) {
     return 0;
   }
@@ -262,6 +294,11 @@ bool ClientStateStore::save(
       output,
       "boot_id",
       state.bootId);
+
+  output
+      << "process_start_time="
+      << state.processStartTime
+      << '\n';
 
   output
       << "device="
@@ -462,6 +499,11 @@ ClientStateStore::load(
       valueOf(
           values,
           "boot_id");
+
+  state.processStartTime =
+      parseUnsigned64(
+          values,
+          "process_start_time");
 
   state.device =
       parseInteger(

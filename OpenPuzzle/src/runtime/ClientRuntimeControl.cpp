@@ -1,9 +1,11 @@
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 
 #include "openpuzzle/client/ClientStateStore.hpp"
+#include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 
 #include <cerrno>
+#include <cstdint>
 #include <csignal>
 #include <cstdlib>
 #include <fcntl.h>
@@ -162,6 +164,39 @@ ClientRuntimeControl::runtimeBootId(
   return bootId;
 }
 
+std::optional<std::uint64_t>
+ClientRuntimeControl::runtimeStartTime() {
+  return runtimeStartTime(
+      client::ClientStateStore::
+          executionSlot());
+}
+
+std::optional<std::uint64_t>
+ClientRuntimeControl::runtimeStartTime(
+    const std::string& executionSlot) {
+  std::ifstream input(
+      pidPath(executionSlot));
+
+  if (!input.is_open()) {
+    return std::nullopt;
+  }
+
+  int pid = 0;
+  std::string bootId;
+  std::uint64_t startTime = 0;
+
+  if (!(input >> pid) ||
+      pid <= 0 ||
+      !(input >> bootId) ||
+      bootId.empty() ||
+      !(input >> startTime) ||
+      startTime == 0) {
+    return std::nullopt;
+  }
+
+  return startTime;
+}
+
 bool ClientRuntimeControl::running() {
   return running(
       client::ClientStateStore::
@@ -176,16 +211,31 @@ bool ClientRuntimeControl::running(
   const auto bootId =
       runtimeBootId(executionSlot);
 
+  const auto startTime =
+      runtimeStartTime(
+          executionSlot);
+
   const auto currentBootId =
       client::ClientStateStore::
           currentBootId();
 
+  if (!pid ||
+      !bootId ||
+      !startTime ||
+      currentBootId.empty() ||
+      *bootId != currentBootId ||
+      !processExists(*pid)) {
+    return false;
+  }
+
+  const auto currentStartTime =
+      LinuxProcessIdentity::
+          startTime(*pid);
+
   return
-      pid &&
-      bootId &&
-      !currentBootId.empty() &&
-      *bootId == currentBootId &&
-      processExists(*pid);
+      currentStartTime &&
+      *currentStartTime ==
+          *startTime;
 }
 
 bool ClientRuntimeControl::acquire() {
@@ -225,7 +275,15 @@ bool ClientRuntimeControl::acquire() {
           client::ClientStateStore::
               currentBootId();
 
-      if (bootId.empty()) {
+      const auto processStartTime =
+          LinuxProcessIdentity::
+              startTime(
+                  static_cast<int>(
+                      getpid()));
+
+      if (bootId.empty() ||
+          !processStartTime ||
+          *processStartTime == 0) {
         close(descriptor);
 
         std::filesystem::remove(
@@ -239,6 +297,9 @@ bool ClientRuntimeControl::acquire() {
           std::to_string(getpid()) +
           "\n" +
           bootId +
+          "\n" +
+          std::to_string(
+              *processStartTime) +
           "\n";
 
       const auto written =
@@ -312,9 +373,22 @@ bool ClientRuntimeControl::release() {
       client::ClientStateStore::
           currentBootId();
 
+  const auto storedStartTime =
+      runtimeStartTime();
+
+  const auto currentStartTime =
+      LinuxProcessIdentity::
+          startTime(
+              static_cast<int>(
+                  getpid()));
+
   if (!bootId ||
+      !storedStartTime ||
+      !currentStartTime ||
       currentBootId.empty() ||
-      *bootId != currentBootId) {
+      *bootId != currentBootId ||
+      *storedStartTime !=
+          *currentStartTime) {
     return false;
   }
 
@@ -342,11 +416,21 @@ bool ClientRuntimeControl::requestStop(
   const auto pid =
       runtimePid(executionSlot);
 
-  if (!pid) {
-    return false;
-  }
+  const auto bootId =
+      runtimeBootId(executionSlot);
 
-  if (!running(executionSlot)) {
+  const auto startTime =
+      runtimeStartTime(executionSlot);
+
+  const auto currentBootId =
+      client::ClientStateStore::
+          currentBootId();
+
+  if (!pid ||
+      !bootId ||
+      !startTime ||
+      currentBootId.empty() ||
+      *bootId != currentBootId) {
     std::error_code error;
 
     std::filesystem::remove(
@@ -356,7 +440,25 @@ bool ClientRuntimeControl::requestStop(
     return false;
   }
 
-  return kill(*pid, SIGTERM) == 0;
+  if (!LinuxProcessIdentity::
+          signalIfMatches(
+              *pid,
+              *startTime,
+              SIGTERM)) {
+    /*
+     * Process disappeared, PID identity changed, or pidfd signalling is
+     * unavailable. Fail closed and never signal by numeric PID alone.
+     */
+    std::error_code error;
+
+    std::filesystem::remove(
+        pidPath(executionSlot),
+        error);
+
+    return false;
+  }
+
+  return true;
 }
 
 bool ClientRuntimeControl::requestSafeStop() {

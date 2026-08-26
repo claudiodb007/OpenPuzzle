@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 namespace openpuzzle::client {
@@ -21,6 +22,19 @@ struct ClientExecutionState {
    * Linux may reuse the same numeric PID after the machine starts again.
    */
   std::string bootId;
+
+  /*
+   * Linux /proc/<pid>/stat field 22 captured for this exact
+   * process instance.
+   *
+   * PID + boot_id is not sufficient against PID reuse within the
+   * same system boot. processStartTime distinguishes two different
+   * processes that happened to receive the same numeric PID.
+   *
+   * Zero means legacy state or unavailable identity and must never
+   * be treated as positive proof that the original process is alive.
+   */
+  std::uint64_t processStartTime = 0;
 
   int device = 0;
   int blocks = 0;
