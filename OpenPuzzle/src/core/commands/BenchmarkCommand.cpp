@@ -110,7 +110,7 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
           "--d",
           context.gpu));
 
-  const auto configuration =
+  auto configuration =
       ConfigurationManager::load();
 
   const std::string configuredBackend =
@@ -148,18 +148,28 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
       getStringArg(
           args,
           "--rusticl-enable",
-          "");
+          configuration.gpu.rusticlEnable);
 
-  if (hasRusticlSelector) {
-    if (backend != "opencl") {
+  if (hasRusticlSelector && backend != "opencl") {
+    throw benchmarkError(
+        "OP-BENCH-005",
+        "--rusticl-enable requires the OpenCL backend",
+        "add --backend opencl or remove --rusticl-enable");
+  }
+
+  if (backend == "opencl" && !rusticlSelector.empty()) {
+    RusticlEnvironment::apply(rusticlSelector);
+  }
+
+  if (hasRusticlSelector &&
+      configuration.gpu.rusticlEnable != rusticlSelector) {
+    configuration.gpu.rusticlEnable = rusticlSelector;
+    if (!ConfigurationManager::save(configuration)) {
       throw benchmarkError(
-          "OP-BENCH-005",
-          "--rusticl-enable requires the OpenCL backend",
-          "add --backend opencl or remove --rusticl-enable");
+          "OP-BENCH-009",
+          "unable to persist the Rusticl selector",
+          "check ownership and write permissions for ~/.config/OpenPuzzle");
     }
-
-    RusticlEnvironment::apply(
-        rusticlSelector);
   }
 
   if (!ToolManager::supportsBackend(backend)) {

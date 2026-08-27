@@ -12,6 +12,12 @@ if(
     )
 endif()
 
+add_executable(ConfigurationManagerRusticlTests
+    config/ConfigurationManagerRusticlTests.cpp
+)
+target_link_libraries(ConfigurationManagerRusticlTests PRIVATE OpenPuzzleCore)
+add_test(NAME ConfigurationManagerRusticlTests COMMAND ConfigurationManagerRusticlTests)
+
 add_executable(EventBusTests
     core/EventBusTests.cpp
 )

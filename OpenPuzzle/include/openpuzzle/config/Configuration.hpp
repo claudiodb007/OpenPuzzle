@@ -17,6 +17,7 @@ struct EngineConfiguration {
 
 struct GpuConfiguration {
   int device = 0;
+  std::string rusticlEnable;
 };
 
 struct AssignmentConfiguration {

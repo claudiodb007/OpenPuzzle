@@ -165,6 +165,10 @@ Configuration ConfigurationManager::load() {
     config.gpu.device = *value;
   }
 
+  if (const auto value = readJsonStringAfterKey(text, "rusticl_enable")) {
+    config.gpu.rusticlEnable = *value;
+  }
+
   if (const auto value = readJsonIntegerAfterKey(text, "duration_minutes")) {
     if (*value > 0) {
       config.assignment.durationMinutes = *value;
@@ -214,6 +218,8 @@ bool ConfigurationManager::save(const Configuration &config) {
          << "\"\n"
          << "  },\n"
          << "  \"gpu_device\": " << config.gpu.device << ",\n"
+         << "  \"rusticl_enable\": \"" << escapeJson(config.gpu.rusticlEnable)
+         << "\",\n"
          << "  \"assignment\": {\n"
          << "    \"duration_minutes\": " << config.assignment.durationMinutes
          << "\n"

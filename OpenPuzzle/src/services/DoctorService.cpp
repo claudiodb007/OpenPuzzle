@@ -5,6 +5,7 @@
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/hardware/GpuInfo.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
+#include "openpuzzle/hardware/RusticlEnvironment.hpp"
 #include "openpuzzle/models/Models.hpp"
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
@@ -232,6 +233,17 @@ int DoctorService::execute(
     const std::vector<std::string> &args) const {
   DoctorSummary summary;
 
+  const auto configuration = ConfigurationManager::load();
+
+  std::string rusticlConfigurationError;
+  if (!configuration.gpu.rusticlEnable.empty()) {
+    try {
+      RusticlEnvironment::apply(configuration.gpu.rusticlEnable);
+    } catch (const std::exception &error) {
+      rusticlConfigurationError = error.what();
+    }
+  }
+
   const auto cudaEngine = ToolManager::bitcrackCudaPath();
   const auto openclEngine = ToolManager::bitcrackOpenCLPath();
   const auto cpuEngine = ToolManager::keyhuntPath();
@@ -244,7 +256,6 @@ int DoctorService::execute(
   const bool cpuReady = cpuEngine.has_value() && processors > 0;
   const bool computeReady = cudaReady || openclReady || cpuReady;
 
-  const auto configuration = ConfigurationManager::load();
   std::string selectedBackend =
       normalizeBackend(configuration.engine.backend);
 
@@ -296,6 +307,13 @@ int DoctorService::execute(
             "run openpuzzle run to complete first-time setup");
   }
 
+  if (!rusticlConfigurationError.empty()) {
+    warning(summary,
+            "OP-DOCTOR-007",
+            "the configured Rusticl selector is invalid",
+            "run OpenPuzzle with a valid --rusticl-enable selector");
+  }
+
   if (storagePresent && !storageWritable) {
     failure(summary,
             "OP-DOCTOR-003",
@@ -340,6 +358,11 @@ int DoctorService::execute(
             << "Logical processors. " << processors << '\n';
   printDevices("CUDA", cudaDevices);
   printDevices("OpenCL", openclDevices);
+
+  if (!configuration.gpu.rusticlEnable.empty()) {
+    std::cout << "Rusticl selector... "
+              << configuration.gpu.rusticlEnable << '\n';
+  }
 
   std::cout << "\nUsable backends\n"
             << "---------------\n"

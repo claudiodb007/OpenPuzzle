@@ -194,6 +194,17 @@ std::string selectedBackend(
           : configuration.engine.backend);
 }
 
+std::string selectedRusticlSelector(
+    const std::vector<std::string> &args) {
+  const auto configuration =
+      ConfigurationManager::load();
+
+  return getArgument(
+      args,
+      "--rusticl-enable",
+      configuration.gpu.rusticlEnable);
+}
+
 int logicalProcessorCount() {
   const long processors =
       sysconf(_SC_NPROCESSORS_ONLN);
@@ -324,9 +335,7 @@ buildCudaOpenclArguments(
   }
 
   const std::string rusticlDrivers =
-      getArgument(
-          args,
-          "--rusticl-enable");
+      selectedRusticlSelector(args);
 
   std::vector<std::string> result;
 
@@ -1840,27 +1849,29 @@ ClientIterationResult RunSession::runOnce(
     return 1;
   }
 
+  const std::string rusticlSelector =
+      subcommand == "run" && runBackend == "opencl"
+          ? selectedRusticlSelector(args)
+          : "";
+
   if (
       subcommand == "run" &&
-      hasArgument(
-          args,
-          "--rusticl-enable")) {
-    if (runBackend != "opencl") {
-      std::cerr
-          << "--rusticl-enable requires the "
-          << "OpenCL backend.\n";
+      hasArgument(args, "--rusticl-enable") &&
+      runBackend != "opencl") {
+    std::cerr
+        << "--rusticl-enable requires the "
+        << "OpenCL backend.\n";
+    return 1;
+  }
 
-      return 1;
-    }
-
+  if (
+      subcommand == "run" &&
+      runBackend == "opencl" &&
+      !rusticlSelector.empty()) {
     try {
-      RusticlEnvironment::apply(
-          getArgument(
-              args,
-              "--rusticl-enable"));
+      RusticlEnvironment::apply(rusticlSelector);
     } catch (const std::exception &error) {
       std::cerr << error.what() << '\n';
-
       return 1;
     }
   }
@@ -1934,6 +1945,22 @@ ClientIterationResult RunSession::runOnce(
 
     if (!setup.ensureConfigured()) {
       return 1;
+    }
+  }
+
+  if (
+      subcommand == "run" &&
+      runBackend == "opencl" &&
+      hasArgument(args, "--rusticl-enable") &&
+      !dryRun &&
+      !preflightOnly) {
+    auto configuration = ConfigurationManager::load();
+    if (configuration.gpu.rusticlEnable != rusticlSelector) {
+      configuration.gpu.rusticlEnable = rusticlSelector;
+      if (!ConfigurationManager::save(configuration)) {
+        std::cerr << "Unable to persist the Rusticl selector.\n";
+        return 1;
+      }
     }
   }
 
