@@ -22,6 +22,9 @@ struct PuzzleRecord {
   std::string name;
   std::string address;
   std::string hash160;
+  std::string publicKey;
+  std::string searchMode = "linear";
+  std::string requiredBackend;
   std::string rangeStart;
   std::string rangeEnd;
   double reward = 0.0;

@@ -10,6 +10,7 @@ struct EngineLaunchRequest {
   std::string backend;
 
   std::vector<std::string> targets;
+  std::string publicKey;
 
   std::string startKey;
   std::string endKey;

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.20 — Puzzle-aware routing and resilient solution alerts
+
+  * Added metadata-driven routing for linear and Pollard Kangaroo workloads.
+  * Added verified metadata for puzzles 140, 145, 150, 155 and 160 while preserving Puzzle 71's linear path.
+  * Added exact power-of-two Kangaroo claim and assignment validation.
+  * Added an external, opt-in PSCKangaroo installer and CUDA execution adapter; the executable is not bundled.
+  * Added Kangaroo command, progress and protected result-file contracts.
+  * Added metadata-only possible-solution reporting that never transmits private-key material.
+  * Added automatic 30-second retry after temporary solution-report network failures.
+  * Preserved assignment fairness, Rusticl selection and process-identity protections.
+  * Passed all 98 automated client tests plus the targeted retry test.
+
+
 ## 1.0.18 — Full Linux process identity
 
 - Bind persisted Linux execution identity to boot ID, PID and process

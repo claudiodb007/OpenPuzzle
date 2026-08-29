@@ -1,6 +1,7 @@
 #include "openpuzzle/tools/ToolManager.hpp"
 
 #include <cassert>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -31,6 +32,23 @@ int main() {
 
   assert(std::filesystem::is_regular_file(*cuda));
   assert(std::filesystem::is_regular_file(*opencl));
+
+  assert(
+      setenv(
+          "OPENPUZZLE_KANGAROO_PATH",
+          "/bin/true",
+          1) == 0);
+
+  const auto kangaroo =
+      ToolManager::kangarooPath();
+
+  assert(kangaroo);
+  assert(*kangaroo == "/bin/true");
+  assert(std::filesystem::is_regular_file(*kangaroo));
+
+  assert(
+      unsetenv(
+          "OPENPUZZLE_KANGAROO_PATH") == 0);
 
   std::string error;
 

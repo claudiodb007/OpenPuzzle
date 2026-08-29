@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(OpenPuzzle VERSION 1.0.19 LANGUAGES CXX)
+project(OpenPuzzle VERSION 1.0.20 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -105,6 +105,7 @@ endif()
 set(OPENPUZZLE_CUDA_ENGINE_NAME "cuBitCrack")
 set(OPENPUZZLE_OPENCL_ENGINE_NAME "clBitCrack")
 set(OPENPUZZLE_KEYHUNT_ENGINE_NAME "keyhunt")
+set(OPENPUZZLE_KANGAROO_ENGINE_NAME "psckangaroo")
 
 set(OPENPUZZLE_CUDA_ENGINE_IDENTITY
     "OpenPuzzle-BitCrack 1.0.0 CUDA protocol 2"
@@ -187,6 +188,7 @@ add_library(OpenPuzzleCore
     src/core/commands/CommandRegistry.cpp
     src/core/commands/StartJobCommand.cpp
     src/services/PuzzleService.cpp
+    src/services/PuzzleMetadataCatalog.cpp
     src/services/QueueService.cpp
     src/services/ServiceUtils.cpp
     src/services/BenchmarkService.cpp
@@ -202,10 +204,13 @@ add_library(OpenPuzzleCore
     src/services/HeartbeatService.cpp
     src/engines/bitcrack/BitCrackEngine.cpp
     src/engines/keyhunt/KeyHuntEngine.cpp
+    src/engines/kangaroo/KangarooEngine.cpp
     src/engines/EngineLaunchBuilder.cpp
     src/engines/EngineParserFactory.cpp
+    src/adapters/kangaroo/KangarooProgressParser.cpp
     src/engines/EngineManager.cpp
     src/engines/common/EngineRegistry.cpp
+    src/engines/common/PuzzleExecutionPlanner.cpp
     src/engines/common/EngineFactory.cpp
     src/engines/common/EngineDiscovery.cpp
     src/database/Database.cpp
@@ -246,12 +251,33 @@ target_compile_definitions(OpenPuzzleCore
         OPENPUZZLE_CUDA_ENGINE_NAME="${OPENPUZZLE_CUDA_ENGINE_NAME}"
         OPENPUZZLE_OPENCL_ENGINE_NAME="${OPENPUZZLE_OPENCL_ENGINE_NAME}"
         OPENPUZZLE_KEYHUNT_ENGINE_NAME="${OPENPUZZLE_KEYHUNT_ENGINE_NAME}"
+        OPENPUZZLE_KANGAROO_ENGINE_NAME="${OPENPUZZLE_KANGAROO_ENGINE_NAME}"
         OPENPUZZLE_CUDA_ENGINE_IDENTITY="${OPENPUZZLE_CUDA_ENGINE_IDENTITY}"
         OPENPUZZLE_OPENCL_ENGINE_IDENTITY="${OPENPUZZLE_OPENCL_ENGINE_IDENTITY}"
+        OPENPUZZLE_SOURCE_PUZZLE_DIR="${CMAKE_SOURCE_DIR}/resources/puzzles"
+        OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH="${CMAKE_BINARY_DIR}/libexec/OpenPuzzle/install_psckangaroo_external.sh"
 )
 
 set(OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY
     "${CMAKE_BINARY_DIR}/libexec/OpenPuzzle"
+)
+
+set(OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH
+    "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}/install_psckangaroo_external.sh"
+)
+
+configure_file(
+    scripts/install_psckangaroo_external.sh
+    "${OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH}"
+    COPYONLY
+)
+
+file(CHMOD
+    "${OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH}"
+    PERMISSIONS
+        OWNER_READ OWNER_WRITE OWNER_EXECUTE
+        GROUP_READ GROUP_EXECUTE
+        WORLD_READ WORLD_EXECUTE
 )
 
 set(OPENPUZZLE_CUDA_ENGINE_BUILD_PATH
@@ -315,6 +341,12 @@ target_link_libraries(OpenPuzzle
 
 add_dependencies(OpenPuzzle OpenPuzzleBundledEngines)
 
+install(
+    DIRECTORY resources/puzzles/
+    DESTINATION share/OpenPuzzle/puzzles
+    FILES_MATCHING PATTERN "*.json"
+)
+
 include(CTest)
 enable_testing()
 
@@ -361,6 +393,7 @@ install(
         "${OPENPUZZLE_BUNDLED_CUDA_ENGINE}"
         "${OPENPUZZLE_BUNDLED_OPENCL_ENGINE}"
         "${OPENPUZZLE_BUNDLED_KEYHUNT_ENGINE}"
+        scripts/install_psckangaroo_external.sh
     DESTINATION
         "${CMAKE_INSTALL_LIBEXECDIR}/OpenPuzzle"
 )
@@ -394,6 +427,7 @@ install(
         docs/RELEASE_1.0.17.md
         docs/RELEASE_1.0.18.md
         docs/RELEASE_1.0.19.md
+        docs/RELEASE_1.0.20.md
         docs/SYSTEMD_SERVICE.md
     DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
 )
@@ -401,6 +435,7 @@ install(
 install(
     FILES
         docs/BUNDLED_ENGINE.md
+        docs/PSCKANGAROO_EXTERNAL.md
     DESTINATION
         ${CMAKE_INSTALL_DOCDIR}/docs
 )

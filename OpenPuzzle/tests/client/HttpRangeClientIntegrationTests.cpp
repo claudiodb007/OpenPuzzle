@@ -375,6 +375,68 @@ int main() {
     server.wait();
   }
 
+
+
+  /*
+   * Kangaroo declares its allocator contract explicitly.  The local server
+   * returns an exact 2^32 range with the required public metadata.
+   */
+  {
+    const std::string expectedBody =
+        "{\"client_id\":"
+        "\"22222222-2222-4222-8222-222222222222\","
+        "\"puzzle\":140,"
+        "\"execution_slot\":\"primary\","
+        "\"backend\":\"cuda\","
+        "\"target_duration_minutes\":60,"
+        "\"speed_mkeys\":1437.360000,"
+        "\"search_mode\":\"kangaroo\","
+        "\"engine\":\"kangaroo\","
+        "\"range_shape\":\"power_of_two\","
+        "\"range_min_bits\":32,"
+        "\"range_max_bits\":170}";
+
+    OneShotHttpServer server(
+        "200 OK",
+        R"JSON({
+          "assignment_id":
+            "44444444-4444-4444-8444-444444444444",
+          "puzzle": 140,
+          "range_id": 90004,
+          "target": "1QKBaU6WAeycb3DbKbLBkX7vJiaS8r42Xo",
+          "search_mode": "kangaroo",
+          "public_key":
+            "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640",
+          "required_backend": "cuda",
+          "start": "100000000",
+          "end": "1FFFFFFFF"
+        })JSON",
+        "/api/range/claim",
+        expectedBody);
+
+    HttpRangeClient client(
+        server.url());
+
+    const auto assignment =
+        client.claim(
+            clientId,
+            140,
+            60,
+            1437.36,
+            "cuda",
+            "kangaroo");
+
+    assert(assignment);
+    assert(assignment->searchMode == "kangaroo");
+    assert(assignment->requiredBackend == "cuda");
+    assert(assignment->start == "100000000");
+    assert(assignment->end == "1FFFFFFFF");
+    assert(client.lastError().empty());
+
+    server.wait();
+  }
+
+
   /*
    * Rejeição de progresso atravessa o curl e
    * preserva o código JSON do servidor.

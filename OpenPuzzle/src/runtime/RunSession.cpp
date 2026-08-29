@@ -3,6 +3,8 @@
 
 #include "openpuzzle/config/ConfigurationManager.hpp"
 #include "openpuzzle/setup/FirstRunSetup.hpp"
+#include "openpuzzle/services/PuzzleMetadataCatalog.hpp"
+#include "openpuzzle/engines/common/PuzzleExecutionPlanner.hpp"
 
 #include "openpuzzle/client/ClientHeartbeatService.hpp"
 #include "openpuzzle/client/ClientIdentity.hpp"
@@ -21,6 +23,7 @@
 #include "openpuzzle/runtime/ClientRuntime.hpp"
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
+#include "openpuzzle/engines/common/SearchMode.hpp"
 #include "openpuzzle/runtime/ExecutionStopper.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 #include "openpuzzle/runtime/RunBenchmarkPreparation.hpp"
@@ -1826,10 +1829,49 @@ ClientIterationResult RunSession::runOnce(
           args,
           "--preflight-only");
 
+  const auto puzzleMetadata =
+      subcommand == "run" && puzzleNumber > 0
+          ? PuzzleMetadataCatalog::load(puzzleNumber)
+          : std::nullopt;
+
+  if (
+      subcommand == "run" &&
+      puzzleNumber > 0 &&
+      !puzzleMetadata) {
+    std::cerr
+        << "OpenPuzzle puzzle metadata validation failed\n"
+        << "--------------------------------------------\n"
+        << "Puzzle............. " << puzzleNumber << '\n'
+        << "Assignment......... not requested\n"
+        << "Problem............ puzzle metadata is unavailable or invalid\n";
+
+    return 1;
+  }
+
+  const bool kangarooWorkload =
+      puzzleMetadata && puzzleMetadata->searchMode == "kangaroo";
+
   const std::string runBackend =
       subcommand == "run"
-          ? selectedBackend(args)
+          ? (kangarooWorkload ? "cuda" : selectedBackend(args))
           : "";
+
+  if (
+      subcommand == "run" &&
+      kangarooWorkload &&
+      hasArgument(args, "--backend") &&
+      selectedBackend(args) != "cuda") {
+    std::cerr
+        << "OpenPuzzle engine validation failed\n"
+        << "-----------------------------------\n"
+        << "Puzzle............. " << puzzleNumber << '\n'
+        << "Search mode........ Kangaroo\n"
+        << "Required backend... CUDA\n"
+        << "Assignment......... not requested\n"
+        << "Problem............ this puzzle requires CUDA\n";
+
+    return 1;
+  }
 
   const int runDevice =
       subcommand == "run" &&
@@ -1934,6 +1976,37 @@ ClientIterationResult RunSession::runOnce(
           << "openpuzzle doctor --offline\n"
           << "Action 2........... verify --device\n";
 
+      return 1;
+    }
+  }
+
+  if (
+      subcommand == "run" &&
+      kangarooWorkload) {
+    const auto plan =
+        PuzzleExecutionPlanner::plan(
+            *puzzleMetadata,
+            true,
+            false,
+            false,
+            ToolManager::kangarooPath().has_value());
+
+    std::cout
+        << "\nOpenPuzzle puzzle routing\n"
+        << "-------------------------\n"
+        << "Puzzle............. " << puzzleNumber << '\n'
+        << "Search mode........ Kangaroo\n"
+        << "Engine............. Kangaroo\n"
+        << "Backend............ CUDA\n"
+        << "Public key......... "
+        << (puzzleMetadata->publicKey.empty() ? "missing" : "available")
+        << '\n';
+
+    if (!plan.executable) {
+      std::cerr
+          << "Status............. NOT READY\n"
+          << "Assignment......... not requested\n"
+          << "Problem............ " << plan.reason << '\n';
       return 1;
     }
   }
@@ -2144,9 +2217,12 @@ ClientIterationResult RunSession::runOnce(
         runBackend;
 
     const auto executable =
-        backend == "opencl"
-            ? ToolManager::bitcrackOpenCLPath()
-            : ToolManager::bitcrackCudaPath();
+        kangarooWorkload
+            ? ToolManager::kangarooPath()
+            : (
+                  backend == "opencl"
+                      ? ToolManager::bitcrackOpenCLPath()
+                      : ToolManager::bitcrackCudaPath());
 
     const auto gpu = GpuManager::currentGpu(
       backend == "opencl"
@@ -2158,8 +2234,11 @@ ClientIterationResult RunSession::runOnce(
               << "-------------------\n"
               << "GPU................ " << gpu.name << '\n'
               << "Engine............. "
-              << (configuration.engine.id.empty() ? "bitcrack"
-                                                  : configuration.engine.id)
+              << (kangarooWorkload
+                      ? "kangaroo"
+                      : (configuration.engine.id.empty()
+                             ? "bitcrack"
+                             : configuration.engine.id))
               << '\n'
               << "Backend............ "
               << (backend == "opencl" ? "OpenCL" : "CUDA") << '\n'
@@ -2212,7 +2291,10 @@ ClientIterationResult RunSession::runOnce(
           puzzleNumber,
           targetDurationMinutes,
           speedMKeys,
-          runBackend);
+          runBackend,
+          kangarooWorkload
+              ? "kangaroo"
+              : "linear");
 
   if (claimResult.unavailable()) {
     if (subcommand == "claim") {
@@ -2270,24 +2352,48 @@ ClientIterationResult RunSession::runOnce(
   const bool cpuBackend =
       runBackend == "cpu";
 
+  const auto assignmentSearchMode =
+      searchModeFromString(
+          assignment->searchMode);
+
+  const bool kangarooAssignment =
+      assignmentSearchMode == SearchMode::Kangaroo;
+
+  if (kangarooAssignment != kangarooWorkload) {
+    throw std::runtime_error(
+        "Assignment search mode does not match validated puzzle metadata");
+  }
+
+  if (
+      kangarooAssignment &&
+      (
+          runBackend != "cuda" ||
+          (
+              !assignment->requiredBackend.empty() &&
+              assignment->requiredBackend != "cuda"))) {
+    throw std::runtime_error(
+        "Kangaroo assignment requires the CUDA backend");
+  }
+
+  const std::string expectedEngine =
+      kangarooAssignment
+          ? "kangaroo"
+          : (cpuBackend ? "keyhunt" : "bitcrack");
+
   const std::string engine =
       getArgument(
           args,
           "--engine",
-          cpuBackend
-              ? "keyhunt"
-              : "bitcrack");
+          expectedEngine);
 
-  if (
-      (cpuBackend && engine != "keyhunt") ||
-      (!cpuBackend && engine != "bitcrack")) {
+  if (engine != expectedEngine) {
     throw std::runtime_error(
         "The " + runBackend +
         " backend requires the " +
-        (cpuBackend
-             ? "KeyHunt"
-             : "BitCrack") +
-        " engine");
+        (kangarooAssignment
+             ? "Kangaroo"
+             : (cpuBackend ? "KeyHunt" : "BitCrack")) +
+        " engine for this assignment");
   }
 
   int device =
@@ -2350,7 +2456,7 @@ ClientIterationResult RunSession::runOnce(
     hardwareValue = gpu.name;
   }
 
-  if (!cpuBackend && !manualProfile) {
+  if (!cpuBackend && !kangarooAssignment && !manualProfile) {
     GpuProfileManager profiles(context.db);
 
     const auto gpu =
@@ -2383,7 +2489,18 @@ ClientIterationResult RunSession::runOnce(
 
   std::string executable;
 
-  if (cpuBackend) {
+  if (kangarooAssignment) {
+    const auto kangaroo =
+        ToolManager::kangarooPath();
+
+    if (!kangaroo) {
+      throw std::runtime_error(
+          "PSCKangaroo CUDA executable not configured; run: "
+          "openpuzzle engine install psckangaroo");
+    }
+
+    executable = *kangaroo;
+  } else if (cpuBackend) {
     const auto keyhunt =
         ToolManager::keyhuntPath();
 
@@ -2423,6 +2540,10 @@ ClientIterationResult RunSession::runOnce(
 
   puzzle.rangeEnd = assignment->end;
 
+  puzzle.publicKey = assignment->publicKey;
+  puzzle.searchMode = assignment->searchMode;
+  puzzle.requiredBackend = assignment->requiredBackend;
+
   RangeRecord range;
 
   range.id = assignment->rangeId;
@@ -2448,9 +2569,9 @@ ClientIterationResult RunSession::runOnce(
   WorkerEngineCapability capability;
 
   capability.engine =
-      cpuBackend
-          ? "KeyHunt"
-          : "BitCrack";
+      kangarooAssignment
+          ? "Kangaroo"
+          : (cpuBackend ? "KeyHunt" : "BitCrack");
 
   capability.backend =
       cpuBackend
@@ -2564,7 +2685,7 @@ ClientIterationResult RunSession::runOnce(
   state.threads = threads;
   state.points = points;
   state.profileManaged =
-      !cpuBackend && !manualProfile;
+      !cpuBackend && !kangarooAssignment && !manualProfile;
   state.gpuName =
       cpuBackend ? std::string{} : hardwareValue;
 

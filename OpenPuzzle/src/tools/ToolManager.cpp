@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cerrno>
+#include <cstdlib>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -25,6 +26,9 @@ constexpr const char *OpenClEngineName =
 
 constexpr const char *KeyHuntEngineName =
     OPENPUZZLE_KEYHUNT_ENGINE_NAME;
+
+constexpr const char *KangarooEngineName =
+    OPENPUZZLE_KANGAROO_ENGINE_NAME;
 
 constexpr const char *CudaEngineIdentity =
     OPENPUZZLE_CUDA_ENGINE_IDENTITY;
@@ -400,6 +404,63 @@ std::optional<std::string>
 ToolManager::keyhuntPath() {
   return bundledExecutable(
       KeyHuntEngineName);
+}
+
+std::optional<std::string>
+ToolManager::kangarooPath() {
+  const char *configured = std::getenv(
+      "OPENPUZZLE_KANGAROO_PATH");
+
+  if (configured != nullptr && configured[0] != '\0') {
+    const fs::path path(configured);
+
+    if (path.is_absolute() && executableFile(path)) {
+      return path.string();
+    }
+
+    return std::nullopt;
+  }
+
+  std::vector<fs::path> candidates;
+
+  const char *xdgDataHome = std::getenv(
+      "XDG_DATA_HOME");
+
+  if (xdgDataHome != nullptr && xdgDataHome[0] != '\0') {
+    const fs::path dataHome(xdgDataHome);
+
+    if (dataHome.is_absolute()) {
+      candidates.push_back(
+          dataHome /
+          "OpenPuzzle" /
+          "engines" /
+          KangarooEngineName);
+    }
+  } else {
+    const char *home = std::getenv("HOME");
+
+    if (home != nullptr && home[0] != '\0') {
+      candidates.push_back(
+          fs::path(home) /
+          ".local" /
+          "share" /
+          "OpenPuzzle" /
+          "engines" /
+          KangarooEngineName);
+    }
+  }
+
+  candidates.push_back(
+      fs::path("/usr/local/libexec/OpenPuzzle") /
+      KangarooEngineName);
+
+  for (const auto &candidate : candidates) {
+    if (executableFile(candidate)) {
+      return candidate.string();
+    }
+  }
+
+  return std::nullopt;
 }
 
 } // namespace openpuzzle

@@ -27,14 +27,16 @@ public:
       int puzzle,
       int targetDurationMinutes,
       double speedMKeys = 0.0,
-      const std::string &backend = {});
+      const std::string &backend = {},
+      const std::string &searchMode = "linear");
 
   RangeClaimResult claimResult(
       const std::string &clientId,
       int puzzle,
       int targetDurationMinutes,
       double speedMKeys = 0.0,
-      const std::string &backend = {});
+      const std::string &backend = {},
+      const std::string &searchMode = "linear");
 
   bool complete(
       const std::string &assignmentId,

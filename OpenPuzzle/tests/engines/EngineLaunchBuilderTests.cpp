@@ -14,6 +14,8 @@ int main() {
   puzzle.number = 71;
   puzzle.address =
       "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU";
+  puzzle.publicKey =
+      "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640";
 
   RangeRecord range;
   range.id = 8;
@@ -62,6 +64,8 @@ int main() {
   assert(
       request.targets.front() ==
       puzzle.address);
+
+  assert(request.publicKey == puzzle.publicKey);
 
   assert(
       request.startKey ==

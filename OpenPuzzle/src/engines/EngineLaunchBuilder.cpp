@@ -53,6 +53,7 @@ EngineLaunchBuilder::build(const PuzzleRecord &puzzle, const RangeRecord &range,
   request.backend = capability.backend;
 
   request.targets.push_back(puzzle.address);
+  request.publicKey = puzzle.publicKey;
 
   request.startKey = range.startKey;
 

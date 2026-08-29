@@ -12,6 +12,35 @@ if(
     )
 endif()
 
+add_test(
+    NAME PuzzleRoutingCliTests
+    COMMAND ${CMAKE_COMMAND}
+        -DOPENPUZZLE_BIN=$<TARGET_FILE:OpenPuzzle>
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PuzzleRoutingCliTests.cmake
+)
+
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+add_test(
+    NAME PuzzleCatalogIntegrityTests
+    COMMAND
+        ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/PuzzleCatalogIntegrityTests.py
+        ${CMAKE_SOURCE_DIR}/resources/puzzles
+)
+
+add_executable(PuzzleMetadataCatalogTests
+    services/PuzzleMetadataCatalogTests.cpp
+)
+target_link_libraries(PuzzleMetadataCatalogTests PRIVATE OpenPuzzleCore)
+add_test(NAME PuzzleMetadataCatalogTests COMMAND PuzzleMetadataCatalogTests)
+
+add_executable(PuzzleExecutionPlannerTests
+    engines/PuzzleExecutionPlannerTests.cpp
+)
+target_link_libraries(PuzzleExecutionPlannerTests PRIVATE OpenPuzzleCore)
+add_test(NAME PuzzleExecutionPlannerTests COMMAND PuzzleExecutionPlannerTests)
+
 add_executable(ConfigurationManagerRusticlTests
     config/ConfigurationManagerRusticlTests.cpp
 )
@@ -863,6 +892,34 @@ add_test(
     COMMAND EngineManagerTests
 )
 
+add_executable(KangarooOutputContractTests
+    engines/KangarooOutputContractTests.cpp
+)
+
+target_link_libraries(KangarooOutputContractTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME KangarooOutputContractTests
+    COMMAND KangarooOutputContractTests
+)
+
+add_executable(KangarooEngineCommandTests
+    engines/KangarooEngineCommandTests.cpp
+)
+
+target_link_libraries(KangarooEngineCommandTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME KangarooEngineCommandTests
+    COMMAND KangarooEngineCommandTests
+)
+
 add_executable(KeyHuntEngineCommandTests
     engines/KeyHuntEngineCommandTests.cpp
 )
@@ -875,6 +932,20 @@ target_link_libraries(KeyHuntEngineCommandTests
 add_test(
     NAME KeyHuntEngineCommandTests
     COMMAND KeyHuntEngineCommandTests
+)
+
+add_executable(KangarooProgressParserTests
+    adapters/KangarooProgressParserTests.cpp
+)
+
+target_link_libraries(KangarooProgressParserTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME KangarooProgressParserTests
+    COMMAND KangarooProgressParserTests
 )
 
 add_executable(EngineParserFactoryTests
@@ -1306,4 +1377,13 @@ target_link_libraries(UpdateCommandTests
 add_test(
     NAME UpdateCommandTests
     COMMAND UpdateCommandTests
+)
+
+
+add_test(
+    NAME EngineInstallerCliTests
+    COMMAND
+        ${CMAKE_COMMAND}
+        "-DOPENPUZZLE_CLI=$<TARGET_FILE:OpenPuzzle>"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/EngineInstallerCliTests.cmake
 )

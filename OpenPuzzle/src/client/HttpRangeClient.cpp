@@ -2,6 +2,9 @@
 
 #include "openpuzzle/client/ClientStateStore.hpp"
 
+#include <boost/multiprecision/cpp_int.hpp>
+
+#include <cctype>
 #include <cstdio>
 #include <iomanip>
 #include <regex>
@@ -100,6 +103,99 @@ bool extractBoolean(const std::string &json, const std::string &key,
   return true;
 }
 
+
+bool validCompressedPublicKey(
+    const std::string &value) {
+  if (
+      value.size() != 66 ||
+      !(
+          value.rfind("02", 0) == 0 ||
+          value.rfind("03", 0) == 0)) {
+    return false;
+  }
+
+  for (const char character : value) {
+    if (!std::isxdigit(
+            static_cast<unsigned char>(character))) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool parseHex(
+    const std::string &text,
+    boost::multiprecision::cpp_int &value) {
+  if (text.empty()) {
+    return false;
+  }
+
+  value = 0;
+
+  for (const char character : text) {
+    unsigned int digit = 0;
+
+    if (character >= '0' && character <= '9') {
+      digit = static_cast<unsigned int>(character - '0');
+    } else if (character >= 'a' && character <= 'f') {
+      digit = 10U + static_cast<unsigned int>(character - 'a');
+    } else if (character >= 'A' && character <= 'F') {
+      digit = 10U + static_cast<unsigned int>(character - 'A');
+    } else {
+      return false;
+    }
+
+    value <<= 4;
+    value += digit;
+  }
+
+  return true;
+}
+
+bool validKangarooRange(
+    const std::string &startText,
+    const std::string &endText) {
+  using boost::multiprecision::cpp_int;
+
+  cpp_int start;
+  cpp_int end;
+
+  if (
+      !parseHex(startText, start) ||
+      !parseHex(endText, end) ||
+      end < start) {
+    return false;
+  }
+
+  const cpp_int size =
+      end - start + 1;
+
+  if (
+      size <= 0 ||
+      (size & (size - 1)) != 0) {
+    return false;
+  }
+
+  const unsigned int rangeBits =
+      boost::multiprecision::msb(size);
+
+  return
+      rangeBits >= 32 &&
+      rangeBits <= 170;
+}
+
+bool validKangarooAssignment(
+    const RangeAssignment &assignment) {
+  return
+      assignment.requiredBackend == "cuda" &&
+      validCompressedPublicKey(
+          assignment.publicKey) &&
+      validKangarooRange(
+          assignment.start,
+          assignment.end);
+}
+
 } // namespace
 
 HttpRangeClient::HttpRangeClient(std::string serverUrl)
@@ -179,6 +275,21 @@ HttpRangeClient::parseClaimResult(
 
   extractString(
       response,
+      "search_mode",
+      assignment.searchMode);
+
+  extractString(
+      response,
+      "public_key",
+      assignment.publicKey);
+
+  extractString(
+      response,
+      "required_backend",
+      assignment.requiredBackend);
+
+  extractString(
+      response,
       "start",
       assignment.start);
 
@@ -193,6 +304,30 @@ HttpRangeClient::parseClaimResult(
 
     result.message =
         "Server returned an invalid range assignment";
+
+    return result;
+  }
+
+  if (
+      assignment.searchMode != "linear" &&
+      assignment.searchMode != "kangaroo") {
+    result.status =
+        RangeClaimStatus::Failed;
+
+    result.message =
+        "Server returned an unsupported assignment search mode";
+
+    return result;
+  }
+
+  if (
+      assignment.searchMode == "kangaroo" &&
+      !validKangarooAssignment(assignment)) {
+    result.status =
+        RangeClaimStatus::Failed;
+
+    result.message =
+        "Server returned invalid Kangaroo metadata or range shape";
 
     return result;
   }
@@ -595,7 +730,8 @@ HttpRangeClient::claim(
     int puzzle,
     int targetDurationMinutes,
     double speedMKeys,
-    const std::string &backend) {
+    const std::string &backend,
+    const std::string &searchMode) {
   lastError_.clear();
 
   lastClaimStatus_ =
@@ -631,6 +767,23 @@ HttpRangeClient::claim(
     return std::nullopt;
   }
 
+  if (
+      searchMode != "linear" &&
+      searchMode != "kangaroo") {
+    lastError_ = "Search mode is invalid";
+
+    return std::nullopt;
+  }
+
+  if (
+      searchMode == "kangaroo" &&
+      backend != "cuda") {
+    lastError_ =
+        "Kangaroo claims require the CUDA backend";
+
+    return std::nullopt;
+  }
+
   std::ostringstream request;
 
   request << "{"
@@ -643,7 +796,18 @@ HttpRangeClient::claim(
           << "\"backend\":\"" << jsonEscape(backend) << "\","
           << "\"target_duration_minutes\":" << targetDurationMinutes << ","
           << "\"speed_mkeys\":" << std::fixed << std::setprecision(6)
-          << speedMKeys << "}";
+          << speedMKeys;
+
+  if (searchMode == "kangaroo") {
+    request
+        << ",\"search_mode\":\"kangaroo\""
+        << ",\"engine\":\"kangaroo\""
+        << ",\"range_shape\":\"power_of_two\""
+        << ",\"range_min_bits\":32"
+        << ",\"range_max_bits\":170";
+  }
+
+  request << "}";
 
   const std::string url = serverUrl_ + "/api/range/claim";
 
@@ -715,14 +879,16 @@ RangeClaimResult HttpRangeClient::claimResult(
     int puzzle,
     int targetDurationMinutes,
     double speedMKeys,
-    const std::string &backend) {
+    const std::string &backend,
+    const std::string &searchMode) {
   auto assignment =
       claim(
           clientId,
           puzzle,
           targetDurationMinutes,
           speedMKeys,
-          backend);
+          backend,
+          searchMode);
 
   RangeClaimResult result;
 

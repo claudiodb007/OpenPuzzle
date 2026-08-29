@@ -2,19 +2,12 @@
 
 ## Current release
 
-**OpenPuzzle 1.0.18** hardens persistent Linux process identity against
-reboots, power loss and Linux PID reuse.
+OpenPuzzle 1.0.20 adds puzzle-aware routing for linear and Pollard Kangaroo workloads and resilient metadata-only solution alerts.
 
-Execution state, runtime-control markers and background engine supervisors
-are now bound to the current Linux `boot_id`. A numerically reused PID from
-an earlier boot is never trusted as proof that an OpenPuzzle execution is
-still active.
+Puzzle 71 keeps its existing BitCrack CUDA/OpenCL and KeyHunt CPU path. Puzzles 140, 145, 150, 155 and 160 use verified public-key metadata and require an explicitly installed external PSCKangaroo executor. Private keys remain local, and temporary alert failures retry automatically.
 
-The public repository contains the client only. The coordination service
-and website infrastructure are not included.
-
-See [OpenPuzzle 1.0.18 release notes](docs/RELEASE_1.0.18.md) and the
-[client runtime guide](docs/CLIENT_RUNTIME.md).
+The public repository contains the client only. The coordination service and website infrastructure are not included.
+See [OpenPuzzle 1.0.20 release notes](docs/RELEASE_1.0.20.md) and the [client runtime guide](docs/CLIENT_RUNTIME.md).
 
 ## Open-source orchestration platform for cryptographic keyspace exploration
 
@@ -206,6 +199,14 @@ ctest --output-on-failure
 ------------------------------------------------------------------------
 
 ## Current Release
+
+### OpenPuzzle 1.0.20
+
+Version 1.0.20 adds metadata-driven routing between linear and Pollard Kangaroo workloads, verified puzzle metadata, an external opt-in PSCKangaroo adapter, and resilient metadata-only solution-report retries.
+
+Puzzle 71 remains on the established bundled BitCrack/KeyHunt path. Kangaroo execution fails closed unless its CUDA executor and puzzle metadata are valid. Private-key material remains local.
+
+See [the 1.0.20 release notes](docs/RELEASE_1.0.20.md).
 
 ### OpenPuzzle 1.0.18
 

@@ -3,6 +3,7 @@
 #include "openpuzzle/engines/bitcrack/BitCrackEngine.hpp"
 #include "openpuzzle/engines/common/EngineDiscovery.hpp"
 #include "openpuzzle/engines/keyhunt/KeyHuntEngine.hpp"
+#include "openpuzzle/engines/kangaroo/KangarooEngine.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 
 #include <algorithm>
@@ -50,6 +51,9 @@ EngineManager::EngineManager() {
   bitcrack.capabilities.supportsResume = true;
   bitcrack.capabilities.supportsCheckpoint = true;
   bitcrack.capabilities.supportsBenchmark = true;
+  bitcrack.capabilities.supportsLinearSearch = true;
+  bitcrack.capabilities.supportsKangarooSearch = false;
+  bitcrack.capabilities.requiresPublicKey = false;
 
   registry_.registerEngine(bitcrack);
 
@@ -77,6 +81,9 @@ EngineManager::EngineManager() {
   keyhunt.capabilities.supportsResume = false;
   keyhunt.capabilities.supportsCheckpoint = false;
   keyhunt.capabilities.supportsBenchmark = false;
+  keyhunt.capabilities.supportsLinearSearch = true;
+  keyhunt.capabilities.supportsKangarooSearch = false;
+  keyhunt.capabilities.requiresPublicKey = false;
 
   registry_.registerEngine(keyhunt);
 
@@ -84,6 +91,39 @@ EngineManager::EngineManager() {
       "keyhunt",
       [](const std::string& executable) {
         return std::make_unique<KeyHuntEngine>(
+            executable);
+      });
+  EngineDescriptor kangaroo;
+  kangaroo.id = "kangaroo";
+  kangaroo.name = "Pollard Kangaroo";
+  kangaroo.version = "PSCKangaroo-compatible";
+  kangaroo.backend = "CUDA";
+
+  const auto configuredKangaroo =
+      ToolManager::kangarooPath();
+
+  kangaroo.runtime =
+      discovery.discover(
+          configuredKangaroo.value_or(
+              "psckangaroo"));
+  kangaroo.capabilities.cuda = true;
+  kangaroo.capabilities.opencl = false;
+  kangaroo.capabilities.cpu = false;
+  kangaroo.capabilities.supportsCompressed = true;
+  kangaroo.capabilities.supportsUncompressed = false;
+  kangaroo.capabilities.supportsResume = false;
+  kangaroo.capabilities.supportsCheckpoint = false;
+  kangaroo.capabilities.supportsBenchmark = false;
+  kangaroo.capabilities.supportsLinearSearch = false;
+  kangaroo.capabilities.supportsKangarooSearch = true;
+  kangaroo.capabilities.requiresPublicKey = true;
+
+  registry_.registerEngine(kangaroo);
+
+  factory_.registerFactory(
+      "kangaroo",
+      [](const std::string& executable) {
+        return std::make_unique<KangarooEngine>(
             executable);
       });
 }
@@ -115,6 +155,11 @@ EngineManager::resolveExecutable(
       return ToolManager::bitcrackCudaPath();
     }
 
+    return std::nullopt;
+  }
+
+  if (engineId == "kangaroo" &&
+      backendId != "cuda") {
     return std::nullopt;
   }
 

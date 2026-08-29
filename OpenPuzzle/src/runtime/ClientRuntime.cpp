@@ -382,35 +382,58 @@ int ClientRuntime::run(
     const std::string &workspace) const {
   dependencies_.prepareSignals();
 
+  constexpr auto solutionReportRetryInterval =
+      std::chrono::seconds(30);
+
   const auto reportDetectedSolution =
       [&] {
-        std::string error;
+        while (true) {
+          std::string error;
 
-        if (dependencies_.reportSolution(
-                serverUrl,
-                assignmentId,
-                clientId,
-                error)) {
-          std::cout
-              << "Solution report.... "
-              << "pending review\n";
+          if (dependencies_.reportSolution(
+                  serverUrl,
+                  assignmentId,
+                  clientId,
+                  error)) {
+            std::cout
+                << "Solution report.... "
+                << "pending review\n";
 
-          return;
-        }
+            return;
+          }
 
-        std::cerr
-            << "Solution report.... failed\n";
-
-        if (!error.empty()) {
           std::cerr
-              << "Reason............. "
-              << error
-              << '\n';
-        }
+              << "Solution report.... failed\n";
 
-        std::cerr
-            << "Local state........ preserved "
-            << "for retry\n";
+          if (!error.empty()) {
+            std::cerr
+                << "Reason............. "
+                << error
+                << '\n';
+          }
+
+          std::cerr
+              << "Local state........ preserved "
+              << "for retry\n";
+
+          if (dependencies_.stopRequested()) {
+            std::cerr
+                << "Solution retry..... interrupted\n";
+
+            return;
+          }
+
+          std::cerr
+              << "Retrying........... in 30 seconds\n";
+
+          if (!sleepInterruptibly(
+                  solutionReportRetryInterval)) {
+            std::cerr
+                << "Solution retry..... interrupted\n";
+
+            return;
+          }
+        }
       };
 
   const auto exportDetectedSolution =

@@ -1186,6 +1186,8 @@ int main() {
     bool reported = false;
     bool stopped = false;
     bool stateRemoved = false;
+    int reportAttempts = 0;
+    int sleepCalls = 0;
 
     dependencies.sync =
         [](const std::string &) {
@@ -1204,7 +1206,7 @@ int main() {
         [&](const std::string &server,
             const std::string &assignment,
             const std::string &clientId,
-            std::string &) {
+            std::string &error) {
           assert(
               server ==
               "https://server.test"
@@ -1220,9 +1222,26 @@ int main() {
               "client-solution"
           );
 
+          ++reportAttempts;
+
+          if (reportAttempts == 1) {
+            error = "simulated network failure";
+            return false;
+          }
+
           reported = true;
 
           return true;
+        };
+
+    dependencies.sleep =
+        [&](std::chrono::seconds duration) {
+          assert(
+              duration ==
+              std::chrono::seconds(1)
+          );
+
+          ++sleepCalls;
         };
 
     dependencies.stopExecution =
@@ -1257,6 +1276,8 @@ int main() {
     );
 
     assert(reported);
+    assert(reportAttempts == 2);
+    assert(sleepCalls == 30);
     assert(stopped);
     assert(!stateRemoved);
   }

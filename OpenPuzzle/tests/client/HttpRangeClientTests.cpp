@@ -35,6 +35,9 @@ int main() {
 
   assert(assignment->puzzle == 71);
   assert(assignment->rangeId == 84521);
+  assert(assignment->searchMode == "linear");
+  assert(assignment->publicKey.empty());
+  assert(assignment->requiredBackend.empty());
 
   assert(
       assignment->start ==
@@ -43,6 +46,76 @@ int main() {
   assert(
       assignment->end ==
       "40000007FFFFFFFFFF");
+
+
+  {
+    const std::string syntheticKangarooJson = R"JSON(
+{
+  "assignment_id": "assignment-synthetic-140",
+  "puzzle": 140,
+  "range_id": 90001,
+  "target": "synthetic-target",
+  "search_mode": "kangaroo",
+  "public_key": "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640",
+  "required_backend": "cuda",
+  "start": "100000000",
+  "end": "1FFFFFFFF"
+}
+)JSON";
+
+    const auto kangaroo =
+        HttpRangeClient::parseClaimResponse(
+            syntheticKangarooJson,
+            error);
+
+    assert(kangaroo);
+    assert(kangaroo->searchMode == "kangaroo");
+    assert(
+        kangaroo->publicKey ==
+        "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640");
+    assert(kangaroo->requiredBackend == "cuda");
+  }
+
+
+
+  {
+    const auto invalidShape =
+        HttpRangeClient::parseClaimResult(R"JSON({
+          "assignment_id": "assignment-invalid-shape",
+          "puzzle": 140,
+          "range_id": 90002,
+          "target": "synthetic-target",
+          "search_mode": "kangaroo",
+          "public_key": "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640",
+          "required_backend": "cuda",
+          "start": "100000000",
+          "end": "1FFFFFFFE"
+        })JSON");
+
+    assert(invalidShape.failed());
+    assert(!invalidShape.assignment);
+    assert(
+        invalidShape.message ==
+        "Server returned invalid Kangaroo metadata or range shape");
+  }
+
+  {
+    const auto invalidBackend =
+        HttpRangeClient::parseClaimResult(R"JSON({
+          "assignment_id": "assignment-invalid-backend",
+          "puzzle": 140,
+          "range_id": 90003,
+          "target": "synthetic-target",
+          "search_mode": "kangaroo",
+          "public_key": "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640",
+          "required_backend": "opencl",
+          "start": "100000000",
+          "end": "1FFFFFFFF"
+        })JSON");
+
+    assert(invalidBackend.failed());
+    assert(!invalidBackend.assignment);
+  }
 
   const auto invalid =
       HttpRangeClient::parseClaimResponse(

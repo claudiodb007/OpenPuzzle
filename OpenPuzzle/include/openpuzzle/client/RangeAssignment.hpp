@@ -11,6 +11,10 @@ struct RangeAssignment {
   int rangeId = 0;
 
   std::string target;
+
+  std::string searchMode = "linear";
+  std::string publicKey;
+  std::string requiredBackend;
   std::string start;
   std::string end;
 

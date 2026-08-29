@@ -30,7 +30,10 @@
 #include "openpuzzle/services/QueueService.hpp"
 #include "openpuzzle/services/WorkerService.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
+#include <array>
 #include <cstdlib>
+#include <optional>
+#include <unistd.h>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -107,6 +110,7 @@ static void printApplicationHelp() {
       << "  openpuzzle safestop\n"
       << "  openpuzzle doctor [--offline]\n"
       << "  openpuzzle audit [--limit N] [--puzzle N] [--event NAME]\n"
+      << "  openpuzzle engine install psckangaroo [--force]\n"
       << "\n"
       << "Global options:\n"
       << "  -h, --help       Show this help\n"
@@ -326,6 +330,9 @@ int Application::run(int argc, char **argv) {
       DoctorService service;
       return service.execute(r);
     }
+    if (cmd == "engine" && !r.empty() && r.front() == "install")
+      return cmdEngineInstall(r);
+
     if (cmd == "engine") {
       Database db;
       if (!ensureDb(db))
@@ -634,6 +641,119 @@ int Application::cmdConfigureTool(const std::vector<std::string> &a) {
   std::cout << "Configured BitCrack... " << p << "\n";
   return 0;
 }
+
+int Application::cmdEngineInstall(const std::vector<std::string> &args) {
+  if (
+      args.size() < 2 ||
+      hasArg(args, "--help") ||
+      hasArg(args, "-h")
+  ) {
+    std::cout
+        << "OpenPuzzle Engine Installation\n"
+        << "------------------------------\n"
+        << "Usage:\n"
+        << "  openpuzzle engine install psckangaroo [--force]\n"
+        << "\n"
+        << "PSCKangaroo is downloaded as pinned GPLv3 source and built\n"
+        << "locally with the installed NVIDIA CUDA toolkit. The OpenPuzzle\n"
+        << "package does not redistribute the resulting executable.\n";
+    return 0;
+  }
+
+  if (args[1] != "psckangaroo") {
+    throw std::runtime_error(
+        "Unsupported external engine: " + args[1]);
+  }
+
+  std::vector<std::string> installerArgs;
+  for (std::size_t index = 2; index < args.size(); ++index) {
+    if (args[index] != "--force") {
+      throw std::runtime_error(
+          "Unknown engine installer option: " + args[index]);
+    }
+    installerArgs.push_back(args[index]);
+  }
+
+  std::optional<fs::path> installer;
+  if (const char *configured =
+          std::getenv("OPENPUZZLE_PSCKANGAROO_INSTALLER")) {
+    const fs::path configuredPath(configured);
+    if (
+        configuredPath.is_absolute() &&
+        fs::is_regular_file(configuredPath) &&
+        access(configuredPath.c_str(), X_OK) == 0
+    ) {
+      installer = configuredPath;
+    } else {
+      throw std::runtime_error(
+          "OPENPUZZLE_PSCKANGAROO_INSTALLER must be an absolute executable file");
+    }
+  }
+
+  if (!installer) {
+    const std::array<fs::path, 3> candidates = {
+#ifdef OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH
+        fs::path(OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH),
+#else
+        fs::path(),
+#endif
+        fs::path("/usr/libexec/OpenPuzzle/install_psckangaroo_external.sh"),
+        fs::path("/usr/local/libexec/OpenPuzzle/install_psckangaroo_external.sh")
+    };
+
+    for (const auto &candidate : candidates) {
+      if (
+          !candidate.empty() &&
+          fs::is_regular_file(candidate) &&
+          access(candidate.c_str(), X_OK) == 0
+      ) {
+        installer = candidate;
+        break;
+      }
+    }
+  }
+
+  if (!installer) {
+    throw std::runtime_error(
+        "PSCKangaroo installer helper is missing or not executable");
+  }
+
+  const pid_t child = fork();
+  if (child < 0) {
+    throw std::runtime_error(
+        "Could not start the PSCKangaroo installer");
+  }
+
+  if (child == 0) {
+    std::vector<std::string> values;
+    values.push_back(installer->string());
+    values.insert(values.end(), installerArgs.begin(), installerArgs.end());
+
+    std::vector<char *> childArgv;
+    for (auto &value : values) {
+      childArgv.push_back(value.data());
+    }
+    childArgv.push_back(nullptr);
+
+    execv(installer->c_str(), childArgv.data());
+    _exit(127);
+  }
+
+  int status = 0;
+  if (waitpid(child, &status, 0) < 0) {
+    throw std::runtime_error(
+        "Could not wait for the PSCKangaroo installer");
+  }
+
+  if (WIFEXITED(status)) {
+    return WEXITSTATUS(status);
+  }
+  if (WIFSIGNALED(status)) {
+    return 128 + WTERMSIG(status);
+  }
+  return 1;
+}
+
 int Application::cmdTools() {
   auto p = ToolManager::bitcrackPath();
   std::cout << "BitCrack............. " << (p ? *p : "(not configured)")

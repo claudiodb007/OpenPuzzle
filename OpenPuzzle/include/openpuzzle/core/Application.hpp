@@ -30,6 +30,7 @@ private:
   int cmdStats(const std::vector<std::string> &);
   int cmdConfigureTool(const std::vector<std::string> &);
   int cmdTools();
+  int cmdEngineInstall(const std::vector<std::string> &);
   int cmdGpuList();
   int cmdGpuSelect(const std::vector<std::string> &);
   int cmdBitcrackCommand(const std::vector<std::string> &);

@@ -20,6 +20,10 @@ struct EngineCapabilities {
     bool supportsMultipleTargets = false;
     bool distributedReady = false;
 
+    bool supportsLinearSearch = false;
+    bool supportsKangarooSearch = false;
+    bool requiresPublicKey = false;
+
     uint32_t defaultBlocks = 256;
     uint32_t defaultThreads = 256;
     uint32_t defaultPoints = 1024;

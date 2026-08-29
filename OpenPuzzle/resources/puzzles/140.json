@@ -1,0 +1,12 @@
+{
+  "number": 140,
+  "name": "Bitcoin Puzzle 140",
+  "address": "1QKBaU6WAeycb3DbKbLBkX7vJiaS8r42Xo",
+  "hash160": "ffbb35a7bb9bbe16c1aa2534f7ff11d59c8e3d1a",
+  "reward": 14.0,
+  "search_mode": "kangaroo",
+  "public_key": "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640",
+  "required_backend": "cuda",
+  "keyspace": "80000000000000000000000000000000000:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "sharing": "private_external_readonly"
+}

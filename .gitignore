@@ -2,3 +2,9 @@
 /OpenPuzzle/build/
 /OpenPuzzle/build-*/
 /OpenPuzzle/dist/
+/.build-*/
+/.engine-staging-*/
+/.engine-validation-*/
+/.package-*/
+/.phase*-stage-*/
+/OpenPuzzle-BitCrack

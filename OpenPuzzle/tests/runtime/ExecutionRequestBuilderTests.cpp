@@ -87,6 +87,64 @@ int main() {
 
   assert(request.workspace == workspace);
 
+
+  {
+    auto kangarooPuzzle = makePuzzle();
+    kangarooPuzzle.id = 140;
+    kangarooPuzzle.number = 140;
+    kangarooPuzzle.searchMode = "kangaroo";
+    kangarooPuzzle.requiredBackend = "cuda";
+    kangarooPuzzle.publicKey =
+        "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640";
+
+    auto kangarooRange = makeRange();
+    kangarooRange.id = 140;
+    kangarooRange.puzzleId = 140;
+    kangarooRange.startKey = "100000000";
+    kangarooRange.endKey = "1FFFFFFFF";
+    kangarooRange.blockBits = 32;
+
+    auto kangarooJob = makeJob();
+    kangarooJob.id = 140;
+    kangarooJob.puzzleId = 140;
+    kangarooJob.rangeId = 140;
+
+    WorkerEngineCapability kangarooCapability;
+    kangarooCapability.engine = "Kangaroo";
+    kangarooCapability.backend = "CUDA";
+    kangarooCapability.device = 2;
+    kangarooCapability.blocks = 1;
+    kangarooCapability.threads = 1;
+    kangarooCapability.points = 1;
+
+    const auto kangarooRequest = builder.build(
+        kangarooPuzzle,
+        kangarooRange,
+        kangarooJob,
+        kangarooCapability,
+        "/tmp/psckangaroo",
+        workspace.string());
+
+    assert(kangarooRequest.engine == "Kangaroo");
+    assert(kangarooRequest.backend == "CUDA");
+    assert(kangarooRequest.device == 2);
+    assert(kangarooRequest.command.find("/tmp/psckangaroo") !=
+           std::string::npos);
+    assert(kangarooRequest.command.find("-gpu 2") != std::string::npos);
+    assert(kangarooRequest.command.find("-range 32") != std::string::npos);
+    assert(kangarooRequest.command.find("-pubkey") != std::string::npos);
+    assert(kangarooRequest.command.find(kangarooPuzzle.publicKey) !=
+           std::string::npos);
+    assert(kangarooRequest.command.find("-start '100000000'") !=
+           std::string::npos);
+    assert(kangarooRequest.command.find("RESULTS.TXT") !=
+           std::string::npos);
+    assert(kangarooRequest.command.find("found.txt") !=
+           std::string::npos);
+    assert(kangarooRequest.command.find("cuBitCrack") ==
+           std::string::npos);
+  }
+
   std::filesystem::remove_all(workspace.parent_path().parent_path());
 
   std::cout << "ExecutionRequestBuilderTests passed\n";

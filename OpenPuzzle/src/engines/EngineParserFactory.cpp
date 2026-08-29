@@ -2,6 +2,7 @@
 
 #include "openpuzzle/adapters/bitcrack/BitCrackProgressParser.hpp"
 #include "openpuzzle/adapters/keyhunt/KeyHuntProgressParser.hpp"
+#include "openpuzzle/adapters/kangaroo/KangarooProgressParser.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -36,6 +37,12 @@ EngineParserFactory::create(
   if (engineId == "keyhunt") {
     return std::make_unique<
         keyhunt::KeyHuntProgressParser>();
+  }
+
+  if (engineId == "kangaroo" ||
+      engineId == "psckangaroo") {
+    return std::make_unique<
+        kangaroo::KangarooProgressParser>();
   }
 
   return nullptr;
