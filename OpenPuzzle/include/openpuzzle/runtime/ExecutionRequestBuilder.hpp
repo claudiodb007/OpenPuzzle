@@ -21,7 +21,8 @@ public:
       const JobRecord& job,
       const WorkerEngineCapability& capability,
       const std::string& executable,
-      const std::string& workspace) const;
+      const std::string& workspace,
+      const std::string& walkSeed = {}) const;
 
 private:
   EngineManager& engineManager_;

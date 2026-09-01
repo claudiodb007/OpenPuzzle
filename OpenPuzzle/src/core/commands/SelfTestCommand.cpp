@@ -1,10 +1,13 @@
 #include "openpuzzle/core/commands/SelfTestCommand.hpp"
 
 #include "openpuzzle/hardware/RusticlEnvironment.hpp"
+#include "openpuzzle/runtime/KangarooWalkSeed.hpp"
+#include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cctype>
 #include <cerrno>
@@ -18,9 +21,11 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <vector>
 
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -47,6 +52,19 @@ constexpr const char *Puzzle20CompressedWif =
 constexpr const char *Puzzle20PrivateHex =
     "00000000000000000000000000000000000000000000000000000000000d2c55";
 
+/*
+ * Synthetic 32-bit ECDLP vector used only by the local
+ * PSCKangaroo self-test. It is not a funded puzzle and
+ * no part of the vector is transmitted.
+ */
+constexpr const char *KangarooStart = "100000000";
+constexpr const char *KangarooPrivateHex = "180000001";
+constexpr const char *KangarooPublicKey =
+    "02c9fb33cd0e097bc593ca0ec10f80b8e8cc1eae11d67e89dbc156d5ff56bb7f5f";
+
+constexpr std::array<const char *, 5> ExecutionSlots = {
+    "primary", "gpu", "cpu", "cuda", "opencl"};
+
 struct Options {
   std::string backend;
   int device = 0;
@@ -59,6 +77,7 @@ struct Options {
 struct ProcessOutcome {
   bool started = false;
   int exitCode = -1;
+  bool timedOut = false;
 };
 
 std::string lowercase(std::string value) {
@@ -129,12 +148,13 @@ Options parseOptions(const std::vector<std::string> &args) {
 
   if (options.backend.empty()) {
     throw std::invalid_argument(
-        "selftest requires --backend cuda, opencl or cpu");
+        "selftest requires --backend cuda, opencl, cpu or kangaroo");
   }
 
   if (options.backend != "cuda" &&
       options.backend != "opencl" &&
-      options.backend != "cpu") {
+      options.backend != "cpu" &&
+      options.backend != "kangaroo") {
     throw std::invalid_argument(
         "Unsupported selftest backend: " + options.backend);
   }
@@ -201,7 +221,8 @@ ProcessOutcome runProcess(
     const std::string &executable,
     const std::vector<std::string> &arguments,
     const fs::path &workspace,
-    const fs::path &logPath) {
+    const fs::path &logPath,
+    int timeoutSeconds) {
   ProcessOutcome outcome;
 
   const int logDescriptor = ::open(
@@ -251,11 +272,43 @@ ProcessOutcome runProcess(
   ::close(logDescriptor);
 
   int status = 0;
-  pid_t waited = -1;
+  pid_t waited = 0;
+  const auto deadline =
+      std::chrono::steady_clock::now() +
+      std::chrono::seconds(timeoutSeconds);
+  auto terminationDeadline = deadline;
+  bool interruptSent = false;
 
-  do {
-    waited = ::waitpid(pid, &status, 0);
-  } while (waited < 0 && errno == EINTR);
+  while (true) {
+    waited = ::waitpid(pid, &status, WNOHANG);
+
+    if (waited == pid) {
+      break;
+    }
+
+    if (waited < 0 && errno != EINTR) {
+      break;
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+
+    if (!interruptSent && now >= deadline) {
+      outcome.timedOut = true;
+      interruptSent = true;
+      terminationDeadline = now + std::chrono::seconds(10);
+      (void)::kill(pid, SIGINT);
+    } else if (interruptSent && now >= terminationDeadline) {
+      (void)::kill(pid, SIGKILL);
+
+      do {
+        waited = ::waitpid(pid, &status, 0);
+      } while (waited < 0 && errno == EINTR);
+
+      break;
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
 
   if (waited != pid) {
     outcome.exitCode = -1;
@@ -331,6 +384,31 @@ bool validPuzzle20KeyHuntLog(const fs::path &path) {
       privateKeyPattern);
 }
 
+bool validKangarooResult(const fs::path &path) {
+  const std::string content = lowercase(readSmallFile(path));
+
+  if (content.empty()) {
+    return false;
+  }
+
+  const std::regex privateKeyPattern(
+      std::string(R"((^|[^0-9a-f])(0x)?0*)") +
+          KangarooPrivateHex +
+          R"(([^0-9a-f]|$))",
+      std::regex_constants::icase);
+
+  return std::regex_search(content, privateKeyPattern);
+}
+
+bool activeClientRuntime() {
+  return std::any_of(
+      ExecutionSlots.begin(),
+      ExecutionSlots.end(),
+      [](const char *slot) {
+        return ClientRuntimeControl::running(slot);
+      });
+}
+
 double lastSpeed(const fs::path &logPath) {
   std::ifstream input(logPath);
 
@@ -339,7 +417,7 @@ double lastSpeed(const fs::path &logPath) {
   }
 
   const std::regex speedPattern(
-      R"(([0-9]+(?:\.[0-9]+)?)\s*MKeys?/s)",
+      R"(([0-9]+(?:\.[0-9]+)?)\s*([GM])Keys?/s)",
       std::regex_constants::icase);
 
   double speed = 0.0;
@@ -351,6 +429,10 @@ double lastSpeed(const fs::path &logPath) {
     if (std::regex_search(line, match, speedPattern)) {
       try {
         speed = std::stod(match[1].str());
+
+        if (lowercase(match[2].str()) == "g") {
+          speed *= 1000.0;
+        }
       } catch (...) {
         /* Ignore malformed performance text. */
       }
@@ -406,12 +488,22 @@ int SelfTestCommand::run(
       RusticlEnvironment::apply(*options.rusticlSelector);
     }
 
+    const bool kangarooBackend =
+        options.backend == "kangaroo";
+
+    if (kangarooBackend && activeClientRuntime()) {
+      throw std::runtime_error(
+          "Kangaroo self-test requires OpenPuzzle to be idle");
+    }
+
     std::optional<std::string> executable;
 
     if (options.backend == "cuda") {
       executable = ToolManager::bitcrackCudaPath();
     } else if (options.backend == "opencl") {
       executable = ToolManager::bitcrackOpenCLPath();
+    } else if (kangarooBackend) {
+      executable = ToolManager::kangarooPath();
     } else {
       executable = ToolManager::keyhuntPath();
     }
@@ -461,7 +553,22 @@ int SelfTestCommand::run(
     resultPath = workspace / "found.txt";
     std::vector<std::string> engineArguments;
 
-    if (options.backend == "cpu") {
+    if (kangarooBackend) {
+      resultPath = workspace / "RESULTS.TXT";
+      writePrivateFile(resultPath, "");
+
+      engineArguments = {
+          "-gpu", std::to_string(options.device),
+          "-dp", "6",
+          "-range", "32",
+          "-pubkey", KangarooPublicKey,
+          "-start", KangarooStart,
+          "-seed", KangarooWalkSeed::generate(),
+          "-ramlimit", "4",
+          "-concurrent", "1",
+          "-wwbuffer", "5",
+          "-checkpoint", "0"};
+    } else if (options.backend == "cpu") {
       const fs::path targetsPath = workspace / "targets.txt";
       resultPath = workspace / "KEYFOUNDKEYFOUND.txt";
 
@@ -496,7 +603,8 @@ int SelfTestCommand::run(
         *executable,
         engineArguments,
         workspace,
-        logPath);
+        logPath,
+        kangarooBackend ? 180 : 300);
     const auto finishedAt = std::chrono::steady_clock::now();
 
     const double duration =
@@ -511,13 +619,16 @@ int SelfTestCommand::run(
     WorkspaceSecurity::protectFile(logPath);
 
     const bool resultMatches =
-        validPuzzle20Result(resultPath) ||
-        (options.backend == "cpu" &&
-         validPuzzle20KeyHuntLog(logPath));
+        kangarooBackend
+        ? validKangarooResult(resultPath)
+        : (validPuzzle20Result(resultPath) ||
+           (options.backend == "cpu" &&
+            validPuzzle20KeyHuntLog(logPath)));
 
     const bool passed =
         outcome.started &&
         outcome.exitCode == 0 &&
+        !outcome.timedOut &&
         resultMatches;
 
     const double speed = lastSpeed(logPath);
@@ -526,7 +637,9 @@ int SelfTestCommand::run(
         << "OpenPuzzle self-test\n"
         << "--------------------\n"
         << "Backend............ " << options.backend << "\n"
-        << "Puzzle............. 20\n"
+        << (kangarooBackend
+            ? "Vector............. synthetic 32-bit\n"
+            : "Puzzle............. 20\n")
         << "Result............. " << (passed ? "passed" : "failed") << "\n"
         << "Duration........... " << std::fixed << std::setprecision(3)
         << duration << " seconds\n";

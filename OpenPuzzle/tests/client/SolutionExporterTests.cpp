@@ -115,6 +115,7 @@ int main() {
           engineResult.string());
 
   assert(exported.success);
+  assert(exported.format == "WIF (compressed)");
 
   const fs::path expectedRoot =
       temporaryHome /
@@ -192,6 +193,86 @@ int main() {
       repeated.noticePath ==
       expectedNotice.string());
   assert(repeated.warning.empty());
+
+  /*
+   * PSCKangaroo writes a single native hexadecimal result.
+   * Accept it only for a Kangaroo assignment and only when
+   * the value belongs to the assigned inclusive range.
+   */
+  {
+    auto kangarooState = state;
+    kangarooState.assignmentId =
+        "40404040-4040-4040-8040-404040404040";
+    kangarooState.engine = "PSCKangaroo";
+    kangarooState.backend = "Kangaroo";
+    kangarooState.start = "180000000";
+    kangarooState.end = "1800000FF";
+    kangarooState.workspace =
+        (temporaryHome / "kangaroo-workspace").string();
+
+    fs::create_directories(kangarooState.workspace);
+
+    const std::string nativePrivateKey =
+        "0000000000000000000000000000000000000000000000000000000180000001";
+
+    const fs::path nativeResult =
+        fs::path(kangarooState.workspace) /
+        "RESULTS.TXT";
+
+    writeFile(
+        nativeResult,
+        "PRIVATE KEY: " + nativePrivateKey + "\n");
+
+    const auto nativeExport =
+        SolutionExporter::exportSolution(
+            kangarooState,
+            nativeResult.string());
+
+    assert(nativeExport.success);
+    assert(nativeExport.format == "hexadecimal");
+    assert(
+        readFile(nativeExport.walletPath).find(
+            nativePrivateKey) != std::string::npos);
+    assert(
+        readFile(nativeExport.noticePath).find(
+            nativePrivateKey) == std::string::npos);
+
+    writeFile(
+        nativeResult,
+        "PRIVATE KEY: 17FFFFFFF\n");
+
+    const auto outsideRange =
+        SolutionExporter::exportSolution(
+            kangarooState,
+            nativeResult.string());
+
+    assert(!outsideRange.success);
+
+    writeFile(
+        nativeResult,
+        "PRIVATE KEY: not-hexadecimal\n");
+
+    const auto malformedNative =
+        SolutionExporter::exportSolution(
+            kangarooState,
+            nativeResult.string());
+
+    assert(!malformedNative.success);
+
+    auto bitCrackState = kangarooState;
+    bitCrackState.engine = "BitCrack";
+
+    writeFile(
+        nativeResult,
+        "PRIVATE KEY: " + nativePrivateKey + "\n");
+
+    const auto wrongEngine =
+        SolutionExporter::exportSolution(
+            bitCrackState,
+            nativeResult.string());
+
+    assert(!wrongEngine.success);
+  }
 
   const fs::path wrongAddress =
       fs::path(state.workspace) /

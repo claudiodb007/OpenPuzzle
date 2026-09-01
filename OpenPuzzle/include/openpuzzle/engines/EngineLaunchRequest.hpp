@@ -11,6 +11,7 @@ struct EngineLaunchRequest {
 
   std::vector<std::string> targets;
   std::string publicKey;
+  std::string walkSeed;
 
   std::string startKey;
   std::string endKey;

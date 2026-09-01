@@ -225,7 +225,11 @@ bool ExecutionStopper::stop(const std::string& workspace) const {
         std::chrono::milliseconds(100));
   }
 
-  return signalled;
+  return
+      signalled &&
+      !processIdentityMatches(
+          workspace,
+          pid);
 }
 
 } // namespace openpuzzle

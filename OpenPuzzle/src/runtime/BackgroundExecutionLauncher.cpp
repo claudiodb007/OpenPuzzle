@@ -13,6 +13,25 @@
 #include <string>
 
 namespace openpuzzle {
+namespace {
+
+std::string shellQuote(
+    const std::string &value) {
+  std::string quoted = "'";
+
+  for (const char character : value) {
+    if (character == '\'') {
+      quoted += "'\\''";
+    } else {
+      quoted += character;
+    }
+  }
+
+  quoted += '\'';
+  return quoted;
+}
+
+} // namespace
 
 ExecutionHandle BackgroundExecutionLauncher::start(
     const StartExecutionRequest& request) const {
@@ -52,15 +71,27 @@ ExecutionHandle BackgroundExecutionLauncher::start(
         "Failed to determine process boot identity");
   }
 
+  std::ostringstream supervisor;
+  supervisor
+      << '(' << request.command
+      << "); rc=$?; printf '%s\\n' \"$rc\" > "
+      << shellQuote(exitFile)
+      << "; exit \"$rc\"";
+
+  std::ostringstream session;
+  session
+      << "printf '%s\\n' \"$$\" >&3; "
+      << "exec 3>&-; "
+      << supervisor.str();
+
   std::ostringstream shell;
-  shell << "umask 077; setsid sh -c '("
-        << request.command
-        << "); rc=$?; echo $rc > "
-        << exitFile
-        << "; exit $rc"
-        << "' >> "
-        << logFile
-        << " 2>&1 & echo $!";
+  shell
+      << "umask 077; setsid sh -c "
+      << shellQuote(session.str())
+      << " 3>&1"
+      << " >> "
+      << shellQuote(logFile)
+      << " 2>&1 &";
 
   FILE* pipe = popen(shell.str().c_str(), "r");
 

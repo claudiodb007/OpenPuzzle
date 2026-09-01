@@ -10,6 +10,7 @@ struct SolutionExportResult {
   bool success = false;
   std::string walletPath;
   std::string noticePath;
+  std::string format;
   std::string warning;
   std::string error;
 };

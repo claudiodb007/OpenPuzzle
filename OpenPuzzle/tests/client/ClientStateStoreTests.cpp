@@ -38,6 +38,12 @@ ClientExecutionState makeValidState() {
   state.target =
       "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU";
 
+  state.publicKey =
+      "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640";
+
+  state.kangarooWalkSeed = "0123456789ABCDEF";
+  state.kangarooGeneration = 7;
+
   state.start =
       "400000070000000000";
 
@@ -89,6 +95,9 @@ void assertEqual(
   assert(actual.gpuName == expected.gpuName);
 
   assert(actual.target == expected.target);
+  assert(actual.publicKey == expected.publicKey);
+  assert(actual.kangarooWalkSeed == expected.kangarooWalkSeed);
+  assert(actual.kangarooGeneration == expected.kangarooGeneration);
   assert(actual.start == expected.start);
   assert(actual.end == expected.end);
 
@@ -186,6 +195,9 @@ int main() {
 
     assert(legacy);
     assert(legacy->processStartTime == 0);
+    assert(legacy->publicKey.empty());
+    assert(legacy->kangarooWalkSeed.empty());
+    assert(legacy->kangarooGeneration == 0);
   }
 
   const auto bootId =

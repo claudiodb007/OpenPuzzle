@@ -54,6 +54,115 @@ bool validCompressedWif(const std::string &value) {
              });
 }
 
+std::string lowercase(std::string value) {
+  std::transform(
+      value.begin(),
+      value.end(),
+      value.begin(),
+      [](unsigned char character) {
+        return static_cast<char>(
+            std::tolower(character));
+      });
+
+  return value;
+}
+
+std::string trim(std::string value) {
+  const auto notSpace =
+      [](unsigned char character) {
+        return std::isspace(character) == 0;
+      };
+
+  value.erase(
+      value.begin(),
+      std::find_if(
+          value.begin(),
+          value.end(),
+          notSpace));
+
+  value.erase(
+      std::find_if(
+          value.rbegin(),
+          value.rend(),
+          notSpace).base(),
+      value.end());
+
+  return value;
+}
+
+bool validHex(std::string value) {
+  if (value.rfind("0x", 0) == 0 ||
+      value.rfind("0X", 0) == 0) {
+    value.erase(0, 2);
+  }
+
+  return
+      !value.empty() &&
+      value.size() <= 64 &&
+      std::all_of(
+          value.begin(),
+          value.end(),
+          [](unsigned char character) {
+            return std::isxdigit(character) != 0;
+          });
+}
+
+std::string normalizedHex(std::string value) {
+  value = trim(std::move(value));
+
+  if (value.rfind("0x", 0) == 0 ||
+      value.rfind("0X", 0) == 0) {
+    value.erase(0, 2);
+  }
+
+  value = lowercase(std::move(value));
+
+  const auto first =
+      value.find_first_not_of('0');
+
+  return first == std::string::npos
+             ? "0"
+             : value.substr(first);
+}
+
+bool hexWithinRange(
+    const std::string &value,
+    const std::string &start,
+    const std::string &end) {
+  if (!validHex(value) ||
+      !validHex(start) ||
+      !validHex(end)) {
+    return false;
+  }
+
+  const auto normalizedValue =
+      normalizedHex(value);
+  const auto normalizedStart =
+      normalizedHex(start);
+  const auto normalizedEnd =
+      normalizedHex(end);
+
+  const auto compare =
+      [](const std::string &left,
+         const std::string &right) {
+        if (left.size() != right.size()) {
+          return left.size() < right.size()
+                     ? -1
+                     : 1;
+        }
+
+        if (left == right) {
+          return 0;
+        }
+
+        return left < right ? -1 : 1;
+      };
+
+  return
+      compare(normalizedValue, normalizedStart) >= 0 &&
+      compare(normalizedValue, normalizedEnd) <= 0;
+}
+
 bool ensurePrivateDirectory(
     const fs::path &path,
     std::string &error) {
@@ -298,7 +407,8 @@ std::vector<std::string> readRecord(
     }
   }
 
-  if (lines.size() != 4) {
+  if (lines.empty() ||
+      lines.size() > 4) {
     error = "Unsupported engine solution format";
     return {};
   }
@@ -387,37 +497,79 @@ SolutionExporter::exportSolution(
   }
 
   std::string address;
-  std::string walletImportKey;
+  std::string privateKey;
   std::string compression;
+  std::string privateKeyLabel;
 
-  if (record[0] !=
-          "OPENPUZZLE_SOLUTION_V1" ||
-      !valueAfter(
-          record[1],
-          "address=",
-          address) ||
-      !valueAfter(
-          record[2],
-          "private_key_wif=",
-          walletImportKey) ||
-      !valueAfter(
-          record[3],
-          "compression=",
-          compression)) {
-    result.error = "Unsupported engine solution format";
-    return result;
-  }
+  const auto engine =
+      lowercase(state.engine);
 
-  if (address != state.target) {
-    result.error = "Solution address does not match assignment";
-    return result;
-  }
+  const bool kangaroo =
+      engine == "kangaroo" ||
+      engine == "psckangaroo";
 
-  if (compression != "compressed" ||
-      !validCompressedWif(
-          walletImportKey)) {
-    result.error = "Invalid compressed wallet-import key";
-    return result;
+  if (kangaroo &&
+      record.size() == 1 &&
+      valueAfter(
+          record[0],
+          "PRIVATE KEY:",
+          privateKey)) {
+    privateKey = trim(std::move(privateKey));
+
+    if (!validHex(privateKey) ||
+        !hexWithinRange(
+            privateKey,
+            state.start,
+            state.end)) {
+      result.error =
+          "Kangaroo private key is invalid or outside the assignment";
+      return result;
+    }
+
+    privateKey = normalizedHex(
+        std::move(privateKey));
+    privateKey.insert(
+        privateKey.begin(),
+        64 - privateKey.size(),
+        '0');
+
+    address = state.target;
+    result.format = "hexadecimal";
+    privateKeyLabel = "Private key (hex):";
+  } else {
+    if (record.size() != 4 ||
+        record[0] !=
+            "OPENPUZZLE_SOLUTION_V1" ||
+        !valueAfter(
+            record[1],
+            "address=",
+            address) ||
+        !valueAfter(
+            record[2],
+            "private_key_wif=",
+            privateKey) ||
+        !valueAfter(
+            record[3],
+            "compression=",
+            compression)) {
+      result.error = "Unsupported engine solution format";
+      return result;
+    }
+
+    if (address != state.target) {
+      result.error = "Solution address does not match assignment";
+      return result;
+    }
+
+    if (compression != "compressed" ||
+        !validCompressedWif(
+            privateKey)) {
+      result.error = "Invalid compressed wallet-import key";
+      return result;
+    }
+
+    result.format = "WIF (compressed)";
+    privateKeyLabel = "Private key (WIF):";
   }
 
   const char *home =
@@ -533,17 +685,20 @@ SolutionExporter::exportSolution(
 
   std::ostringstream content;
   content
-      << "OpenPuzzle wallet import\n"
-      << "========================\n"
+      << "OpenPuzzle protected solution\n"
+      << "=============================\n"
       << "Puzzle: "
       << state.puzzle
       << "\n"
       << "Address: "
       << address
       << "\n"
-      << "Compression: compressed\n"
-      << "Private key (WIF):\n"
-      << walletImportKey
+      << "Format: "
+      << result.format
+      << "\n"
+      << privateKeyLabel
+      << "\n"
+      << privateKey
       << "\n";
 
   const bool written =

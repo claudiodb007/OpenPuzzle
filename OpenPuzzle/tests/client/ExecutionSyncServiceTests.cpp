@@ -536,6 +536,42 @@ int main() {
   }
 
   /*
+   * O resultado nativo do PSCKangaroo também suspende a
+   * sincronização. Outros engines não podem interpretá-lo,
+   * e ligações simbólicas nunca contam como resultados.
+   */
+  {
+    const auto nativeResult =
+        workspace / "RESULTS.TXT";
+
+    writeFile(
+        nativeResult,
+        "PRIVATE KEY: synthetic-test-secret\n");
+
+    assert(
+        ExecutionSyncService::solutionFile(
+            workspace.string(),
+            "PSCKangaroo"));
+
+    assert(
+        !ExecutionSyncService::solutionFile(
+            workspace.string(),
+            "BitCrack"));
+
+    std::filesystem::remove(nativeResult);
+    std::filesystem::create_symlink(
+        "/etc/passwd",
+        nativeResult);
+
+    assert(
+        !ExecutionSyncService::solutionFile(
+            workspace.string(),
+            "Kangaroo"));
+
+    std::filesystem::remove(nativeResult);
+  }
+
+  /*
    * Processo terminado com exit code diferente de zero:
    * tenta reportar failed e preserva o estado quando
    * o servidor não está disponível.

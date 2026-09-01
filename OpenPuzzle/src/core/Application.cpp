@@ -102,7 +102,7 @@ static void printApplicationHelp() {
       << "Usage:\n"
       << "  openpuzzle benchmark [benchmark options]\n"
       << "  openpuzzle update [--check|--download-only|--safe]\n"
-      << "  openpuzzle selftest --backend cuda|opencl|cpu [options]\n"
+      << "  openpuzzle selftest --backend cuda|opencl|cpu|kangaroo [options]\n"
       << "  openpuzzle [puzzle] [run options]\n"
       << "  openpuzzle run [puzzle] [run options]\n"
       << "  openpuzzle status\n"
@@ -691,12 +691,18 @@ int Application::cmdEngineInstall(const std::vector<std::string> &args) {
   }
 
   if (!installer) {
+    fs::path developmentInstaller;
+    std::error_code executablePathError;
+    const fs::path executablePath =
+        fs::read_symlink("/proc/self/exe", executablePathError);
+    if (!executablePathError && !executablePath.empty()) {
+      developmentInstaller =
+          executablePath.parent_path() /
+          "libexec/OpenPuzzle/install_psckangaroo_external.sh";
+    }
+
     const std::array<fs::path, 3> candidates = {
-#ifdef OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH
-        fs::path(OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH),
-#else
-        fs::path(),
-#endif
+        developmentInstaller,
         fs::path("/usr/libexec/OpenPuzzle/install_psckangaroo_external.sh"),
         fs::path("/usr/local/libexec/OpenPuzzle/install_psckangaroo_external.sh")
     };

@@ -471,7 +471,9 @@ int ClientRuntime::run(
         }
 
         std::cout
-            << "Format............. WIF (compressed)\n"
+            << "Format............. "
+            << exported.format
+            << "\n"
             << "Permissions........ owner only\n"
             << "Private key........ not displayed or uploaded\n"
             << "Action............. protect the wallet file now\n";
@@ -511,16 +513,16 @@ int ClientRuntime::run(
             << workspace
             << '\n'
             << "Local state........ preserved\n"
-            << "Stopping BitCrack...\n";
+            << "Stopping search engine...\n";
 
         if (!dependencies_.stopExecution(
                 workspace)) {
           std::cerr
               << "Warning............ unable to "
-              << "confirm BitCrack termination\n";
+              << "confirm search engine termination\n";
         } else {
           std::cout
-              << "BitCrack............ stopped\n";
+              << "Search engine....... stopped\n";
         }
 
         exportDetectedSolution(finalSync);
@@ -541,18 +543,18 @@ int ClientRuntime::run(
             << '\n';
       }
 
-      std::cout << "Stopping BitCrack...\n";
+      std::cout << "Stopping search engine...\n";
 
       if (!dependencies_.stopExecution(
               workspace)) {
         std::cerr
-            << "Unable to stop BitCrack cleanly.\n";
+            << "Unable to stop search engine cleanly.\n";
 
         return 1;
       }
 
       std::cout
-          << "BitCrack............ stopped\n";
+          << "Search engine....... stopped\n";
 
       const std::string finalKeysChecked =
           dependencies_.finalKeysChecked(
@@ -648,16 +650,16 @@ int ClientRuntime::run(
 
       if (result.running) {
         std::cout
-            << "Stopping BitCrack...\n";
+            << "Stopping search engine...\n";
 
         if (!dependencies_.stopExecution(
                 workspace)) {
           std::cerr
               << "Warning............ unable to "
-              << "confirm BitCrack termination\n";
+              << "confirm search engine termination\n";
         } else {
           std::cout
-              << "BitCrack............ stopped\n";
+              << "Search engine....... stopped\n";
         }
       }
 
@@ -696,12 +698,12 @@ int ClientRuntime::run(
               AssignmentRejected) {
         std::cerr
             << "Assignment......... rejected by server\n"
-            << "Stopping BitCrack...\n";
+            << "Stopping search engine...\n";
 
         if (!dependencies_.stopExecution(
                 workspace)) {
           std::cerr
-              << "Unable to stop BitCrack cleanly.\n";
+              << "Unable to stop search engine cleanly.\n";
 
           return 1;
         }
@@ -715,7 +717,7 @@ int ClientRuntime::run(
         }
 
         std::cout
-            << "BitCrack............ stopped\n"
+            << "Search engine....... stopped\n"
             << "Local state........ removed\n";
 
         return 0;
@@ -727,12 +729,12 @@ int ClientRuntime::run(
               PermanentFailure) {
         std::cerr
             << "Progress error..... permanent\n"
-            << "Stopping BitCrack...\n";
+            << "Stopping search engine...\n";
 
         if (!dependencies_.stopExecution(
                 workspace)) {
           std::cerr
-              << "Unable to stop BitCrack cleanly.\n";
+              << "Unable to stop search engine cleanly.\n";
         }
 
         std::cerr

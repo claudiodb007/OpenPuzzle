@@ -15,7 +15,8 @@ public:
       const RangeRecord& range,
       const JobRecord& job,
       const WorkerEngineCapability& capability,
-      const std::string& workspace) const;
+      const std::string& workspace,
+      const std::string& walkSeed = {}) const;
 };
 
 } // namespace openpuzzle

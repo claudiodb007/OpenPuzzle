@@ -1,6 +1,10 @@
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
 
+#include "openpuzzle/runtime/ExecutionStopper.hpp"
+
 #include <cassert>
+#include <cerrno>
+#include <csignal>
 #include <cstdint>
 #include <chrono>
 #include <filesystem>
@@ -14,6 +18,22 @@
 using namespace openpuzzle;
 
 namespace {
+
+std::string shellQuote(
+    const std::string &value) {
+  std::string quoted = "'";
+
+  for (const char character : value) {
+    if (character == '\'') {
+      quoted += "'\\''";
+    } else {
+      quoted += character;
+    }
+  }
+
+  quoted += '\'';
+  return quoted;
+}
 
 std::string readFile(
     const std::filesystem::path& path) {
@@ -75,18 +95,91 @@ bool waitForFile(
       path);
 }
 
+bool processExists(int pid) {
+  return
+      pid > 0 &&
+      (::kill(pid, 0) == 0 ||
+       errno == EPERM);
+}
+
 } // namespace
 
 int main() {
   const auto workspace =
       std::filesystem::temp_directory_path() /
       (
-          "openpuzzle-background-launcher-" +
+          "openpuzzle-background launcher-'quoted'-" +
           std::to_string(getpid())
       );
 
   std::filesystem::remove_all(
       workspace);
+
+  BackgroundExecutionLauncher launcher;
+
+  const auto stopWorkspace =
+      std::filesystem::temp_directory_path() /
+      ("openpuzzle-background-stop-" +
+       std::to_string(getpid()));
+
+  std::filesystem::remove_all(
+      stopWorkspace);
+
+  StartExecutionRequest stopRequest;
+  stopRequest.executionId = 78;
+  stopRequest.workspace =
+      stopWorkspace.string();
+  stopRequest.command =
+      "sleep 9999 & child=$!; "
+      "printf '%s\\n' \"$child\" > " +
+      shellQuote(
+          stopWorkspace / "child.pid") +
+      "; wait \"$child\"";
+
+  const auto stopHandle =
+      launcher.start(
+          stopRequest);
+
+  const auto childPath =
+      stopWorkspace / "child.pid";
+
+  assert(
+      waitForFile(
+          childPath,
+          std::chrono::seconds(2)));
+
+  int childPid = 0;
+
+  {
+    std::ifstream input(childPath);
+    input >> childPid;
+  }
+
+  assert(childPid > 0);
+  assert(processExists(stopHandle.pid));
+  assert(processExists(childPid));
+  assert(
+      ::getpgid(stopHandle.pid) ==
+      stopHandle.pid);
+
+  ExecutionStopper stopper;
+  assert(
+      stopper.stop(
+          stopWorkspace.string()));
+
+  for (int attempt = 0;
+       attempt < 40 &&
+       processExists(childPid);
+       ++attempt) {
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(50));
+  }
+
+  assert(!processExists(stopHandle.pid));
+  assert(!processExists(childPid));
+
+  std::filesystem::remove_all(
+      stopWorkspace);
 
   StartExecutionRequest request;
 
@@ -96,16 +189,12 @@ int main() {
       workspace.string();
 
   request.command =
-      "echo stdout-line; "
-      "echo stderr-line >&2; "
-      "echo synthetic-found > " +
-      (
-          workspace /
-          "found.txt"
-      ).string() +
-      "; sleep 1; exit 7";
-
-  BackgroundExecutionLauncher launcher;
+      "if [ 'quoted value' = 'quoted value' ]; then "
+      "printf '%s\\n' 'stdout-line'; "
+      "printf '%s\\n' 'stderr-line' >&2; "
+      "printf '%s\\n' 'synthetic-found' > " +
+      shellQuote(workspace / "found.txt") +
+      "; else exit 66; fi; sleep 1; exit 7";
 
   const auto handle =
       launcher.start(

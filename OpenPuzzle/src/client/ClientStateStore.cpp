@@ -334,6 +334,21 @@ bool ClientStateStore::save(
 
   writeField(
       output,
+      "public_key",
+      state.publicKey);
+
+  writeField(
+      output,
+      "kangaroo_walk_seed",
+      state.kangarooWalkSeed);
+
+  output
+      << "kangaroo_generation="
+      << state.kangarooGeneration
+      << '\n';
+
+  writeField(
+      output,
       "start",
       state.start);
 
@@ -534,6 +549,21 @@ ClientStateStore::load(
       valueOf(
           values,
           "target");
+
+  state.publicKey =
+      valueOf(
+          values,
+          "public_key");
+
+  state.kangarooWalkSeed =
+      valueOf(
+          values,
+          "kangaroo_walk_seed");
+
+  state.kangarooGeneration =
+      parseUnsigned64(
+          values,
+          "kangaroo_generation");
 
   state.start =
       valueOf(

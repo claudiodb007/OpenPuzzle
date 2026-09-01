@@ -118,7 +118,12 @@ bool ExecutionSyncService::readLatestProgress(
   const std::string logName =
       engineId == "keyhunt"
           ? "keyhunt.log"
-          : "bitcrack.log";
+          : (
+                engineId == "kangaroo" ||
+                        engineId == "psckangaroo"
+                    ? "kangaroo.log"
+                    : "bitcrack.log"
+            );
 
   const auto logPath =
       std::filesystem::path(workspace) /
@@ -263,12 +268,20 @@ bool ExecutionSyncService::hasCompletionProof(
   const bool keyhunt =
       engineId == "keyhunt";
 
+  const bool kangaroo =
+      engineId == "kangaroo" ||
+      engineId == "psckangaroo";
+
   const auto logPath =
       std::filesystem::path(workspace) /
       (
           keyhunt
               ? "keyhunt.log"
-              : "bitcrack.log"
+              : (
+                    kangaroo
+                        ? "kangaroo.log"
+                        : "bitcrack.log"
+                )
       );
 
   std::ifstream input(
@@ -280,7 +293,16 @@ bool ExecutionSyncService::hasCompletionProof(
   }
 
   const auto provesCompletion =
-      [keyhunt](const std::string& record) {
+      [keyhunt, kangaroo](const std::string& record) {
+        if (kangaroo) {
+          /*
+           * Pollard Kangaroo is probabilistic. A clean process exit or a
+           * checkpoint message is not deterministic proof that the assigned
+           * interval was exhausted.
+           */
+          return false;
+        }
+
         if (keyhunt) {
           return record == "End";
         }
@@ -387,9 +409,16 @@ ExecutionSyncService::speedSamples(
 
   const auto logPath =
       std::filesystem::path(workspace) /
-      (engineId == "keyhunt"
-           ? "keyhunt.log"
-           : "bitcrack.log");
+      (
+          engineId == "keyhunt"
+              ? "keyhunt.log"
+              : (
+                    engineId == "kangaroo" ||
+                            engineId == "psckangaroo"
+                        ? "kangaroo.log"
+                        : "bitcrack.log"
+                )
+      );
 
   std::ifstream input(
       logPath,
@@ -446,31 +475,62 @@ ExecutionSyncService::speedSamples(
 
 std::optional<std::string>
 ExecutionSyncService::solutionFile(
-    const std::string& workspace) {
-  const auto path =
-      std::filesystem::path(workspace) /
-      "found.txt";
+    const std::string& workspace,
+    const std::string& engine) {
+  const auto root =
+      std::filesystem::path(workspace);
 
-  std::error_code error;
+  const auto nonEmptyDirectFile =
+      [](const std::filesystem::path& path) {
+        std::error_code error;
+        const auto status =
+            std::filesystem::symlink_status(
+                path,
+                error);
 
-  if (
-      !std::filesystem::is_regular_file(
-          path,
-          error) ||
-      error) {
-    return std::nullopt;
+        if (error ||
+            std::filesystem::is_symlink(status) ||
+            !std::filesystem::is_regular_file(status)) {
+          return false;
+        }
+
+        const auto size =
+            std::filesystem::file_size(
+                path,
+                error);
+
+        return !error && size > 0;
+      };
+
+  const auto found =
+      root / "found.txt";
+
+  if (nonEmptyDirectFile(found)) {
+    return found.string();
   }
 
-  const auto size =
-      std::filesystem::file_size(
-          path,
-          error);
+  std::string normalizedEngine = engine;
 
-  if (error || size == 0) {
-    return std::nullopt;
+  std::transform(
+      normalizedEngine.begin(),
+      normalizedEngine.end(),
+      normalizedEngine.begin(),
+      [](unsigned char character) {
+        return static_cast<char>(
+            std::tolower(character));
+      });
+
+  if (normalizedEngine == "kangaroo" ||
+      normalizedEngine == "psckangaroo") {
+    const auto nativeResult =
+        root / "RESULTS.TXT";
+
+    if (nonEmptyDirectFile(nativeResult)) {
+      return nativeResult.string();
+    }
   }
 
-  return path.string();
+  return std::nullopt;
 }
 
 AssignmentUploadStatus
@@ -570,7 +630,8 @@ ExecutionSyncService::tick(
 
   const auto detectedSolution =
       solutionFile(
-          state->workspace);
+          state->workspace,
+          state->engine);
 
   if (detectedSolution) {
     result.solutionFound = true;

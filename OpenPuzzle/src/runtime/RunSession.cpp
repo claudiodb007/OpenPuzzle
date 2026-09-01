@@ -25,6 +25,8 @@
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/engines/common/SearchMode.hpp"
 #include "openpuzzle/runtime/ExecutionStopper.hpp"
+#include "openpuzzle/runtime/KangarooCheckpointRecoveryFlow.hpp"
+#include "openpuzzle/runtime/KangarooWalkSeed.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 #include "openpuzzle/runtime/RunBenchmarkPreparation.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
@@ -774,10 +776,21 @@ int showStatus(const std::vector<std::string> &args) {
           std::cout
               << "Speed.............. "
               << result.progress.speedMKeys
-              << " MKey/s\n"
-              << "Keys checked....... "
-              << result.progress.keysChecked
-              << '\n';
+              << " MKey/s\n";
+
+          const auto statusEngine =
+              normalizedGpuName(state.engine);
+
+          if (statusEngine == "kangaroo" ||
+              statusEngine == "psckangaroo") {
+            std::cout
+                << "Linear coverage.... not applicable\n";
+          } else {
+            std::cout
+                << "Keys checked....... "
+                << result.progress.keysChecked
+                << '\n';
+          }
 
           if (result.progressUploaded) {
             std::cout
@@ -900,10 +913,24 @@ int showStatus(const std::vector<std::string> &args) {
 
   if (result.running) {
     if (result.hasProgress) {
-      std::cout << "Speed.............. " << result.progress.speedMKeys
-                << " MKey/s\n"
-                << "Keys checked....... " << result.progress.keysChecked
-                << '\n';
+      std::cout
+          << "Speed.............. "
+          << result.progress.speedMKeys
+          << " MKey/s\n";
+
+      const auto statusEngine =
+          normalizedGpuName(state.engine);
+
+      if (statusEngine == "kangaroo" ||
+          statusEngine == "psckangaroo") {
+        std::cout
+            << "Linear coverage.... not applicable\n";
+      } else {
+        std::cout
+            << "Keys checked....... "
+            << result.progress.keysChecked
+            << '\n';
+      }
 
       if (result.progressUploaded) {
         std::cout << "Progress........... uploaded\n";
@@ -1030,7 +1057,8 @@ int stopExecution() {
   const auto solution =
       client::ExecutionSyncService::
           solutionFile(
-              state->workspace);
+              state->workspace,
+              state->engine);
 
   if (solution) {
     std::cout
@@ -1650,6 +1678,7 @@ ClientIterationResult RunSession::runOnce(
    */
   if (subcommand == "run") {
     const auto existing = client::ClientStateStore::load();
+    bool rejectedKangarooRecovery = false;
 
     if (existing &&
         processIdentityMatches(*existing)) {
@@ -1675,7 +1704,119 @@ ClientIterationResult RunSession::runOnce(
               existing->workspace));
     }
 
-    if (existing) {
+    /*
+     * Result material always takes precedence over checkpoint recovery.
+     * A power failure may happen after PSCKangaroo writes RESULTS.TXT but
+     * before the launcher copies it to found.txt or sends the metadata-only
+     * report. Re-enter ClientRuntime so export and report retry use the same
+     * audited path as a solution detected during normal execution.
+     */
+    if (existing &&
+        client::ExecutionSyncService::solutionFile(
+            existing->workspace,
+            existing->engine)) {
+      std::cout
+          << "Recovering protected solution...\n"
+          << "Assignment......... "
+          << existing->assignmentId
+          << "\n\n";
+
+      ClientRuntime recoveryRuntime;
+
+      return monitoredResult(
+          recoveryRuntime.run(
+              server,
+              existing->assignmentId,
+              existing->clientId,
+              existing->workspace));
+    }
+
+    const auto existingEngine =
+        existing
+            ? normalizedGpuName(existing->engine)
+            : std::string{};
+
+    if (existing &&
+        (existingEngine == "kangaroo" ||
+         existingEngine == "psckangaroo")) {
+      std::cout
+          << "Recovering interrupted Kangaroo execution...\n"
+          << "Assignment......... "
+          << existing->assignmentId
+          << '\n';
+
+      const auto executable =
+          ToolManager::kangarooPath();
+
+      if (!executable) {
+        std::cerr
+            << "Kangaroo recovery.. blocked\n"
+            << "Reason............. PSCKangaroo executable is unavailable\n"
+            << "Local state........ preserved for diagnosis\n";
+
+        return 1;
+      }
+
+      const auto recovery =
+          KangarooCheckpointRecoveryFlow::recover(
+              server,
+              *existing,
+              *executable,
+              assignmentWorkspace(existing->assignmentId));
+
+      switch (recovery.status) {
+      case KangarooCheckpointRecoveryFlowStatus::Resumed: {
+        std::cout
+            << "Kangaroo recovery.. resumed\n"
+            << "PID................ "
+            << recovery.state.pid
+            << "\n\n";
+
+        ClientRuntime recoveryRuntime;
+
+        return monitoredResult(
+            recoveryRuntime.run(
+                server,
+                recovery.state.assignmentId,
+                recovery.state.clientId,
+                recovery.state.workspace));
+      }
+
+      case KangarooCheckpointRecoveryFlowStatus::Retry:
+        return ClientIterationResult::retry(
+            recovery.error.empty()
+                ? "Unable to verify the Kangaroo assignment lease"
+                : recovery.error);
+
+      case KangarooCheckpointRecoveryFlowStatus::Rejected:
+        if (!client::ClientStateStore::remove()) {
+          return ClientIterationResult::retry(
+              "Unable to remove rejected Kangaroo execution state");
+        }
+
+        rejectedKangarooRecovery = true;
+
+        std::cout
+            << "Kangaroo recovery.. rejected by server\n"
+            << "Checkpoint......... preserved\n"
+            << "Local state........ removed\n\n";
+        break;
+
+      case KangarooCheckpointRecoveryFlowStatus::Invalid:
+        std::cerr
+            << "Kangaroo recovery.. blocked\n"
+            << "Reason............. "
+            << (recovery.error.empty()
+                    ? "unsafe or incomplete local recovery state"
+                    : recovery.error)
+            << '\n'
+            << "Local state........ preserved for diagnosis\n";
+
+        return 1;
+      }
+    }
+
+    if (existing && !rejectedKangarooRecovery) {
       std::cout
           << "Recovering finished execution...\n"
           << "Assignment......... "
@@ -1688,59 +1829,14 @@ ClientIterationResult RunSession::runOnce(
           syncService.tick(server);
 
       if (recovery.solutionFound) {
-        const auto exported =
-            client::SolutionExporter::exportSolution(
-                recovery.state,
-                recovery.solutionPath);
+        ClientRuntime recoveryRuntime;
 
-        std::cout
-            << "\n"
-            << "========================================\n"
-            << "PRIVATE KEY FOUND - ACTION REQUIRED\n"
-            << "========================================\n"
-            << "Engine result...... "
-            << recovery.solutionPath
-            << '\n'
-            << "Workspace.......... "
-            << existing->workspace
-            << '\n'
-            << "Local state........ preserved\n";
-
-        if (exported.success) {
-          std::cout
-              << "Wallet file........ "
-              << exported.walletPath
-              << '\n';
-
-          if (!exported.noticePath.empty()) {
-            std::cout
-                << "Visible notice..... "
-                << exported.noticePath
-                << '\n';
-          }
-
-          std::cout
-              << "Private key........ not displayed or uploaded\n"
-              << "Action............. protect the wallet file now\n";
-
-          if (!exported.warning.empty()) {
-            std::cerr
-                << "Notice warning..... "
-                << exported.warning
-                << '\n';
-          }
-        } else {
-          std::cerr
-              << "Wallet export..... failed\n"
-              << "Reason............. "
-              << exported.error
-              << '\n'
-              << "Engine result...... preserved for recovery\n";
-        }
-
-        return
-            ClientIterationResult::
-                solutionFound();
+        return monitoredResult(
+            recoveryRuntime.run(
+                server,
+                recovery.state.assignmentId,
+                recovery.state.clientId,
+                recovery.state.workspace));
       }
 
       if (
@@ -2048,6 +2144,7 @@ ClientIterationResult RunSession::runOnce(
     if (
         initializeClient &&
         !dryRun &&
+        !kangarooWorkload &&
         runBackend != "cpu") {
       RunBenchmarkPreparationDependencies
           preparationDependencies;
@@ -2125,7 +2222,9 @@ ClientIterationResult RunSession::runOnce(
       subcommand == "run" &&
       runBackend != "cpu") {
     const auto measured =
-        measuredSpeedMKeys(args);
+        kangarooWorkload
+            ? std::optional<double>{}
+            : measuredSpeedMKeys(args);
 
     if (measured) {
       speedMKeys = *measured;
@@ -2596,12 +2695,17 @@ ClientIterationResult RunSession::runOnce(
   WorkspaceSecurity::prepare(
       workspace);
 
+  const auto walkSeed =
+      kangarooAssignment
+          ? KangarooWalkSeed::generate()
+          : std::string{};
+
   EngineManager engineManager;
 
   ExecutionRequestBuilder builder(engineManager);
 
   auto request = builder.build(puzzle, range, job, capability, executable,
-                               workspace.string());
+                               workspace.string(), walkSeed);
 
   request.executionId = assignment->rangeId;
 
@@ -2690,6 +2794,9 @@ ClientIterationResult RunSession::runOnce(
       cpuBackend ? std::string{} : hardwareValue;
 
   state.target = assignment->target;
+  state.publicKey = assignment->publicKey;
+  state.kangarooWalkSeed = request.walkSeed;
+  state.kangarooGeneration = 0;
   state.start = assignment->start;
   state.end = assignment->end;
 

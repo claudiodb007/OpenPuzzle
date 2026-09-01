@@ -44,6 +44,12 @@ struct ClientExecutionState {
   bool profileManaged = false;
 
   std::string target;
+  std::string publicKey;
+
+  // Explicit PSCKangaroo walk identity for this process generation.
+  std::string kangarooWalkSeed;
+  std::uint64_t kangarooGeneration = 0;
+
   std::string start;
   std::string end;
 

@@ -34,7 +34,8 @@ StartExecutionRequest ExecutionRequestBuilder::build(
     const JobRecord& job,
     const WorkerEngineCapability& capability,
     const std::string& executable,
-    const std::string& workspace) const {
+    const std::string& workspace,
+    const std::string& walkSeed) const {
   const std::string engineId =
       normalizeEngineId(
           capability.engine);
@@ -47,7 +48,8 @@ StartExecutionRequest ExecutionRequestBuilder::build(
           range,
           job,
           capability,
-          workspace);
+          workspace,
+          walkSeed);
 
   auto engine = engineManager_.create(
       engineId,
@@ -67,6 +69,7 @@ StartExecutionRequest ExecutionRequestBuilder::build(
 
   request.engine = capability.engine;
   request.backend = capability.backend;
+  request.walkSeed = walkSeed;
 
   request.device = capability.device;
   request.blocks = capability.blocks;

@@ -82,7 +82,8 @@ public:
 
   static std::optional<std::string>
   solutionFile(
-      const std::string& workspace);
+      const std::string& workspace,
+      const std::string& engine = {});
 
   static bool hasCompletionProof(
       const std::string& workspace,

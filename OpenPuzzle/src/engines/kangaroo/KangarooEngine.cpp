@@ -1,4 +1,5 @@
 #include "openpuzzle/engines/kangaroo/KangarooEngine.hpp"
+#include "openpuzzle/runtime/KangarooWalkSeed.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -158,6 +159,19 @@ unsigned int exactRangeBits(
   return bits;
 }
 
+unsigned int distinguishedPointBits(
+    unsigned int rangeBits) {
+  if (rangeBits <= 40) {
+    return 6;
+  }
+
+  if (rangeBits <= 80) {
+    return 12;
+  }
+
+  return 16;
+}
+
 } // namespace
 
 KangarooEngine::KangarooEngine(std::string executable)
@@ -186,6 +200,10 @@ std::string KangarooEngine::buildCommand(
     throw std::invalid_argument(
         "Kangaroo requires a compressed public key");
 
+  if (!KangarooWalkSeed::valid(request.walkSeed))
+    throw std::invalid_argument(
+        "Kangaroo walk seed must be 16 non-zero hexadecimal digits");
+
   if (request.workspace.empty() ||
       request.outputFile.empty() ||
       request.logFile.empty())
@@ -199,8 +217,15 @@ std::string KangarooEngine::buildCommand(
   const auto rangeBits =
       exactRangeBits(request.startKey, request.endKey);
 
+  const auto dpBits =
+      distinguishedPointBits(rangeBits);
+
   const auto resultsFile =
       (std::filesystem::path(request.workspace) / "RESULTS.TXT").string();
+
+  const auto checkpointFile =
+      (std::filesystem::path(request.workspace) /
+       "kangaroo.checkpoint").string();
 
   if (std::filesystem::path(request.outputFile) ==
       std::filesystem::path(resultsFile))
@@ -215,18 +240,42 @@ std::string KangarooEngine::buildCommand(
       << " && chmod 600 " << shellQuote(request.outputFile)
       << " && : > " << shellQuote(resultsFile)
       << " && chmod 600 " << shellQuote(resultsFile)
-      << " && { " << shellQuote(executable_)
+      << " && { set --; "
+      << "if [ -e " << shellQuote(checkpointFile)
+      << " ] || [ -L " << shellQuote(checkpointFile) << " ]; then "
+      << "if [ ! -f " << shellQuote(checkpointFile)
+      << " ] || [ -L " << shellQuote(checkpointFile)
+      << " ]; then printf '%s\\n' "
+      << shellQuote("Unsafe Kangaroo checkpoint rejected")
+      << " >&2; exit 70; fi; "
+      << "chmod 600 " << shellQuote(checkpointFile)
+      << " || exit 70; "
+      << "set -- -loadwild " << shellQuote(checkpointFile)
+      << "; fi; "
+      << shellQuote(executable_)
       << " -gpu " << request.device
-      << " -dp 16"
+      << " -dp " << dpBits
       << " -range " << rangeBits
       << " -pubkey " << shellQuote(request.publicKey)
-      << " -start " << shellQuote(request.startKey)
+      << " -start " << shellQuote(request.startKey);
+
+  command << " -seed " << shellQuote(request.walkSeed);
+
+  command
       << " -ramlimit 8"
       << " -concurrent 1"
       << " -wwbuffer 5"
-      << " -checkpoint 0"
+      << " -checkpoint 1"
+      << " -savefile " << shellQuote(checkpointFile)
+      << " \"$@\""
       << " >> " << shellQuote(request.logFile)
       << " 2>&1; status=$?; "
+      << "if [ -e " << shellQuote(checkpointFile)
+      << " ] || [ -L " << shellQuote(checkpointFile) << " ]; then "
+      << "if [ ! -f " << shellQuote(checkpointFile)
+      << " ] || [ -L " << shellQuote(checkpointFile)
+      << " ] || ! chmod 600 " << shellQuote(checkpointFile)
+      << "; then status=70; fi; fi; "
       << "if [ -s " << shellQuote(resultsFile) << " ]; then "
       << "cp -- " << shellQuote(resultsFile)
       << " " << shellQuote(request.outputFile)

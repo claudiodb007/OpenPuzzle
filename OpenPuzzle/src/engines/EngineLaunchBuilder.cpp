@@ -25,7 +25,8 @@ EngineLaunchRequest
 EngineLaunchBuilder::build(const PuzzleRecord &puzzle, const RangeRecord &range,
                            const JobRecord &job,
                            const WorkerEngineCapability &capability,
-                           const std::string &workspace) const {
+                           const std::string &workspace,
+                           const std::string &walkSeed) const {
   if (!capability.available) {
     throw std::runtime_error("Worker engine capability is unavailable");
   }
@@ -54,6 +55,7 @@ EngineLaunchBuilder::build(const PuzzleRecord &puzzle, const RangeRecord &range,
 
   request.targets.push_back(puzzle.address);
   request.publicKey = puzzle.publicKey;
+  request.walkSeed = walkSeed;
 
   request.startKey = range.startKey;
 

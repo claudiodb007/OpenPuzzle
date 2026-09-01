@@ -123,7 +123,8 @@ int main() {
         kangarooJob,
         kangarooCapability,
         "/tmp/psckangaroo",
-        workspace.string());
+        workspace.string(),
+        "0123456789ABCDEF");
 
     assert(kangarooRequest.engine == "Kangaroo");
     assert(kangarooRequest.backend == "CUDA");
@@ -135,7 +136,10 @@ int main() {
     assert(kangarooRequest.command.find("-pubkey") != std::string::npos);
     assert(kangarooRequest.command.find(kangarooPuzzle.publicKey) !=
            std::string::npos);
+    assert(kangarooRequest.walkSeed == "0123456789ABCDEF");
     assert(kangarooRequest.command.find("-start '100000000'") !=
+           std::string::npos);
+    assert(kangarooRequest.command.find("-seed '0123456789ABCDEF'") !=
            std::string::npos);
     assert(kangarooRequest.command.find("RESULTS.TXT") !=
            std::string::npos);

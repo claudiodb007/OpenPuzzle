@@ -52,7 +52,10 @@ KangarooProgressParser::parseLine(const std::string& line) {
     progress.speedMKeys = std::stod(speedMatch[1].str()) * 1000.0;
 
     // PSCK's DPs and Checks counters are not linear keys checked.
-    // Leaving keysChecked empty prevents false range progress.
+    // Zero is the explicit wire-level sentinel for unknown/not-applicable
+    // linear coverage. It keeps the assignment lease alive without claiming
+    // deterministic keyspace coverage.
+    progress.keysChecked = "0";
     return progress;
   }
 

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(OpenPuzzle VERSION 1.0.20 LANGUAGES CXX)
+project(OpenPuzzle VERSION 1.0.21 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -176,6 +176,10 @@ add_library(OpenPuzzleCore
     src/runtime/ClientRuntime.cpp
     src/runtime/ClientRuntimeControl.cpp
     src/runtime/LinuxProcessIdentity.cpp
+    src/runtime/KangarooCheckpointRecoveryPlanner.cpp
+    src/runtime/KangarooRecoveryLeaseGuard.cpp
+    src/runtime/KangarooCheckpointRecoveryCoordinator.cpp
+    src/runtime/KangarooCheckpointRecoveryFlow.cpp
     src/runtime/WorkspaceSecurity.cpp
     src/setup/FirstRunSetup.cpp
     src/client/HttpRangeClient.cpp
@@ -254,8 +258,6 @@ target_compile_definitions(OpenPuzzleCore
         OPENPUZZLE_KANGAROO_ENGINE_NAME="${OPENPUZZLE_KANGAROO_ENGINE_NAME}"
         OPENPUZZLE_CUDA_ENGINE_IDENTITY="${OPENPUZZLE_CUDA_ENGINE_IDENTITY}"
         OPENPUZZLE_OPENCL_ENGINE_IDENTITY="${OPENPUZZLE_OPENCL_ENGINE_IDENTITY}"
-        OPENPUZZLE_SOURCE_PUZZLE_DIR="${CMAKE_SOURCE_DIR}/resources/puzzles"
-        OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH="${CMAKE_BINARY_DIR}/libexec/OpenPuzzle/install_psckangaroo_external.sh"
 )
 
 set(OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY
@@ -428,6 +430,7 @@ install(
         docs/RELEASE_1.0.18.md
         docs/RELEASE_1.0.19.md
         docs/RELEASE_1.0.20.md
+        docs/RELEASE_1.0.21.md
         docs/SYSTEMD_SERVICE.md
     DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
 )

@@ -19,6 +19,13 @@ add_test(
         -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PuzzleRoutingCliTests.cmake
 )
 
+add_test(
+    NAME KangarooSelfTestCliTests
+    COMMAND ${CMAKE_COMMAND}
+        -DOPENPUZZLE_BIN=$<TARGET_FILE:OpenPuzzle>
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/KangarooSelfTestCliTests.cmake
+)
+
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_test(
@@ -920,6 +927,100 @@ add_test(
     COMMAND KangarooEngineCommandTests
 )
 
+add_executable(KangarooCheckpointCommandTests
+    engines/KangarooCheckpointCommandTests.cpp
+)
+
+target_link_libraries(KangarooCheckpointCommandTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME KangarooCheckpointCommandTests
+    COMMAND KangarooCheckpointCommandTests
+)
+
+add_executable(KangarooCheckpointRecoveryPlannerTests
+    runtime/KangarooCheckpointRecoveryPlannerTests.cpp
+)
+
+target_link_libraries(KangarooCheckpointRecoveryPlannerTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME KangarooCheckpointRecoveryPlannerTests
+    COMMAND KangarooCheckpointRecoveryPlannerTests
+)
+
+add_executable(KangarooRecoveryLeaseGuardTests
+    runtime/KangarooRecoveryLeaseGuardTests.cpp
+)
+
+target_link_libraries(KangarooRecoveryLeaseGuardTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME KangarooRecoveryLeaseGuardTests
+    COMMAND KangarooRecoveryLeaseGuardTests
+)
+
+add_executable(KangarooCheckpointRecoveryCoordinatorTests
+    runtime/KangarooCheckpointRecoveryCoordinatorTests.cpp
+)
+
+target_link_libraries(KangarooCheckpointRecoveryCoordinatorTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME KangarooCheckpointRecoveryCoordinatorTests
+    COMMAND KangarooCheckpointRecoveryCoordinatorTests
+)
+
+add_executable(KangarooCheckpointRecoveryFlowTests
+    runtime/KangarooCheckpointRecoveryFlowTests.cpp
+)
+
+target_link_libraries(KangarooCheckpointRecoveryFlowTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME KangarooCheckpointRecoveryFlowTests
+    COMMAND KangarooCheckpointRecoveryFlowTests
+)
+
+add_test(
+    NAME KangarooStartupRecoveryCliTests
+    COMMAND bash
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/KangarooStartupRecoveryCliTests.sh
+        $<TARGET_FILE:OpenPuzzle>
+)
+
+set_tests_properties(
+    KangarooStartupRecoveryCliTests
+    PROPERTIES TIMEOUT 35
+)
+
+add_test(
+    NAME KangarooSolutionRecoveryCliTests
+    COMMAND bash
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/KangarooSolutionRecoveryCliTests.sh
+        $<TARGET_FILE:OpenPuzzle>
+)
+
+set_tests_properties(
+    KangarooSolutionRecoveryCliTests
+    PROPERTIES TIMEOUT 20
+)
+
 add_executable(KeyHuntEngineCommandTests
     engines/KeyHuntEngineCommandTests.cpp
 )
@@ -946,6 +1047,20 @@ target_link_libraries(KangarooProgressParserTests
 add_test(
     NAME KangarooProgressParserTests
     COMMAND KangarooProgressParserTests
+)
+
+add_executable(KangarooExecutionSyncContractTests
+    client/KangarooExecutionSyncContractTests.cpp
+)
+
+target_link_libraries(KangarooExecutionSyncContractTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME KangarooExecutionSyncContractTests
+    COMMAND KangarooExecutionSyncContractTests
 )
 
 add_executable(EngineParserFactoryTests
@@ -1386,4 +1501,20 @@ add_test(
         ${CMAKE_COMMAND}
         "-DOPENPUZZLE_CLI=$<TARGET_FILE:OpenPuzzle>"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/EngineInstallerCliTests.cmake
+)
+
+
+# Phase 41: explicit Kangaroo walk-seed contract
+add_executable(KangarooWalkSeedTests
+    runtime/KangarooWalkSeedTests.cpp
+)
+
+target_link_libraries(KangarooWalkSeedTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME KangarooWalkSeedTests
+    COMMAND KangarooWalkSeedTests
 )

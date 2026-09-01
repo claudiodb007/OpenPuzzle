@@ -43,6 +43,7 @@ int main() {
   request.backend = "CUDA";
   request.publicKey =
       "031f6a332d3c5c4f2de2378c012f429cd109ba07d69690c6c701b6bb87860d6640";
+  request.walkSeed = "0123456789ABCDEF";
   request.startKey = "100000000";
   request.endKey = "1FFFFFFFF";
   request.device = 0;

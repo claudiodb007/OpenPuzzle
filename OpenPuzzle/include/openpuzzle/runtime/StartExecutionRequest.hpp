@@ -12,6 +12,7 @@ struct StartExecutionRequest {
 
   std::string engine;
   std::string backend;
+  std::string walkSeed;
 
   int device = 0;
   int blocks = 0;
