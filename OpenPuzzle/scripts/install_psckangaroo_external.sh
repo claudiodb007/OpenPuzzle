@@ -6,7 +6,13 @@ export LC_ALL=C
 UPSTREAM_URL="https://github.com/pscamillo/PSCKangaroo.git"
 UPSTREAM_COMMIT="021e997a2c9de28d86e3d8db3a5f65188653a80a"
 UPSTREAM_TREE="61533742ddcde64df0d993093317b570c68026a7"
+PATCH_ID="explicit-seed-v1"
+PATCH_SHA256="59092a431b94eacebc66a46afc202a84d1b21e162e339bfcaeb9ee25b3c2a03e"
+PATCHED_RCK_SHA256="8c99fe7d327531c145f817f082d460172b86b9aedf5de99090016dfd425a8b79"
+PATCHED_README_SHA256="a2f33d35cd571523bc20f2089ae51dc2972ee9b2a21f77d546769261830cbd8d"
 ARCHITECTURES="sm_60 sm_61 sm_70 sm_75 sm_80 sm_86 sm_89 sm_90 compute_89"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+patch_file="$script_dir/patches/psckangaroo-explicit-seed-v1.patch"
 
 usage() {
   cat <<'EOF'
@@ -16,7 +22,8 @@ Usage:
   openpuzzle engine install psckangaroo [--force]
 
 This explicit command downloads pinned GPLv3 source, verifies its Git commit
-and tree, builds it locally with the installed NVIDIA CUDA toolkit, and places
+and tree, applies a bundled hash-verified OpenPuzzle compatibility patch,
+builds it locally with the installed NVIDIA CUDA toolkit, and places
 the executable in the current user's OpenPuzzle engine directory.
 
 The PSCKangaroo executable is not downloaded from or redistributed by the
@@ -41,7 +48,7 @@ done
 [[ "$(uname -s)" == "Linux" ]] || die "only Linux is supported"
 [[ "$(uname -m)" == "x86_64" ]] || die "only x86_64 is supported"
 
-for command in git nvcc g++ sha256sum readelf file install mktemp; do
+for command in git nvcc g++ sha256sum readelf file install mktemp awk dirname strip; do
   command -v "$command" >/dev/null 2>&1 || die "required command not found: $command"
 done
 
@@ -78,6 +85,7 @@ printf 'OpenPuzzle PSCKangaroo local installation\n'
 printf '%s\n' '-----------------------------------------'
 printf 'Source.............. %s\n' "$UPSTREAM_URL"
 printf 'Commit.............. %s\n' "$UPSTREAM_COMMIT"
+printf 'Compatibility patch. %s (%s)\n' "$PATCH_ID" "$PATCH_SHA256"
 printf 'Destination......... %s\n' "$target"
 printf 'CUDA runtime........ static local link\n'
 printf 'GPU execution....... none\n\n'
@@ -91,6 +99,21 @@ actual_tree="$(git -C "$source_dir" rev-parse 'HEAD^{tree}')"
 [[ "$actual_tree" == "$UPSTREAM_TREE" ]] || die "pinned tree verification failed"
 [[ -z "$(git -C "$source_dir" status --porcelain --untracked-files=no)" ]] || \
   die "pinned source worktree is not clean"
+
+[[ -f "$patch_file" && ! -L "$patch_file" ]] || die "compatibility patch is missing or unsafe"
+actual_patch_sha="$(sha256sum "$patch_file" | awk '{print $1}')"
+[[ "$actual_patch_sha" == "$PATCH_SHA256" ]] || die "compatibility patch hash verification failed"
+git -C "$source_dir" apply --check "$patch_file" || die "compatibility patch preflight failed"
+git -C "$source_dir" apply "$patch_file" || die "compatibility patch application failed"
+git -C "$source_dir" diff --check || die "patched source whitespace validation failed"
+patched_paths="$(git -C "$source_dir" diff --name-only -- | sort)"
+expected_patched_paths=$'RCKangaroo_hunt_v2.cpp\nREADME.md'
+[[ "$patched_paths" == "$expected_patched_paths" ]] || die "compatibility patch changed unexpected files"
+[[ "$(sha256sum "$source_dir/RCKangaroo_hunt_v2.cpp" | awk '{print $1}')" == "$PATCHED_RCK_SHA256" ]] || \
+  die "patched RCKangaroo source hash verification failed"
+[[ "$(sha256sum "$source_dir/README.md" | awk '{print $1}')" == "$PATCHED_README_SHA256" ]] || \
+  die "patched README hash verification failed"
+git -C "$source_dir" apply --reverse --check "$patch_file" || die "applied patch reverse verification failed"
 
 common=(
   -O3 -march=x86-64 -mtune=generic -pthread
@@ -135,6 +158,12 @@ nvcc -O3 "${gpu_arch[@]}" \
 popd >/dev/null
 
 [[ -f "$source_dir/psckangaroo" ]] || die "build did not produce psckangaroo"
+
+strip --strip-all "$source_dir/psckangaroo"
+if readelf -SW "$source_dir/psckangaroo" | grep -Eq '] \.symtab|] \.strtab'; then
+  die "stripped executable still contains non-runtime symbol tables"
+fi
+
 if readelf -d "$source_dir/psckangaroo" | grep -q 'libcudart\.so'; then
   die "built executable unexpectedly requires shared libcudart"
 fi
@@ -148,14 +177,19 @@ install -m 700 "$source_dir/psckangaroo" "$temporary_target"
 
 binary_sha="$(sha256sum "$temporary_target" | awk '{print $1}')"
 cat >"$temporary_manifest" <<EOF
-schema=openpuzzle-external-engine-v1
+schema=openpuzzle-external-engine-v2
 engine=psckangaroo
 source_url=$UPSTREAM_URL
 source_commit=$UPSTREAM_COMMIT
 source_tree=$UPSTREAM_TREE
+patch_id=$PATCH_ID
+patch_sha256=$PATCH_SHA256
+patched_rck_sha256=$PATCHED_RCK_SHA256
+patched_readme_sha256=$PATCHED_README_SHA256
 binary_sha256=$binary_sha
 architectures=$ARCHITECTURES
 cuda_runtime=static-local-build
+binary_symbols=stripped
 EOF
 chmod 600 "$temporary_manifest"
 
@@ -166,4 +200,5 @@ printf '\nPSCKangaroo installation complete\n'
 printf 'Executable.......... %s\n' "$target"
 printf 'SHA-256............ %s\n' "$binary_sha"
 printf 'Manifest............ %s\n' "$manifest"
+printf 'Binary symbols...... stripped\n'
 printf 'GPU execution....... none\n'

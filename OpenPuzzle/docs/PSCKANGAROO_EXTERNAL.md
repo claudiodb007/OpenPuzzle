@@ -1,6 +1,6 @@
 # External PSCKangaroo executor
 
-OpenPuzzle 1.0.20 does not distribute a PSCKangaroo binary. PSCKangaroo is
+OpenPuzzle does not distribute a PSCKangaroo binary. PSCKangaroo is
 GPLv3 software that is built with the NVIDIA CUDA Toolkit, whose runtime has
 separate distribution terms. Keeping the executor external avoids combining
 those licensing obligations inside the public OpenPuzzle package.
@@ -38,3 +38,23 @@ executor locally. The generated executable is stored under the current user's
 OpenPuzzle data directory and is not part of the OpenPuzzle package.
 Use `--force` to rebuild the same pinned version. The installer does not start
 PSCKangaroo or perform GPU work.
+
+## OpenPuzzle 1.0.21 compatibility patch
+
+The installer verifies the pinned upstream Git commit and tree, then applies
+the bundled `explicit-seed-v1` patch. The patch adds `-seed <16hex>` for
+deterministic distributed walk generations. A missing, modified or
+inapplicable patch stops installation before compilation.
+
+After compilation, non-runtime symbols are stripped so CUDA temporary
+identifiers do not make otherwise identical builds differ. The user-local
+manifest uses schema `openpuzzle-external-engine-v2` and records the upstream
+identity, patch and patched-source hashes, generated binary hash, supported
+architectures and stripping policy.
+
+The OpenPuzzle package contains the installer and source patch only. The
+PSCKangaroo executable is compiled locally after the user explicitly runs:
+
+```text
+openpuzzle engine install psckangaroo
+```

@@ -1504,6 +1504,15 @@ add_test(
 )
 
 
+add_test(
+    NAME PsckangarooInstallerPatchContractTests
+    COMMAND
+        ${CMAKE_COMMAND}
+        "-DINSTALLER=${OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH}"
+        "-DPATCH_FILE=${OPENPUZZLE_PSCKANGAROO_PATCH_BUILD_PATH}"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PsckangarooInstallerPatchContractTests.cmake
+)
+
 # Phase 41: explicit Kangaroo walk-seed contract
 add_executable(KangarooWalkSeedTests
     runtime/KangarooWalkSeedTests.cpp

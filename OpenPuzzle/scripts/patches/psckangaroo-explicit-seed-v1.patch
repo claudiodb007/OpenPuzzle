@@ -1,0 +1,95 @@
+diff --git a/RCKangaroo_hunt_v2.cpp b/RCKangaroo_hunt_v2.cpp
+index 1c178dc..eb09357 100644
+--- a/RCKangaroo_hunt_v2.cpp
++++ b/RCKangaroo_hunt_v2.cpp
+@@ -737,6 +737,8 @@ u64 gHuntStartTime = 0;
+ // Smart Wave System
+ int gWaveIntervalMin = 0;              // Minutes between wave renewals (0 = disabled)
+ u64 gLastWaveTime = 0;                 // Timestamp of last wave launch
++u64 gWalkSeed = 0;                     // Explicit per-generation walk seed
++bool gWalkSeedSet = false;             // False preserves upstream automatic seeding
+ 
+ // Configurable kangaroo count
+ int gGroupCnt = 24;                    // Groups per block (default 24, can be 8-256)
+@@ -1930,7 +1932,12 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
+         EcJumps3[i].dist.data[0] &= 0xFFFFFFFFFFFFFFFE;
+         EcJumps3[i].p = ec.MultiplyG(EcJumps3[i].dist);
+     }
+-    SetRndSeed(GetTickCount64());
++    const u64 effectiveWalkSeed =
++        gWalkSeedSet ? gWalkSeed : GetTickCount64();
++    SetRndSeed(effectiveWalkSeed);
++    printf("Walk seed: %016llX (%s)\r\n",
++           (unsigned long long)effectiveWalkSeed,
++           gWalkSeedSet ? "explicit" : "automatic");
+ 
+     Int_HalfRange.Set(1);
+     Int_HalfRange.ShiftLeft(Range - 1);
+@@ -2359,6 +2366,47 @@ bool ParseCommandLine(int argc, char* argv[])
+             if (val < 1.0) return false;
+             gRAMLimitGB = val;
+         }
++        else if (strcmp(argument, "-seed") == 0)
++        {
++            if (ci >= argc) return false;
++
++            const char* seedText = argv[ci];
++            ci++;
++
++            if (strlen(seedText) != 16) {
++                printf("Error: -seed must contain exactly 16 hexadecimal characters\r\n");
++                return false;
++            }
++
++            u64 parsedSeed = 0;
++
++            for (int i = 0; i < 16; i++) {
++                const char character = seedText[i];
++                int digit = -1;
++
++                if (character >= '0' && character <= '9')
++                    digit = character - '0';
++                else if (character >= 'a' && character <= 'f')
++                    digit = character - 'a' + 10;
++                else if (character >= 'A' && character <= 'F')
++                    digit = character - 'A' + 10;
++
++                if (digit < 0) {
++                    printf("Error: -seed must contain exactly 16 hexadecimal characters\r\n");
++                    return false;
++                }
++
++                parsedSeed = (parsedSeed << 4) | (u64)digit;
++            }
++
++            if (parsedSeed == 0) {
++                printf("Error: -seed must not be zero\r\n");
++                return false;
++            }
++
++            gWalkSeed = parsedSeed;
++            gWalkSeedSet = true;
++        }
+         else if (strcmp(argument, "-waveinterval") == 0)
+         {
+             int val = atoi(argv[ci]);
+@@ -2524,6 +2572,7 @@ int main(int argc, char* argv[])
+         printf("  -pubkey <hex>    Target public key (compressed 02/03...)\n");
+         printf("  -start <hex>     Range start offset\n");
+         printf("  -ramlimit N      RAM limit in GB\n");
++        printf("  -seed <16hex>    Explicit non-zero 64-bit walk seed\n");
+         printf("\n");
+         printf("Optional:\n");
+         printf("  -allwild 0       ALL-TAME mode (default, recommended for 130+ bits)\n");
+diff --git a/README.md b/README.md
+index d763bde..b3b76e5 100644
+--- a/README.md
++++ b/README.md
+@@ -439,3 +439,7 @@ If you want to support continued development directly:
+ **BTC (bech32):** `bc1q62axpzhteksv4yhqhfzvmeqqq98gcvzfak0etk`
+ 
+ Hardware, electricity, and tooling costs are real, though partially offset by solar power. Contributions of code, benchmarks, bug reports, and documentation are also welcome — open an issue or pull request.
++
++### Distributed walk seed
++
++Use `-seed <16hex>` to select an explicit, non-zero 64-bit walk seed. A resumed distributed session must use a new seed while retaining its checkpoint tables. If omitted, the upstream automatic seed is used.

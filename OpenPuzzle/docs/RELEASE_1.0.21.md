@@ -85,3 +85,22 @@ syntax.
 The offline startup recovery regression now restarts the same interrupted
 Kangaroo checkpoint twice. It requires generations 9, 10 and 11 to use three
 different explicit walk seeds while preserving the checkpoint byte-for-byte.
+
+## Verified external executor build
+
+The opt-in PSCKangaroo installer pins the official upstream Git commit and
+tree before applying the bundled `explicit-seed-v1` compatibility patch. The
+patch adds the required explicit, non-zero 64-bit `-seed` argument while
+preserving upstream automatic seeding when the option is omitted.
+
+Installation fails closed unless the patch SHA-256, the patched source hashes
+and the complete set of expected changed files match. The locally compiled
+executor is stripped of non-runtime symbols to remove CUDA temporary build
+identifiers and make repeated builds byte-for-byte reproducible under the same
+toolchain.
+
+The installed `openpuzzle-external-engine-v2` manifest records the upstream
+URL, commit and tree, patch identity and hash, patched source hashes, generated
+binary hash, CUDA architectures, runtime linkage and stripped-symbol policy.
+The Debian package continues to include only the installer and compatibility
+patch; it does not redistribute a PSCKangaroo executable.

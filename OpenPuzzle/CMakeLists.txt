@@ -268,9 +268,19 @@ set(OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH
     "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}/install_psckangaroo_external.sh"
 )
 
+set(OPENPUZZLE_PSCKANGAROO_PATCH_BUILD_PATH
+    "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}/patches/psckangaroo-explicit-seed-v1.patch"
+)
+
 configure_file(
     scripts/install_psckangaroo_external.sh
     "${OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH}"
+    COPYONLY
+)
+
+configure_file(
+    scripts/patches/psckangaroo-explicit-seed-v1.patch
+    "${OPENPUZZLE_PSCKANGAROO_PATCH_BUILD_PATH}"
     COPYONLY
 )
 
@@ -398,6 +408,13 @@ install(
         scripts/install_psckangaroo_external.sh
     DESTINATION
         "${CMAKE_INSTALL_LIBEXECDIR}/OpenPuzzle"
+)
+
+install(
+    FILES
+        scripts/patches/psckangaroo-explicit-seed-v1.patch
+    DESTINATION
+        "${CMAKE_INSTALL_LIBEXECDIR}/OpenPuzzle/patches"
 )
 
 install(
