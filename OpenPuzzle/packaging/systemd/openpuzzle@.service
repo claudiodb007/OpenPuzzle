@@ -11,12 +11,12 @@ Type=simple
 Environment=OPENPUZZLE_EXECUTION_SLOT=primary
 Environment=OPENPUZZLE_SERVICE_ARGS=
 EnvironmentFile=-%h/.config/OpenPuzzle/%i.env
-ExecStart=/usr/bin/openpuzzle run --backend %i $OPENPUZZLE_SERVICE_ARGS
-ExecStop=/usr/bin/openpuzzle stop
+ExecStart=/usr/bin/openpuzzle run $OPENPUZZLE_SERVICE_ARGS --backend %i
 Restart=on-failure
 RestartSec=30s
 TimeoutStopSec=180s
 KillMode=mixed
+KillSignal=SIGTERM
 UMask=0077
 WorkingDirectory=%h
 StandardOutput=journal
