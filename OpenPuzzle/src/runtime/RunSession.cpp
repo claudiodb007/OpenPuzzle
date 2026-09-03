@@ -1944,13 +1944,90 @@ ClientIterationResult RunSession::runOnce(
     return 1;
   }
 
-  const bool kangarooWorkload =
+  std::string requestedEngine =
+      getArgument(args, "--engine");
+
+  std::transform(
+      requestedEngine.begin(),
+      requestedEngine.end(),
+      requestedEngine.begin(),
+      [](unsigned char character) {
+        return static_cast<char>(std::tolower(character));
+      });
+
+  if (
+      subcommand == "run" &&
+      !requestedEngine.empty() &&
+      requestedEngine != "kangaroo" &&
+      requestedEngine != "bitcrack" &&
+      requestedEngine != "keyhunt") {
+    std::cerr
+        << "Unsupported engine: " << requestedEngine << '\n'
+        << "Use kangaroo, bitcrack or keyhunt.\n";
+    return 1;
+  }
+
+  const bool puzzleSupportsKangaroo =
       puzzleMetadata && puzzleMetadata->searchMode == "kangaroo";
 
+  const bool explicitLinearBackend =
+      hasArgument(args, "--backend") &&
+      selectedBackend(args) != "cuda";
+
+  const bool kangarooWorkload =
+      puzzleSupportsKangaroo &&
+      (
+          requestedEngine == "kangaroo" ||
+          (
+              requestedEngine.empty() &&
+              !explicitLinearBackend
+          )
+      );
+
+  if (
+      subcommand == "run" &&
+      requestedEngine == "kangaroo" &&
+      !puzzleSupportsKangaroo) {
+    std::cerr
+        << "OpenPuzzle engine validation failed\n"
+        << "-----------------------------------\n"
+        << "Puzzle............. " << puzzleNumber << '\n'
+        << "Assignment......... not requested\n"
+        << "Problem............ this puzzle does not support Kangaroo\n";
+    return 1;
+  }
+
   const std::string runBackend =
-      subcommand == "run"
-          ? (kangarooWorkload ? "cuda" : selectedBackend(args))
-          : "";
+      subcommand != "run"
+          ? ""
+          : (
+                kangarooWorkload
+                    ? "cuda"
+                    : (
+                          requestedEngine == "keyhunt"
+                              ? "cpu"
+                              : selectedBackend(args)
+                      )
+            );
+
+  if (
+      subcommand == "run" &&
+      requestedEngine == "keyhunt" &&
+      hasArgument(args, "--backend") &&
+      selectedBackend(args) != "cpu") {
+    std::cerr
+        << "KeyHunt requires --backend cpu.\n";
+    return 1;
+  }
+
+  if (
+      subcommand == "run" &&
+      requestedEngine == "bitcrack" &&
+      runBackend == "cpu") {
+    std::cerr
+        << "BitCrack requires --backend cuda or opencl.\n";
+    return 1;
+  }
 
   if (
       subcommand == "run" &&
@@ -1964,7 +2041,7 @@ ClientIterationResult RunSession::runOnce(
         << "Search mode........ Kangaroo\n"
         << "Required backend... CUDA\n"
         << "Assignment......... not requested\n"
-        << "Problem............ this puzzle requires CUDA\n";
+        << "Problem............ Kangaroo requires CUDA\n";
 
     return 1;
   }

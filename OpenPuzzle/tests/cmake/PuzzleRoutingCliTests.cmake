@@ -92,6 +92,61 @@ require_text("${kangaroo_ready_output}"
 reject_text("${kangaroo_ready_output}"
   "Requesting assignment" "Kangaroo ready")
 
+# 1c. A Kangaroo-capable puzzle must retain the linear KeyHunt route.
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E env
+          "OPENPUZZLE_PUZZLE_DIR=${TEST_ROOT}"
+          "${OPENPUZZLE_BIN}" run 140 --dry-run
+          --engine keyhunt --backend cpu
+          --server http://127.0.0.1:1
+  RESULT_VARIABLE hybrid_keyhunt_result
+  OUTPUT_VARIABLE hybrid_keyhunt_stdout
+  ERROR_VARIABLE hybrid_keyhunt_stderr
+  TIMEOUT 10
+)
+set(hybrid_keyhunt_output
+  "${hybrid_keyhunt_stdout}${hybrid_keyhunt_stderr}")
+if(NOT hybrid_keyhunt_result EQUAL 0)
+  message(FATAL_ERROR
+    "Hybrid KeyHunt dry-run returned ${hybrid_keyhunt_result}\n${hybrid_keyhunt_output}")
+endif()
+require_text("${hybrid_keyhunt_output}"
+  "Engine............. KeyHunt" "Hybrid KeyHunt")
+require_text("${hybrid_keyhunt_output}"
+  "Backend............ CPU" "Hybrid KeyHunt")
+reject_text("${hybrid_keyhunt_output}"
+  "PSCKangaroo executable is not installed" "Hybrid KeyHunt")
+reject_text("${hybrid_keyhunt_output}"
+  "Requesting assignment" "Hybrid KeyHunt")
+
+# 1d. Explicit BitCrack must bypass Kangaroo routing on the same puzzle.
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E env
+          "OPENPUZZLE_PUZZLE_DIR=${TEST_ROOT}"
+          "OPENPUZZLE_KANGAROO_PATH=/nonexistent/openpuzzle-cli-test-psckangaroo"
+          "${OPENPUZZLE_BIN}" run 140 --dry-run
+          --engine bitcrack --backend cuda
+          --server http://127.0.0.1:1
+  RESULT_VARIABLE hybrid_bitcrack_result
+  OUTPUT_VARIABLE hybrid_bitcrack_stdout
+  ERROR_VARIABLE hybrid_bitcrack_stderr
+  TIMEOUT 10
+)
+set(hybrid_bitcrack_output
+  "${hybrid_bitcrack_stdout}${hybrid_bitcrack_stderr}")
+if(NOT hybrid_bitcrack_result EQUAL 0)
+  message(FATAL_ERROR
+    "Hybrid BitCrack dry-run returned ${hybrid_bitcrack_result}\n${hybrid_bitcrack_output}")
+endif()
+require_text("${hybrid_bitcrack_output}"
+  "Engine............. bitcrack" "Hybrid BitCrack")
+require_text("${hybrid_bitcrack_output}"
+  "Backend............ CUDA" "Hybrid BitCrack")
+reject_text("${hybrid_bitcrack_output}"
+  "PSCKangaroo executable is not installed" "Hybrid BitCrack")
+reject_text("${hybrid_bitcrack_output}"
+  "Requesting assignment" "Hybrid BitCrack")
+
 # 2. Missing metadata for an explicit puzzle must fail before any request.
 file(REMOVE "${TEST_ROOT}/140.json")
 execute_process(
