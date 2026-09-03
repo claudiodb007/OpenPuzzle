@@ -4,10 +4,12 @@
 #include "openpuzzle/workers/WorkerAgent.hpp"
 
 #include <cassert>
+#include <chrono>
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <unistd.h>
 
 using namespace openpuzzle;
@@ -66,6 +68,9 @@ int main() {
   assert(!agent.stop(stopper));
   assert(!agent.completeExecution());
 
+  const auto exitCodePath = workspace / "exit.code";
+  std::filesystem::remove(exitCodePath);
+
   request.executionId = 2;
   request.command = "exit 0";
 
@@ -73,6 +78,17 @@ int main() {
   assert(completedHandle.pid > 0);
   assert(agent.hasExecution());
   assert(agent.busy());
+
+  /*
+   * O supervisor escreve exit.code de forma assíncrona.
+   * Esperar pelo resultado antes de remover o workspace.
+   */
+  for (int attempt = 0;
+       attempt < 500 && !std::filesystem::exists(exitCodePath);
+       ++attempt) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  assert(std::filesystem::exists(exitCodePath));
 
   assert(agent.completeExecution());
   assert(!agent.hasExecution());
