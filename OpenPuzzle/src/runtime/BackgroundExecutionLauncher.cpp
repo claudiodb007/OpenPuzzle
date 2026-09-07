@@ -4,6 +4,9 @@
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
 
+#include <cerrno>
+#include <csignal>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -31,6 +34,53 @@ std::string shellQuote(
   return quoted;
 }
 
+bool workspaceExecutionIsActive(
+    const std::filesystem::path& workspace) {
+  std::ifstream pidInput(
+      workspace / "process.pid");
+
+  std::ifstream bootInput(
+      workspace / "process.boot_id");
+
+  std::ifstream startTimeInput(
+      workspace / "process.start_time");
+
+  int pid = 0;
+  std::string recordedBootId;
+  std::uint64_t recordedStartTime = 0;
+
+  if (!(pidInput >> pid) ||
+      !(bootInput >> recordedBootId) ||
+      !(startTimeInput >> recordedStartTime) ||
+      pid <= 0 ||
+      recordedBootId.empty() ||
+      recordedStartTime == 0) {
+    return false;
+  }
+
+  const auto currentBootId =
+      client::ClientStateStore::currentBootId();
+
+  if (currentBootId.empty() ||
+      recordedBootId != currentBootId) {
+    return false;
+  }
+
+  errno = 0;
+
+  if (kill(pid, 0) != 0 &&
+      errno != EPERM) {
+    return false;
+  }
+
+  const auto currentStartTime =
+      LinuxProcessIdentity::startTime(pid);
+
+  return currentStartTime &&
+         *currentStartTime ==
+             recordedStartTime;
+}
+
 } // namespace
 
 ExecutionHandle BackgroundExecutionLauncher::start(
@@ -45,6 +95,19 @@ ExecutionHandle BackgroundExecutionLauncher::start(
   }
 
   auto workspacePath = std::filesystem::path(request.workspace);
+
+  /*
+   * Última barreira contra relançamentos duplicados.
+   * Mesmo que o estado principal seja lido incorretamente,
+   * nunca substituir a identidade de um processo ainda vivo
+   * no mesmo workspace.
+   */
+  if (!request.workspace.empty() &&
+      workspaceExecutionIsActive(
+          workspacePath)) {
+    throw std::runtime_error(
+        "An execution is already active in this workspace");
+  }
 
   auto pidFile = (workspacePath / "process.pid").string();
   auto bootIdFile =

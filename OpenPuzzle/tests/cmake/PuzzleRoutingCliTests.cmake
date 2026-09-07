@@ -22,6 +22,38 @@ function(reject_text content rejected label)
   endif()
 endfunction()
 
+# OPENPUZZLE_ROUTING_TEST_ISOLATED_HOME
+# CLI tests must never inspect, recover, stop, or overwrite a real user's
+# OpenPuzzle runtime state.
+set(TEST_HOME "${TEST_ROOT}/isolated-home")
+set(TEST_CONFIG_HOME "${TEST_HOME}/.config")
+set(TEST_DATA_HOME "${TEST_HOME}/.local/share")
+set(TEST_STATE_HOME "${TEST_HOME}/.local/state")
+set(TEST_CACHE_HOME "${TEST_HOME}/.cache")
+set(TEST_RUNTIME_HOME "${TEST_HOME}/runtime")
+
+file(MAKE_DIRECTORY
+  "${TEST_CONFIG_HOME}"
+  "${TEST_DATA_HOME}"
+  "${TEST_STATE_HOME}"
+  "${TEST_CACHE_HOME}"
+  "${TEST_RUNTIME_HOME}"
+)
+
+file(CHMOD "${TEST_RUNTIME_HOME}"
+  PERMISSIONS
+    OWNER_READ
+    OWNER_WRITE
+    OWNER_EXECUTE
+)
+
+set(ENV{HOME} "${TEST_HOME}")
+set(ENV{XDG_CONFIG_HOME} "${TEST_CONFIG_HOME}")
+set(ENV{XDG_DATA_HOME} "${TEST_DATA_HOME}")
+set(ENV{XDG_STATE_HOME} "${TEST_STATE_HOME}")
+set(ENV{XDG_CACHE_HOME} "${TEST_CACHE_HOME}")
+set(ENV{XDG_RUNTIME_DIR} "${TEST_RUNTIME_HOME}")
+
 # 1. Valid Kangaroo metadata with no executor must fail before any request.
 file(WRITE "${TEST_ROOT}/140.json" [=[{
   "number": 140,

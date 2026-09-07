@@ -117,6 +117,58 @@ int main() {
 
   BackgroundExecutionLauncher launcher;
 
+  /*
+   * Um workspace com identidade válida de um processo vivo
+   * não pode receber uma segunda execução.
+   */
+  const auto duplicateWorkspace =
+      std::filesystem::temp_directory_path() /
+      ("openpuzzle-background-duplicate-" +
+       std::to_string(getpid()));
+
+  std::filesystem::remove_all(
+      duplicateWorkspace);
+
+  StartExecutionRequest duplicateRequest;
+  duplicateRequest.executionId = 76;
+  duplicateRequest.workspace =
+      duplicateWorkspace.string();
+  duplicateRequest.command = "sleep 9999";
+
+  const auto duplicateHandle =
+      launcher.start(
+          duplicateRequest);
+
+  bool duplicateRejected = false;
+
+  try {
+    launcher.start(
+        duplicateRequest);
+  } catch (...) {
+    duplicateRejected = true;
+  }
+
+  assert(duplicateRejected);
+
+  {
+    std::ifstream pidInput(
+        duplicateWorkspace /
+        "process.pid");
+
+    int recordedPid = 0;
+    assert(pidInput >> recordedPid);
+    assert(recordedPid == duplicateHandle.pid);
+  }
+
+  ExecutionStopper duplicateStopper;
+
+  assert(
+      duplicateStopper.stop(
+          duplicateWorkspace.string()));
+
+  std::filesystem::remove_all(
+      duplicateWorkspace);
+
   const auto stopWorkspace =
       std::filesystem::temp_directory_path() /
       ("openpuzzle-background-stop-" +

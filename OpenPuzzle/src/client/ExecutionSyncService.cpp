@@ -678,6 +678,10 @@ ExecutionSyncService::tick(
 
       result.progressError =
           httpClient.lastError();
+
+      result.progressReason =
+          HttpRangeClient::parseErrorReason(
+              result.progressError);
     }
 
     return result;

@@ -42,6 +42,7 @@ struct ExecutionSyncResult {
       AssignmentUploadStatus::NotAttempted;
 
   std::string progressError;
+  std::string progressReason;
 
   bool hasExitCode = false;
   int exitCode = 0;

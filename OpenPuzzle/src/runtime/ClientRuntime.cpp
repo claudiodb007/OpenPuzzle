@@ -630,9 +630,20 @@ int ClientRuntime::run(
         dependencies_.sync(serverUrl);
 
     if (!result.hasState) {
-      std::cout << "Assignment complete.\n";
+      /*
+       * A ausência momentânea de client.state não prova
+       * que o assignment terminou. Sair daqui faria o ciclo
+       * contínuo pedir novamente o mesmo assignment e lançar
+       * outro engine sobre o mesmo workspace.
+       */
+      std::cerr
+          << "Local state........ temporarily unavailable\n"
+          << "Monitoring.......... preserved\n";
 
-      return 0;
+      dependencies_.sleep(
+          completionPollInterval);
+
+      continue;
     }
 
     if (result.solutionFound) {
@@ -696,8 +707,24 @@ int ClientRuntime::run(
           result.progressStatus ==
           client::AssignmentUploadStatus::
               AssignmentRejected) {
+        if (
+            result.progressReason ==
+            "puzzle_verification_pending") {
+          std::cerr
+              << "Puzzle............. paused for solution review\n"
+              << "Assignment......... stopped temporarily\n";
+        } else if (
+            result.progressReason ==
+            "puzzle_solved") {
+          std::cerr
+              << "Puzzle............. solved\n"
+              << "Assignment......... stopped permanently\n";
+        } else {
+          std::cerr
+              << "Assignment......... rejected by server\n";
+        }
+
         std::cerr
-            << "Assignment......... rejected by server\n"
             << "Stopping search engine...\n";
 
         if (!dependencies_.stopExecution(

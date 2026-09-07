@@ -182,8 +182,30 @@ int main() {
           })JSON") ==
       "assignment_lease_expired");
 
+  const std::string pausedResponse =
+      R"JSON({
+        "error": "invalid_assignment_state",
+        "reason": "puzzle_verification_pending",
+        "message": "Puzzle is paused while a potential solution is reviewed",
+        "stop_requested": true
+      })JSON";
+
   assert(
       HttpRangeClient::parseErrorCode(
+          pausedResponse) ==
+      "invalid_assignment_state");
+
+  assert(
+      HttpRangeClient::parseErrorReason(
+          pausedResponse) ==
+      "puzzle_verification_pending");
+
+  assert(
+      HttpRangeClient::parseErrorCode(
+          "{}").empty());
+
+  assert(
+      HttpRangeClient::parseErrorReason(
           "{}").empty());
 
   /*

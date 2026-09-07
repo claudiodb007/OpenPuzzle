@@ -365,6 +365,18 @@ std::string HttpRangeClient::parseErrorCode(
   return errorCode;
 }
 
+std::string HttpRangeClient::parseErrorReason(
+    const std::string &response) {
+  std::string reason;
+
+  extractString(
+      response,
+      "reason",
+      reason);
+
+  return reason;
+}
+
 std::string
 HttpRangeClient::buildSolutionReportPayload(
     const std::string &assignmentId,

@@ -58,6 +58,9 @@ public:
   parseErrorCode(const std::string &response);
 
   static std::string
+  parseErrorReason(const std::string &response);
+
+  static std::string
   buildSolutionReportPayload(
       const std::string &assignmentId,
       const std::string &clientId);

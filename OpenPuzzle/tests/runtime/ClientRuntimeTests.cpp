@@ -3,6 +3,7 @@
 #include <cassert>
 #include <chrono>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -141,6 +142,53 @@ int main() {
             "/tmp/workspace-1") == 0);
 
     assert(syncCalls == 1);
+  }
+
+  /*
+   * Uma leitura temporariamente ausente do estado não
+   * pode ser interpretada como conclusão nem provocar
+   * o lançamento de outro assignment.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    int syncCalls = 0;
+    int sleepCalls = 0;
+
+    dependencies.sync =
+        [&](const std::string &) {
+          ++syncCalls;
+
+          if (syncCalls == 1) {
+            return
+                client::ExecutionSyncResult{};
+          }
+
+          return completedResult();
+        };
+
+    dependencies.sleep =
+        [&](std::chrono::seconds duration) {
+          assert(
+              duration ==
+              std::chrono::seconds(2));
+
+          ++sleepCalls;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    assert(
+        runtime.run(
+            "https://server.test",
+            "assignment-transient-state",
+            "client-transient-state",
+            "/tmp/workspace-transient-state") == 0);
+
+    assert(syncCalls == 2);
+    assert(sleepCalls == 1);
   }
 
   /*
@@ -1280,6 +1328,156 @@ int main() {
     assert(sleepCalls == 30);
     assert(stopped);
     assert(!stateRemoved);
+  }
+
+
+  /*
+   * Uma pausa para revisão de solução deve parar
+   * o engine, remover o estado local e explicar
+   * que a interrupção é temporária.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    bool stopped = false;
+    bool stateRemoved = false;
+
+    dependencies.sync =
+        [](const std::string &) {
+          client::ExecutionSyncResult result;
+          result.hasState = true;
+          result.running = true;
+          result.hasProgress = true;
+          result.progressUploaded = false;
+          result.progressStatus =
+              client::AssignmentUploadStatus::
+                  AssignmentRejected;
+          result.progressReason =
+              "puzzle_verification_pending";
+          result.progressError =
+              "Puzzle is paused while a potential "
+              "solution is reviewed";
+          return result;
+        };
+
+    dependencies.stopExecution =
+        [&](const std::string &) {
+          stopped = true;
+          return true;
+        };
+
+    dependencies.removeState =
+        [&] {
+          stateRemoved = true;
+          return true;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    std::ostringstream errorOutput;
+    auto *originalErrorBuffer =
+        std::cerr.rdbuf(errorOutput.rdbuf());
+
+    const int runResult =
+        runtime.run(
+            "https://server.test",
+            "assignment-puzzle-review-pending",
+            "client-puzzle-review-pending",
+            "/tmp/workspace-puzzle-review-pending");
+
+    std::cerr.rdbuf(originalErrorBuffer);
+
+    assert(runResult == 0);
+    assert(stopped);
+    assert(stateRemoved);
+    assert(
+        errorOutput.str().find(
+            "Puzzle............. paused for solution review") !=
+        std::string::npos);
+    assert(
+        errorOutput.str().find(
+            "Assignment......... stopped temporarily") !=
+        std::string::npos);
+    assert(
+        errorOutput.str().find(
+            "Assignment......... rejected by server") ==
+        std::string::npos);
+  }
+
+  /*
+   * Um puzzle confirmado como resolvido deve parar
+   * definitivamente o engine e apresentar a razão
+   * específica recebida do servidor.
+   */
+  {
+    auto dependencies =
+        makeDependencies();
+
+    bool stopped = false;
+    bool stateRemoved = false;
+
+    dependencies.sync =
+        [](const std::string &) {
+          client::ExecutionSyncResult result;
+          result.hasState = true;
+          result.running = true;
+          result.hasProgress = true;
+          result.progressUploaded = false;
+          result.progressStatus =
+              client::AssignmentUploadStatus::
+                  AssignmentRejected;
+          result.progressReason =
+              "puzzle_solved";
+          result.progressError =
+              "Puzzle has already been solved";
+          return result;
+        };
+
+    dependencies.stopExecution =
+        [&](const std::string &) {
+          stopped = true;
+          return true;
+        };
+
+    dependencies.removeState =
+        [&] {
+          stateRemoved = true;
+          return true;
+        };
+
+    ClientRuntime runtime(
+        std::move(dependencies));
+
+    std::ostringstream errorOutput;
+    auto *originalErrorBuffer =
+        std::cerr.rdbuf(errorOutput.rdbuf());
+
+    const int runResult =
+        runtime.run(
+            "https://server.test",
+            "assignment-puzzle-solved",
+            "client-puzzle-solved",
+            "/tmp/workspace-puzzle-solved");
+
+    std::cerr.rdbuf(originalErrorBuffer);
+
+    assert(runResult == 0);
+    assert(stopped);
+    assert(stateRemoved);
+    assert(
+        errorOutput.str().find(
+            "Puzzle............. solved") !=
+        std::string::npos);
+    assert(
+        errorOutput.str().find(
+            "Assignment......... stopped permanently") !=
+        std::string::npos);
+    assert(
+        errorOutput.str().find(
+            "Assignment......... rejected by server") ==
+        std::string::npos);
   }
 
   std::cout
