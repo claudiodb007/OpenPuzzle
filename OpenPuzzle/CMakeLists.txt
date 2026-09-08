@@ -448,6 +448,7 @@ install(
         docs/RELEASE_1.0.19.md
         docs/RELEASE_1.0.20.md
         docs/RELEASE_1.0.21.md
+        docs/RELEASE_1.0.22.md
         docs/SYSTEMD_SERVICE.md
     DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
 )
