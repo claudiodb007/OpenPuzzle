@@ -1,6 +1,7 @@
 #pragma once
 
 #include "openpuzzle/client/ClientHeartbeat.hpp"
+#include "openpuzzle/hardware/GpuInfo.hpp"
 
 #include <string>
 
@@ -18,6 +19,10 @@ public:
       const std::string& serverUrl) const;
 
   static ClientHeartbeat collectLocalHeartbeat();
+
+  static std::vector<ClientGpuCapability>
+  gpuCapabilities(
+      const std::vector<openpuzzle::GpuInfo>& inventory);
 
 private:
   static std::string platform();

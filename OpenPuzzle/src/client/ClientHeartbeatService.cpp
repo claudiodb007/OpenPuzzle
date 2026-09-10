@@ -220,23 +220,24 @@ ClientHeartbeatService::cpu() {
 }
 
 std::vector<ClientGpuCapability>
-ClientHeartbeatService::gpus() {
+ClientHeartbeatService::gpuCapabilities(
+    const std::vector<openpuzzle::GpuInfo>& inventory) {
   std::vector<ClientGpuCapability>
       capabilities;
 
-  for (const auto& gpu :
-       GpuManager::listGpus()) {
+  for (const auto& gpu : inventory) {
     ClientGpuCapability capability;
 
     /*
-     * O GpuManager atual deteta estas placas
-     * através de nvidia-smi.
+     * O inventário inclui dispositivos CUDA e
+     * OpenCL. O backend detetado pelo GpuManager
+     * é preservado no heartbeat.
      *
      * Apenas backend, nome e memória são
      * incluídos na capacidade pública.
      */
     capability.backend =
-        "CUDA";
+        gpu.backend;
 
     capability.name =
         gpu.name;
@@ -251,6 +252,12 @@ ClientHeartbeatService::gpus() {
   }
 
   return capabilities;
+}
+
+std::vector<ClientGpuCapability>
+ClientHeartbeatService::gpus() {
+  return gpuCapabilities(
+      GpuManager::listAllGpus());
 }
 
 std::vector<ClientEngineCapability>
@@ -300,6 +307,11 @@ ClientHeartbeatService::engines() {
       makeCapability(
           "KeyHunt",
           "CPU"));
+
+  capabilities.push_back(
+      makeCapability(
+          "Kangaroo",
+          "CUDA"));
 
   return capabilities;
 }

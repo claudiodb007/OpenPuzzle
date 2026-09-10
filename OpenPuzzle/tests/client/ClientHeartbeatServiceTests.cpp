@@ -63,6 +63,37 @@ int main() {
           temporaryHome.string().c_str(),
           1) == 0);
 
+  openpuzzle::GpuInfo cudaGpu;
+  cudaGpu.backend = "CUDA";
+  cudaGpu.name = "Test NVIDIA GPU";
+  cudaGpu.memoryMb = 12288;
+
+  openpuzzle::GpuInfo openclGpu;
+  openclGpu.backend = "OpenCL";
+  openclGpu.name = "Test AMD GPU";
+  openclGpu.memoryMb = 8192;
+
+  openpuzzle::GpuInfo invalidGpu;
+  invalidGpu.backend = "OpenCL";
+  invalidGpu.memoryMb = 4096;
+
+  const auto gpuInventory =
+      ClientHeartbeatService::gpuCapabilities({
+          cudaGpu,
+          openclGpu,
+          invalidGpu,
+      });
+
+  assert(gpuInventory.size() == 2);
+
+  assert(gpuInventory[0].backend == "CUDA");
+  assert(gpuInventory[0].name == "Test NVIDIA GPU");
+  assert(gpuInventory[0].memoryMB == 12288);
+
+  assert(gpuInventory[1].backend == "OpenCL");
+  assert(gpuInventory[1].name == "Test AMD GPU");
+  assert(gpuInventory[1].memoryMB == 8192);
+
   const auto heartbeat =
       ClientHeartbeatService::
           collectLocalHeartbeat();
@@ -87,7 +118,19 @@ int main() {
   }
 
   assert(
-      heartbeat.engines.size() == 3);
+      heartbeat.engines.size() == 4);
+
+  const auto kangaroo =
+      std::find_if(
+          heartbeat.engines.begin(),
+          heartbeat.engines.end(),
+          [](const ClientEngineCapability& engine) {
+            return
+                engine.name == "Kangaroo" &&
+                engine.backend == "CUDA";
+          });
+
+  assert(kangaroo != heartbeat.engines.end());
 
   for (const auto& engine :
        heartbeat.engines) {
