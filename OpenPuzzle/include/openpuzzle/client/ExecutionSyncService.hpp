@@ -64,6 +64,11 @@ struct ExecutionSyncResult {
 
 class ExecutionSyncService {
 public:
+  ExecutionSyncResult inspect() const;
+
+  ExecutionSyncResult inspect(
+      const std::string& executionSlot) const;
+
   ExecutionSyncResult tick(
       const std::string& serverUrl) const;
 

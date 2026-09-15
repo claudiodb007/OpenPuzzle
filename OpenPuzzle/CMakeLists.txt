@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(OpenPuzzle VERSION 1.0.23 LANGUAGES CXX)
+project(OpenPuzzle VERSION 1.0.25 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -209,6 +209,7 @@ add_library(OpenPuzzleCore
     src/engines/bitcrack/BitCrackEngine.cpp
     src/engines/keyhunt/KeyHuntEngine.cpp
     src/engines/kangaroo/KangarooEngine.cpp
+    src/engines/kangaroo/KangarooMemoryPlanner.cpp
     src/engines/EngineLaunchBuilder.cpp
     src/engines/EngineParserFactory.cpp
     src/adapters/kangaroo/KangarooProgressParser.cpp
@@ -353,6 +354,64 @@ target_link_libraries(OpenPuzzle
 
 add_dependencies(OpenPuzzle OpenPuzzleBundledEngines)
 
+option(
+    OPENPUZZLE_BUILD_UI
+    "Build the optional Qt 6 desktop interface"
+    ON
+)
+
+if(OPENPUZZLE_BUILD_UI)
+    find_package(Qt6 QUIET COMPONENTS Widgets)
+
+    if(Qt6Widgets_FOUND)
+        add_executable(OpenPuzzleUi
+            src/ui/main.cpp
+            src/ui/MainWindow.cpp
+            src/ui/MainWindow.hpp
+            src/ui/RunCommandBuilder.cpp
+            src/ui/UiLanguage.cpp
+            src/ui/UiLanguage.hpp
+            src/ui/UiTheme.cpp
+            src/ui/UiTheme.hpp
+            resources/openpuzzle-ui.qrc
+        )
+
+        set_target_properties(OpenPuzzleUi
+            PROPERTIES
+                OUTPUT_NAME openpuzzle-ui
+                AUTOMOC ON
+                AUTORCC ON
+        )
+
+        target_include_directories(OpenPuzzleUi
+            PRIVATE
+                include
+                src/ui
+        )
+
+        target_link_libraries(OpenPuzzleUi
+            PRIVATE
+                Qt6::Widgets
+        )
+
+        target_compile_definitions(OpenPuzzleUi
+            PRIVATE
+                OPENPUZZLE_VERSION="${PROJECT_VERSION}"
+        )
+
+        target_compile_options(OpenPuzzleUi
+            PRIVATE
+                -Wall -Wextra -Wpedantic
+        )
+
+        message(STATUS "OpenPuzzle desktop UI: enabled")
+    else()
+        message(STATUS
+            "OpenPuzzle desktop UI: skipped (Qt 6 Widgets not found)"
+        )
+    endif()
+endif()
+
 install(
     DIRECTORY resources/puzzles/
     DESTINATION share/OpenPuzzle/puzzles
@@ -393,6 +452,35 @@ install(
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
+if(TARGET OpenPuzzleUi)
+    install(
+        TARGETS OpenPuzzleUi
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        COMPONENT DesktopUi
+    )
+
+    install(
+        FILES packaging/desktop/openpuzzle-ui.desktop
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications
+        COMPONENT DesktopUi
+    )
+
+    install(
+        FILES resources/branding/openpuzzle-icon.png
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pixmaps
+        RENAME openpuzzle.png
+        COMPONENT DesktopUi
+    )
+
+    install(
+        FILES resources/branding/openpuzzle-icon.png
+        DESTINATION
+            ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/512x512/apps
+        RENAME openpuzzle.png
+        COMPONENT DesktopUi
+    )
+endif()
+
 install(
     FILES
         packaging/systemd/openpuzzle@.service
@@ -428,6 +516,7 @@ install(
 install(
     FILES
         docs/CLIENT_RUNTIME.md
+        docs/DESKTOP_UI.md
         docs/RELEASE_1.0.0.md
         docs/RELEASE_1.0.1.md
         docs/RELEASE_1.0.2.md
@@ -450,6 +539,7 @@ install(
         docs/RELEASE_1.0.21.md
         docs/RELEASE_1.0.22.md
         docs/RELEASE_1.0.23.md
+        docs/RELEASE_1.0.25.md
         docs/SYSTEMD_SERVICE.md
     DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
 )

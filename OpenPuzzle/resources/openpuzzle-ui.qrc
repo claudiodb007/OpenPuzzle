@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="/branding">
+    <file alias="openpuzzle-icon.png">branding/openpuzzle-icon.png</file>
+    <file alias="openpuzzle-logo.png">branding/openpuzzle-logo.png</file>
+    <file alias="openpuzzle-logo-header.png">branding/openpuzzle-logo-header.png</file>
+  </qresource>
+</RCC>

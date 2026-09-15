@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=OpenPuzzle
+GenericName=Distributed search client
+GenericName[pt]=Cliente de pesquisa distribuída
+GenericName[fr]=Client de recherche distribuée
+GenericName[es]=Cliente de búsqueda distribuida
+Comment=Bitcoin Puzzle distributed search client
+Comment[pt]=Cliente de pesquisa distribuída Bitcoin Puzzle
+Comment[fr]=Client de recherche distribuée Bitcoin Puzzle
+Comment[es]=Cliente de búsqueda distribuida Bitcoin Puzzle
+TryExec=openpuzzle-ui
+Exec=openpuzzle-ui
+Icon=openpuzzle
+Terminal=false
+Categories=Utility;Science;
+Keywords=Bitcoin;Puzzle;CUDA;OpenCL;
+StartupNotify=true

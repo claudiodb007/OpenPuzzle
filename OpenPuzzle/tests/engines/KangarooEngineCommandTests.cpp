@@ -26,7 +26,9 @@ bool rejected(KangarooEngine &engine, EngineLaunchRequest request) {
 } // namespace
 
 int main() {
-  KangarooEngine engine("/tmp/psckangaroo");
+  KangarooEngine engine(
+      "/tmp/psckangaroo",
+      8);
 
   EngineLaunchRequest request;
   request.engine = "Kangaroo";

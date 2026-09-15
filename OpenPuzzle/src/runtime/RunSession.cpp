@@ -637,7 +637,7 @@ void printAssignment(const client::RangeAssignment &assignment) {
 }
 
 int showStatus(const std::vector<std::string> &args) {
-  const std::string server = serverUrl(args);
+  (void)args;
 
   const std::vector<std::string>
       executionSlots = {
@@ -672,9 +672,7 @@ int showStatus(const std::vector<std::string> &args) {
     for (const auto& slot :
          executionSlots) {
       const auto result =
-          syncService.tick(
-              server,
-              slot);
+          syncService.inspect(slot);
 
       const auto runtimePid =
           ClientRuntimeControl::
@@ -792,16 +790,8 @@ int showStatus(const std::vector<std::string> &args) {
                 << '\n';
           }
 
-          if (result.progressUploaded) {
-            std::cout
-                << "Progress........... uploaded\n";
-          } else {
-            std::cerr
-                << "Progress........... failed\n"
-                << "Upload error....... "
-                << result.progressError
-                << '\n';
-          }
+          std::cout
+              << "Progress........... runtime managed\n";
         } else {
           std::cout
               << "Progress........... "
@@ -820,30 +810,8 @@ int showStatus(const std::vector<std::string> &args) {
           << result.exitCode
           << '\n';
 
-      if (result.exitCode != 0) {
-        std::cout
-            << "Failure upload..... "
-            << (
-                   result.completionUploaded
-                       ? "uploaded"
-                       : "failed")
-            << '\n';
-      } else {
-        std::cout
-            << "Completion......... "
-            << (
-                   result.completionUploaded
-                       ? "uploaded"
-                       : "failed")
-            << '\n';
-      }
-
-      if (!result.completionError.empty()) {
-        std::cerr
-            << "Upload error....... "
-            << result.completionError
-            << '\n';
-      }
+      std::cout
+          << "Synchronization.... pending supervisor\n";
     }
 
     return 0;
@@ -851,7 +819,7 @@ int showStatus(const std::vector<std::string> &args) {
 
   client::ExecutionSyncService syncService;
 
-  const auto result = syncService.tick(server);
+  const auto result = syncService.inspect();
 
   std::cout << "OpenPuzzle Status\n"
             << "-----------------\n";
@@ -932,12 +900,8 @@ int showStatus(const std::vector<std::string> &args) {
             << '\n';
       }
 
-      if (result.progressUploaded) {
-        std::cout << "Progress........... uploaded\n";
-      } else {
-        std::cerr << "Progress........... failed\n"
-                  << "Upload error....... " << result.progressError << '\n';
-      }
+      std::cout
+          << "Progress........... runtime managed\n";
     } else {
       std::cout << "Progress........... "
                 << "waiting for engine output\n";
@@ -952,50 +916,8 @@ int showStatus(const std::vector<std::string> &args) {
 
   std::cout << "Exit code.......... " << result.exitCode << '\n';
 
-  if (result.exitCode != 0) {
-    if (!result.completionUploaded) {
-      std::cerr
-          << "Failure upload..... failed\n"
-          << "Reason............. "
-          << result.completionError
-          << '\n';
-
-      return 1;
-    }
-
-    std::cout
-        << "Failure upload..... uploaded\n";
-
-    if (!result.stateRemoved) {
-      std::cerr
-          << "State cleanup...... failed\n"
-          << "Reason............. "
-          << result.completionError
-          << '\n';
-
-      return 1;
-    }
-
-    std::cout
-        << "Local state........ removed\n";
-
-    return 0;
-  }
-
-  if (!result.completionUploaded) {
-    std::cerr << "Completion......... failed\n"
-              << "Upload error....... " << result.completionError << '\n';
-
-    return 1;
-  }
-
-  std::cout << "Completion......... uploaded\n";
-
-  if (!result.stateRemoved) {
-    std::cerr << "Warning............ " << result.completionError << '\n';
-
-    return 1;
-  }
+  std::cout
+      << "Synchronization.... pending supervisor\n";
 
   return 0;
 }
@@ -1190,6 +1112,40 @@ int runConcurrent(
     throw std::runtime_error(
         "Concurrent execution requires exactly "
         "one of --with-cpu or --with-opencl");
+  }
+
+  std::string requestedEngine =
+      getArgument(args, "--engine");
+
+  std::transform(
+      requestedEngine.begin(),
+      requestedEngine.end(),
+      requestedEngine.begin(),
+      [](unsigned char character) {
+        return static_cast<char>(
+            std::tolower(character));
+      });
+
+  bool kangarooWorkload =
+      requestedEngine == "kangaroo";
+
+  if (requestedEngine.empty()) {
+    const int puzzle = selectedPuzzle(args);
+    const auto metadata =
+        puzzle > 0
+            ? PuzzleMetadataCatalog::load(puzzle)
+            : std::nullopt;
+
+    kangarooWorkload =
+        metadata &&
+        metadata->searchMode == "kangaroo" &&
+        selectedBackend(args) == "cuda";
+  }
+
+  if (kangarooWorkload) {
+    throw std::runtime_error(
+        "Kangaroo execution is exclusive; "
+        "remove --with-cpu or --with-opencl");
   }
 
   const std::string firstSlot =

@@ -1,5 +1,6 @@
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/ExecutionSyncService.hpp"
+#include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 
 #include <arpa/inet.h>
@@ -465,6 +466,62 @@ int main() {
             "http://127.0.0.1:1");
 
     assert(!result.hasState);
+  }
+
+  /*
+   * A consulta usada por `openpuzzle status` é
+   * estritamente local e só de leitura.
+   *
+   * Mesmo com uma execução já terminada e pronta
+   * para ser concluída, inspect() não comunica com
+   * a API e nunca remove client.state. Apenas o
+   * supervisor proprietário pode chamar tick().
+   */
+  {
+    const auto state =
+        makeState(
+            workspace,
+            999999999);
+
+    assert(
+        ClientStateStore::save(
+            state));
+
+    writeFile(
+        workspace / "exit.code",
+        "0\n");
+
+    writeFile(
+        workspace / "bitcrack.log",
+        "Reached end of keyspace\n");
+
+    const auto inspected =
+        service.inspect();
+
+    assert(inspected.hasState);
+    assert(!inspected.running);
+    assert(inspected.hasExitCode);
+    assert(inspected.exitCode == 0);
+    assert(!inspected.completionUploaded);
+    assert(
+        inspected.completionStatus ==
+        AssignmentUploadStatus::NotAttempted);
+    assert(!inspected.stateRemoved);
+
+    const auto preserved =
+        ClientStateStore::load();
+    assert(preserved);
+    assert(
+        preserved->assignmentId ==
+        state.assignmentId);
+
+    assert(
+        ClientStateStore::remove());
+
+    std::filesystem::remove(
+        workspace / "exit.code");
+    std::filesystem::remove(
+        workspace / "bitcrack.log");
   }
 
   /*
@@ -1415,18 +1472,64 @@ int main() {
         workspace / "keyhunt.log");
   }
 
-  std::filesystem::remove_all(
-      temporaryHome);
+  /*
+   * A temporary engine identity read failure must not cancel the assignment
+   * while the main runtime is still provably alive.
+   */
+  {
+    const auto runtimeGapWorkspace =
+        temporaryHome /
+        "workspace-active-runtime-identity-gap";
 
-  if (hadHome) {
+    std::filesystem::create_directories(
+        runtimeGapWorkspace);
+
+    std::filesystem::remove(
+        runtimeGapWorkspace / "exit.code");
+
+    auto state =
+        makeState(
+            runtimeGapWorkspace,
+            static_cast<int>(getpid()));
+
+    const auto currentStartTime =
+        openpuzzle::LinuxProcessIdentity::
+            startTime(state.pid);
+
+    assert(currentStartTime);
+
+    state.processStartTime =
+        *currentStartTime + 1;
+
     assert(
-        setenv(
-            "HOME",
-            savedHome.c_str(),
-            1) == 0);
-  } else {
+        ClientStateStore::save(
+            state));
+
     assert(
-        unsetenv("HOME") == 0);
+        openpuzzle::ClientRuntimeControl::
+            acquire());
+
+    const auto result =
+        service.tick(
+            "http://127.0.0.1:1");
+
+    assert(result.hasState);
+    assert(!result.running);
+    assert(result.interrupted);
+    assert(!result.hasExitCode);
+    assert(!result.completionUploaded);
+    assert(!result.stateRemoved);
+    assert(!result.completionError.empty());
+    assert(ClientStateStore::load());
+
+    openpuzzle::ClientRuntimeControl::
+        release();
+
+    assert(
+        ClientStateStore::remove());
+
+    std::filesystem::remove_all(
+        runtimeGapWorkspace);
   }
 
   /*
@@ -1560,6 +1663,21 @@ int main() {
 
     std::filesystem::remove_all(
         workspace);
+  }
+
+
+  std::filesystem::remove_all(
+      temporaryHome);
+
+  if (hadHome) {
+    assert(
+        setenv(
+            "HOME",
+            savedHome.c_str(),
+            1) == 0);
+  } else {
+    assert(
+        unsetenv("HOME") == 0);
   }
 
 

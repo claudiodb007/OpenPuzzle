@@ -105,6 +105,18 @@ locally. Invalid local or protocol state is preserved for diagnosis.
 
 `openpuzzle safestop` writes a local request for each active runtime slot. The current assignment continues normally, including progress and completion synchronization. After finalization, the slot exits before claiming another assignment. In concurrent GPU and CPU mode, both slots finish independently. Repeating the command is safe.
 
+`openpuzzle status` is a strictly local, read-only inspection. It may read the
+slot state, process identity, engine log and exit code, but it never uploads
+progress or completion, changes an assignment, calibrates a profile or removes
+state. Only the supervisor that owns a slot performs synchronization. This
+prevents frequent desktop-interface status polling from racing a completed
+engine and removing its state before the supervisor observes completion.
+
+CUDA and OpenCL concurrent slots inherit the same puzzle and engine.
+Kangaroo execution is exclusive because Pollard Kangaroo is CUDA-only;
+the client rejects `--with-cpu` and `--with-opencl` for Kangaroo
+workloads before requesting an assignment.
+
 The request does not terminate an engine and does not cancel searched coverage. If no runtime is active, the command reports that there is nothing to stop.
 
 ## Cancellation
@@ -119,6 +131,12 @@ The request does not terminate an engine and does not cancel searched coverage. 
 
 If the server already rejected or finalized the assignment, openpuzzle stops
 the engine without repeatedly submitting the same transition.
+
+An active runtime also protects its assignment state against a temporary
+failure while reading the engine process identity. Without a launcher
+`exit.code`, the client preserves `client.state` and retries monitoring instead
+of reporting a false interruption, cancelling the assignment or leaving an
+unmonitored engine process behind.
 
 ## Solution safety
 

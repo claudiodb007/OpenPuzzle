@@ -26,6 +26,92 @@ add_test(
         -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/KangarooSelfTestCliTests.cmake
 )
 
+add_executable(UiRunCommandBuilderTests
+    ui/RunCommandBuilderTests.cpp
+    ../src/ui/RunCommandBuilder.cpp
+)
+
+target_include_directories(UiRunCommandBuilderTests
+    PRIVATE
+        ../include
+)
+
+add_test(
+    NAME UiRunCommandBuilderTests
+    COMMAND UiRunCommandBuilderTests
+)
+
+if(TARGET OpenPuzzleUi)
+    add_executable(UiPreferencesTests
+        ui/UiPreferencesTests.cpp
+        ../src/ui/UiLanguage.cpp
+        ../src/ui/UiTheme.cpp
+    )
+
+    target_include_directories(UiPreferencesTests
+        PRIVATE
+            ../src/ui
+    )
+
+    target_link_libraries(UiPreferencesTests
+        PRIVATE
+            Qt6::Widgets
+    )
+
+    add_test(
+        NAME UiPreferencesTests
+        COMMAND UiPreferencesTests
+    )
+
+    add_executable(UiControlTests
+        ui/UiControlTests.cpp
+        ../src/ui/MainWindow.cpp
+        ../src/ui/MainWindow.hpp
+        ../src/ui/RunCommandBuilder.cpp
+        ../src/ui/UiLanguage.cpp
+        ../src/ui/UiLanguage.hpp
+        ../src/ui/UiTheme.cpp
+        ../src/ui/UiTheme.hpp
+        ../resources/openpuzzle-ui.qrc
+    )
+
+    set_target_properties(UiControlTests
+        PROPERTIES
+            AUTOMOC ON
+            AUTORCC ON
+    )
+
+    target_include_directories(UiControlTests
+        PRIVATE
+            ../include
+            ../src/ui
+    )
+
+    target_link_libraries(UiControlTests
+        PRIVATE
+            Qt6::Widgets
+    )
+
+    target_compile_definitions(UiControlTests
+        PRIVATE
+            OPENPUZZLE_VERSION="${PROJECT_VERSION}"
+    )
+
+    add_test(
+        NAME UiControlTests
+        COMMAND UiControlTests
+    )
+
+    add_test(
+        NAME DesktopUiInstallTests
+        COMMAND
+            ${CMAKE_COMMAND}
+            "-DOPENPUZZLE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            -P
+                ${CMAKE_CURRENT_SOURCE_DIR}/cmake/DesktopUiInstallTests.cmake
+    )
+endif()
+
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_test(
@@ -925,6 +1011,20 @@ target_link_libraries(KangarooEngineCommandTests
 add_test(
     NAME KangarooEngineCommandTests
     COMMAND KangarooEngineCommandTests
+)
+
+add_executable(KangarooMemoryPlannerTests
+    engines/KangarooMemoryPlannerTests.cpp
+)
+
+target_link_libraries(KangarooMemoryPlannerTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME KangarooMemoryPlannerTests
+    COMMAND KangarooMemoryPlannerTests
 )
 
 add_executable(KangarooCheckpointCommandTests

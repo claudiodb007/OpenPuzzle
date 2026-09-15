@@ -102,6 +102,18 @@ checkpoints and lifecycle synchronization. `openpuzzle status` displays
 the GPU and CPU slots independently, and `openpuzzle stop` stops both
 slots safely.
 
+Concurrent CUDA and OpenCL slots always inherit the same puzzle and
+engine selection. Kangaroo is CUDA-only and runs exclusively in one
+slot; `--with-cpu` and `--with-opencl` are rejected for Kangaroo
+workloads.
+
+Production Kangaroo commands choose a conservative host-RAM limit from
+the physical or container memory limit. The planner uses approximately
+60 percent of the detected memory, rounded down in 4 GiB steps on systems
+with at least 4 GiB available to the process. This leaves headroom for the
+operating system, OpenPuzzle and concurrent workloads. The choice is
+deterministic for checkpoint recovery and does not depend on GPU VRAM.
+
 ## Solution result protocol
 
 Protocol 2 writes a structured local result containing the matched address, a

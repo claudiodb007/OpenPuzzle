@@ -8,7 +8,9 @@ namespace openpuzzle {
 
 class KangarooEngine : public ISearchEngine {
 public:
-  explicit KangarooEngine(std::string executable);
+  explicit KangarooEngine(
+      std::string executable,
+      int ramLimitGiB = 0);
 
   EngineInfo info() const override;
 
@@ -21,6 +23,7 @@ public:
 
 private:
   std::string executable_;
+  int ramLimitGiB_ = 0;
   bool running_ = false;
 };
 

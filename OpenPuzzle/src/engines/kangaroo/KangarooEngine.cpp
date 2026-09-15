@@ -1,4 +1,5 @@
 #include "openpuzzle/engines/kangaroo/KangarooEngine.hpp"
+#include "openpuzzle/engines/kangaroo/KangarooMemoryPlanner.hpp"
 #include "openpuzzle/runtime/KangarooWalkSeed.hpp"
 
 #include <algorithm>
@@ -174,8 +175,16 @@ unsigned int distinguishedPointBits(
 
 } // namespace
 
-KangarooEngine::KangarooEngine(std::string executable)
-    : executable_(std::move(executable)) {}
+KangarooEngine::KangarooEngine(
+    std::string executable,
+    int ramLimitGiB)
+    : executable_(std::move(executable)),
+      ramLimitGiB_(ramLimitGiB) {
+  if (ramLimitGiB_ < 0) {
+    throw std::invalid_argument(
+        "Kangaroo RAM limit must not be negative");
+  }
+}
 
 EngineInfo KangarooEngine::info() const {
   EngineInfo result;
@@ -220,6 +229,12 @@ std::string KangarooEngine::buildCommand(
   const auto dpBits =
       distinguishedPointBits(rangeBits);
 
+  const int ramLimitGiB =
+      ramLimitGiB_ > 0
+          ? ramLimitGiB_
+          : KangarooMemoryPlanner::
+                recommendedRamLimitGiB();
+
   const auto resultsFile =
       (std::filesystem::path(request.workspace) / "RESULTS.TXT").string();
 
@@ -262,7 +277,7 @@ std::string KangarooEngine::buildCommand(
   command << " -seed " << shellQuote(request.walkSeed);
 
   command
-      << " -ramlimit 8"
+      << " -ramlimit " << ramLimitGiB
       << " -concurrent 1"
       << " -wwbuffer 5"
       << " -checkpoint 1"

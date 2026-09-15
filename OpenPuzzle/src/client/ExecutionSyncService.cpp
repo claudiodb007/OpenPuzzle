@@ -5,6 +5,7 @@
 #include "openpuzzle/engines/EngineParserFactory.hpp"
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/performance/AdaptiveProfileUpdater.hpp"
+#include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 
 #include <boost/multiprecision/cpp_int.hpp>
@@ -600,6 +601,69 @@ ExecutionSyncService::classifyCompletionError(
 }
 
 ExecutionSyncResult
+ExecutionSyncService::inspect() const {
+  return inspect(
+      ClientStateStore::executionSlot());
+}
+
+ExecutionSyncResult
+ExecutionSyncService::inspect(
+    const std::string& executionSlot) const {
+  ExecutionSyncResult result;
+
+  const auto state =
+      ClientStateStore::load(
+          executionSlot);
+
+  if (!state) {
+    return result;
+  }
+
+  result.hasState = true;
+  result.state = *state;
+  result.running =
+      processIdentityMatches(*state);
+
+  const auto detectedSolution =
+      solutionFile(
+          state->workspace,
+          state->engine);
+
+  if (detectedSolution) {
+    result.solutionFound = true;
+    result.solutionPath =
+        *detectedSolution;
+    return result;
+  }
+
+  if (result.running) {
+    ExecutionProgress progress;
+
+    if (readLatestProgress(
+            state->workspace,
+            state->engine,
+            progress)) {
+      result.hasProgress = true;
+      result.progress = progress;
+    }
+
+    return result;
+  }
+
+  int exitCode = 0;
+  if (readExitCode(
+          state->workspace,
+          exitCode)) {
+    result.hasExitCode = true;
+    result.exitCode = exitCode;
+  } else {
+    result.interrupted = true;
+  }
+
+  return result;
+}
+
+ExecutionSyncResult
 ExecutionSyncService::tick(
     const std::string& serverUrl) const {
   return tick(
@@ -702,6 +766,26 @@ ExecutionSyncService::tick(
           state->workspace,
           exitCode)) {
     result.interrupted = true;
+
+    /*
+     * A leitura de /proc pode falhar momentaneamente mesmo com o runtime
+     * principal ainda ativo. Nesse caso não transformar uma identidade
+     * incerta numa falsa interrupção: isso cancelaria o assignment e
+     * removeria client.state enquanto o motor continuava a pesquisar.
+     *
+     * O runtime volta a tentar no ciclo seguinte. Uma recuperação iniciada
+     * depois de o runtime desaparecer continua a usar o fluxo normal abaixo.
+     */
+    if (
+        openpuzzle::ClientRuntimeControl::
+            running(executionSlot)) {
+      result.completionError =
+          "Process identity temporarily unavailable; "
+          "local state was preserved";
+
+      return result;
+    }
+
     exitCode = -3;
   }
 

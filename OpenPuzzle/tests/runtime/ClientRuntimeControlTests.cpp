@@ -207,6 +207,47 @@ int main() {
               cudaOpenclArguments) ==
       expectedOpenclArguments);
 
+  RunSession runSession;
+
+  assert(
+      runSession.run({
+          "run",
+          "140",
+          "--engine",
+          "kangaroo",
+          "--backend",
+          "cuda",
+          "--device",
+          "0",
+          "--with-opencl",
+          "--opencl-device",
+          "1",
+      }) == 1);
+
+  assert(
+      runSession.run({
+          "run",
+          "140",
+          "--backend",
+          "cuda",
+          "--device",
+          "0",
+          "--with-opencl",
+          "--opencl-device",
+          "1",
+      }) == 1);
+
+  assert(
+      runSession.run({
+          "run",
+          "140",
+          "--engine",
+          "KANGAROO",
+          "--with-cpu",
+          "--cpu-threads",
+          "1",
+      }) == 1);
+
   auto expectedCudaPreflight =
       expectedCudaArguments;
 
