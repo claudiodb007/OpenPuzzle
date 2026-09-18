@@ -220,6 +220,33 @@ int main() {
   assert(
       ClientStateStore::path("opencl")
           .filename() == "client-opencl.state");
+  assert(
+      ClientStateStore::path("cuda-0")
+          .filename() == "client-cuda-0.state");
+  assert(
+      ClientStateStore::path("cuda-147")
+          .filename() == "client-cuda-147.state");
+  assert(
+      ClientStateStore::path("../../escape")
+          .filename() == "client.state");
+
+  assert(
+      setenv(
+          "OPENPUZZLE_EXECUTION_SLOT",
+          "cuda-147",
+          1) == 0);
+  assert(
+      ClientStateStore::executionSlot() ==
+      "cuda-147");
+
+  assert(
+      setenv(
+          "OPENPUZZLE_EXECUTION_SLOT",
+          "cuda-01",
+          1) == 0);
+  assert(
+      ClientStateStore::executionSlot() ==
+      "primary");
 
   assert(
       setenv(

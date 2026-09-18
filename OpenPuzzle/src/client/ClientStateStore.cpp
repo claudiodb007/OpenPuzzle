@@ -1,5 +1,6 @@
 #include "openpuzzle/client/ClientStateStore.hpp"
 
+#include "openpuzzle/runtime/ExecutionSlot.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 
 #include <cstdint>
@@ -157,10 +158,7 @@ ClientStateStore::executionSlot() {
   if (value != nullptr) {
     const std::string slot(value);
 
-    if (slot == "gpu" ||
-        slot == "cpu" ||
-        slot == "cuda" ||
-        slot == "opencl") {
+    if (ExecutionSlot::valid(slot)) {
       return slot;
     }
   }
@@ -210,18 +208,10 @@ ClientStateStore::path(
           ? std::filesystem::path(home)
           : std::filesystem::current_path();
 
-  std::string filename =
-      "client.state";
-
-  if (executionSlot == "gpu") {
-    filename = "client-gpu.state";
-  } else if (executionSlot == "cpu") {
-    filename = "client-cpu.state";
-  } else if (executionSlot == "cuda") {
-    filename = "client-cuda.state";
-  } else if (executionSlot == "opencl") {
-    filename = "client-opencl.state";
-  }
+  const std::string filename =
+      "client" +
+      ExecutionSlot::fileSuffix(executionSlot) +
+      ".state";
 
   return root /
          ".local" /

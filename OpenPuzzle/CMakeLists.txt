@@ -175,6 +175,7 @@ add_library(OpenPuzzleCore
     src/runtime/RunBenchmarkPreparation.cpp
     src/runtime/ClientRuntime.cpp
     src/runtime/ClientRuntimeControl.cpp
+    src/runtime/ExecutionSlot.cpp
     src/runtime/LinuxProcessIdentity.cpp
     src/runtime/KangarooCheckpointRecoveryPlanner.cpp
     src/runtime/KangarooRecoveryLeaseGuard.cpp

@@ -74,6 +74,16 @@ int main() {
           pidPath("opencl")
               .filename() ==
       "runtime-opencl.pid");
+  assert(
+      ClientRuntimeControl::
+          pidPath("cuda-0")
+              .filename() ==
+      "runtime-cuda-0.pid");
+  assert(
+      ClientRuntimeControl::
+          pidPath("cuda-147")
+              .filename() ==
+      "runtime-cuda-147.pid");
 
   assert(
       ClientRuntimeControl::
@@ -96,6 +106,21 @@ int main() {
           safeStopPath("opencl")
               .filename() ==
       "safestop-opencl.requested");
+  assert(
+      ClientRuntimeControl::
+          safeStopPath("cuda-0")
+              .filename() ==
+      "safestop-cuda-0.requested");
+  assert(
+      ClientRuntimeControl::
+          safeStopPath("cuda-147")
+              .filename() ==
+      "safestop-cuda-147.requested");
+  assert(
+      ClientRuntimeControl::
+          safeStopPath("../../escape")
+              .filename() ==
+      "safestop.requested");
 
   const std::vector<std::string>
       concurrentArguments = {

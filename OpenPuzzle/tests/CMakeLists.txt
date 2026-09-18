@@ -1404,6 +1404,20 @@ add_test(
     COMMAND ClientRuntimeControlTests
 )
 
+add_executable(ExecutionSlotTests
+    runtime/ExecutionSlotTests.cpp
+)
+
+target_link_libraries(ExecutionSlotTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ExecutionSlotTests
+    COMMAND ExecutionSlotTests
+)
+
 
 
 find_program(

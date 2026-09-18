@@ -1,6 +1,7 @@
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 
 #include "openpuzzle/client/ClientStateStore.hpp"
+#include "openpuzzle/runtime/ExecutionSlot.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 
@@ -34,18 +35,10 @@ ClientRuntimeControl::pidPath(
           ? std::filesystem::path(home)
           : std::filesystem::current_path();
 
-  std::string filename =
-      "runtime.pid";
-
-  if (executionSlot == "gpu") {
-    filename = "runtime-gpu.pid";
-  } else if (executionSlot == "cpu") {
-    filename = "runtime-cpu.pid";
-  } else if (executionSlot == "cuda") {
-    filename = "runtime-cuda.pid";
-  } else if (executionSlot == "opencl") {
-    filename = "runtime-opencl.pid";
-  }
+  const std::string filename =
+      "runtime" +
+      ExecutionSlot::fileSuffix(executionSlot) +
+      ".pid";
 
   return root /
          ".local" /
@@ -72,18 +65,10 @@ ClientRuntimeControl::safeStopPath(
           ? std::filesystem::path(home)
           : std::filesystem::current_path();
 
-  std::string filename =
-      "safestop.requested";
-
-  if (executionSlot == "gpu") {
-    filename = "safestop-gpu.requested";
-  } else if (executionSlot == "cpu") {
-    filename = "safestop-cpu.requested";
-  } else if (executionSlot == "cuda") {
-    filename = "safestop-cuda.requested";
-  } else if (executionSlot == "opencl") {
-    filename = "safestop-opencl.requested";
-  }
+  const std::string filename =
+      "safestop" +
+      ExecutionSlot::fileSuffix(executionSlot) +
+      ".requested";
 
   return root /
          ".local" /
