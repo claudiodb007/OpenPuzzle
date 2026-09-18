@@ -1594,6 +1594,16 @@ add_test(
     COMMAND UpdateCommandTests
 )
 
+find_program(BASH_EXECUTABLE bash REQUIRED)
+
+add_test(
+    NAME CreateReleaseManifestsTests
+    COMMAND
+        ${BASH_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/CreateReleaseManifestsTests.sh
+        ${CMAKE_SOURCE_DIR}/scripts/create_release_manifests.sh
+)
+
 
 add_test(
     NAME EngineInstallerCliTests
