@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(OpenPuzzle VERSION 1.0.26 LANGUAGES CXX)
+project(OpenPuzzle VERSION 1.0.27 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -543,6 +543,7 @@ install(
         docs/RELEASE_1.0.23.md
         docs/RELEASE_1.0.25.md
         docs/RELEASE_1.0.26.md
+        docs/RELEASE_1.0.27.md
         docs/SYSTEMD_SERVICE.md
     DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
 )

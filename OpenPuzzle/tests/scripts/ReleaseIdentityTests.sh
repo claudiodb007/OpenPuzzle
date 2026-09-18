@@ -31,9 +31,9 @@ PROJECT_VERSION="$({
 
 [[ "$(grep -Fc "docs/RELEASE_$VERSION.md" "$CMAKE")" -eq 1 ]] || \
   fail "release note is not installed exactly once"
-grep -Fqx "## $VERSION — Reproducible Linux release contract" "$CHANGELOG" || \
+grep -Eq "^## $VERSION — .+" "$CHANGELOG" || \
   fail "changelog entry is missing"
-grep -Fqx "# OpenPuzzle $VERSION — Reproducible Linux release contract" \
+grep -Eq "^# OpenPuzzle $VERSION — .+" \
   "$RELEASE_NOTE" || fail "release note title is invalid"
 grep -Fq "OpenPuzzle-$VERSION-Linux-x86_64.deb" "$RELEASE_NOTE" || \
   fail "release package identity is missing"

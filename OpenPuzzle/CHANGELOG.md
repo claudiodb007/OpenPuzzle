@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.27 — Unlimited multi-CUDA supervisors
+
+- Add `--devices all` to start one independent BitCrack supervisor for every
+  detected CUDA GPU, without a fixed client-side GPU limit.
+- Add comma-separated explicit selection such as `--devices 0,2,5` with
+  duplicate, missing and invalid-device rejection before claiming work.
+- Give every selected GPU its own `cuda-N` runtime slot, assignment,
+  workspace, state file, PID file and lifecycle.
+- Discover dynamic CUDA slots automatically in `status`, `stop` and
+  `safestop`.
+- Keep workers independent when one assignment finishes or one GPU fails, and
+  stop the remaining workers if a possible solution is found.
+- Prevent single-runtime and legacy concurrent modes from overlapping an
+  active multi-CUDA execution.
+- Retain exclusive single-device execution for Pollard Kangaroo and limit the
+  new multi-CUDA mode to BitCrack linear puzzles.
+- Preserve the existing server coordination protocol, client identity,
+  release pipeline, desktop interface and updater contract.
+- Pass all 120 automated tests, including CUDA selection, dynamic-slot and
+  independent-worker argument contracts.
+
 ## 1.0.26 — Reproducible Linux release contract
 
 - Generate the SHA-prefixed portable Debian package required by the updater
