@@ -50,6 +50,17 @@ PORTABLE_LINES="$(
 [[ "$PORTABLE_LINES" -eq 1 ]] || \
   fail "stable manifest does not contain exactly one portable package"
 
+printf 'source archive\n' > "$DIST/OpenPuzzle-$VERSION-source.tar.gz"
+printf 'release manifest\n' > "$DIST/RELEASE_MANIFEST.txt"
+"$SCRIPT" "$DIST" "$VERSION" >/dev/null
+
+[[ "$(wc -l < "$STABLE")" -eq 5 ]] || \
+  fail "final manifest does not contain five release artifacts"
+(
+  cd "$DIST"
+  sha256sum -c "$(basename "$STABLE")" >/dev/null
+) || fail "final release manifest verification failed"
+
 PORTABLE_INODE="$(stat -c %i "$PORTABLE")"
 FIRST_MANIFEST_SHA="$(sha256sum "$STABLE" | awk '{print $1}')"
 "$SCRIPT" "$DIST" "$VERSION" >/dev/null
@@ -88,6 +99,14 @@ fi
 
 if "$SCRIPT" "$DIST" "1.0" >/dev/null 2>&1; then
   fail "invalid version was accepted"
+fi
+
+INCOMPLETE_DIST="$TEST_ROOT/incomplete"
+make_packages "$INCOMPLETE_DIST"
+printf 'source only\n' > \
+  "$INCOMPLETE_DIST/OpenPuzzle-$VERSION-source.tar.gz"
+if "$SCRIPT" "$INCOMPLETE_DIST" "$VERSION" >/dev/null 2>&1; then
+  fail "source archive without release manifest was accepted"
 fi
 
 echo "CreateReleaseManifestsTests passed"

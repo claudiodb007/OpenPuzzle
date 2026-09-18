@@ -55,7 +55,21 @@ PORTABLE_SHA="$(sha256sum "$PORTABLE" | awk '{print $1}')"
 V="$DIST/OpenPuzzle-$VERSION-SHA256SUMS.txt"
 S="$DIST/SHA256SUMS.txt"
 C="$DIST/SHA256SUMS"
-for f in "$DEB" "$PORTABLE" "$TGZ"; do
+SOURCE="$DIST/OpenPuzzle-$VERSION-source.tar.gz"
+RELEASE_MANIFEST="$DIST/RELEASE_MANIFEST.txt"
+
+if [[ -e "$SOURCE" || -e "$RELEASE_MANIFEST" ]]; then
+  [[ -f "$SOURCE" && ! -L "$SOURCE" && \
+     -f "$RELEASE_MANIFEST" && ! -L "$RELEASE_MANIFEST" ]] || {
+    echo "Source archive and release manifest must be created together" >&2
+    exit 1
+  }
+  RELEASE_FILES=("$DEB" "$TGZ" "$SOURCE" "$RELEASE_MANIFEST" "$PORTABLE")
+else
+  RELEASE_FILES=("$DEB" "$TGZ" "$PORTABLE")
+fi
+
+for f in "${RELEASE_FILES[@]}"; do
   printf '%s  %s\n' \
     "$(sha256sum "$f" | awk '{print $1}')" \
     "$(basename "$f")"
@@ -69,6 +83,10 @@ cmp -s "$V" "$C"
   exit 1
 }
 echo "Portable package:  $PORTABLE"
+if [[ -f "$SOURCE" ]]; then
+  echo "Source archive:    $SOURCE"
+  echo "Release manifest:  $RELEASE_MANIFEST"
+fi
 echo "Versioned manifest: $V"
 echo "Updater manifest:   $S"
 echo "Checksum manifest:  $C"

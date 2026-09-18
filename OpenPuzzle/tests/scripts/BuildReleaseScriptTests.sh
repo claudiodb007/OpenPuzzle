@@ -37,6 +37,13 @@ if [[ " ${*} " == *" -B "* && " ${*} " == *" -S "* ]]; then
     if [[ "${arguments[index]}" = "-B" ]]; then
       mkdir -p "${arguments[index + 1]}"
       : > "${arguments[index + 1]}/CPackConfig.cmake"
+      mkdir -p "${arguments[index + 1]}/libexec/OpenPuzzle"
+      printf 'CUDA engine\n' > \
+        "${arguments[index + 1]}/libexec/OpenPuzzle/cuBitCrack"
+      printf 'OpenCL engine\n' > \
+        "${arguments[index + 1]}/libexec/OpenPuzzle/clBitCrack"
+      printf 'KeyHunt engine\n' > \
+        "${arguments[index + 1]}/libexec/OpenPuzzle/keyhunt"
     fi
   done
 fi
@@ -46,6 +53,9 @@ cat > "$FAKE_BIN/ctest" <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'ctest %s\n' "$*" >> "$OPENPUZZLE_TEST_COMMAND_LOG"
+if [[ " ${*} " == *" -N "* ]]; then
+  printf 'Total Tests: 116\n'
+fi
 SCRIPT
 
 cat > "$FAKE_BIN/cpack" <<'SCRIPT'
@@ -68,9 +78,67 @@ printf 'release TGZ\n' > \
   "$output/OpenPuzzle-$OPENPUZZLE_RELEASE_VERSION-Linux-x86_64.tar.gz"
 SCRIPT
 
-chmod +x "$FAKE_BIN/cmake" "$FAKE_BIN/ctest" "$FAKE_BIN/cpack"
+cat > "$FAKE_BIN/git" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'git %s\n' "$*" >> "$OPENPUZZLE_TEST_COMMAND_LOG"
+if [[ "${1:-}" = "-C" ]]; then
+  shift 2
+fi
+case "${1:-}" in
+  rev-parse)
+    if [[ "${2:-}" = "--show-toplevel" ]]; then
+      printf '%s\n' "$OPENPUZZLE_TEST_REPOSITORY"
+    elif [[ "${2:-}" = "--is-inside-work-tree" ]]; then
+      printf 'true\n'
+    else
+      printf '%040d\n' 0
+    fi
+    ;;
+  status)
+    if [[ "${OPENPUZZLE_TEST_DIRTY:-0}" = "1" ]]; then
+      printf ' M OpenPuzzle/CMakeLists.txt\n'
+    fi
+    ;;
+  diff)
+    ;;
+  branch)
+    printf 'feature/1.0.26-release-contract\n'
+    ;;
+  show)
+    printf '2026-09-18T12:00:00+00:00\n'
+    ;;
+  ls-tree)
+    printf 'OpenPuzzle/CMakeLists.txt\nOpenPuzzle/scripts/build_release.sh\n'
+    ;;
+  archive)
+    output=""
+    while [[ "$#" -gt 0 ]]; do
+      if [[ "$1" = "-o" ]]; then
+        output="$2"
+        shift 2
+      else
+        shift
+      fi
+    done
+    [[ -n "$output" ]]
+    printf 'exact committed source archive\n' > "$output"
+    ;;
+  *)
+    echo "Unexpected fake git command: $*" >&2
+    exit 1
+    ;;
+esac
+SCRIPT
+
+chmod +x \
+  "$FAKE_BIN/cmake" \
+  "$FAKE_BIN/ctest" \
+  "$FAKE_BIN/cpack" \
+  "$FAKE_BIN/git"
 
 OPENPUZZLE_TEST_COMMAND_LOG="$LOG" \
+OPENPUZZLE_TEST_REPOSITORY="$TEST_ROOT/repository" \
 PATH="$FAKE_BIN:$PATH" \
   "$BUILD_SCRIPT" "$OUTPUT" >/dev/null
 
@@ -82,6 +150,8 @@ for file in \
   "$DEB" \
   "$OUTPUT/OpenPuzzle-$VERSION-Linux-x86_64.tar.gz" \
   "$PORTABLE" \
+  "$OUTPUT/OpenPuzzle-$VERSION-source.tar.gz" \
+  "$OUTPUT/RELEASE_MANIFEST.txt" \
   "$OUTPUT/OpenPuzzle-$VERSION-SHA256SUMS.txt" \
   "$OUTPUT/SHA256SUMS.txt" \
   "$OUTPUT/SHA256SUMS"; do
@@ -93,10 +163,28 @@ grep -Fq -- '--target OpenPuzzleUi' "$LOG" || \
   fail "desktop UI was not required"
 grep -q '^ctest ' "$LOG" || fail "test suite was not invoked"
 grep -q '^cpack ' "$LOG" || fail "CPack was not invoked"
+grep -q '^git .* archive ' "$LOG" || fail "source archive was not created"
+grep -Fxq "Commit: 0000000000000000000000000000000000000000" \
+  "$OUTPUT/RELEASE_MANIFEST.txt" || fail "release commit was not recorded"
+grep -Fxq "Automated tests: 116" \
+  "$OUTPUT/RELEASE_MANIFEST.txt" || fail "test count was not recorded"
+[[ "$(wc -l < "$OUTPUT/SHA256SUMS.txt")" -eq 5 ]] || \
+  fail "updater manifest does not contain five release assets"
 
-if OPENPUZZLE_TEST_COMMAND_LOG="$LOG" PATH="$FAKE_BIN:$PATH" \
+if OPENPUZZLE_TEST_COMMAND_LOG="$LOG" \
+  OPENPUZZLE_TEST_REPOSITORY="$TEST_ROOT/repository" \
+  PATH="$FAKE_BIN:$PATH" \
   "$BUILD_SCRIPT" "$OUTPUT" >/dev/null 2>&1; then
   fail "non-empty output directory was accepted"
+fi
+
+DIRTY_OUTPUT="$TEST_ROOT/dirty-output"
+if OPENPUZZLE_TEST_COMMAND_LOG="$LOG" \
+  OPENPUZZLE_TEST_REPOSITORY="$TEST_ROOT/repository" \
+  OPENPUZZLE_TEST_DIRTY=1 \
+  PATH="$FAKE_BIN:$PATH" \
+  "$BUILD_SCRIPT" "$DIRTY_OUTPUT" >/dev/null 2>&1; then
+  fail "dirty Git worktree was accepted"
 fi
 
 printf 'corrupt manifest\n' > "$OUTPUT/SHA256SUMS"

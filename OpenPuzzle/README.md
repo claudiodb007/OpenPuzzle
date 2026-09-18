@@ -448,8 +448,10 @@ OpenPuzzle/scripts/build_release.sh /path/to/empty/output-directory
 
 The command performs a clean Release build, requires the Qt desktop interface,
 runs the complete test suite, creates the DEB and TGZ packages, creates the
-SHA-prefixed portable DEB required by the updater, and verifies the versioned,
-updater and conventional SHA-256 manifests. It refuses to use a non-empty
-output directory so stale release files cannot be published accidentally.
+SHA-prefixed portable DEB required by the updater, archives the exact committed
+source tree, writes release provenance and verifies the versioned, updater and
+conventional SHA-256 manifests. It requires a clean Git worktree and refuses to
+use a non-empty output directory so uncommitted or stale release files cannot
+be published accidentally.
 
 After a source installation, use the same `run` command.
