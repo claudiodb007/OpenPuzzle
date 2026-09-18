@@ -1613,6 +1613,15 @@ add_test(
         ${PROJECT_VERSION}
 )
 
+add_test(
+    NAME ReleaseIdentityTests
+    COMMAND
+        ${BASH_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/ReleaseIdentityTests.sh
+        ${CMAKE_SOURCE_DIR}
+        ${PROJECT_VERSION}
+)
+
 
 add_test(
     NAME EngineInstallerCliTests

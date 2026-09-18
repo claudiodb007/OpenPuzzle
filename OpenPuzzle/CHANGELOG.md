@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.26 — Reproducible Linux release contract
+
+- Generate the SHA-prefixed portable Debian package required by the updater
+  directly from the normal release package.
+- Generate identical versioned, stable updater and conventional SHA-256
+  manifests as part of the release build.
+- Add one command for the complete Linux configure, build, desktop UI, test,
+  CPack, manifest and validation pipeline.
+- Refuse release builds from a dirty Git worktree.
+- Create the source archive directly from the exact release commit.
+- Record branch, commit, commit date, tracked file count, automated test count
+  and the CUDA, OpenCL and KeyHunt engine hashes in the release manifest.
+- Validate all required release artefacts and their updater contract before
+  publication.
+- Exclude generated CTest runtime state from committed source archives.
+- Retain the OpenPuzzle 1.0.25 client, engine and coordination protocol
+  behavior while strengthening release production and verification.
+- Pass all 117 automated tests, including the release identity contract.
+
 ## 1.0.20 — Puzzle-aware routing and resilient solution alerts
 
   * Added metadata-driven routing for linear and Pollard Kangaroo workloads.
