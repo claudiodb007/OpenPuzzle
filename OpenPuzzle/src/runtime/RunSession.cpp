@@ -22,6 +22,7 @@
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
 #include "openpuzzle/runtime/ClientRuntime.hpp"
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
+#include "openpuzzle/runtime/CudaDeviceSelection.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/engines/common/SearchMode.hpp"
 #include "openpuzzle/runtime/ExecutionStopper.hpp"
@@ -1485,6 +1486,58 @@ RunSession::concurrentPreflightArguments(
   }
 
   return result;
+}
+
+std::vector<int>
+RunSession::selectedCudaDevices(
+    const std::vector<std::string>& args,
+    const std::vector<GpuInfo>& availableDevices) {
+  const auto occurrences =
+      static_cast<std::size_t>(
+          std::count(
+              args.begin(),
+              args.end(),
+              "--devices"));
+
+  if (occurrences != 1) {
+    throw std::runtime_error(
+        occurrences == 0
+            ? "--devices is required for multi-CUDA selection"
+            : "--devices may only be specified once");
+  }
+
+  if (hasArgument(args, "--device") ||
+      hasArgument(args, "--gpu")) {
+    throw std::runtime_error(
+        "--devices cannot be combined with --device or --gpu");
+  }
+
+  if (hasArgument(args, "--with-cpu") ||
+      hasArgument(args, "--with-opencl")) {
+    throw std::runtime_error(
+        "--devices cannot be combined with "
+        "--with-cpu or --with-opencl");
+  }
+
+  const auto backend =
+      getArgument(args, "--backend", "cuda");
+
+  if (backend != "cuda") {
+    throw std::runtime_error(
+        "--devices requires --backend cuda");
+  }
+
+  const auto engine =
+      getArgument(args, "--engine", "bitcrack");
+
+  if (engine != "bitcrack") {
+    throw std::runtime_error(
+        "--devices currently requires --engine bitcrack");
+  }
+
+  return CudaDeviceSelection::resolve(
+      getArgument(args, "--devices"),
+      availableDevices);
 }
 
 void RunSession::validateConcurrentGpuSelection(

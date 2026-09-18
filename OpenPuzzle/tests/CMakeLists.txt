@@ -1418,6 +1418,34 @@ add_test(
     COMMAND ExecutionSlotTests
 )
 
+add_executable(CudaDeviceSelectionTests
+    runtime/CudaDeviceSelectionTests.cpp
+)
+
+target_link_libraries(CudaDeviceSelectionTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME CudaDeviceSelectionTests
+    COMMAND CudaDeviceSelectionTests
+)
+
+add_executable(RunSessionCudaDeviceSelectionTests
+    runtime/RunSessionCudaDeviceSelectionTests.cpp
+)
+
+target_link_libraries(RunSessionCudaDeviceSelectionTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME RunSessionCudaDeviceSelectionTests
+    COMMAND RunSessionCudaDeviceSelectionTests
+)
+
 
 
 find_program(
