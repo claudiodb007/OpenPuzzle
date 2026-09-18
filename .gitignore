@@ -8,3 +8,6 @@
 /.package-*/
 /.phase*-stage-*/
 /OpenPuzzle-BitCrack
+
+# CTest runtime files
+/OpenPuzzle/Testing/
