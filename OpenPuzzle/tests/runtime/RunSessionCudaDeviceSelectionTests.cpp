@@ -78,6 +78,67 @@ int main() {
           sixGpus) ==
       std::vector<int>({5, 0, 2}));
 
+  assert(
+      RunSession::cudaWorkerArguments(
+          {
+              "run",
+              "71",
+              "--devices",
+              "all",
+              "--duration-minutes",
+              "60",
+          },
+          4) ==
+      std::vector<std::string>({
+          "run",
+          "71",
+          "--duration-minutes",
+          "60",
+          "--backend",
+          "cuda",
+          "--engine",
+          "bitcrack",
+          "--device",
+          "4",
+      }));
+
+  assert(
+      RunSession::cudaWorkerArguments(
+          {
+              "run",
+              "71",
+              "--backend",
+              "cuda",
+              "--engine",
+              "bitcrack",
+              "--devices",
+              "5,3,1",
+              "--once",
+          },
+          3) ==
+      std::vector<std::string>({
+          "run",
+          "71",
+          "--backend",
+          "cuda",
+          "--engine",
+          "bitcrack",
+          "--once",
+          "--device",
+          "3",
+      }));
+
+  try {
+    (void) RunSession::cudaWorkerArguments(
+        {"run", "71", "--devices", "all"},
+        -1);
+    assert(false);
+  } catch (const std::runtime_error& error) {
+    assert(
+        std::string(error.what()).find("negative") !=
+        std::string::npos);
+  }
+
   expectFailure(
       {"run", "71"},
       sixGpus,

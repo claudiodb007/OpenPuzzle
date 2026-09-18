@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace openpuzzle {
 
@@ -21,6 +23,10 @@ public:
    */
   static std::string fileSuffix(
       const std::string& value);
+
+  static std::vector<std::string>
+  discoverCudaSlots(
+      const std::filesystem::path& directory);
 };
 
 } // namespace openpuzzle

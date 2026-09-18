@@ -5,6 +5,9 @@
 #include <iostream>
 #include <limits>
 #include <string>
+#include <filesystem>
+#include <fstream>
+#include <unistd.h>
 
 using openpuzzle::ExecutionSlot;
 
@@ -51,6 +54,40 @@ int main() {
   assert(ExecutionSlot::fileSuffix("cuda-0") == "-cuda-0");
   assert(ExecutionSlot::fileSuffix("cuda-999") == "-cuda-999");
   assert(ExecutionSlot::fileSuffix("../../escape").empty());
+
+  const auto directory =
+      std::filesystem::temp_directory_path() /
+      (
+          "openpuzzle-execution-slot-discovery-" +
+          std::to_string(getpid()));
+
+  std::filesystem::remove_all(directory);
+  std::filesystem::create_directories(directory);
+
+  for (const auto& filename : {
+           "client-cuda-5.state",
+           "runtime-cuda-0.pid",
+           "safestop-cuda-2.requested",
+           "client-cuda-2.state",
+           "client-cuda-01.state",
+           "runtime-opencl.pid",
+           "unrelated.txt",
+       }) {
+    std::ofstream output(
+        directory / filename);
+    assert(output);
+  }
+
+  assert(
+      ExecutionSlot::discoverCudaSlots(
+          directory) ==
+      std::vector<std::string>({
+          "cuda-0",
+          "cuda-2",
+          "cuda-5",
+      }));
+
+  std::filesystem::remove_all(directory);
 
   std::cout << "ExecutionSlotTests passed\n";
   return 0;

@@ -38,6 +38,11 @@ public:
       const std::vector<std::string>& args,
       const std::vector<GpuInfo>& availableDevices);
 
+  static std::vector<std::string>
+  cudaWorkerArguments(
+      const std::vector<std::string>& args,
+      int device);
+
   static void validateConcurrentGpuSelection(
       const std::vector<std::string> &cudaArguments,
       const std::vector<std::string> &openclArguments,

@@ -23,6 +23,24 @@ Request work for a specific puzzle:
 openpuzzle run 71
 ```
 
+Run one independent BitCrack supervisor for every detected CUDA device:
+
+```bash
+openpuzzle run 71 --engine bitcrack --backend cuda --devices all
+```
+
+An explicit comma-separated selection is also accepted, with no fixed client
+limit on the number of devices:
+
+```bash
+openpuzzle run 71 --engine bitcrack --backend cuda --devices 0,2,5
+```
+
+Each selected GPU receives its own assignment, workspace, PID file and local
+state in a `cuda-N` slot. `status`, `stop` and `safestop` discover all such
+slots automatically. Multi-CUDA currently supports BitCrack linear puzzles;
+Kangaroo remains an exclusive single-device execution.
+
 Execute only one assignment:
 
 ```bash

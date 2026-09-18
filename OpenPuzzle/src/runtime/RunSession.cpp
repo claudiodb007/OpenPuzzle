@@ -23,6 +23,7 @@
 #include "openpuzzle/runtime/ClientRuntime.hpp"
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/CudaDeviceSelection.hpp"
+#include "openpuzzle/runtime/ExecutionSlot.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/engines/common/SearchMode.hpp"
 #include "openpuzzle/runtime/ExecutionStopper.hpp"
@@ -43,6 +44,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <algorithm>
 #include <sstream>
@@ -640,13 +642,23 @@ void printAssignment(const client::RangeAssignment &assignment) {
 int showStatus(const std::vector<std::string> &args) {
   (void)args;
 
-  const std::vector<std::string>
+  std::vector<std::string>
       executionSlots = {
           "gpu",
           "cpu",
           "cuda",
           "opencl",
       };
+
+  const auto dynamicSlots =
+      ExecutionSlot::discoverCudaSlots(
+          client::ClientStateStore::
+              path("primary").parent_path());
+
+  executionSlots.insert(
+      executionSlots.end(),
+      dynamicSlots.begin(),
+      dynamicSlots.end());
 
   bool slotStateFound = false;
 
@@ -930,12 +942,24 @@ int stopExecution() {
   bool concurrentStopRequested =
       false;
 
-  for (const std::string slot : {
-           "gpu",
-           "cpu",
-           "cuda",
-           "opencl",
-       }) {
+  std::vector<std::string> executionSlots = {
+      "gpu",
+      "cpu",
+      "cuda",
+      "opencl",
+  };
+
+  const auto dynamicSlots =
+      ExecutionSlot::discoverCudaSlots(
+          client::ClientStateStore::
+              path("primary").parent_path());
+
+  executionSlots.insert(
+      executionSlots.end(),
+      dynamicSlots.begin(),
+      dynamicSlots.end());
+
+  for (const auto& slot : executionSlots) {
     if (
         ClientRuntimeControl::
             requestStop(slot)) {
@@ -1025,12 +1049,24 @@ int safeStopExecution() {
 
   std::vector<std::string> activeSlots;
 
-  for (const std::string slot : {
-           "gpu",
-           "cpu",
-           "cuda",
-           "opencl",
-       }) {
+  std::vector<std::string> executionSlots = {
+      "gpu",
+      "cpu",
+      "cuda",
+      "opencl",
+  };
+
+  const auto dynamicSlots =
+      ExecutionSlot::discoverCudaSlots(
+          client::ClientStateStore::
+              path("primary").parent_path());
+
+  executionSlots.insert(
+      executionSlots.end(),
+      dynamicSlots.begin(),
+      dynamicSlots.end());
+
+  for (const auto& slot : executionSlots) {
     if (
         ClientRuntimeControl::
             running(slot)) {
@@ -1175,15 +1211,23 @@ int runConcurrent(
           : RunSession::
                 concurrentCpuArguments(args);
 
-  const std::vector<std::string> allSlots = {
+  std::vector<std::string> allSlots = {
       "primary",
       "gpu",
       "cpu",
       "cuda",
       "opencl",
-      "cuda",
-      "opencl",
   };
+
+  const auto dynamicSlots =
+      ExecutionSlot::discoverCudaSlots(
+          client::ClientStateStore::
+              path("primary").parent_path());
+
+  allSlots.insert(
+      allSlots.end(),
+      dynamicSlots.begin(),
+      dynamicSlots.end());
 
   for (const auto& slot : allSlots) {
     if (ClientRuntimeControl::running(slot)) {
@@ -1433,6 +1477,241 @@ int runConcurrent(
   return WEXITSTATUS(completedStatus);
 }
 
+int runMultiCuda(
+    const std::vector<std::string>& args) {
+  const auto availableDevices =
+      GpuManager::listCudaGpus();
+
+  const auto devices =
+      RunSession::selectedCudaDevices(
+          args,
+          availableDevices);
+
+  const int puzzle = selectedPuzzle(args);
+  const auto metadata =
+      puzzle > 0
+          ? PuzzleMetadataCatalog::load(puzzle)
+          : std::nullopt;
+
+  if (metadata &&
+      metadata->searchMode == "kangaroo") {
+    throw std::runtime_error(
+        "--devices supports BitCrack linear puzzles only; "
+        "Kangaroo remains exclusive");
+  }
+
+  std::vector<std::string> occupiedSlots = {
+      "primary",
+      "gpu",
+      "cpu",
+      "cuda",
+      "opencl",
+  };
+
+  const auto discoveredSlots =
+      ExecutionSlot::discoverCudaSlots(
+          client::ClientStateStore::
+              path("primary").parent_path());
+
+  occupiedSlots.insert(
+      occupiedSlots.end(),
+      discoveredSlots.begin(),
+      discoveredSlots.end());
+
+  for (const auto& slot : occupiedSlots) {
+    if (ClientRuntimeControl::running(slot)) {
+      throw std::runtime_error(
+          "An OpenPuzzle runtime is already active in slot " +
+          slot);
+    }
+  }
+
+  struct Worker {
+    int device = 0;
+    std::string slot;
+    std::vector<std::string> arguments;
+    pid_t pid = -1;
+  };
+
+  std::vector<Worker> workers;
+  workers.reserve(devices.size());
+
+  for (const int device : devices) {
+    Worker worker;
+    worker.device = device;
+    worker.slot =
+        ExecutionSlot::cuda(
+            static_cast<std::uint64_t>(
+                device));
+    worker.arguments =
+        RunSession::cudaWorkerArguments(
+            args,
+            device);
+
+    const int preflightResult =
+        RunSession().run(
+            RunSession::
+                concurrentPreflightArguments(
+                    worker.arguments));
+
+    if (preflightResult != 0) {
+      throw std::runtime_error(
+          "CUDA device " +
+          std::to_string(device) +
+          " preflight failed; no assignment was requested");
+    }
+
+    workers.push_back(
+        std::move(worker));
+  }
+
+  std::cout.flush();
+  std::cerr.flush();
+
+  for (auto& worker : workers) {
+    worker.pid = fork();
+
+    if (worker.pid == 0) {
+      if (setenv(
+              "OPENPUZZLE_EXECUTION_SLOT",
+              worker.slot.c_str(),
+              1) != 0) {
+        _exit(1);
+      }
+
+      const int result =
+          RunSession().run(
+              worker.arguments);
+
+      std::cout.flush();
+      std::cerr.flush();
+      _exit(result);
+    }
+
+    if (worker.pid < 0) {
+      for (const auto& launched : workers) {
+        if (launched.pid > 0) {
+          kill(launched.pid, SIGTERM);
+        }
+      }
+
+      for (const auto& launched : workers) {
+        if (launched.pid > 0) {
+          waitpid(launched.pid, nullptr, 0);
+        }
+      }
+
+      throw std::runtime_error(
+          "Unable to start CUDA device " +
+          std::to_string(worker.device));
+    }
+  }
+
+  std::cout
+      << "OpenPuzzle multi-CUDA execution\n"
+      << "-------------------------------\n"
+      << "Workers............ "
+      << workers.size()
+      << '\n';
+
+  for (const auto& worker : workers) {
+    std::cout
+        << "Slot "
+        << worker.slot
+        << "......... PID "
+        << worker.pid
+        << " | device "
+        << worker.device
+        << '\n';
+  }
+
+  std::cout << '\n';
+
+  signal(SIGINT, SIG_IGN);
+  signal(SIGTERM, SIG_IGN);
+
+  std::map<pid_t, std::size_t> remaining;
+
+  for (std::size_t index = 0;
+       index < workers.size();
+       ++index) {
+    remaining.emplace(
+        workers[index].pid,
+        index);
+  }
+
+  int result = 0;
+  bool solutionStopRequested = false;
+
+  while (!remaining.empty()) {
+    int status = 0;
+    const pid_t completed =
+        waitpid(-1, &status, 0);
+
+    if (completed < 0 && errno == EINTR) {
+      continue;
+    }
+
+    if (completed < 0) {
+      result = 1;
+      break;
+    }
+
+    const auto found =
+        remaining.find(completed);
+
+    if (found == remaining.end()) {
+      continue;
+    }
+
+    const auto workerIndex = found->second;
+    const auto& worker = workers[workerIndex];
+    remaining.erase(found);
+
+    const int exitCode =
+        WIFEXITED(status)
+            ? WEXITSTATUS(status)
+            : 1;
+
+    std::cout
+        << "CUDA worker stopped. "
+        << worker.slot
+        << " | exit "
+        << exitCode
+        << '\n';
+
+    if (exitCode != 0) {
+      result = exitCode;
+    }
+
+    if (exitCode ==
+            ClientRuntime::SolutionFoundExitCode &&
+        !solutionStopRequested) {
+      solutionStopRequested = true;
+
+      for (const auto& [pid, index] : remaining) {
+        (void) pid;
+        ClientRuntimeControl::requestStop(
+            workers[index].slot);
+      }
+    }
+  }
+
+  if (!remaining.empty()) {
+    for (const auto& [pid, index] : remaining) {
+      (void) index;
+      kill(pid, SIGTERM);
+    }
+
+    for (const auto& [pid, index] : remaining) {
+      (void) index;
+      waitpid(pid, nullptr, 0);
+    }
+  }
+
+  return result;
+}
+
 } // namespace
 
 std::vector<std::string>
@@ -1540,6 +1819,49 @@ RunSession::selectedCudaDevices(
       availableDevices);
 }
 
+std::vector<std::string>
+RunSession::cudaWorkerArguments(
+    const std::vector<std::string>& args,
+    const int device) {
+  if (device < 0) {
+    throw std::runtime_error(
+        "CUDA device must not be negative");
+  }
+
+  std::vector<std::string> result;
+  result.reserve(args.size() + 4);
+
+  for (std::size_t index = 0;
+       index < args.size();
+       ++index) {
+    if (args[index] == "--devices") {
+      if (index + 1 >= args.size()) {
+        throw std::runtime_error(
+            "--devices requires a value");
+      }
+
+      ++index;
+      continue;
+    }
+
+    result.push_back(args[index]);
+  }
+
+  if (!hasArgument(result, "--backend")) {
+    result.push_back("--backend");
+    result.push_back("cuda");
+  }
+
+  if (!hasArgument(result, "--engine")) {
+    result.push_back("--engine");
+    result.push_back("bitcrack");
+  }
+
+  result.push_back("--device");
+  result.push_back(std::to_string(device));
+  return result;
+}
+
 void RunSession::validateConcurrentGpuSelection(
     const std::vector<std::string> &cudaArguments,
     const std::vector<std::string> &openclArguments,
@@ -1593,6 +1915,23 @@ void RunSession::validateConcurrentGpuSelection(
 
 int RunSession::run(
     const std::vector<std::string> &args) const {
+  if (!args.empty() &&
+      args.front() == "run" &&
+      hasArgument(args, "--devices")) {
+    try {
+      return runMultiCuda(args);
+    } catch (const std::exception& error) {
+      std::cerr
+          << "OpenPuzzle multi-CUDA start failed\n"
+          << "----------------------------------\n"
+          << "Problem............ "
+          << error.what()
+          << '\n'
+          << "Assignment......... not requested by supervisor\n";
+      return 1;
+    }
+  }
+
   if (
       !args.empty() &&
       args.front() == "run" &&
@@ -1612,6 +1951,30 @@ int RunSession::run(
           << '\n';
 
       return 1;
+    }
+  }
+
+  if (
+      !args.empty() &&
+      args.front() == "run" &&
+      !hasArgument(args, "--dry-run") &&
+      !hasArgument(args, "--preflight-only") &&
+      client::ClientStateStore::executionSlot() ==
+          "primary") {
+    const auto dynamicSlots =
+        ExecutionSlot::discoverCudaSlots(
+            client::ClientStateStore::
+                path("primary").parent_path());
+
+    for (const auto& slot : dynamicSlots) {
+      if (ClientRuntimeControl::running(slot)) {
+        std::cerr
+            << "An OpenPuzzle multi-CUDA runtime is "
+            << "already active in slot "
+            << slot
+            << '\n';
+        return 1;
+      }
     }
   }
 

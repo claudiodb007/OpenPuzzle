@@ -1,12 +1,42 @@
 #include "openpuzzle/runtime/ExecutionSlot.hpp"
 
 #include <limits>
+#include <map>
 
 namespace openpuzzle {
 
 namespace {
 
 constexpr const char* cudaPrefix = "cuda-";
+
+std::optional<std::string> slotFromFilename(
+    const std::string& filename,
+    const std::string& prefix,
+    const std::string& suffix) {
+  if (filename.size() <=
+          prefix.size() + suffix.size() ||
+      filename.compare(
+          0,
+          prefix.size(),
+          prefix) != 0 ||
+      filename.compare(
+          filename.size() - suffix.size(),
+          suffix.size(),
+          suffix) != 0) {
+    return std::nullopt;
+  }
+
+  const auto slot =
+      filename.substr(
+          prefix.size(),
+          filename.size() -
+              prefix.size() -
+              suffix.size());
+
+  return ExecutionSlot::cudaDevice(slot)
+      ? std::optional<std::string>(slot)
+      : std::nullopt;
+}
 
 } // namespace
 
@@ -80,6 +110,72 @@ std::string ExecutionSlot::fileSuffix(
   }
 
   return {};
+}
+
+std::vector<std::string>
+ExecutionSlot::discoverCudaSlots(
+    const std::filesystem::path& directory) {
+  std::map<std::uint64_t, std::string> slots;
+  std::error_code error;
+
+  std::filesystem::directory_iterator iterator(
+      directory,
+      error);
+
+  if (error) {
+    return {};
+  }
+
+  const std::filesystem::directory_iterator end;
+
+  for (; iterator != end; iterator.increment(error)) {
+    if (error) {
+      return {};
+    }
+
+    const auto filename =
+        iterator->path().filename().string();
+
+    std::optional<std::string> slot =
+        slotFromFilename(
+            filename,
+            "client-",
+            ".state");
+
+    if (!slot) {
+      slot = slotFromFilename(
+          filename,
+          "runtime-",
+          ".pid");
+    }
+
+    if (!slot) {
+      slot = slotFromFilename(
+          filename,
+          "safestop-",
+          ".requested");
+    }
+
+    if (!slot) {
+      continue;
+    }
+
+    const auto device = cudaDevice(*slot);
+
+    if (device) {
+      slots.emplace(*device, *slot);
+    }
+  }
+
+  std::vector<std::string> result;
+  result.reserve(slots.size());
+
+  for (const auto& [device, slot] : slots) {
+    (void) device;
+    result.push_back(slot);
+  }
+
+  return result;
 }
 
 } // namespace openpuzzle
