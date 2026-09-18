@@ -1604,6 +1604,15 @@ add_test(
         ${CMAKE_SOURCE_DIR}/scripts/create_release_manifests.sh
 )
 
+add_test(
+    NAME BuildReleaseScriptTests
+    COMMAND
+        ${BASH_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/BuildReleaseScriptTests.sh
+        ${CMAKE_SOURCE_DIR}/scripts/build_release.sh
+        ${PROJECT_VERSION}
+)
+
 
 add_test(
     NAME EngineInstallerCliTests

@@ -30,10 +30,13 @@ DEB_SHA="$(sha256sum "$DEB" | awk '{print $1}')"
 PORTABLE="$DIST/OpenPuzzle-$VERSION-portable-${DEB_SHA:0:8}.deb"
 VERSIONED="$DIST/OpenPuzzle-$VERSION-SHA256SUMS.txt"
 STABLE="$DIST/SHA256SUMS.txt"
+CONVENTIONAL="$DIST/SHA256SUMS"
 
 [[ -f "$PORTABLE" ]] || fail "portable package was not created"
 cmp -s "$DEB" "$PORTABLE" || fail "portable package is not byte-identical"
 cmp -s "$VERSIONED" "$STABLE" || fail "release manifests differ"
+cmp -s "$VERSIONED" "$CONVENTIONAL" || \
+  fail "conventional checksum manifest differs"
 (
   cd "$DIST"
   sha256sum -c "$(basename "$STABLE")" >/dev/null
@@ -54,6 +57,8 @@ FIRST_MANIFEST_SHA="$(sha256sum "$STABLE" | awk '{print $1}')"
   fail "idempotent rerun replaced the portable package"
 [[ "$(sha256sum "$STABLE" | awk '{print $1}')" = "$FIRST_MANIFEST_SHA" ]] || \
   fail "idempotent rerun changed the stable manifest"
+cmp -s "$STABLE" "$CONVENTIONAL" || \
+  fail "idempotent rerun changed the conventional manifest"
 
 STALE_DIST="$TEST_ROOT/stale"
 make_packages "$STALE_DIST"

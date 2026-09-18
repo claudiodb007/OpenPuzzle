@@ -437,4 +437,19 @@ cmake --build build
 sudo cmake --install build
 ```
 
+## Release build
+
+Maintainers can build and validate every Linux release package with one
+command:
+
+```bash
+OpenPuzzle/scripts/build_release.sh /path/to/empty/output-directory
+```
+
+The command performs a clean Release build, requires the Qt desktop interface,
+runs the complete test suite, creates the DEB and TGZ packages, creates the
+SHA-prefixed portable DEB required by the updater, and verifies the versioned,
+updater and conventional SHA-256 manifests. It refuses to use a non-empty
+output directory so stale release files cannot be published accidentally.
+
 After a source installation, use the same `run` command.

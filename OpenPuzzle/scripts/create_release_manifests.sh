@@ -54,17 +54,21 @@ PORTABLE_SHA="$(sha256sum "$PORTABLE" | awk '{print $1}')"
 
 V="$DIST/OpenPuzzle-$VERSION-SHA256SUMS.txt"
 S="$DIST/SHA256SUMS.txt"
+C="$DIST/SHA256SUMS"
 for f in "$DEB" "$PORTABLE" "$TGZ"; do
   printf '%s  %s\n' \
     "$(sha256sum "$f" | awk '{print $1}')" \
     "$(basename "$f")"
 done > "$V"
 cp -f "$V" "$S"
+cp -f "$V" "$C"
 cmp -s "$V" "$S"
+cmp -s "$V" "$C"
 [[ "$(awk '$2 ~ /^OpenPuzzle-[0-9]+\.[0-9]+\.[0-9]+-portable-[0-9a-f]{8}\.deb$/ {n++} END{print n+0}' "$S")" -eq 1 ]] || {
   echo "Stable manifest must contain exactly one portable package" >&2
   exit 1
 }
 echo "Portable package:  $PORTABLE"
 echo "Versioned manifest: $V"
-echo "Stable manifest:    $S"
+echo "Updater manifest:   $S"
+echo "Checksum manifest:  $C"
