@@ -45,6 +45,8 @@ staggers worker startup. Workers do not repeat the global BitCrack probe, which
 avoids unnecessary GPU contexts and host-memory peaks. CUDA and OpenCL
 inventories are cached before workers are forked; registration, heartbeat,
 profile selection and status output reuse the inherited snapshot.
+Legacy single-device runs retain their existing discovery and first-run setup
+path; the supervised shortcut is added only to workers created by `--devices`.
 
 The same unlimited supervisor model is available for OpenCL devices:
 

@@ -18,6 +18,9 @@ public:
 
   bool initialize();
 
+  bool initialize(
+      const std::string& backend);
+
   const std::string &lastError() const;
 
 private:

@@ -526,12 +526,6 @@ int selectedPuzzle(const std::vector<std::string> &args) {
 }
 
 std::optional<double> measuredSpeedMKeys(const std::vector<std::string> &args) {
-  CommandContext context;
-
-  if (!context.initialize()) {
-    return std::nullopt;
-  }
-
   const auto configuration = ConfigurationManager::load();
 
   const std::string configuredBackend = configuration.engine.backend.empty()
@@ -539,6 +533,19 @@ std::optional<double> measuredSpeedMKeys(const std::vector<std::string> &args) {
                                             : configuration.engine.backend;
 
   const std::string backend = getArgument(args, "--backend", configuredBackend);
+
+  CommandContext context;
+
+  const bool contextReady =
+      hasArgument(
+          args,
+          kSupervisedGpuDeviceArgument)
+          ? context.initialize(backend)
+          : context.initialize();
+
+  if (!contextReady) {
+    return std::nullopt;
+  }
 
   const int device =
       getIntegerArgument(
@@ -1539,6 +1546,12 @@ int runMultiGpu(
           "An OpenPuzzle runtime is already active in slot " +
           slot);
     }
+  }
+
+  FirstRunSetup setup;
+  if (!setup.ensureConfigured(backend)) {
+    throw std::runtime_error(
+        "Unable to configure the selected multi-GPU backend");
   }
 
   struct Worker {
@@ -2692,7 +2705,8 @@ ClientIterationResult RunSession::runOnce(
 
   if (subcommand == "run" &&
       initializeClient &&
-      runBackend != "cpu") {
+      runBackend != "cpu" &&
+      !supervisedGpuDevice) {
     FirstRunSetup setup;
 
     if (!setup.ensureConfigured()) {
@@ -3023,9 +3037,15 @@ ClientIterationResult RunSession::runOnce(
 
   CommandContext context;
 
-  if (
-      runBackend != "cpu" &&
-      !context.initialize()) {
+  const bool contextReady =
+      runBackend == "cpu" ||
+      (
+          supervisedGpuDevice
+              ? context.initialize(runBackend)
+              : context.initialize()
+      );
+
+  if (!contextReady) {
     std::cerr << context.lastError() << '\n';
 
     return 1;

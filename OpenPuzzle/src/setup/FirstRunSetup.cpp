@@ -12,7 +12,15 @@ bool FirstRunSetup::ensureConfigured() const {
   const std::string backend =
       ToolManager::preferredBackend();
 
-  if (backend.empty()) {
+  return ensureConfigured(backend);
+}
+
+bool FirstRunSetup::ensureConfigured(
+    const std::string& backend) const {
+
+  if (
+      backend != "cuda" &&
+      backend != "opencl") {
     std::cerr
         << "OpenPuzzle setup failed\n"
         << "-----------------------\n"

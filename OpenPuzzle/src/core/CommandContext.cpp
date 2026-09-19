@@ -8,6 +8,11 @@
 namespace openpuzzle {
 
 bool CommandContext::initialize() {
+  return initialize("");
+}
+
+bool CommandContext::initialize(
+    const std::string& backend) {
 
   const char *home = std::getenv("HOME");
 
@@ -31,7 +36,10 @@ bool CommandContext::initialize() {
 
   gpu = GpuManager::selectedGpu();
 
-  bitcrack = ToolManager::bitcrackPath();
+  bitcrack =
+      backend.empty()
+          ? ToolManager::bitcrackPath()
+          : ToolManager::bundledBitCrackPath(backend);
 
   return true;
 }
