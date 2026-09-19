@@ -39,7 +39,10 @@ openpuzzle run 71 --engine bitcrack --backend cuda --devices 0,2,5
 Each selected GPU receives its own assignment, workspace, PID file and local
 state in a `cuda-N` slot. `status`, `stop` and `safestop` discover all such
 slots automatically. Multi-CUDA currently supports BitCrack linear puzzles;
-Kangaroo remains an exclusive single-device execution.
+Kangaroo remains an exclusive single-device execution. The supervisor performs
+global device discovery once, passes each validated device to its worker and
+staggers worker startup. Workers do not repeat the global BitCrack probe, which
+avoids unnecessary GPU contexts and host-memory peaks.
 
 The same unlimited supervisor model is available for OpenCL devices:
 
@@ -51,7 +54,8 @@ openpuzzle run 71 --engine bitcrack --backend opencl --devices 1,3,5
 Each OpenCL worker uses an independent `opencl-N` slot. This includes AMD
 devices exposed through Rusticl; `--rusticl-enable radeonsi` is preserved in
 every worker command when supplied. Legacy single-device `cuda` and `opencl`
-slots remain supported.
+slots remain supported. OpenCL workers use the same single-probe and staggered
+startup contract as CUDA workers.
 
 Execute only one assignment:
 

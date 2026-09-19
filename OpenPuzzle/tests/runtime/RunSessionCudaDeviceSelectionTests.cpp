@@ -100,6 +100,7 @@ int main() {
           "bitcrack",
           "--device",
           "4",
+          "--supervised-gpu-device",
       }));
 
   assert(
@@ -141,6 +142,7 @@ int main() {
           "bitcrack",
           "--device",
           "2",
+          "--supervised-gpu-device",
       }));
 
   assert(
@@ -167,6 +169,30 @@ int main() {
           "--once",
           "--device",
           "3",
+          "--supervised-gpu-device",
+      }));
+
+  assert(
+      RunSession::concurrentPreflightArguments(
+          RunSession::cudaWorkerArguments(
+              {
+                  "run",
+                  "71",
+                  "--devices",
+                  "0,1",
+              },
+              1)) ==
+      std::vector<std::string>({
+          "run",
+          "71",
+          "--backend",
+          "cuda",
+          "--engine",
+          "bitcrack",
+          "--device",
+          "1",
+          "--supervised-gpu-device",
+          "--preflight-only",
       }));
 
   try {

@@ -59,6 +59,9 @@ namespace openpuzzle {
 
 namespace {
 
+constexpr const char* kSupervisedGpuDeviceArgument =
+    "--supervised-gpu-device";
+
 std::string getArgument(const std::vector<std::string> &args,
                         const std::string &name,
                         const std::string &fallback = {}) {
@@ -1576,7 +1579,10 @@ int runMultiGpu(
   std::cout.flush();
   std::cerr.flush();
 
-  for (auto& worker : workers) {
+  for (std::size_t workerIndex = 0;
+       workerIndex < workers.size();
+       ++workerIndex) {
+    auto& worker = workers[workerIndex];
     worker.pid = fork();
 
     if (worker.pid == 0) {
@@ -1614,6 +1620,15 @@ int runMultiGpu(
           (opencl ? "OpenCL" : "CUDA") +
           " device " +
           std::to_string(worker.device));
+    }
+
+    /*
+     * Avoid simultaneous CUDA/OpenCL context creation on
+     * memory-constrained multi-GPU hosts. Device discovery and
+     * validation have already completed in the supervisor.
+     */
+    if (workerIndex + 1 < workers.size()) {
+      sleep(2);
     }
   }
 
@@ -1918,6 +1933,7 @@ RunSession::cudaWorkerArguments(
 
   result.push_back("--device");
   result.push_back(std::to_string(device));
+  result.push_back(kSupervisedGpuDeviceArgument);
   return result;
 }
 
@@ -1957,6 +1973,7 @@ RunSession::openclWorkerArguments(
   }
   result.push_back("--device");
   result.push_back(std::to_string(device));
+  result.push_back(kSupervisedGpuDeviceArgument);
   return result;
 }
 
@@ -2401,6 +2418,11 @@ ClientIterationResult RunSession::runOnce(
           args,
           "--preflight-only");
 
+  const bool supervisedGpuDevice =
+      hasArgument(
+          args,
+          kSupervisedGpuDeviceArgument);
+
   const auto puzzleMetadata =
       subcommand == "run" && puzzleNumber > 0
           ? PuzzleMetadataCatalog::load(puzzleNumber)
@@ -2599,7 +2621,8 @@ ClientIterationResult RunSession::runOnce(
 
   if (
       subcommand == "run" &&
-      runBackend != "cpu") {
+      runBackend != "cpu" &&
+      !supervisedGpuDevice) {
     try {
       const auto devices =
           runBackend == "opencl"
