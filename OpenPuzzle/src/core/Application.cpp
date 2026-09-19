@@ -122,7 +122,7 @@ static void printApplicationHelp() {
       << "  --engine NAME    Select kangaroo, bitcrack or keyhunt\n"
       << "  --backend NAME   Select cuda, opencl or cpu\n"
       << "  --device N       Select the primary GPU device\n"
-      << "  --devices LIST   Select CUDA devices: all or 0,1,2,...\n"
+      << "  --devices LIST   Select CUDA/OpenCL devices: all or 0,1,2,...\n"
       << "  --with-opencl    Run CUDA and OpenCL together\n"
       << "  --opencl-device N\n"
       << "                   Select the OpenCL device\n"

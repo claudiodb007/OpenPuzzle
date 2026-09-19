@@ -41,6 +41,18 @@ state in a `cuda-N` slot. `status`, `stop` and `safestop` discover all such
 slots automatically. Multi-CUDA currently supports BitCrack linear puzzles;
 Kangaroo remains an exclusive single-device execution.
 
+The same unlimited supervisor model is available for OpenCL devices:
+
+```bash
+openpuzzle run 71 --engine bitcrack --backend opencl --devices all
+openpuzzle run 71 --engine bitcrack --backend opencl --devices 1,3,5
+```
+
+Each OpenCL worker uses an independent `opencl-N` slot. This includes AMD
+devices exposed through Rusticl; `--rusticl-enable radeonsi` is preserved in
+every worker command when supplied. Legacy single-device `cuda` and `opencl`
+slots remain supported.
+
 Execute only one assignment:
 
 ```bash

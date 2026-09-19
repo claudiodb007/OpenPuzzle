@@ -38,8 +38,18 @@ public:
       const std::vector<std::string>& args,
       const std::vector<GpuInfo>& availableDevices);
 
+  static std::vector<int>
+  selectedOpenclDevices(
+      const std::vector<std::string>& args,
+      const std::vector<GpuInfo>& availableDevices);
+
   static std::vector<std::string>
   cudaWorkerArguments(
+      const std::vector<std::string>& args,
+      int device);
+
+  static std::vector<std::string>
+  openclWorkerArguments(
       const std::vector<std::string>& args,
       int device);
 

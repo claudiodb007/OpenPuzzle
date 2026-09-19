@@ -21,6 +21,8 @@ int main() {
   assert(ExecutionSlot::cuda(0) == "cuda-0");
   assert(ExecutionSlot::cuda(1) == "cuda-1");
   assert(ExecutionSlot::cuda(32) == "cuda-32");
+  assert(ExecutionSlot::opencl(0) == "opencl-0");
+  assert(ExecutionSlot::opencl(32) == "opencl-32");
   assert(
       ExecutionSlot::cuda(
           std::numeric_limits<std::uint64_t>::max()) ==
@@ -29,12 +31,16 @@ int main() {
   assert(ExecutionSlot::valid("cuda-0"));
   assert(ExecutionSlot::valid("cuda-1"));
   assert(ExecutionSlot::valid("cuda-32"));
+  assert(ExecutionSlot::valid("opencl-0"));
+  assert(ExecutionSlot::valid("opencl-32"));
   assert(
       ExecutionSlot::valid(
           "cuda-18446744073709551615"));
 
   assert(ExecutionSlot::cudaDevice("cuda-0") == 0);
   assert(ExecutionSlot::cudaDevice("cuda-32") == 32);
+  assert(ExecutionSlot::openclDevice("opencl-0") == 0);
+  assert(ExecutionSlot::openclDevice("opencl-32") == 32);
   assert(
       ExecutionSlot::cudaDevice(
           "cuda-18446744073709551615") ==
@@ -47,12 +53,16 @@ int main() {
   assert(!ExecutionSlot::valid("cuda-1/../../escape"));
   assert(!ExecutionSlot::valid("cuda-18446744073709551616"));
   assert(!ExecutionSlot::valid("CUDA-1"));
+  assert(!ExecutionSlot::valid("opencl-"));
+  assert(!ExecutionSlot::valid("opencl-01"));
+  assert(!ExecutionSlot::valid("OPENCL-1"));
 
   assert(ExecutionSlot::fileSuffix("primary").empty());
   assert(ExecutionSlot::fileSuffix("cuda") == "-cuda");
   assert(ExecutionSlot::fileSuffix("opencl") == "-opencl");
   assert(ExecutionSlot::fileSuffix("cuda-0") == "-cuda-0");
   assert(ExecutionSlot::fileSuffix("cuda-999") == "-cuda-999");
+  assert(ExecutionSlot::fileSuffix("opencl-999") == "-opencl-999");
   assert(ExecutionSlot::fileSuffix("../../escape").empty());
 
   const auto directory =
@@ -71,6 +81,8 @@ int main() {
            "client-cuda-2.state",
            "client-cuda-01.state",
            "runtime-opencl.pid",
+           "runtime-opencl-1.pid",
+           "client-opencl-3.state",
            "unrelated.txt",
        }) {
     std::ofstream output(
@@ -85,6 +97,17 @@ int main() {
           "cuda-0",
           "cuda-2",
           "cuda-5",
+      }));
+
+  assert(
+      ExecutionSlot::discoverGpuSlots(
+          directory) ==
+      std::vector<std::string>({
+          "cuda-0",
+          "cuda-2",
+          "cuda-5",
+          "opencl-1",
+          "opencl-3",
       }));
 
   std::filesystem::remove_all(directory);

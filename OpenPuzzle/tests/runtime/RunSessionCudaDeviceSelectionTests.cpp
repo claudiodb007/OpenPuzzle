@@ -103,6 +103,47 @@ int main() {
       }));
 
   assert(
+      RunSession::selectedOpenclDevices(
+          {
+              "run",
+              "71",
+              "--backend",
+              "opencl",
+              "--engine",
+              "bitcrack",
+              "--devices",
+              "5,0,2",
+          },
+          sixGpus) ==
+      std::vector<int>({5, 0, 2}));
+
+  assert(
+      RunSession::openclWorkerArguments(
+          {
+              "run",
+              "71",
+              "--backend",
+              "opencl",
+              "--devices",
+              "all",
+              "--rusticl-enable",
+              "radeonsi",
+          },
+          2) ==
+      std::vector<std::string>({
+          "run",
+          "71",
+          "--backend",
+          "opencl",
+          "--rusticl-enable",
+          "radeonsi",
+          "--engine",
+          "bitcrack",
+          "--device",
+          "2",
+      }));
+
+  assert(
       RunSession::cudaWorkerArguments(
           {
               "run",

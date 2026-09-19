@@ -176,6 +176,7 @@ add_library(OpenPuzzleCore
     src/runtime/ClientRuntime.cpp
     src/runtime/ClientRuntimeControl.cpp
     src/runtime/CudaDeviceSelection.cpp
+    src/runtime/OpenclDeviceSelection.cpp
     src/runtime/ExecutionSlot.cpp
     src/runtime/LinuxProcessIdentity.cpp
     src/runtime/KangarooCheckpointRecoveryPlanner.cpp

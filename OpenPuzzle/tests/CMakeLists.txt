@@ -1432,6 +1432,21 @@ add_test(
     COMMAND CudaDeviceSelectionTests
 )
 
+add_executable(OpenclDeviceSelectionTests
+    runtime/OpenclDeviceSelectionTests.cpp
+    ../src/runtime/OpenclDeviceSelection.cpp
+)
+
+target_include_directories(OpenclDeviceSelectionTests
+    PRIVATE
+        ../include
+)
+
+add_test(
+    NAME OpenclDeviceSelectionTests
+    COMMAND OpenclDeviceSelectionTests
+)
+
 add_executable(RunSessionCudaDeviceSelectionTests
     runtime/RunSessionCudaDeviceSelectionTests.cpp
 )
