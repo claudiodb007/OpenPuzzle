@@ -10,6 +10,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -146,6 +147,18 @@ std::vector<GpuInfo> discoverBitCrackDevices(
       backend);
 }
 
+std::optional<std::vector<GpuInfo>>&
+cudaDeviceCache() {
+  static std::optional<std::vector<GpuInfo>> cache;
+  return cache;
+}
+
+std::optional<std::vector<GpuInfo>>&
+openclDeviceCache() {
+  static std::optional<std::vector<GpuInfo>> cache;
+  return cache;
+}
+
 } // namespace
 
 std::vector<GpuInfo>
@@ -246,6 +259,11 @@ GpuManager::parseBitCrackDevices(
 
 std::vector<GpuInfo>
 GpuManager::listCudaGpus() {
+  auto& cache = cudaDeviceCache();
+  if (cache) {
+    return *cache;
+  }
+
   std::vector<GpuInfo> result;
 
   const std::string output =
@@ -329,7 +347,8 @@ GpuManager::listCudaGpus() {
           "CUDA");
 
   if (result.empty()) {
-    return bitcrackDevices;
+    cache = bitcrackDevices;
+    return *cache;
   }
 
   for (auto &gpu : result) {
@@ -356,14 +375,19 @@ GpuManager::listCudaGpus() {
     }
   }
 
-  return result;
+  cache = std::move(result);
+  return *cache;
 }
 
 std::vector<GpuInfo>
 GpuManager::listOpenClGpus() {
-  return discoverBitCrackDevices(
-      ToolManager::bitcrackOpenCLPath(),
-      "OpenCL");
+  auto& cache = openclDeviceCache();
+  if (!cache) {
+    cache = discoverBitCrackDevices(
+        ToolManager::bitcrackOpenCLPath(),
+        "OpenCL");
+  }
+  return *cache;
 }
 
 std::vector<GpuInfo>
@@ -480,8 +504,12 @@ GpuInfo GpuManager::currentGpu(
     const std::string &backend,
     int device) {
 
-  for (const auto &gpu :
-       listAllGpus()) {
+  const auto devices =
+      backend == "OpenCL"
+          ? listOpenClGpus()
+          : listCudaGpus();
+
+  for (const auto &gpu : devices) {
     if (
         gpu.device == device &&
         gpu.backend == backend) {

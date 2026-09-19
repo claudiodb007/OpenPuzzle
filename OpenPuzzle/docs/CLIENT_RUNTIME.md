@@ -42,7 +42,9 @@ slots automatically. Multi-CUDA currently supports BitCrack linear puzzles;
 Kangaroo remains an exclusive single-device execution. The supervisor performs
 global device discovery once, passes each validated device to its worker and
 staggers worker startup. Workers do not repeat the global BitCrack probe, which
-avoids unnecessary GPU contexts and host-memory peaks.
+avoids unnecessary GPU contexts and host-memory peaks. CUDA and OpenCL
+inventories are cached before workers are forked; registration, heartbeat,
+profile selection and status output reuse the inherited snapshot.
 
 The same unlimited supervisor model is available for OpenCL devices:
 

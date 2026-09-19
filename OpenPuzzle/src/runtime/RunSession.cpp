@@ -1485,10 +1485,17 @@ int runMultiGpu(
     const std::vector<std::string>& args,
     const std::string& backend) {
   const bool opencl = backend == "opencl";
-  const auto availableDevices =
-      opencl
-          ? GpuManager::listOpenClGpus()
-          : GpuManager::listCudaGpus();
+  /*
+   * Populate both inventory caches before forking. Child workers inherit
+   * this immutable snapshot and therefore registration, heartbeat, profile
+   * selection and status output cannot launch additional global probes.
+   */
+  const auto cudaDevices =
+      GpuManager::listCudaGpus();
+  const auto openclDevices =
+      GpuManager::listOpenClGpus();
+  const auto& availableDevices =
+      opencl ? openclDevices : cudaDevices;
 
   const auto devices =
       opencl
