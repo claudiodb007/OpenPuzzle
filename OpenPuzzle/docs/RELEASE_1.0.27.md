@@ -74,14 +74,16 @@ Multi-CUDA rig operation is available through the command-line client.
 
 ## Validation
 
-The complete suite contains 120 automated tests. New coverage validates:
+The complete suite contains 121 automated tests. New coverage validates:
 
 - unlimited CUDA inventory resolution;
 - explicit and automatic device selection;
 - dynamic `cuda-N` slot identities and filesystem discovery;
 - per-device worker command construction;
 - invalid or conflicting selector rejection;
-- preservation of existing runtime and release contracts.
+- preservation of existing runtime and release contracts;
+- cached GPU inventory reuse across supervised workers;
+- per-worker CUDA device isolation that avoids cross-device context allocation.
 
 ## Upgrade and rig test
 
