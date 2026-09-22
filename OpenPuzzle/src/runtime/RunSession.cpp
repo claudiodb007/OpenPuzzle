@@ -1557,6 +1557,7 @@ int runMultiGpu(
   struct Worker {
     int device = 0;
     std::string slot;
+    std::string cudaVisibleDevice;
     std::vector<std::string> arguments;
     pid_t pid = -1;
   };
@@ -1573,6 +1574,22 @@ int runMultiGpu(
                   static_cast<std::uint64_t>(device))
             : ExecutionSlot::cuda(
                   static_cast<std::uint64_t>(device));
+    worker.cudaVisibleDevice =
+        std::to_string(device);
+    if (!opencl) {
+      const auto selected =
+          std::find_if(
+              cudaDevices.begin(),
+              cudaDevices.end(),
+              [device](const GpuInfo& gpu) {
+                return gpu.device == device;
+              });
+      if (
+          selected != cudaDevices.end() &&
+          !selected->uuid.empty()) {
+        worker.cudaVisibleDevice = selected->uuid;
+      }
+    }
     worker.arguments =
         opencl
             ? RunSession::openclWorkerArguments(args, device)
@@ -1613,6 +1630,27 @@ int runMultiGpu(
         _exit(1);
       }
 
+      /*
+       * cuBitCrack creates a CUDA context on every visible NVIDIA device,
+       * even when -d selects only one of them.  Restrict supervised CUDA
+       * workers to their physical device so an N-GPU run creates N contexts
+       * instead of N x N contexts.  The selected physical device remains in
+       * the OpenPuzzle state and slot name; inside the restricted CUDA view
+       * the engine always addresses it as logical device zero.
+       */
+      if (!opencl) {
+        if (setenv(
+                "CUDA_VISIBLE_DEVICES",
+                worker.cudaVisibleDevice.c_str(),
+                1) != 0 ||
+            setenv(
+                "OPENPUZZLE_CUDA_ENGINE_DEVICE",
+                "0",
+                1) != 0) {
+          _exit(1);
+        }
+      }
+
       const int result =
           RunSession().run(
               worker.arguments);
@@ -1648,7 +1686,7 @@ int runMultiGpu(
      * validation have already completed in the supervisor.
      */
     if (workerIndex + 1 < workers.size()) {
-      sleep(2);
+      sleep(10);
     }
   }
 
@@ -3103,6 +3141,21 @@ ClientIterationResult RunSession::runOnce(
           ? 0
           : runDevice;
 
+  int engineDevice = device;
+  if (
+      supervisedGpuDevice &&
+      runBackend == "cuda") {
+    const char* isolatedDevice =
+        std::getenv(
+            "OPENPUZZLE_CUDA_ENGINE_DEVICE");
+
+    if (
+        isolatedDevice != nullptr &&
+        std::string(isolatedDevice) == "0") {
+      engineDevice = 0;
+    }
+  }
+
   int blocks =
       cpuBackend
           ? 0
@@ -3283,7 +3336,7 @@ ClientIterationResult RunSession::runOnce(
                     ? "OpenCL"
                     : "CUDA");
 
-  capability.device = device;
+  capability.device = engineDevice;
 
   capability.blocks = blocks;
 

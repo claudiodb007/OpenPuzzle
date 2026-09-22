@@ -48,6 +48,15 @@ profile selection and status output reuse the inherited snapshot.
 Legacy single-device runs retain their existing discovery and first-run setup
 path; the supervised shortcut is added only to workers created by `--devices`.
 
+Supervised CUDA workers are isolated with `CUDA_VISIBLE_DEVICES` before the
+engine starts.  The public slot and saved runtime state continue to use the
+physical device number (`cuda-0`, `cuda-1`, and so on), while cuBitCrack sees
+only that selected GPU as logical device zero.  This prevents every worker
+from creating CUDA contexts on every NVIDIA GPU in the host.  Worker launches
+are separated by ten seconds so transient CUDA initialization allocations do
+not overlap on memory-constrained rigs.  Normal `--device` execution is not
+isolated and retains its previous behavior.
+
 The same unlimited supervisor model is available for OpenCL devices:
 
 ```bash
