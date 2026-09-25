@@ -1603,6 +1603,22 @@ add_test(
 )
 
 add_executable(
+    ThermalCommandTests
+    core/ThermalCommandTests.cpp
+)
+
+target_link_libraries(
+    ThermalCommandTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ThermalCommandTests
+    COMMAND ThermalCommandTests
+)
+
+add_executable(
     RusticlEnvironmentTests
     hardware/RusticlEnvironmentTests.cpp
 )

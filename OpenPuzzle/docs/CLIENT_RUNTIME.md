@@ -154,6 +154,20 @@ higher, up to 120 degrees Celsius. The policy remains diagnostic in this
 phase: it never signals, stops or restarts a runtime and never changes GPU
 power, clocks or fans.
 
+The policy is managed locally from the command line:
+
+```bash
+openpuzzle thermal
+openpuzzle thermal --enable --warning-c 75 --critical-c 85
+openpuzzle thermal --warning-c 72 --critical-c 82
+openpuzzle thermal --disable
+```
+
+Querying the policy does not create or rewrite the configuration. Invalid,
+missing, repeated or conflicting options are rejected before any file is
+changed. Enabling the policy activates diagnostic classifications in
+`openpuzzle doctor`; it still does not monitor or control a running engine.
+
 ## Local states
 
 `openpuzzle status` can report:

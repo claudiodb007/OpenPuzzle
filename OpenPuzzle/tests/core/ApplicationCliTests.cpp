@@ -121,6 +121,11 @@ int main() {
 
     assert(
         result.output.find(
+            "openpuzzle thermal") !=
+        std::string::npos);
+
+    assert(
+        result.output.find(
             "--rusticl-enable") !=
         std::string::npos);
 

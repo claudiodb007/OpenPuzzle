@@ -15,6 +15,7 @@
 #include "openpuzzle/core/commands/RangeCommand.hpp"
 #include "openpuzzle/core/commands/SelfTestCommand.hpp"
 #include "openpuzzle/core/commands/StartJobCommand.hpp"
+#include "openpuzzle/core/commands/ThermalCommand.hpp"
 #include "openpuzzle/core/commands/WorkerRunCommand.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/performance/AutoTuner.hpp"
@@ -109,6 +110,7 @@ static void printApplicationHelp() {
       << "  openpuzzle stop\n"
       << "  openpuzzle safestop\n"
       << "  openpuzzle doctor [--offline]\n"
+      << "  openpuzzle thermal [--enable|--disable] [thresholds]\n"
       << "  openpuzzle audit [--limit N] [--puzzle N] [--event NAME]\n"
       << "  openpuzzle engine install psckangaroo [--force]\n"
       << "\n"
@@ -332,6 +334,8 @@ int Application::run(int argc, char **argv) {
       DoctorService service;
       return service.execute(r);
     }
+    if (cmd == "thermal")
+      return ThermalCommand().run(r);
     if (cmd == "engine" && !r.empty() && r.front() == "install")
       return cmdEngineInstall(r);
 
