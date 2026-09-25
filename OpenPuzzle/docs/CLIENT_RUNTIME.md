@@ -120,6 +120,23 @@ Client performance may be used to size an assignment and select a compatible
 engine or backend. It must never grant scheduling priority, reputation-based
 access or preferential treatment.
 
+## Read-only GPU telemetry
+
+`openpuzzle doctor` collects a point-in-time hardware snapshot without
+changing clocks, fans, power limits, assignments or runtime state. NVIDIA
+temperature, power draw and configured power limit are read with
+`nvidia-smi`. AMD temperature and power sensors are read directly from the
+kernel `amdgpu` hwmon interface under `/sys/class/drm`.
+
+AMD cards can expose edge, junction and memory temperature sensors. The
+reported value is the highest valid sensor reading, which is the conservative
+choice for later safety decisions. A missing tool or unsupported sensor is
+shown as `unavailable`; it is never represented as a zero measurement.
+
+This telemetry layer is observational only. Normal single-GPU, multi-GPU,
+CUDA, OpenCL and CPU execution paths do not call it and retain their existing
+behaviour.
+
 ## Local states
 
 `openpuzzle status` can report:

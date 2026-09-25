@@ -1555,6 +1555,22 @@ add_test(
 )
 
 add_executable(
+    GpuTelemetryTests
+    hardware/GpuTelemetryTests.cpp
+)
+
+target_link_libraries(
+    GpuTelemetryTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME GpuTelemetryTests
+    COMMAND GpuTelemetryTests
+)
+
+add_executable(
     RusticlEnvironmentTests
     hardware/RusticlEnvironmentTests.cpp
 )

@@ -226,6 +226,7 @@ add_library(OpenPuzzleCore
     src/allocator/RangeAllocator.cpp
     src/tools/ToolManager.cpp
     src/hardware/GpuManager.cpp
+    src/hardware/GpuTelemetry.cpp
     src/hardware/RusticlEnvironment.cpp
     src/adapters/bitcrack/BitCrackOutputParser.cpp
     src/adapters/bitcrack/BitCrackProgressParser.cpp

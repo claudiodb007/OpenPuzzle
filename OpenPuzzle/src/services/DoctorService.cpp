@@ -5,6 +5,7 @@
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/hardware/GpuInfo.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
+#include "openpuzzle/hardware/GpuTelemetry.hpp"
 #include "openpuzzle/hardware/RusticlEnvironment.hpp"
 #include "openpuzzle/models/Models.hpp"
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
@@ -14,8 +15,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <system_error>
 #include <sys/wait.h>
@@ -180,6 +183,53 @@ void printDevices(const std::string &backend,
   }
 }
 
+std::string telemetryValue(
+    const std::optional<double> &value,
+    const std::string &unit) {
+  if (!value) {
+    return "unavailable";
+  }
+
+  std::ostringstream output;
+  output << std::fixed << std::setprecision(1) << *value << ' ' << unit;
+  return output.str();
+}
+
+void printTelemetry(
+    const std::vector<GpuTelemetrySnapshot> &snapshots) {
+  std::cout << "\nGPU telemetry\n"
+            << "-------------\n";
+
+  if (snapshots.empty()) {
+    std::cout << "Readings........... unavailable\n";
+    return;
+  }
+
+  for (const auto &snapshot : snapshots) {
+    std::cout << "Device.............. "
+              << snapshot.vendor << ' ' << snapshot.deviceId;
+
+    if (!snapshot.pciBusId.empty()) {
+      std::cout << " (" << snapshot.pciBusId << ')';
+    }
+
+    std::cout << '\n'
+              << "Temperature......... "
+              << telemetryValue(snapshot.temperatureC, "C");
+
+    if (snapshot.temperatureC &&
+        !snapshot.temperatureLabel.empty()) {
+      std::cout << " (" << snapshot.temperatureLabel << ')';
+    }
+
+    std::cout << '\n'
+              << "Power draw.......... "
+              << telemetryValue(snapshot.powerDrawW, "W") << '\n'
+              << "Power limit......... "
+              << telemetryValue(snapshot.powerLimitW, "W") << '\n';
+  }
+}
+
 bool usableProfile(const GpuProfileRecord &profile) {
   return profile.blocks > 0 &&
          profile.threads > 0 &&
@@ -249,6 +299,7 @@ int DoctorService::execute(
   const auto cpuEngine = ToolManager::keyhuntPath();
   const auto cudaDevices = GpuManager::listCudaGpus();
   const auto openclDevices = GpuManager::listOpenClGpus();
+  const auto gpuTelemetry = GpuTelemetry::readAll();
   const int processors = logicalProcessorCount();
 
   const bool cudaReady = cudaEngine.has_value() && !cudaDevices.empty();
@@ -363,6 +414,8 @@ int DoctorService::execute(
     std::cout << "Rusticl selector... "
               << configuration.gpu.rusticlEnable << '\n';
   }
+
+  printTelemetry(gpuTelemetry);
 
   std::cout << "\nUsable backends\n"
             << "---------------\n"
