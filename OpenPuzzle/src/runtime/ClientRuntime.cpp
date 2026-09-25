@@ -1,15 +1,18 @@
 #include "openpuzzle/runtime/ClientRuntime.hpp"
 
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
+#include "openpuzzle/runtime/RuntimeThermalObserver.hpp"
 
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
 #include "openpuzzle/client/SolutionExporter.hpp"
 #include "openpuzzle/core/SignalHandler.hpp"
+#include "openpuzzle/config/ConfigurationManager.hpp"
 #include "openpuzzle/runtime/ExecutionStopper.hpp"
 
 #include <chrono>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <thread>
 #include <utility>
@@ -47,6 +50,10 @@ ClientRuntime::ClientRuntime(
 ClientRuntimeDependencies
 ClientRuntime::productionDependencies() {
   ClientRuntimeDependencies dependencies;
+
+  const auto thermalObserver =
+      std::make_shared<RuntimeThermalObserver>(
+          ConfigurationManager::load().gpu.thermal);
 
   dependencies.sync =
       [](const std::string &serverUrl) {
@@ -182,6 +189,13 @@ ClientRuntime::productionDependencies() {
         std::this_thread::sleep_for(duration);
       };
 
+  dependencies.thermalPoll =
+      [thermalObserver] {
+        for (const auto &event : thermalObserver->poll()) {
+          RuntimeThermalObserver::print(event, std::cerr);
+        }
+      };
+
   return dependencies;
 }
 
@@ -190,6 +204,10 @@ bool ClientRuntime::sleepInterruptibly(
   for (std::chrono::seconds elapsed{0};
        elapsed < duration;
        elapsed += std::chrono::seconds(1)) {
+    if (dependencies_.thermalPoll) {
+      dependencies_.thermalPoll();
+    }
+
     if (dependencies_.stopRequested()) {
       return false;
     }
@@ -495,6 +513,10 @@ int ClientRuntime::run(
       std::chrono::seconds(2);
 
   while (true) {
+    if (dependencies_.thermalPoll) {
+      dependencies_.thermalPoll();
+    }
+
     if (dependencies_.stopRequested()) {
       std::cout << "\nStopping search...\n";
 

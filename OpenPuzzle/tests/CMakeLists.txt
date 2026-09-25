@@ -1587,6 +1587,22 @@ add_test(
 )
 
 add_executable(
+    RuntimeThermalObserverTests
+    runtime/RuntimeThermalObserverTests.cpp
+)
+
+target_link_libraries(
+    RuntimeThermalObserverTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME RuntimeThermalObserverTests
+    COMMAND RuntimeThermalObserverTests
+)
+
+add_executable(
     ConfigurationManagerThermalTests
     config/ConfigurationManagerThermalTests.cpp
 )

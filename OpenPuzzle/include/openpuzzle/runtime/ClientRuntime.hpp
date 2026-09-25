@@ -111,6 +111,9 @@ struct ClientRuntimeDependencies {
 
   std::function<void(
       std::chrono::seconds duration)> sleep;
+
+  /* Optional so existing deterministic tests can omit hardware access. */
+  std::function<void()> thermalPoll;
 };
 
 class ClientRuntime {

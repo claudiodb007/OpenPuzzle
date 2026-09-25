@@ -133,9 +133,9 @@ reported value is the highest valid sensor reading, which is the conservative
 choice for later safety decisions. A missing tool or unsupported sensor is
 shown as `unavailable`; it is never represented as a zero measurement.
 
-This telemetry layer is observational only. Normal single-GPU, multi-GPU,
-CUDA, OpenCL and CPU execution paths do not call it and retain their existing
-behaviour.
+This telemetry layer is observational only. With the thermal policy disabled,
+normal single-GPU, multi-GPU, CUDA, OpenCL and CPU execution paths do not call
+it and retain their existing behaviour.
 
 The local configuration also contains a disabled-by-default thermal policy:
 
@@ -166,7 +166,22 @@ openpuzzle thermal --disable
 Querying the policy does not create or rewrite the configuration. Invalid,
 missing, repeated or conflicting options are rejected before any file is
 changed. Enabling the policy activates diagnostic classifications in
-`openpuzzle doctor`; it still does not monitor or control a running engine.
+`openpuzzle doctor` and read-only runtime observation. A running client samples
+the available GPU sensors once every 30 seconds. It writes a warning when a
+device crosses the warning or critical threshold, repeats a persistent warning
+at most once every five minutes, and reports recovery after the temperature
+returns to normal. Configuration changes take effect when the next runtime is
+started.
+
+Single-GPU execution owns its observer directly. Concurrent and multi-GPU
+execution assigns observation to the parent supervisor; supervised workers are
+explicitly excluded, so a six-GPU run still executes only one `nvidia-smi`
+telemetry query per sample interval rather than one query per worker. NVIDIA
+and AMD readings are collected in the same machine snapshot.
+
+Runtime observation remains diagnostic: it never signals, stops or restarts an
+engine, cancels an assignment, or changes GPU power, clocks or fans. Disabling
+the policy removes runtime telemetry calls completely.
 
 ## Local states
 

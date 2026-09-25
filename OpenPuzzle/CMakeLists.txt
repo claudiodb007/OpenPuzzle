@@ -174,6 +174,7 @@ add_library(OpenPuzzleCore
     src/core/commands/RangeCommand.cpp
     src/runtime/RunSession.cpp
     src/runtime/RunBenchmarkPreparation.cpp
+    src/runtime/RuntimeThermalObserver.cpp
     src/runtime/ClientRuntime.cpp
     src/runtime/ClientRuntimeControl.cpp
     src/runtime/CudaDeviceSelection.cpp

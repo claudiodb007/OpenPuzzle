@@ -123,6 +123,12 @@ int main() {
         makeDependencies();
 
     int syncCalls = 0;
+    int thermalPolls = 0;
+
+    dependencies.thermalPoll =
+        [&] {
+          ++thermalPolls;
+        };
 
     dependencies.sync =
         [&](const std::string &server) {
@@ -142,6 +148,7 @@ int main() {
             "/tmp/workspace-1") == 0);
 
     assert(syncCalls == 1);
+    assert(thermalPolls == 1);
   }
 
   /*

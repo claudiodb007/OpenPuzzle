@@ -32,6 +32,7 @@
 #include "openpuzzle/runtime/KangarooWalkSeed.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 #include "openpuzzle/runtime/RunBenchmarkPreparation.hpp"
+#include "openpuzzle/runtime/RuntimeThermalObserver.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 #include "openpuzzle/workers/WorkerEngineCapability.hpp"
@@ -47,6 +48,7 @@
 #include <iostream>
 #include <map>
 #include <optional>
+#include <memory>
 #include <algorithm>
 #include <sstream>
 #include <stdexcept>
@@ -61,6 +63,50 @@ namespace {
 
 constexpr const char* kSupervisedGpuDeviceArgument =
     "--supervised-gpu-device";
+
+std::shared_ptr<RuntimeThermalObserver>
+makeSupervisorThermalObserver() {
+  return std::make_shared<RuntimeThermalObserver>(
+      ConfigurationManager::load().gpu.thermal);
+}
+
+void pollThermalObserver(
+    const std::shared_ptr<RuntimeThermalObserver> &observer) {
+  for (const auto &event : observer->poll()) {
+    RuntimeThermalObserver::print(event, std::cerr);
+  }
+}
+
+pid_t waitForAnyChild(
+    int &status,
+    const std::shared_ptr<RuntimeThermalObserver> &observer) {
+  while (true) {
+    const pid_t result = waitpid(-1, &status, WNOHANG);
+
+    if (result != 0) {
+      return result;
+    }
+
+    pollThermalObserver(observer);
+    sleep(1);
+  }
+}
+
+pid_t waitForChild(
+    const pid_t pid,
+    int &status,
+    const std::shared_ptr<RuntimeThermalObserver> &observer) {
+  while (true) {
+    const pid_t result = waitpid(pid, &status, WNOHANG);
+
+    if (result != 0) {
+      return result;
+    }
+
+    pollThermalObserver(observer);
+    sleep(1);
+  }
+}
 
 std::string getArgument(const std::vector<std::string> &args,
                         const std::string &name,
@@ -1334,6 +1380,10 @@ int runConcurrent(
             setenv(
                 "OPENPUZZLE_EXECUTION_SLOT",
                 slot.c_str(),
+                1) != 0 ||
+            setenv(
+                RuntimeThermalObserver::OwnerEnvironment,
+                "0",
                 1) != 0) {
           _exit(1);
         }
@@ -1415,12 +1465,21 @@ int runConcurrent(
   signal(SIGINT, SIG_IGN);
   signal(SIGTERM, SIG_IGN);
 
+  const auto thermalObserver =
+      makeSupervisorThermalObserver();
+
   if (finiteRun) {
     int firstStatus = 0;
     int secondStatus = 0;
 
-    waitpid(firstPid, &firstStatus, 0);
-    waitpid(secondPid, &secondStatus, 0);
+    waitForChild(
+        firstPid,
+        firstStatus,
+        thermalObserver);
+    waitForChild(
+        secondPid,
+        secondStatus,
+        thermalObserver);
 
     return
         (
@@ -1436,7 +1495,9 @@ int runConcurrent(
   int completedStatus = 0;
 
   const pid_t completedPid =
-      waitpid(-1, &completedStatus, 0);
+      waitForAnyChild(
+          completedStatus,
+          thermalObserver);
 
   const pid_t remainingPid =
       completedPid == firstPid
@@ -1456,10 +1517,10 @@ int runConcurrent(
       int remainingStatus = 0;
 
       if (
-          waitpid(
+          waitForChild(
               remainingPid,
-              &remainingStatus,
-              0) != remainingPid) {
+              remainingStatus,
+              thermalObserver) != remainingPid) {
         return 1;
       }
 
@@ -1616,6 +1677,9 @@ int runMultiGpu(
   std::cout.flush();
   std::cerr.flush();
 
+  const auto thermalObserver =
+      makeSupervisorThermalObserver();
+
   for (std::size_t workerIndex = 0;
        workerIndex < workers.size();
        ++workerIndex) {
@@ -1626,6 +1690,10 @@ int runMultiGpu(
       if (setenv(
               "OPENPUZZLE_EXECUTION_SLOT",
               worker.slot.c_str(),
+              1) != 0 ||
+          setenv(
+              RuntimeThermalObserver::OwnerEnvironment,
+              "0",
               1) != 0) {
         _exit(1);
       }
@@ -1686,7 +1754,10 @@ int runMultiGpu(
      * validation have already completed in the supervisor.
      */
     if (workerIndex + 1 < workers.size()) {
-      sleep(10);
+      for (int second = 0; second < 10; ++second) {
+        pollThermalObserver(thermalObserver);
+        sleep(1);
+      }
     }
   }
 
@@ -1731,7 +1802,9 @@ int runMultiGpu(
   while (!remaining.empty()) {
     int status = 0;
     const pid_t completed =
-        waitpid(-1, &status, 0);
+        waitForAnyChild(
+            status,
+            thermalObserver);
 
     if (completed < 0 && errno == EINTR) {
       continue;
