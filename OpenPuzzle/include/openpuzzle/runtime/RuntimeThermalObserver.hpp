@@ -8,6 +8,7 @@
 #include <iosfwd>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -32,6 +33,8 @@ public:
   using Clock = std::chrono::steady_clock;
   using Reader =
       std::function<std::vector<GpuTelemetrySnapshot>()>;
+  using DeviceScope =
+      std::optional<std::vector<std::string>>;
 
   static constexpr const char *OwnerEnvironment =
       "OPENPUZZLE_THERMAL_MONITOR_OWNER";
@@ -43,6 +46,22 @@ public:
           std::chrono::seconds(30),
       std::chrono::seconds reminderInterval =
           std::chrono::minutes(5));
+
+  RuntimeThermalObserver(
+      GpuThermalPolicyConfiguration policy,
+      DeviceScope deviceScope,
+      Reader reader = GpuTelemetry::readAll,
+      std::chrono::seconds sampleInterval =
+          std::chrono::seconds(30),
+      std::chrono::seconds reminderInterval =
+          std::chrono::minutes(5));
+
+  static DeviceScope executionScope(
+      std::string backend,
+      int device);
+
+  static DeviceScope cudaScope(
+      const std::vector<int> &devices);
 
   bool enabled() const;
 
@@ -70,6 +89,7 @@ private:
   Reader reader_;
   std::chrono::seconds sampleInterval_;
   std::chrono::seconds reminderInterval_;
+  std::optional<std::set<std::string>> deviceScope_;
   std::optional<Clock::time_point> nextSample_;
   std::map<std::string, DeviceState> states_;
 };

@@ -1,6 +1,8 @@
 #include "openpuzzle/runtime/RuntimeThermalObserver.hpp"
 
 #include <cstdlib>
+#include <algorithm>
+#include <cctype>
 #include <iomanip>
 #include <ostream>
 #include <sstream>
@@ -18,11 +20,74 @@ RuntimeThermalObserver::RuntimeThermalObserver(
       sampleInterval_(sampleInterval),
       reminderInterval_(reminderInterval) {}
 
+RuntimeThermalObserver::RuntimeThermalObserver(
+    GpuThermalPolicyConfiguration policy,
+    DeviceScope deviceScope,
+    Reader reader,
+    const std::chrono::seconds sampleInterval,
+    const std::chrono::seconds reminderInterval)
+    : policy_(std::move(policy)),
+      reader_(std::move(reader)),
+      sampleInterval_(sampleInterval),
+      reminderInterval_(reminderInterval) {
+  if (deviceScope) {
+    deviceScope_.emplace(
+        deviceScope->begin(),
+        deviceScope->end());
+  }
+}
+
+RuntimeThermalObserver::DeviceScope
+RuntimeThermalObserver::executionScope(
+    std::string backend,
+    const int device) {
+  std::transform(
+      backend.begin(),
+      backend.end(),
+      backend.begin(),
+      [](const unsigned char character) {
+        return static_cast<char>(std::tolower(character));
+      });
+
+  if (backend == "cuda" && device >= 0) {
+    return std::vector<std::string>{
+        "cuda-" + std::to_string(device)};
+  }
+
+  if (backend == "cpu") {
+    return std::vector<std::string>{};
+  }
+
+  /*
+   * OpenCL indexes are backend-local and cannot be mapped safely to a DRM
+   * card or NVIDIA index on mixed-vendor hosts. Keep conservative whole-host
+   * monitoring until the OpenCL inventory exposes a stable physical ID.
+   */
+  return std::nullopt;
+}
+
+RuntimeThermalObserver::DeviceScope
+RuntimeThermalObserver::cudaScope(
+    const std::vector<int> &devices) {
+  std::vector<std::string> result;
+  result.reserve(devices.size());
+
+  for (const int device : devices) {
+    if (device >= 0) {
+      result.push_back(
+          "cuda-" + std::to_string(device));
+    }
+  }
+
+  return result;
+}
+
 bool RuntimeThermalObserver::enabled() const {
   return processOwnsMonitoring() &&
          policy_.enabled &&
          GpuThermalPolicy::valid(policy_) &&
          static_cast<bool>(reader_) &&
+         (!deviceScope_ || !deviceScope_->empty()) &&
          sampleInterval_.count() > 0 &&
          reminderInterval_.count() > 0;
 }
@@ -49,6 +114,13 @@ RuntimeThermalObserver::pollAt(
   nextSample_ = now + sampleInterval_;
 
   for (const auto &snapshot : reader_()) {
+    if (
+        deviceScope_ &&
+        deviceScope_->find(snapshot.deviceId) ==
+            deviceScope_->end()) {
+      continue;
+    }
+
     const auto current =
         GpuThermalPolicy::evaluate(
             policy_, snapshot.temperatureC);

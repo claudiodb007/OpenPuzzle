@@ -151,9 +151,9 @@ The local configuration also contains a disabled-by-default thermal policy:
 When enabled, `openpuzzle doctor` classifies each reading as `NORMAL`,
 `WARNING`, `CRITICAL` or `UNAVAILABLE`. Thresholds are accepted only when the
 warning value is between 30 and 110 degrees Celsius and the critical value is
-higher, up to 120 degrees Celsius. The policy remains diagnostic in this
-phase: it never signals, stops or restarts a runtime and never changes GPU
-power, clocks or fans.
+higher, up to 120 degrees Celsius. The default policy remains diagnostic: it
+never signals, stops or restarts a runtime and never changes GPU power, clocks
+or fans.
 
 The policy is managed locally from the command line:
 
@@ -195,6 +195,19 @@ requests the stop of every worker so the rig does not continue generating heat
 on the remaining devices. The protection never changes power limits, clocks or
 fans and never performs an abrupt engine kill. Restore warning-only behaviour
 with `openpuzzle thermal --diagnostic-only`.
+
+CUDA observation is scoped to the physical devices selected by the execution.
+A single `--device 2` run observes only `cuda-2`, while a multi-GPU
+`--devices 1,2` supervisor observes only `cuda-1` and `cuda-2`. A hot GPU that
+is not part of that execution can still be reported by `openpuzzle doctor`,
+but it cannot stop unrelated CUDA work. CPU-only execution performs no GPU
+telemetry queries.
+
+OpenCL device indexes do not currently expose a stable cross-vendor physical
+identifier. OpenCL and mixed CUDA plus OpenCL execution therefore retain
+conservative whole-host GPU monitoring. This avoids silently excluding the
+active AMD or NVIDIA device on systems where OpenCL enumeration and DRM card
+numbers differ.
 
 ## Local states
 

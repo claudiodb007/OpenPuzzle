@@ -20,8 +20,14 @@
 namespace openpuzzle {
 
 ClientRuntime::ClientRuntime()
+    : ClientRuntime(std::nullopt) {}
+
+ClientRuntime::ClientRuntime(
+    std::optional<std::vector<std::string>>
+        thermalDeviceScope)
     : dependencies_(
-          productionDependencies()) {}
+          productionDependencies(
+              std::move(thermalDeviceScope))) {}
 
 ClientRuntime::ClientRuntime(
     ClientRuntimeDependencies dependencies)
@@ -48,12 +54,15 @@ ClientRuntime::ClientRuntime(
 }
 
 ClientRuntimeDependencies
-ClientRuntime::productionDependencies() {
+ClientRuntime::productionDependencies(
+    std::optional<std::vector<std::string>>
+        thermalDeviceScope) {
   ClientRuntimeDependencies dependencies;
 
   const auto thermalObserver =
       std::make_shared<RuntimeThermalObserver>(
-          ConfigurationManager::load().gpu.thermal);
+          ConfigurationManager::load().gpu.thermal,
+          std::move(thermalDeviceScope));
 
   dependencies.sync =
       [](const std::string &serverUrl) {

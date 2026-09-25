@@ -5,8 +5,10 @@
 
 #include <chrono>
 #include <functional>
+#include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace openpuzzle {
 
@@ -124,6 +126,10 @@ public:
   ClientRuntime();
 
   explicit ClientRuntime(
+      std::optional<std::vector<std::string>>
+          thermalDeviceScope);
+
+  explicit ClientRuntime(
       ClientRuntimeDependencies dependencies);
 
   int runContinuous(
@@ -143,7 +149,9 @@ private:
       std::chrono::seconds duration) const;
 
   static ClientRuntimeDependencies
-  productionDependencies();
+  productionDependencies(
+      std::optional<std::vector<std::string>>
+          thermalDeviceScope = std::nullopt);
 };
 
 } // namespace openpuzzle

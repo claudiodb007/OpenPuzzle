@@ -66,9 +66,12 @@ constexpr const char* kSupervisedGpuDeviceArgument =
     "--supervised-gpu-device";
 
 std::shared_ptr<RuntimeThermalObserver>
-makeSupervisorThermalObserver() {
+makeSupervisorThermalObserver(
+    RuntimeThermalObserver::DeviceScope deviceScope =
+        std::nullopt) {
   return std::make_shared<RuntimeThermalObserver>(
-      ConfigurationManager::load().gpu.thermal);
+      ConfigurationManager::load().gpu.thermal,
+      std::move(deviceScope));
 }
 
 bool pollThermalObserver(
@@ -159,6 +162,9 @@ bool hasArgument(const std::vector<std::string> &args,
   return false;
 }
 
+std::string selectedBackend(
+    const std::vector<std::string> &args);
+
 int selectedGpuDevice(
     const std::vector<std::string> &args,
     int fallback) {
@@ -192,6 +198,36 @@ int selectedGpuDevice(
   }
 
   return static_cast<int>(parsed);
+}
+
+RuntimeThermalObserver::DeviceScope
+runtimeThermalScope(
+    const std::vector<std::string> &args) {
+  std::string backend = selectedBackend(args);
+  std::string engine = getArgument(args, "--engine");
+
+  std::transform(
+      engine.begin(),
+      engine.end(),
+      engine.begin(),
+      [](const unsigned char character) {
+        return static_cast<char>(std::tolower(character));
+      });
+
+  if (engine == "keyhunt") {
+    backend = "cpu";
+  }
+
+  const int device =
+      backend == "cpu"
+          ? 0
+          : selectedGpuDevice(
+                args,
+                GpuManager::selectedGpu());
+
+  return RuntimeThermalObserver::executionScope(
+      backend,
+      device);
 }
 
 const GpuInfo *findGpuDevice(
@@ -1483,7 +1519,11 @@ int runConcurrent(
   signal(SIGTERM, SIG_IGN);
 
   const auto thermalObserver =
-      makeSupervisorThermalObserver();
+      makeSupervisorThermalObserver(
+          withOpencl
+              ? RuntimeThermalObserver::DeviceScope{
+                    std::nullopt}
+              : runtimeThermalScope(firstArguments));
 
   bool thermalProtectionRequested = false;
   const auto requestThermalStop = [&] {
@@ -1716,7 +1756,12 @@ int runMultiGpu(
   std::cerr.flush();
 
   const auto thermalObserver =
-      makeSupervisorThermalObserver();
+      makeSupervisorThermalObserver(
+          opencl
+              ? RuntimeThermalObserver::DeviceScope{
+                    std::nullopt}
+              : RuntimeThermalObserver::cudaScope(
+                    devices));
 
   for (std::size_t workerIndex = 0;
        workerIndex < workers.size();
@@ -2303,7 +2348,8 @@ int RunSession::run(
     return runOnce(args).exitCode;
   }
 
-  ClientRuntime runtime;
+  ClientRuntime runtime(
+      runtimeThermalScope(args));
 
   bool initializeClient = true;
 
@@ -3608,7 +3654,10 @@ ClientIterationResult RunSession::runOnce(
             << "PID................ " << handle.pid << '\n'
             << "Monitoring.......... active\n\n";
 
-  ClientRuntime runtime;
+  ClientRuntime runtime(
+      RuntimeThermalObserver::executionScope(
+          runBackend,
+          runDevice));
 
   return monitoredResult(
       runtime.run(
