@@ -227,6 +227,7 @@ add_library(OpenPuzzleCore
     src/tools/ToolManager.cpp
     src/hardware/GpuManager.cpp
     src/hardware/GpuTelemetry.cpp
+    src/hardware/GpuThermalPolicy.cpp
     src/hardware/RusticlEnvironment.cpp
     src/adapters/bitcrack/BitCrackOutputParser.cpp
     src/adapters/bitcrack/BitCrackProgressParser.cpp

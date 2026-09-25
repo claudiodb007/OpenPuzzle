@@ -137,6 +137,23 @@ This telemetry layer is observational only. Normal single-GPU, multi-GPU,
 CUDA, OpenCL and CPU execution paths do not call it and retain their existing
 behaviour.
 
+The local configuration also contains a disabled-by-default thermal policy:
+
+```json
+"thermal": {
+  "thermal_enabled": false,
+  "thermal_warning_c": 75,
+  "thermal_critical_c": 85
+}
+```
+
+When enabled, `openpuzzle doctor` classifies each reading as `NORMAL`,
+`WARNING`, `CRITICAL` or `UNAVAILABLE`. Thresholds are accepted only when the
+warning value is between 30 and 110 degrees Celsius and the critical value is
+higher, up to 120 degrees Celsius. The policy remains diagnostic in this
+phase: it never signals, stops or restarts a runtime and never changes GPU
+power, clocks or fans.
+
 ## Local states
 
 `openpuzzle status` can report:

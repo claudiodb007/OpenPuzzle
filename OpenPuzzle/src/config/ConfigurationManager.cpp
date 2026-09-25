@@ -3,6 +3,7 @@
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 
 #include <cstdlib>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -67,6 +68,60 @@ std::optional<int> readJsonIntegerAfterKey(const std::string &text,
   } catch (...) {
     return std::nullopt;
   }
+}
+
+std::optional<double> readJsonDoubleAfterKey(
+    const std::string &text,
+    const std::string &key) {
+  const auto keyPosition = text.find("\"" + key + "\"");
+
+  if (keyPosition == std::string::npos) {
+    return std::nullopt;
+  }
+
+  const auto colon = text.find(':', keyPosition);
+  if (colon == std::string::npos) {
+    return std::nullopt;
+  }
+
+  try {
+    std::size_t consumed = 0;
+    const double value = std::stod(text.substr(colon + 1), &consumed);
+    return consumed > 0 ? std::optional<double>(value) : std::nullopt;
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+std::optional<bool> readJsonBooleanAfterKey(
+    const std::string &text,
+    const std::string &key) {
+  const auto keyPosition = text.find("\"" + key + "\"");
+
+  if (keyPosition == std::string::npos) {
+    return std::nullopt;
+  }
+
+  const auto colon = text.find(':', keyPosition);
+  if (colon == std::string::npos) {
+    return std::nullopt;
+  }
+
+  std::size_t position = colon + 1;
+  while (position < text.size() &&
+         std::isspace(static_cast<unsigned char>(text[position]))) {
+    ++position;
+  }
+
+  if (text.compare(position, 4, "true") == 0) {
+    return true;
+  }
+
+  if (text.compare(position, 5, "false") == 0) {
+    return false;
+  }
+
+  return std::nullopt;
 }
 
 std::string readFile(const std::string &path) {
@@ -169,6 +224,18 @@ Configuration ConfigurationManager::load() {
     config.gpu.rusticlEnable = *value;
   }
 
+  if (const auto value = readJsonBooleanAfterKey(text, "thermal_enabled")) {
+    config.gpu.thermal.enabled = *value;
+  }
+
+  if (const auto value = readJsonDoubleAfterKey(text, "thermal_warning_c")) {
+    config.gpu.thermal.warningC = *value;
+  }
+
+  if (const auto value = readJsonDoubleAfterKey(text, "thermal_critical_c")) {
+    config.gpu.thermal.criticalC = *value;
+  }
+
   if (const auto value = readJsonIntegerAfterKey(text, "duration_minutes")) {
     if (*value > 0) {
       config.assignment.durationMinutes = *value;
@@ -220,6 +287,14 @@ bool ConfigurationManager::save(const Configuration &config) {
          << "  \"gpu_device\": " << config.gpu.device << ",\n"
          << "  \"rusticl_enable\": \"" << escapeJson(config.gpu.rusticlEnable)
          << "\",\n"
+         << "  \"thermal\": {\n"
+         << "    \"thermal_enabled\": "
+         << (config.gpu.thermal.enabled ? "true" : "false") << ",\n"
+         << "    \"thermal_warning_c\": "
+         << config.gpu.thermal.warningC << ",\n"
+         << "    \"thermal_critical_c\": "
+         << config.gpu.thermal.criticalC << "\n"
+         << "  },\n"
          << "  \"assignment\": {\n"
          << "    \"duration_minutes\": " << config.assignment.durationMinutes
          << "\n"

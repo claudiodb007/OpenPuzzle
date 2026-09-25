@@ -1571,6 +1571,38 @@ add_test(
 )
 
 add_executable(
+    GpuThermalPolicyTests
+    hardware/GpuThermalPolicyTests.cpp
+)
+
+target_link_libraries(
+    GpuThermalPolicyTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME GpuThermalPolicyTests
+    COMMAND GpuThermalPolicyTests
+)
+
+add_executable(
+    ConfigurationManagerThermalTests
+    config/ConfigurationManagerThermalTests.cpp
+)
+
+target_link_libraries(
+    ConfigurationManagerThermalTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ConfigurationManagerThermalTests
+    COMMAND ConfigurationManagerThermalTests
+)
+
+add_executable(
     RusticlEnvironmentTests
     hardware/RusticlEnvironmentTests.cpp
 )

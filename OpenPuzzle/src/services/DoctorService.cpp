@@ -6,6 +6,7 @@
 #include "openpuzzle/hardware/GpuInfo.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/hardware/GpuTelemetry.hpp"
+#include "openpuzzle/hardware/GpuThermalPolicy.hpp"
 #include "openpuzzle/hardware/RusticlEnvironment.hpp"
 #include "openpuzzle/models/Models.hpp"
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
@@ -196,7 +197,8 @@ std::string telemetryValue(
 }
 
 void printTelemetry(
-    const std::vector<GpuTelemetrySnapshot> &snapshots) {
+    const std::vector<GpuTelemetrySnapshot> &snapshots,
+    const GpuThermalPolicyConfiguration &policy) {
   std::cout << "\nGPU telemetry\n"
             << "-------------\n";
 
@@ -226,8 +228,27 @@ void printTelemetry(
               << "Power draw.......... "
               << telemetryValue(snapshot.powerDrawW, "W") << '\n'
               << "Power limit......... "
-              << telemetryValue(snapshot.powerLimitW, "W") << '\n';
+              << telemetryValue(snapshot.powerLimitW, "W") << '\n'
+              << "Thermal state....... "
+              << GpuThermalPolicy::stateName(
+                     GpuThermalPolicy::evaluate(
+                         policy,
+                         snapshot.temperatureC))
+              << '\n';
   }
+}
+
+void printThermalPolicy(
+    const GpuThermalPolicyConfiguration &policy) {
+  std::cout << "\nThermal policy\n"
+            << "--------------\n"
+            << "Mode................ "
+            << (policy.enabled ? "enabled" : "disabled") << '\n'
+            << "Warning threshold... "
+            << telemetryValue(policy.warningC, "C") << '\n'
+            << "Critical threshold.. "
+            << telemetryValue(policy.criticalC, "C") << '\n'
+            << "Enforcement......... none; diagnostic warnings only\n";
 }
 
 bool usableProfile(const GpuProfileRecord &profile) {
@@ -415,7 +436,39 @@ int DoctorService::execute(
               << configuration.gpu.rusticlEnable << '\n';
   }
 
-  printTelemetry(gpuTelemetry);
+  printThermalPolicy(configuration.gpu.thermal);
+  printTelemetry(gpuTelemetry, configuration.gpu.thermal);
+
+  if (!GpuThermalPolicy::valid(configuration.gpu.thermal)) {
+    warning(summary,
+            "OP-DOCTOR-008",
+            "the thermal policy thresholds are invalid",
+            "set warning to 30-110 C and critical above warning up to 120 C");
+  } else if (configuration.gpu.thermal.enabled) {
+    for (const auto &snapshot : gpuTelemetry) {
+      const auto state = GpuThermalPolicy::evaluate(
+          configuration.gpu.thermal,
+          snapshot.temperatureC);
+      const std::string device = snapshot.vendor + " " + snapshot.deviceId;
+
+      if (state == GpuThermalState::Unavailable) {
+        warning(summary,
+                "OP-DOCTOR-009",
+                device + " has no usable temperature reading",
+                "verify the GPU driver and hardware sensor interface");
+      } else if (state == GpuThermalState::Warning) {
+        warning(summary,
+                "OP-DOCTOR-010",
+                device + " reached the thermal warning threshold",
+                "inspect airflow, fans and heatsink condition");
+      } else if (state == GpuThermalState::Critical) {
+        warning(summary,
+                "OP-DOCTOR-011",
+                device + " reached the critical thermal threshold",
+                "stop the workload and inspect GPU cooling");
+      }
+    }
+  }
 
   std::cout << "\nUsable backends\n"
             << "---------------\n"

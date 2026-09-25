@@ -1,5 +1,7 @@
 #pragma once
 
+#include "openpuzzle/hardware/GpuThermalPolicy.hpp"
+
 #include <string>
 
 namespace openpuzzle {
@@ -18,6 +20,7 @@ struct EngineConfiguration {
 struct GpuConfiguration {
   int device = 0;
   std::string rusticlEnable;
+  GpuThermalPolicyConfiguration thermal;
 };
 
 struct AssignmentConfiguration {
