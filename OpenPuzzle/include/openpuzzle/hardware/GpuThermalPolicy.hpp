@@ -7,6 +7,7 @@ namespace openpuzzle {
 
 struct GpuThermalPolicyConfiguration {
   bool enabled = false;
+  bool stopOnCritical = false;
   double warningC = 75.0;
   double criticalC = 85.0;
 };

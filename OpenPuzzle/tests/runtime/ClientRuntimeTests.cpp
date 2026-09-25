@@ -1,4 +1,5 @@
 #include "openpuzzle/runtime/ClientRuntime.hpp"
+#include "openpuzzle/core/SignalHandler.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -115,6 +116,12 @@ client::ExecutionSyncResult completedResult() {
 } // namespace
 
 int main() {
+  SignalHandler::reset();
+  assert(!SignalHandler::stopRequested());
+  SignalHandler::requestStop();
+  assert(SignalHandler::stopRequested());
+  SignalHandler::reset();
+
   /*
    * Conclusão bem-sucedida.
    */

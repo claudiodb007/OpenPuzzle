@@ -23,6 +23,10 @@ bool SignalHandler::stopRequested() {
     return g_stopRequested.load();
 }
 
+void SignalHandler::requestStop() {
+    g_stopRequested.store(true);
+}
+
 void SignalHandler::reset() {
     g_stopRequested.store(false);
 }

@@ -25,6 +25,7 @@ int main() {
 
   const auto defaults = openpuzzle::ConfigurationManager::load();
   if (defaults.gpu.thermal.enabled ||
+      defaults.gpu.thermal.stopOnCritical ||
       defaults.gpu.thermal.warningC != 75.0 ||
       defaults.gpu.thermal.criticalC != 85.0) {
     return 2;
@@ -32,6 +33,7 @@ int main() {
 
   openpuzzle::Configuration configuration;
   configuration.gpu.thermal.enabled = true;
+  configuration.gpu.thermal.stopOnCritical = true;
   configuration.gpu.thermal.warningC = 72.5;
   configuration.gpu.thermal.criticalC = 84.5;
 
@@ -41,6 +43,7 @@ int main() {
 
   const auto loaded = openpuzzle::ConfigurationManager::load();
   if (!loaded.gpu.thermal.enabled ||
+      !loaded.gpu.thermal.stopOnCritical ||
       loaded.gpu.thermal.warningC != 72.5 ||
       loaded.gpu.thermal.criticalC != 84.5) {
     return 4;
@@ -51,6 +54,8 @@ int main() {
   text << input.rdbuf();
 
   if (text.str().find("\"thermal_enabled\": true") ==
+          std::string::npos ||
+      text.str().find("\"thermal_stop_on_critical\": true") ==
           std::string::npos ||
       text.str().find("\"thermal_warning_c\": 72.5") ==
           std::string::npos ||

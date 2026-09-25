@@ -27,6 +27,10 @@ bool RuntimeThermalObserver::enabled() const {
          reminderInterval_.count() > 0;
 }
 
+bool RuntimeThermalObserver::protectionEnabled() const {
+  return enabled() && policy_.stopOnCritical;
+}
+
 std::vector<RuntimeThermalEvent>
 RuntimeThermalObserver::poll() {
   return pollAt(Clock::now());

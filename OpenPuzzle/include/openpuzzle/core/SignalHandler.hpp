@@ -8,6 +8,8 @@ public:
 
     static bool stopRequested();
 
+    static void requestStop();
+
     static void reset();
 };
 

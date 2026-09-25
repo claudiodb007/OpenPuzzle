@@ -248,7 +248,11 @@ void printThermalPolicy(
             << telemetryValue(policy.warningC, "C") << '\n'
             << "Critical threshold.. "
             << telemetryValue(policy.criticalC, "C") << '\n'
-            << "Enforcement......... none; diagnostic warnings only\n";
+            << "Enforcement......... "
+            << (policy.stopOnCritical
+                    ? "orderly stop at critical threshold"
+                    : "none; diagnostic warnings only")
+            << '\n';
 }
 
 bool usableProfile(const GpuProfileRecord &profile) {

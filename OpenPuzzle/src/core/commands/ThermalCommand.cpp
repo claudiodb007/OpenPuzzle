@@ -16,6 +16,8 @@ namespace {
 struct ThermalCommandOptions {
   bool enable = false;
   bool disable = false;
+  bool stopOnCritical = false;
+  bool diagnosticOnly = false;
   bool help = false;
   std::optional<double> warningC;
   std::optional<double> criticalC;
@@ -29,10 +31,11 @@ void printUsage() {
       << "  openpuzzle thermal\n"
       << "  openpuzzle thermal --enable [--warning-c N] [--critical-c N]\n"
       << "  openpuzzle thermal --disable\n"
+      << "  openpuzzle thermal --stop-on-critical|--diagnostic-only\n"
       << "  openpuzzle thermal --warning-c N --critical-c N\n"
       << "\n"
-      << "This command only configures diagnostic warnings. It does not\n"
-      << "stop engines or change GPU power, clocks or fans.\n";
+      << "Critical stopping is opt-in and orderly. OpenPuzzle never changes\n"
+      << "GPU power, clocks or fans.\n";
 }
 
 std::optional<double> parseTemperature(const std::string &value) {
@@ -74,6 +77,18 @@ bool parseOptions(
         return false;
       }
       options.disable = true;
+    } else if (argument == "--stop-on-critical") {
+      if (options.stopOnCritical) {
+        error = "--stop-on-critical was provided more than once";
+        return false;
+      }
+      options.stopOnCritical = true;
+    } else if (argument == "--diagnostic-only") {
+      if (options.diagnosticOnly) {
+        error = "--diagnostic-only was provided more than once";
+        return false;
+      }
+      options.diagnosticOnly = true;
     } else if (argument == "--warning-c" ||
                argument == "--critical-c") {
       const bool warning = argument == "--warning-c";
@@ -112,6 +127,11 @@ bool parseOptions(
     return false;
   }
 
+  if (options.stopOnCritical && options.diagnosticOnly) {
+    error = "--stop-on-critical and --diagnostic-only cannot be used together";
+    return false;
+  }
+
   return true;
 }
 
@@ -125,7 +145,11 @@ void printPolicy(
             << std::fixed << std::setprecision(1)
             << "Warning threshold... " << policy.warningC << " C\n"
             << "Critical threshold.. " << policy.criticalC << " C\n"
-            << "Enforcement......... none; diagnostic warnings only\n"
+            << "Enforcement......... "
+            << (policy.stopOnCritical
+                    ? "orderly stop at critical threshold"
+                    : "none; diagnostic warnings only")
+            << '\n'
             << "Configuration....... "
             << (updated ? "updated" : "unchanged") << '\n';
 }
@@ -160,6 +184,12 @@ int ThermalCommand::run(
     policy.enabled = false;
   }
 
+  if (options.stopOnCritical) {
+    policy.stopOnCritical = true;
+  } else if (options.diagnosticOnly) {
+    policy.stopOnCritical = false;
+  }
+
   if (options.warningC) {
     policy.warningC = *options.warningC;
   }
@@ -181,6 +211,7 @@ int ThermalCommand::run(
 
   const bool changed =
       policy.enabled != previous.enabled ||
+      policy.stopOnCritical != previous.stopOnCritical ||
       policy.warningC != previous.warningC ||
       policy.criticalC != previous.criticalC;
 

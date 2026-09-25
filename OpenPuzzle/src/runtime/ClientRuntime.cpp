@@ -190,9 +190,23 @@ ClientRuntime::productionDependencies() {
       };
 
   dependencies.thermalPoll =
-      [thermalObserver] {
+      [thermalObserver, protectionRequested = false]() mutable {
         for (const auto &event : thermalObserver->poll()) {
           RuntimeThermalObserver::print(event, std::cerr);
+
+          if (
+              event.kind == RuntimeThermalEventKind::Critical &&
+              thermalObserver->protectionEnabled() &&
+              !protectionRequested) {
+            protectionRequested = true;
+            std::cerr
+                << "\nOpenPuzzle thermal protection\n"
+                << "-----------------------------\n"
+                << "Trigger............. critical threshold\n"
+                << "Action.............. orderly stop requested\n"
+                << "Runtime state....... synchronization preserved\n";
+            SignalHandler::requestStop();
+          }
         }
       };
 

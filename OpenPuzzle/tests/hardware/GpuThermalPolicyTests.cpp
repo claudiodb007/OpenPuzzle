@@ -9,6 +9,7 @@ int main() {
   GpuThermalPolicyConfiguration policy;
 
   if (policy.enabled ||
+      policy.stopOnCritical ||
       policy.warningC != 75.0 ||
       policy.criticalC != 85.0 ||
       !GpuThermalPolicy::valid(policy)) {

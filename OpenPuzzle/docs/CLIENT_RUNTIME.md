@@ -142,6 +142,7 @@ The local configuration also contains a disabled-by-default thermal policy:
 ```json
 "thermal": {
   "thermal_enabled": false,
+  "thermal_stop_on_critical": false,
   "thermal_warning_c": 75,
   "thermal_critical_c": 85
 }
@@ -159,6 +160,8 @@ The policy is managed locally from the command line:
 ```bash
 openpuzzle thermal
 openpuzzle thermal --enable --warning-c 75 --critical-c 85
+openpuzzle thermal --enable --stop-on-critical
+openpuzzle thermal --diagnostic-only
 openpuzzle thermal --warning-c 72 --critical-c 82
 openpuzzle thermal --disable
 ```
@@ -179,9 +182,19 @@ explicitly excluded, so a six-GPU run still executes only one `nvidia-smi`
 telemetry query per sample interval rather than one query per worker. NVIDIA
 and AMD readings are collected in the same machine snapshot.
 
-Runtime observation remains diagnostic: it never signals, stops or restarts an
-engine, cancels an assignment, or changes GPU power, clocks or fans. Disabling
-the policy removes runtime telemetry calls completely.
+In the default diagnostic-only mode, runtime observation never signals, stops
+or restarts an engine, cancels an assignment, or changes GPU power, clocks or
+fans. Disabling the policy removes runtime telemetry calls completely.
+
+Critical protection is a separate opt-in setting and is disabled by default.
+With `--stop-on-critical`, the first `CRITICAL` runtime reading requests the
+same orderly shutdown lifecycle used by `openpuzzle stop`: final progress is
+synchronized, the engine is terminated by its owning runtime, and assignment
+cancellation is reported before local state is removed. A multi-GPU supervisor
+requests the stop of every worker so the rig does not continue generating heat
+on the remaining devices. The protection never changes power limits, clocks or
+fans and never performs an abrupt engine kill. Restore warning-only behaviour
+with `openpuzzle thermal --diagnostic-only`.
 
 ## Local states
 

@@ -228,6 +228,10 @@ Configuration ConfigurationManager::load() {
     config.gpu.thermal.enabled = *value;
   }
 
+  if (const auto value = readJsonBooleanAfterKey(text, "thermal_stop_on_critical")) {
+    config.gpu.thermal.stopOnCritical = *value;
+  }
+
   if (const auto value = readJsonDoubleAfterKey(text, "thermal_warning_c")) {
     config.gpu.thermal.warningC = *value;
   }
@@ -290,6 +294,8 @@ bool ConfigurationManager::save(const Configuration &config) {
          << "  \"thermal\": {\n"
          << "    \"thermal_enabled\": "
          << (config.gpu.thermal.enabled ? "true" : "false") << ",\n"
+         << "    \"thermal_stop_on_critical\": "
+         << (config.gpu.thermal.stopOnCritical ? "true" : "false") << ",\n"
          << "    \"thermal_warning_c\": "
          << config.gpu.thermal.warningC << ",\n"
          << "    \"thermal_critical_c\": "

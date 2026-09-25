@@ -44,6 +44,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <map>
@@ -70,16 +71,27 @@ makeSupervisorThermalObserver() {
       ConfigurationManager::load().gpu.thermal);
 }
 
-void pollThermalObserver(
+bool pollThermalObserver(
     const std::shared_ptr<RuntimeThermalObserver> &observer) {
+  bool critical = false;
+
   for (const auto &event : observer->poll()) {
     RuntimeThermalObserver::print(event, std::cerr);
+
+    if (
+        event.kind == RuntimeThermalEventKind::Critical &&
+        observer->protectionEnabled()) {
+      critical = true;
+    }
   }
+
+  return critical;
 }
 
 pid_t waitForAnyChild(
     int &status,
-    const std::shared_ptr<RuntimeThermalObserver> &observer) {
+    const std::shared_ptr<RuntimeThermalObserver> &observer,
+    const std::function<void()> &criticalAction) {
   while (true) {
     const pid_t result = waitpid(-1, &status, WNOHANG);
 
@@ -87,7 +99,9 @@ pid_t waitForAnyChild(
       return result;
     }
 
-    pollThermalObserver(observer);
+    if (pollThermalObserver(observer)) {
+      criticalAction();
+    }
     sleep(1);
   }
 }
@@ -95,7 +109,8 @@ pid_t waitForAnyChild(
 pid_t waitForChild(
     const pid_t pid,
     int &status,
-    const std::shared_ptr<RuntimeThermalObserver> &observer) {
+    const std::shared_ptr<RuntimeThermalObserver> &observer,
+    const std::function<void()> &criticalAction) {
   while (true) {
     const pid_t result = waitpid(pid, &status, WNOHANG);
 
@@ -103,7 +118,9 @@ pid_t waitForChild(
       return result;
     }
 
-    pollThermalObserver(observer);
+    if (pollThermalObserver(observer)) {
+      criticalAction();
+    }
     sleep(1);
   }
 }
@@ -1468,6 +1485,23 @@ int runConcurrent(
   const auto thermalObserver =
       makeSupervisorThermalObserver();
 
+  bool thermalProtectionRequested = false;
+  const auto requestThermalStop = [&] {
+    if (thermalProtectionRequested) {
+      return;
+    }
+
+    thermalProtectionRequested = true;
+    std::cerr
+        << "\nOpenPuzzle thermal protection\n"
+        << "-----------------------------\n"
+        << "Trigger............. critical threshold\n"
+        << "Action.............. orderly stop requested\n"
+        << "Runtime state....... synchronization preserved\n";
+    kill(firstPid, SIGTERM);
+    kill(secondPid, SIGTERM);
+  };
+
   if (finiteRun) {
     int firstStatus = 0;
     int secondStatus = 0;
@@ -1475,11 +1509,13 @@ int runConcurrent(
     waitForChild(
         firstPid,
         firstStatus,
-        thermalObserver);
+        thermalObserver,
+        requestThermalStop);
     waitForChild(
         secondPid,
         secondStatus,
-        thermalObserver);
+        thermalObserver,
+        requestThermalStop);
 
     return
         (
@@ -1497,7 +1533,8 @@ int runConcurrent(
   const pid_t completedPid =
       waitForAnyChild(
           completedStatus,
-          thermalObserver);
+          thermalObserver,
+          requestThermalStop);
 
   const pid_t remainingPid =
       completedPid == firstPid
@@ -1520,7 +1557,8 @@ int runConcurrent(
           waitForChild(
               remainingPid,
               remainingStatus,
-              thermalObserver) != remainingPid) {
+              thermalObserver,
+              requestThermalStop) != remainingPid) {
         return 1;
       }
 
@@ -1755,7 +1793,9 @@ int runMultiGpu(
      */
     if (workerIndex + 1 < workers.size()) {
       for (int second = 0; second < 10; ++second) {
-        pollThermalObserver(thermalObserver);
+        if (!thermalObserver->protectionEnabled()) {
+          (void) pollThermalObserver(thermalObserver);
+        }
         sleep(1);
       }
     }
@@ -1796,6 +1836,26 @@ int runMultiGpu(
         index);
   }
 
+  bool thermalProtectionRequested = false;
+  const auto requestThermalStop = [&] {
+    if (thermalProtectionRequested) {
+      return;
+    }
+
+    thermalProtectionRequested = true;
+    std::cerr
+        << "\nOpenPuzzle thermal protection\n"
+        << "-----------------------------\n"
+        << "Trigger............. critical threshold\n"
+        << "Action.............. orderly stop requested\n"
+        << "Runtime state....... synchronization preserved\n";
+
+    for (const auto &[pid, index] : remaining) {
+      (void) index;
+      kill(pid, SIGTERM);
+    }
+  };
+
   int result = 0;
   bool solutionStopRequested = false;
 
@@ -1804,7 +1864,8 @@ int runMultiGpu(
     const pid_t completed =
         waitForAnyChild(
             status,
-            thermalObserver);
+            thermalObserver,
+            requestThermalStop);
 
     if (completed < 0 && errno == EINTR) {
       continue;

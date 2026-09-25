@@ -46,6 +46,8 @@ public:
 
   bool enabled() const;
 
+  bool protectionEnabled() const;
+
   std::vector<RuntimeThermalEvent> poll();
 
   std::vector<RuntimeThermalEvent> pollAt(

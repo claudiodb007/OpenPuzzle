@@ -41,6 +41,7 @@ int main() {
 
   GpuThermalPolicyConfiguration policy;
   policy.enabled = true;
+  policy.stopOnCritical = true;
   policy.warningC = 75.0;
   policy.criticalC = 85.0;
 
@@ -62,6 +63,7 @@ int main() {
   assert(ownedReads == 0);
   assert(unsetenv(RuntimeThermalObserver::OwnerEnvironment) == 0);
   assert(RuntimeThermalObserver::processOwnsMonitoring());
+  assert(childObserver.protectionEnabled());
 
   double temperature = 80.0;
   int reads = 0;
