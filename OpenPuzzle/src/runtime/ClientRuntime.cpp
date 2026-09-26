@@ -217,6 +217,8 @@ ClientRuntime::productionDependencies(
             SignalHandler::requestStop();
           }
         }
+
+        return protectionRequested;
       };
 
   return dependencies;
@@ -228,7 +230,7 @@ bool ClientRuntime::sleepInterruptibly(
        elapsed < duration;
        elapsed += std::chrono::seconds(1)) {
     if (dependencies_.thermalPoll) {
-      dependencies_.thermalPoll();
+      (void)dependencies_.thermalPoll();
     }
 
     if (dependencies_.stopRequested()) {
@@ -290,8 +292,17 @@ int ClientRuntime::runContinuous(
      * callback is therefore never entered while a selected GPU is already
      * above the critical threshold.
      */
-    if (dependencies_.thermalPoll) {
-      dependencies_.thermalPoll();
+    const bool thermalStartupBlocked =
+        dependencies_.thermalPoll &&
+        dependencies_.thermalPoll();
+
+    if (thermalStartupBlocked) {
+      std::cerr
+          << "\nOpenPuzzle thermal startup protection\n"
+          << "-------------------------------------\n"
+          << "Startup............. blocked\n"
+          << "Assignment......... not requested\n"
+          << "Action.............. allow the selected GPU to cool\n";
     }
 
     if (dependencies_.stopRequested()) {

@@ -135,6 +135,7 @@ int main() {
     dependencies.thermalPoll =
         [&] {
           ++thermalPolls;
+          return false;
         };
 
     dependencies.sync =

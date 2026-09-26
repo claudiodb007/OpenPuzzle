@@ -2,6 +2,8 @@
 
 #include <cassert>
 #include <chrono>
+#include <iostream>
+#include <sstream>
 #include <string>
 
 using namespace openpuzzle;
@@ -70,6 +72,7 @@ ClientRuntimeDependencies dependencies(
   result.sleep = [](std::chrono::seconds) {};
   result.thermalPoll = [&] {
     ++thermalPolls;
+    return false;
   };
 
   return result;
@@ -92,9 +95,16 @@ int main() {
     configured.thermalPoll = [&] {
       ++thermalPolls;
       stopRequested = true;
+      return true;
     };
 
     ClientRuntime runtime(std::move(configured));
+
+    std::ostringstream standardOutput;
+    std::ostringstream errorOutput;
+    auto *oldStandard = std::cout.rdbuf(standardOutput.rdbuf());
+    auto *oldError = std::cerr.rdbuf(errorOutput.rdbuf());
+
     const int result = runtime.runContinuous(
         "https://server.test",
         [&] {
@@ -102,10 +112,19 @@ int main() {
           return ClientIterationResult::solutionFound();
         });
 
+    std::cout.rdbuf(oldStandard);
+    std::cerr.rdbuf(oldError);
+
     assert(result == 0);
     assert(thermalPolls == 1);
     assert(assignments == 0);
     assert(releaseCalls == 1);
+    assert(errorOutput.str().find(
+               "Startup............. blocked") !=
+           std::string::npos);
+    assert(errorOutput.str().find(
+               "Assignment......... not requested") !=
+           std::string::npos);
   }
 
   /* Diagnostic sampling does not block the existing assignment path. */

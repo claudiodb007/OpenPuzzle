@@ -204,8 +204,10 @@ action always matches the configured policy.
 Critical protection also samples the selected thermal scope before requesting
 new work. If a selected GPU is already at or above the critical threshold,
 single-GPU, concurrent and multi-GPU startup is blocked before an assignment
-is requested. Diagnostic-only mode still reports the reading and continues.
-No startup telemetry is collected while the policy is disabled.
+is requested. Every execution mode reports `Startup blocked` and
+`Assignment not requested` explicitly. Diagnostic-only mode still reports the
+reading and continues. No startup telemetry is collected while the policy is
+disabled.
 
 CUDA observation is scoped to the physical devices selected by the execution.
 A single `--device 2` run observes only `cuda-2`, while a multi-GPU
