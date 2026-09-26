@@ -41,6 +41,8 @@ public:
   static constexpr const char *OwnerEnvironment =
       "OPENPUZZLE_THERMAL_MONITOR_OWNER";
 
+  static constexpr double RecoveryHysteresisC = 2.0;
+
   explicit RuntimeThermalObserver(
       GpuThermalPolicyConfiguration policy,
       Reader reader = GpuTelemetry::readAll,

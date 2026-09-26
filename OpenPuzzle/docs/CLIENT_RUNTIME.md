@@ -173,8 +173,10 @@ changed. Enabling the policy activates diagnostic classifications in
 the available GPU sensors once every 30 seconds. It writes a warning when a
 device crosses the warning or critical threshold, repeats a persistent warning
 at most once every five minutes, and reports recovery after the temperature
-returns to normal. Configuration changes take effect when the next runtime is
-started.
+falls at least 2 degrees Celsius below the warning threshold. This recovery
+hysteresis prevents warning/recovery oscillation near the boundary. A
+temporarily unavailable sensor does not erase an existing hot state.
+Configuration changes take effect when the next runtime is started.
 
 Single-GPU execution owns its observer directly. Concurrent and multi-GPU
 execution assigns observation to the parent supervisor; supervised workers are

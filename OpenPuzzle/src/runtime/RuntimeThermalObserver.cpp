@@ -255,20 +255,39 @@ RuntimeThermalObserver::pollAt(
       continue;
     }
 
-    const auto current =
+    auto current =
         GpuThermalPolicy::evaluate(
             policy_, snapshot.temperatureC);
 
     auto &device = states_[snapshot.deviceId];
     const auto previous = device.state;
 
-    const bool hot =
-        current == GpuThermalState::Warning ||
-        current == GpuThermalState::Critical;
-
     const bool wasHot =
         previous == GpuThermalState::Warning ||
         previous == GpuThermalState::Critical;
+
+    /*
+     * Keep a hot state through a transient missing sample, and require a
+     * small temperature margin before reporting recovery. This avoids
+     * warning/recovery oscillation when a sensor sits on the configured
+     * warning boundary without changing either configured threshold.
+     */
+    if (
+        wasHot &&
+        current == GpuThermalState::Unavailable) {
+      current = previous;
+    } else if (
+        wasHot &&
+        current == GpuThermalState::Normal &&
+        snapshot.temperatureC &&
+        *snapshot.temperatureC >
+            policy_.warningC - RecoveryHysteresisC) {
+      current = previous;
+    }
+
+    const bool hot =
+        current == GpuThermalState::Warning ||
+        current == GpuThermalState::Critical;
 
     if (hot) {
       const bool transition = current != previous;

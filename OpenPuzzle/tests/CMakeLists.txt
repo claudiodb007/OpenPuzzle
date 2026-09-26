@@ -1665,6 +1665,22 @@ add_test(
 )
 
 add_executable(
+    RuntimeThermalHysteresisTests
+    runtime/RuntimeThermalHysteresisTests.cpp
+)
+
+target_link_libraries(
+    RuntimeThermalHysteresisTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME RuntimeThermalHysteresisTests
+    COMMAND RuntimeThermalHysteresisTests
+)
+
+add_executable(
     ConfigurationManagerThermalTests
     config/ConfigurationManagerThermalTests.cpp
 )
