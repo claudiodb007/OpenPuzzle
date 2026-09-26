@@ -5,12 +5,14 @@
 #include "openpuzzle/client/HttpRangeClient.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
+#include "openpuzzle/hardware/GpuTelemetry.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <csignal>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <set>
@@ -260,6 +262,48 @@ ClientHeartbeatService::gpus() {
       GpuManager::listAllGpus());
 }
 
+std::vector<ClientGpuTelemetry>
+ClientHeartbeatService::gpuTelemetry(
+    const std::vector<openpuzzle::GpuTelemetrySnapshot>& snapshots) {
+  std::vector<ClientGpuTelemetry> telemetry;
+
+  for (const auto& snapshot : snapshots) {
+    if (!snapshot.hasMeasurements()) {
+      continue;
+    }
+
+    ClientGpuTelemetry reading;
+    reading.vendor = snapshot.vendor;
+    reading.deviceId = snapshot.deviceId;
+    reading.pciBusId = snapshot.pciBusId;
+    reading.temperatureLabel = snapshot.temperatureLabel;
+    reading.device = snapshot.device;
+    reading.temperatureC = snapshot.temperatureC;
+    reading.powerDrawW = snapshot.powerDrawW;
+    reading.powerLimitW = snapshot.powerLimitW;
+
+    if (reading.valid()) {
+      telemetry.push_back(std::move(reading));
+    }
+  }
+
+  return telemetry;
+}
+
+std::vector<ClientGpuTelemetry>
+ClientHeartbeatService::telemetry() {
+  return gpuTelemetry(
+      GpuTelemetry::readAll());
+}
+
+bool ClientHeartbeatService::shouldCollectTelemetry() {
+  const char* owner =
+      std::getenv(TelemetryOwnerEnvironment);
+
+  return owner == nullptr ||
+         std::string(owner) != "0";
+}
+
 std::vector<ClientEngineCapability>
 ClientHeartbeatService::engines() {
   std::vector<ClientEngineCapability>
@@ -411,6 +455,12 @@ collectLocalHeartbeat() {
 
   heartbeat.gpus =
       gpus();
+
+  if (shouldCollectTelemetry()) {
+    heartbeat.gpuTelemetryReported = true;
+    heartbeat.gpuTelemetry =
+        telemetry();
+  }
 
   heartbeat.engines =
       engines();

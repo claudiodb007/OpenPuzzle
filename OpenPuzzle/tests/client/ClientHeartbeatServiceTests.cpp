@@ -44,6 +44,18 @@ int main() {
           ? originalHome
           : "";
 
+  const char* originalTelemetryOwner =
+      std::getenv(
+          ClientHeartbeatService::TelemetryOwnerEnvironment);
+
+  const bool hadTelemetryOwner =
+      originalTelemetryOwner != nullptr;
+
+  const std::string savedTelemetryOwner =
+      hadTelemetryOwner
+          ? originalTelemetryOwner
+          : "";
+
   const auto temporaryHome =
       std::filesystem::temp_directory_path() /
       (
@@ -139,6 +151,31 @@ int main() {
     if (engine.available) {
       assert(engine.installed);
     }
+  }
+
+  assert(
+      setenv(
+          ClientHeartbeatService::TelemetryOwnerEnvironment,
+          "0",
+          1) == 0);
+
+  const auto nonOwnerHeartbeat =
+      ClientHeartbeatService::collectLocalHeartbeat();
+
+  assert(nonOwnerHeartbeat.valid());
+  assert(!nonOwnerHeartbeat.gpuTelemetryReported);
+  assert(nonOwnerHeartbeat.gpuTelemetry.empty());
+
+  if (hadTelemetryOwner) {
+    assert(
+        setenv(
+            ClientHeartbeatService::TelemetryOwnerEnvironment,
+            savedTelemetryOwner.c_str(),
+            1) == 0);
+  } else {
+    assert(
+        unsetenv(
+            ClientHeartbeatService::TelemetryOwnerEnvironment) == 0);
   }
 
   ClientExecutionState cpuState;

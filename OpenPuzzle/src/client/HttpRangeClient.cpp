@@ -661,8 +661,53 @@ bool HttpRangeClient::heartbeat(const ClientHeartbeat &heartbeat) {
             << "\"memory_mb\":" << gpu.memoryMB << "}";
   }
 
-  request << "],"
-          << "\"engines\":[";
+  request << "],";
+
+  if (heartbeat.gpuTelemetryReported) {
+    request << "\"gpu_telemetry\":[";
+
+    for (std::size_t index = 0;
+         index < heartbeat.gpuTelemetry.size();
+         ++index) {
+      const auto &reading = heartbeat.gpuTelemetry[index];
+
+      if (index > 0) {
+        request << ',';
+      }
+
+      const auto appendOptional =
+          [&request](
+              const char *name,
+              const std::optional<double> &value) {
+            request << "\"" << name << "\":";
+
+            if (value) {
+              request << std::fixed << std::setprecision(2) << *value;
+            } else {
+              request << "null";
+            }
+          };
+
+      request << "{"
+              << "\"vendor\":\"" << jsonEscape(reading.vendor) << "\","
+              << "\"device_id\":\"" << jsonEscape(reading.deviceId) << "\","
+              << "\"device\":" << reading.device << ","
+              << "\"pci_bus_id\":\"" << jsonEscape(reading.pciBusId) << "\","
+              << "\"temperature_label\":\""
+              << jsonEscape(reading.temperatureLabel) << "\",";
+
+      appendOptional("temperature_c", reading.temperatureC);
+      request << ',';
+      appendOptional("power_draw_w", reading.powerDrawW);
+      request << ',';
+      appendOptional("power_limit_w", reading.powerLimitW);
+      request << "}";
+    }
+
+    request << "],";
+  }
+
+  request << "\"engines\":[";
 
   for (std::size_t index = 0; index < heartbeat.engines.size(); ++index) {
     const auto &engine = heartbeat.engines[index];

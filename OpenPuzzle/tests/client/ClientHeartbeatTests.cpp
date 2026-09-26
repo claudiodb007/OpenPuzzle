@@ -71,6 +71,20 @@ int main() {
 
   heartbeat.gpus.push_back(gpu);
 
+  ClientGpuTelemetry telemetry;
+
+  telemetry.vendor = "NVIDIA";
+  telemetry.deviceId = "cuda-0";
+  telemetry.device = 0;
+  telemetry.temperatureC = 62.0;
+  telemetry.powerDrawW = 184.5;
+  telemetry.powerLimitW = 245.0;
+
+  assert(telemetry.valid());
+
+  heartbeat.gpuTelemetryReported = true;
+  heartbeat.gpuTelemetry.push_back(telemetry);
+
   ClientEngineCapability engine;
 
   engine.name =

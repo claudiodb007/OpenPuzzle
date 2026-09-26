@@ -1846,6 +1846,11 @@ int runMultiGpu(
           setenv(
               RuntimeThermalObserver::OwnerEnvironment,
               "0",
+              1) != 0 ||
+          setenv(
+              client::ClientHeartbeatService::
+                  TelemetryOwnerEnvironment,
+              workerIndex == 0 ? "1" : "0",
               1) != 0) {
         _exit(1);
       }

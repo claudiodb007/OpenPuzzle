@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <cmath>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -42,6 +44,41 @@ struct ClientEngineCapability {
   }
 };
 
+struct ClientGpuTelemetry {
+  std::string vendor;
+  std::string deviceId;
+  std::string pciBusId;
+  std::string temperatureLabel;
+
+  int device = -1;
+
+  std::optional<double> temperatureC;
+  std::optional<double> powerDrawW;
+  std::optional<double> powerLimitW;
+
+  bool valid() const {
+    const auto finite = [](const std::optional<double>& value) {
+      return !value || std::isfinite(*value);
+    };
+
+    return !vendor.empty() &&
+           !deviceId.empty() &&
+           device >= 0 &&
+           (
+             temperatureC.has_value() ||
+             powerDrawW.has_value() ||
+             powerLimitW.has_value()
+           ) &&
+           finite(temperatureC) &&
+           finite(powerDrawW) &&
+           finite(powerLimitW) &&
+           (!temperatureC ||
+             (*temperatureC >= -100.0 && *temperatureC <= 300.0)) &&
+           (!powerDrawW || *powerDrawW >= 0.0) &&
+           (!powerLimitW || *powerLimitW >= 0.0);
+  }
+};
+
 struct ClientHeartbeat {
   std::string clientId;
   std::string version;
@@ -54,6 +91,8 @@ struct ClientHeartbeat {
 
   ClientCpuCapability cpu;
   std::vector<ClientGpuCapability> gpus;
+  bool gpuTelemetryReported = false;
+  std::vector<ClientGpuTelemetry> gpuTelemetry;
   std::vector<ClientEngineCapability> engines;
 
   bool valid() const {

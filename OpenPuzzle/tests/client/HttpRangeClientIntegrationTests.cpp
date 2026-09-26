@@ -330,6 +330,67 @@ int main() {
       "22222222-2222-4222-8222-222222222222";
 
   /*
+   * Heartbeats publish physical GPU telemetry as an optional block.  The
+   * payload is exact so nullable values and decimal precision stay stable.
+   */
+  {
+    ClientHeartbeat heartbeat;
+    heartbeat.clientId = clientId;
+    heartbeat.version = "1.0.29-test";
+    heartbeat.platform = "Linux";
+    heartbeat.status = "idle";
+    heartbeat.cpu.name = "Test CPU";
+    heartbeat.cpu.cores = 8;
+    heartbeat.cpu.threads = 16;
+
+    ClientGpuCapability gpu;
+    gpu.backend = "CUDA";
+    gpu.name = "Test GPU";
+    gpu.memoryMB = 12288;
+    heartbeat.gpus.push_back(gpu);
+
+    ClientGpuTelemetry telemetry;
+    telemetry.vendor = "NVIDIA";
+    telemetry.deviceId = "cuda-0";
+    telemetry.device = 0;
+    telemetry.pciBusId = "00000000:01:00.0";
+    telemetry.temperatureC = 64.0;
+    telemetry.powerDrawW = 201.25;
+    telemetry.powerLimitW = 245.0;
+    heartbeat.gpuTelemetryReported = true;
+    heartbeat.gpuTelemetry.push_back(telemetry);
+
+    const std::string expectedBody =
+        "{\"client_id\":\"" + clientId +
+        "\",\"version\":\"1.0.29-test\","
+        "\"platform\":\"Linux\","
+        "\"status\":\"idle\","
+        "\"active_engine\":\"\","
+        "\"active_backend\":\"\","
+        "\"active_backends\":[],"
+        "\"cpu\":{\"name\":\"Test CPU\",\"cores\":8,\"threads\":16},"
+        "\"gpus\":[{\"backend\":\"CUDA\",\"name\":\"Test GPU\","
+        "\"memory_mb\":12288}],"
+        "\"gpu_telemetry\":[{\"vendor\":\"NVIDIA\","
+        "\"device_id\":\"cuda-0\",\"device\":0,"
+        "\"pci_bus_id\":\"00000000:01:00.0\","
+        "\"temperature_label\":\"\","
+        "\"temperature_c\":64.00,\"power_draw_w\":201.25,"
+        "\"power_limit_w\":245.00}],\"engines\":[]}";
+
+    OneShotHttpServer server(
+        "200 OK",
+        R"JSON({"heartbeat":true})JSON",
+        "/api/client/heartbeat",
+        expectedBody);
+
+    HttpRangeClient client(server.url());
+    assert(client.heartbeat(heartbeat));
+    assert(client.lastError().empty());
+    server.wait();
+  }
+
+  /*
    * O pedido de atribuição identifica explicitamente
    * o backend mesmo quando o slot local é primary.
    */

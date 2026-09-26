@@ -2,6 +2,7 @@
 
 #include "openpuzzle/client/ClientHeartbeat.hpp"
 #include "openpuzzle/hardware/GpuInfo.hpp"
+#include "openpuzzle/hardware/GpuTelemetry.hpp"
 
 #include <string>
 
@@ -15,6 +16,9 @@ struct ClientHeartbeatResult {
 
 class ClientHeartbeatService {
 public:
+  static constexpr const char* TelemetryOwnerEnvironment =
+      "OPENPUZZLE_HEARTBEAT_TELEMETRY_OWNER";
+
   ClientHeartbeatResult send(
       const std::string& serverUrl) const;
 
@@ -24,12 +28,21 @@ public:
   gpuCapabilities(
       const std::vector<openpuzzle::GpuInfo>& inventory);
 
+  static std::vector<ClientGpuTelemetry>
+  gpuTelemetry(
+      const std::vector<openpuzzle::GpuTelemetrySnapshot>& snapshots);
+
 private:
+  static bool shouldCollectTelemetry();
+
   static std::string platform();
   static ClientCpuCapability cpu();
 
   static std::vector<ClientGpuCapability>
   gpus();
+
+  static std::vector<ClientGpuTelemetry>
+  telemetry();
 
   static std::vector<ClientEngineCapability>
   engines();

@@ -1362,6 +1362,20 @@ add_test(
     COMMAND ClientHeartbeatServiceTests
 )
 
+add_executable(ClientGpuTelemetryTests
+    client/ClientGpuTelemetryTests.cpp
+)
+
+target_link_libraries(ClientGpuTelemetryTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ClientGpuTelemetryTests
+    COMMAND ClientGpuTelemetryTests
+)
+
 add_executable(ClientRuntimeTests
     runtime/ClientRuntimeTests.cpp
 )

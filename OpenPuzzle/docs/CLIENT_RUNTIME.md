@@ -133,9 +133,19 @@ reported value is the highest valid sensor reading, which is the conservative
 choice for later safety decisions. A missing tool or unsupported sensor is
 shown as `unavailable`; it is never represented as a zero measurement.
 
-This telemetry layer is observational only. With the thermal policy disabled,
-normal single-GPU, multi-GPU, CUDA, OpenCL and CPU execution paths do not call
-it and retain their existing behaviour.
+This telemetry layer is observational only. Client heartbeats include an
+optional point-in-time sensor snapshot for the public network dashboard. The
+payload keeps physical sensor identities separate from CUDA and OpenCL
+capabilities, so one NVIDIA card exposed by both backends is not duplicated.
+Missing tools and sensors are omitted rather than reported as zero. Clients up
+to 1.0.28 remain compatible because the server treats the telemetry field as
+optional.
+
+Dashboard reporting does not enable the thermal policy and never changes
+clocks, fans or power limits. In supervised multi-GPU mode, exactly one worker
+owns heartbeat telemetry collection; the remaining workers omit the optional
+field and therefore cannot erase or duplicate the shared machine snapshot.
+Thermal enforcement remains disabled unless explicitly configured below.
 
 The local configuration also contains a disabled-by-default thermal policy:
 
@@ -186,7 +196,9 @@ and AMD readings are collected in the same machine snapshot.
 
 In the default diagnostic-only mode, runtime observation never signals, stops
 or restarts an engine, cancels an assignment, or changes GPU power, clocks or
-fans. Disabling the policy removes runtime telemetry calls completely.
+fans. Disabling the policy removes thermal-observer sampling; the independent
+read-only heartbeat snapshot described above remains available to the
+dashboard.
 
 Critical protection is a separate opt-in setting and is disabled by default.
 With `--stop-on-critical`, the first `CRITICAL` runtime reading requests the
