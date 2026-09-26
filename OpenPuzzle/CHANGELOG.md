@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.28 — GPU telemetry and thermal safety
+
+- Add read-only NVIDIA and AMD GPU temperature, power draw and power-limit
+  telemetry to `openpuzzle doctor`.
+- Add a disabled-by-default local thermal policy with configurable warning and
+  critical thresholds.
+- Add `openpuzzle thermal` commands for querying, enabling, configuring and
+  disabling the policy without changing GPU clocks, fans or power limits.
+- Monitor active GPU executions every 30 seconds with transition warnings,
+  five-minute reminders and recovery reporting.
+- Add opt-in `--stop-on-critical` protection using the existing orderly stop,
+  progress synchronization and assignment cancellation lifecycle.
+- Block new assignments when a selected GPU is already critical and thermal
+  protection is enabled.
+- Scope CUDA observation to selected devices and resolve OpenCL physical
+  sensors conservatively on mixed-vendor systems.
+- Add a two-degree recovery margin and retain hot state through temporary
+  sensor unavailability to prevent misleading message oscillation.
+- Preserve existing execution behaviour and avoid all runtime telemetry calls
+  while the policy remains disabled.
+- Pass all 131 automated tests, including telemetry parsing, policy,
+  configuration, runtime ownership, scope, output, startup and hysteresis
+  contracts.
+
 ## 1.0.27 — Unlimited multi-CUDA supervisors
 
 - Add `--devices all` to start one independent BitCrack supervisor for every
@@ -18,7 +42,7 @@
   new multi-CUDA mode to BitCrack linear puzzles.
 - Preserve the existing server coordination protocol, client identity,
   release pipeline, desktop interface and updater contract.
-- Pass all 120 automated tests, including CUDA selection, dynamic-slot and
+- Pass all 121 automated tests, including CUDA selection, dynamic-slot and
   independent-worker argument contracts.
 
 ## 1.0.26 — Reproducible Linux release contract
