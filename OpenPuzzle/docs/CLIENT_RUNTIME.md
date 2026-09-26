@@ -194,7 +194,10 @@ cancellation is reported before local state is removed. A multi-GPU supervisor
 requests the stop of every worker so the rig does not continue generating heat
 on the remaining devices. The protection never changes power limits, clocks or
 fans and never performs an abrupt engine kill. Restore warning-only behaviour
-with `openpuzzle thermal --diagnostic-only`.
+with `openpuzzle thermal --diagnostic-only`. Thermal event output states
+`diagnostic only; execution continues` when enforcement is disabled and
+`orderly stop requested` when critical protection is active, so the displayed
+action always matches the configured policy.
 
 CUDA observation is scoped to the physical devices selected by the execution.
 A single `--device 2` run observes only `cuda-2`, while a multi-GPU

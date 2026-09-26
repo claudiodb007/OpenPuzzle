@@ -27,6 +27,7 @@ struct RuntimeThermalEvent {
   GpuTelemetrySnapshot snapshot;
   double thresholdC = 0.0;
   bool reminder = false;
+  bool orderlyStop = false;
 };
 
 class RuntimeThermalObserver {

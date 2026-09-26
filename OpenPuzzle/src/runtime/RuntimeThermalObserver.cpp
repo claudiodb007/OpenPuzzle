@@ -289,6 +289,9 @@ RuntimeThermalObserver::pollAt(
                 ? policy_.criticalC
                 : policy_.warningC;
         event.reminder = reminder;
+        event.orderlyStop =
+            current == GpuThermalState::Critical &&
+            policy_.stopOnCritical;
         events.push_back(std::move(event));
         device.lastNotice = now;
       }
@@ -367,7 +370,9 @@ void RuntimeThermalObserver::print(
       << "Action.............. "
       << (recovered
               ? "monitoring continues"
-              : "diagnostic only; execution continues")
+              : (event.orderlyStop
+                     ? "orderly stop requested"
+                     : "diagnostic only; execution continues"))
       << '\n';
 
   output << message.str();

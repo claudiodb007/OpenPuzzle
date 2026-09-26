@@ -126,7 +126,7 @@ int main() {
   RuntimeThermalObserver::print(events[0], output);
   assert(output.str().find("State............... CRITICAL") !=
          std::string::npos);
-  assert(output.str().find("diagnostic only; execution continues") !=
+  assert(output.str().find("orderly stop requested") !=
          std::string::npos);
 
   return 0;
