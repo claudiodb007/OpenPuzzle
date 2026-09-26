@@ -199,6 +199,12 @@ with `openpuzzle thermal --diagnostic-only`. Thermal event output states
 `orderly stop requested` when critical protection is active, so the displayed
 action always matches the configured policy.
 
+Critical protection also samples the selected thermal scope before requesting
+new work. If a selected GPU is already at or above the critical threshold,
+single-GPU, concurrent and multi-GPU startup is blocked before an assignment
+is requested. Diagnostic-only mode still reports the reading and continues.
+No startup telemetry is collected while the policy is disabled.
+
 CUDA observation is scoped to the physical devices selected by the execution.
 A single `--device 2` run observes only `cuda-2`, while a multi-GPU
 `--devices 1,2` supervisor observes only `cuda-1` and `cuda-2`. A hot GPU that

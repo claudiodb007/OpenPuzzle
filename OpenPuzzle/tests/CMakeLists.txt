@@ -1376,6 +1376,20 @@ add_test(
     COMMAND ClientRuntimeTests
 )
 
+add_executable(ClientRuntimeThermalStartupTests
+    runtime/ClientRuntimeThermalStartupTests.cpp
+)
+
+target_link_libraries(ClientRuntimeThermalStartupTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME ClientRuntimeThermalStartupTests
+    COMMAND ClientRuntimeThermalStartupTests
+)
+
 add_executable(LinuxProcessIdentityTests
     runtime/LinuxProcessIdentityTests.cpp
 )

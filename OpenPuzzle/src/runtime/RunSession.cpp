@@ -93,6 +93,22 @@ bool pollThermalObserver(
   return critical;
 }
 
+bool thermalStartupAllowed(
+    const std::shared_ptr<RuntimeThermalObserver> &observer) {
+  if (!pollThermalObserver(observer)) {
+    return true;
+  }
+
+  std::cerr
+      << "\nOpenPuzzle thermal startup protection\n"
+      << "-------------------------------------\n"
+      << "Startup............. blocked\n"
+      << "Assignment......... not requested\n"
+      << "Action.............. allow the selected GPU to cool\n";
+
+  return false;
+}
+
 pid_t waitForAnyChild(
     int &status,
     const std::shared_ptr<RuntimeThermalObserver> &observer,
@@ -1463,6 +1479,16 @@ int runConcurrent(
     return 1;
   }
 
+  const auto thermalObserver =
+      makeSupervisorThermalObserver(
+          RuntimeThermalObserver::combineScopes(
+              runtimeThermalScope(firstArguments),
+              runtimeThermalScope(secondArguments)));
+
+  if (!thermalStartupAllowed(thermalObserver)) {
+    return 1;
+  }
+
   const auto launch =
       [](const std::string& slot,
          const std::vector<std::string>&
@@ -1561,12 +1587,6 @@ int runConcurrent(
 
   signal(SIGINT, SIG_IGN);
   signal(SIGTERM, SIG_IGN);
-
-  const auto thermalObserver =
-      makeSupervisorThermalObserver(
-          RuntimeThermalObserver::combineScopes(
-              runtimeThermalScope(firstArguments),
-              runtimeThermalScope(secondArguments)));
 
   bool thermalProtectionRequested = false;
   const auto requestThermalStop = [&] {
@@ -1806,6 +1826,11 @@ int runMultiGpu(
                     devices)
               : RuntimeThermalObserver::cudaScope(
                     devices));
+
+  if (!thermalStartupAllowed(thermalObserver)) {
+    throw std::runtime_error(
+        "Critical GPU temperature blocked multi-GPU startup");
+  }
 
   for (std::size_t workerIndex = 0;
        workerIndex < workers.size();

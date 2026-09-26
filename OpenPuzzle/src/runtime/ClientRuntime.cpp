@@ -284,6 +284,16 @@ int ClientRuntime::runContinuous(
   bool availabilityHeartbeatRequired = false;
 
   while (true) {
+    /*
+     * Sample before requesting work. With critical protection enabled,
+     * thermalPoll requests the normal runtime stop and the assignment
+     * callback is therefore never entered while a selected GPU is already
+     * above the critical threshold.
+     */
+    if (dependencies_.thermalPoll) {
+      dependencies_.thermalPoll();
+    }
+
     if (dependencies_.stopRequested()) {
       std::cout << "openpuzzle stopped.\n";
 
