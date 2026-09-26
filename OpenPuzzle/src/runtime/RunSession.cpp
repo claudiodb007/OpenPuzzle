@@ -16,6 +16,8 @@
 #include "openpuzzle/core/commands/BenchmarkCommand.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
+#include "openpuzzle/hardware/GpuTelemetry.hpp"
+#include "openpuzzle/hardware/GpuThermalPolicy.hpp"
 #include "openpuzzle/hardware/RusticlEnvironment.hpp"
 #include "openpuzzle/models/Models.hpp"
 #include "openpuzzle/performance/GpuProfileManager.hpp"
@@ -218,6 +220,14 @@ runtimeThermalScope(
     backend = "cpu";
   }
 
+  std::transform(
+      backend.begin(),
+      backend.end(),
+      backend.begin(),
+      [](const unsigned char character) {
+        return static_cast<char>(std::tolower(character));
+      });
+
   const int device =
       backend == "cpu"
           ? 0
@@ -225,9 +235,43 @@ runtimeThermalScope(
                 args,
                 GpuManager::selectedGpu());
 
-  return RuntimeThermalObserver::executionScope(
+  const auto directScope =
+      RuntimeThermalObserver::executionScope(
       backend,
       device);
+
+  if (directScope || backend != "opencl") {
+    return directScope;
+  }
+
+  const auto policy =
+      ConfigurationManager::load().gpu.thermal;
+
+  if (!policy.enabled || !GpuThermalPolicy::valid(policy)) {
+    return std::nullopt;
+  }
+
+  return RuntimeThermalObserver::openclScope(
+      GpuManager::listOpenClGpus(),
+      std::vector<int>{device},
+      GpuTelemetry::readAll());
+}
+
+RuntimeThermalObserver::DeviceScope
+multiOpenclThermalScope(
+    const std::vector<GpuInfo> &availableDevices,
+    const std::vector<int> &selectedDevices) {
+  const auto policy =
+      ConfigurationManager::load().gpu.thermal;
+
+  if (!policy.enabled || !GpuThermalPolicy::valid(policy)) {
+    return std::nullopt;
+  }
+
+  return RuntimeThermalObserver::openclScope(
+      availableDevices,
+      selectedDevices,
+      GpuTelemetry::readAll());
 }
 
 const GpuInfo *findGpuDevice(
@@ -1520,10 +1564,9 @@ int runConcurrent(
 
   const auto thermalObserver =
       makeSupervisorThermalObserver(
-          withOpencl
-              ? RuntimeThermalObserver::DeviceScope{
-                    std::nullopt}
-              : runtimeThermalScope(firstArguments));
+          RuntimeThermalObserver::combineScopes(
+              runtimeThermalScope(firstArguments),
+              runtimeThermalScope(secondArguments)));
 
   bool thermalProtectionRequested = false;
   const auto requestThermalStop = [&] {
@@ -1758,8 +1801,9 @@ int runMultiGpu(
   const auto thermalObserver =
       makeSupervisorThermalObserver(
           opencl
-              ? RuntimeThermalObserver::DeviceScope{
-                    std::nullopt}
+              ? multiOpenclThermalScope(
+                    openclDevices,
+                    devices)
               : RuntimeThermalObserver::cudaScope(
                     devices));
 

@@ -2,6 +2,7 @@
 
 #include "openpuzzle/hardware/GpuTelemetry.hpp"
 #include "openpuzzle/hardware/GpuThermalPolicy.hpp"
+#include "openpuzzle/hardware/GpuInfo.hpp"
 
 #include <chrono>
 #include <functional>
@@ -62,6 +63,15 @@ public:
 
   static DeviceScope cudaScope(
       const std::vector<int> &devices);
+
+  static DeviceScope openclScope(
+      const std::vector<GpuInfo> &availableDevices,
+      const std::vector<int> &selectedDevices,
+      const std::vector<GpuTelemetrySnapshot> &telemetry);
+
+  static DeviceScope combineScopes(
+      const DeviceScope &first,
+      const DeviceScope &second);
 
   bool enabled() const;
 

@@ -203,11 +203,15 @@ is not part of that execution can still be reported by `openpuzzle doctor`,
 but it cannot stop unrelated CUDA work. CPU-only execution performs no GPU
 telemetry queries.
 
-OpenCL device indexes do not currently expose a stable cross-vendor physical
-identifier. OpenCL and mixed CUDA plus OpenCL execution therefore retain
-conservative whole-host GPU monitoring. This avoids silently excluding the
-active AMD or NVIDIA device on systems where OpenCL enumeration and DRM card
-numbers differ.
+OpenCL device indexes do not expose the same physical identifiers as NVIDIA
+telemetry or Linux DRM cards. OpenPuzzle resolves the scope only when the
+mapping is unambiguous: a sole AMD or NVIDIA device is matched to that
+vendor's telemetry, and selecting every device of one vendor safely includes
+all of that vendor's sensors. This covers common mixed NVIDIA plus AMD hosts,
+including a CUDA GPU beside one Rusticl Radeon GPU. If several same-vendor
+devices exist and only a subset is selected, OpenPuzzle retains conservative
+whole-host monitoring rather than guessing the physical mapping. Mixed CUDA
+plus OpenCL mode combines both resolved scopes when possible.
 
 ## Local states
 

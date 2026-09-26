@@ -1619,6 +1619,22 @@ add_test(
 )
 
 add_executable(
+    OpenclThermalScopeTests
+    runtime/OpenclThermalScopeTests.cpp
+)
+
+target_link_libraries(
+    OpenclThermalScopeTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME OpenclThermalScopeTests
+    COMMAND OpenclThermalScopeTests
+)
+
+add_executable(
     ConfigurationManagerThermalTests
     config/ConfigurationManagerThermalTests.cpp
 )
