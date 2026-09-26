@@ -135,8 +135,12 @@ shown as `unavailable`; it is never represented as a zero measurement.
 
 This telemetry layer is observational only. Client heartbeats include an
 optional point-in-time sensor snapshot for the private administrative node
-dashboard. The public website and public network API do not expose these
-readings. The payload keeps physical sensor identities separate from CUDA and
+dashboard. Current readings are displayed beside the speed of the matching
+active GPU slot. CUDA `cuda-N` slots use their exact physical device index;
+generic and OpenCL slots are associated only when one unambiguous unused
+physical reading remains. The dashboard never guesses between devices. The
+public website and public network API do not expose these readings. The
+payload keeps physical sensor identities separate from CUDA and
 OpenCL capabilities, so one NVIDIA card exposed by both backends is not
 duplicated. Missing tools and sensors are omitted rather than reported as
 zero. Clients up to 1.0.28 remain compatible because the server treats the
