@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.29 — Private per-GPU dashboard telemetry
+
+- Add optional physical GPU telemetry snapshots to authenticated client
+  heartbeats while preserving the existing assignment and progress protocol.
+- Report NVIDIA and AMD temperature, power draw and configured power limit
+  without changing clocks, fans or device power settings.
+- Keep exactly one supervisor responsible for telemetry collection during
+  concurrent and multi-GPU execution.
+- Store readings in the private coordination database and display them only in
+  the authenticated Admin Nodes dashboard.
+- Place temperature and power directly beside the speed of the matching active
+  GPU assignment, including dynamic `cuda-N` and legacy `primary` slots.
+- Refuse ambiguous physical-device associations instead of showing a reading
+  beside the wrong OpenCL or generic GPU slot.
+- Keep the public website and public network-status API free of temperatures,
+  power values and physical GPU identifiers.
+- Retain compatibility with clients up to 1.0.28, which omit the optional
+  telemetry heartbeat field.
+- Pass all 132 automated client tests, including heartbeat serialization,
+  physical-device deduplication, supervisor ownership and privacy contracts.
+
 ## 1.0.28 — GPU telemetry and thermal safety
 
 - Add read-only NVIDIA and AMD GPU temperature, power draw and power-limit
