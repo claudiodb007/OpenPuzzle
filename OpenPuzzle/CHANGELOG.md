@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.30 — Desktop thermal safety controls
+
+- Add desktop controls for enabling or disabling the persisted GPU thermal
+  policy and editing its warning and critical temperature thresholds.
+- Let operators choose diagnostic-only monitoring or the existing orderly stop
+  at the critical threshold directly from the Qt interface.
+- Lock thermal settings while an execution is active and clearly state that
+  saved changes apply to the next GPU execution.
+- Parse persisted decimal thresholds independently of the desktop locale so
+  values such as `73.5` remain exact on Portuguese systems.
+- Add the thermal state of every active GPU to `openpuzzle status` without
+  changing the existing status or telemetry fields.
+- Display a localized, colour-coded Normal, Warning, Critical, Invalid,
+  Disabled or Unavailable badge inside the matching desktop GPU card.
+- Preserve read-only telemetry, disabled-by-default policy, startup protection,
+  orderly runtime shutdown and private dashboard boundaries.
+- Pass all 134 automated tests, including settings persistence, locale-safe
+  round trips, per-GPU state selection, UI presentation and shutdown stability.
+
 ## 1.0.29 — Private per-GPU dashboard telemetry
 
 - Add optional physical GPU telemetry snapshots to authenticated client
