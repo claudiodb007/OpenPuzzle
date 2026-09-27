@@ -29,6 +29,10 @@ int main() {
          "Atribuição");
   assert(translated(UiLanguage::French, "status_details") ==
          "État détaillé");
+  assert(translated(UiLanguage::Portuguese, "thermal_safety") ==
+         "Proteção térmica");
+  assert(translated(UiLanguage::English, "save_thermal") ==
+         "Save thermal settings");
 
   assert(themeFromCode("unknown") == UiTheme::Light);
   assert(themeFromCode("dark") == UiTheme::Dark);
@@ -41,6 +45,7 @@ int main() {
   assert(dark.contains("#080b10"));
   assert(dark.contains("#e3b23c"));
   assert(dark.contains("background: transparent"));
+  assert(dark.contains("QDoubleSpinBox"));
   assert(!dark.contains("QMainWindow, QWidget"));
   assert(dark.contains(
       "QFrame#Card {\n      background: #10151d;"));

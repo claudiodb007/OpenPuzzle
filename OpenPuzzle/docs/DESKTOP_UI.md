@@ -30,6 +30,14 @@ doctor, update check, audit and Kangaroo installation. The interface invokes
 the same audited CLI entry points and disables disruptive tools while an
 execution is active.
 
+The Thermal safety card edits the same configuration used by
+`openpuzzle thermal`. It exposes the disabled-by-default monitoring switch,
+warning and critical thresholds, and the optional orderly stop at the critical
+threshold. Values are validated by the shared thermal policy before the full
+configuration is saved. The controls are locked while a runtime is active,
+because a running observer keeps the policy captured at startup; saved changes
+therefore apply predictably to the next GPU execution.
+
 The new-execution card presents five safe modes instead of separate engine and
 backend controls:
 

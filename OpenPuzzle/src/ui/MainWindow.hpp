@@ -9,6 +9,7 @@
 
 class QComboBox;
 class QCheckBox;
+class QDoubleSpinBox;
 class QHBoxLayout;
 class QLabel;
 class QPlainTextEdit;
@@ -32,6 +33,9 @@ private:
   void buildInterface();
   void applyLanguage();
   void applyTheme();
+  void loadThermalSettings();
+  void updateThermalControlState();
+  void saveThermalSettings();
   void updateSelectionRules();
   void updateActionAvailability();
   void refreshStatus();
@@ -65,6 +69,10 @@ private:
   QLabel* currentStateTitle_ = nullptr;
   QLabel* newExecutionTitle_ = nullptr;
   QLabel* toolsTitle_ = nullptr;
+  QLabel* thermalTitle_ = nullptr;
+  QLabel* thermalHint_ = nullptr;
+  QLabel* thermalWarningName_ = nullptr;
+  QLabel* thermalCriticalName_ = nullptr;
   QLabel* detailsTitle_ = nullptr;
   QLabel* statusBadge_ = nullptr;
   QLabel* summary_ = nullptr;
@@ -85,6 +93,11 @@ private:
   QSpinBox* cpuThreads_ = nullptr;
   QCheckBox* rusticlRadeonsi_ = nullptr;
   QCheckBox* autoStart_ = nullptr;
+  QCheckBox* thermalEnabled_ = nullptr;
+  QCheckBox* thermalStopOnCritical_ = nullptr;
+  QDoubleSpinBox* thermalWarning_ = nullptr;
+  QDoubleSpinBox* thermalCritical_ = nullptr;
+  QPushButton* saveThermal_ = nullptr;
   QPushButton* start_ = nullptr;
   QPushButton* safeStop_ = nullptr;
   QPushButton* stop_ = nullptr;

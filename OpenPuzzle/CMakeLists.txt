@@ -372,6 +372,25 @@ if(OPENPUZZLE_BUILD_UI)
     find_package(Qt6 QUIET COMPONENTS Widgets)
 
     if(Qt6Widgets_FOUND)
+        add_library(OpenPuzzleUiSettings STATIC
+            src/ui/ThermalSettings.cpp
+            src/ui/ThermalSettings.hpp
+            src/config/ConfigurationManager.cpp
+            src/runtime/WorkspaceSecurity.cpp
+            src/hardware/GpuThermalPolicy.cpp
+        )
+
+        target_include_directories(OpenPuzzleUiSettings
+            PUBLIC
+                include
+                src/ui
+        )
+
+        target_compile_options(OpenPuzzleUiSettings
+            PRIVATE
+                -Wall -Wextra -Wpedantic
+        )
+
         add_executable(OpenPuzzleUi
             src/ui/main.cpp
             src/ui/MainWindow.cpp
@@ -399,6 +418,7 @@ if(OPENPUZZLE_BUILD_UI)
 
         target_link_libraries(OpenPuzzleUi
             PRIVATE
+                OpenPuzzleUiSettings
                 Qt6::Widgets
         )
 

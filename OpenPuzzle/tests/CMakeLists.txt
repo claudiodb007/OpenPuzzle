@@ -63,6 +63,20 @@ if(TARGET OpenPuzzleUi)
         COMMAND UiPreferencesTests
     )
 
+    add_executable(UiThermalSettingsTests
+        ui/UiThermalSettingsTests.cpp
+    )
+
+    target_link_libraries(UiThermalSettingsTests
+        PRIVATE
+            OpenPuzzleUiSettings
+    )
+
+    add_test(
+        NAME UiThermalSettingsTests
+        COMMAND UiThermalSettingsTests
+    )
+
     add_executable(UiControlTests
         ui/UiControlTests.cpp
         ../src/ui/MainWindow.cpp
@@ -89,6 +103,7 @@ if(TARGET OpenPuzzleUi)
 
     target_link_libraries(UiControlTests
         PRIVATE
+            OpenPuzzleUiSettings
             Qt6::Widgets
     )
 

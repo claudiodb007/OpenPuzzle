@@ -1,5 +1,6 @@
 #include "openpuzzle/config/ConfigurationManager.hpp"
 
+#include <clocale>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -10,6 +11,10 @@
 namespace fs = std::filesystem;
 
 int main() {
+  if (std::setlocale(LC_NUMERIC, "") == nullptr) {
+    return 8;
+  }
+
   const char *oldHome = std::getenv("HOME");
   const std::string savedHome = oldHome ? oldHome : "";
   const fs::path root = fs::temp_directory_path() /

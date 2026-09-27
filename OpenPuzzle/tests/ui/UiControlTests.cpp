@@ -1,5 +1,6 @@
 #include "MainWindow.hpp"
 
+#include "openpuzzle/config/ConfigurationManager.hpp"
 #include "openpuzzle/ui/RunCommandBuilder.hpp"
 
 #include <QApplication>
@@ -7,6 +8,7 @@
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDir>
+#include <QDoubleSpinBox>
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
@@ -92,6 +94,7 @@ int main(int argc, char* argv[]) {
 
   QTemporaryDir temporary;
   assert(temporary.isValid());
+  qputenv("HOME", temporary.path().toUtf8());
 
   const QString isolatedConfig = temporary.filePath("config");
   assert(QDir().mkpath(isolatedConfig));
@@ -168,8 +171,46 @@ int main(int argc, char* argv[]) {
 
   auto* statusBadge = control<QLabel>(window, "statusBadge");
   auto* autoStart = control<QCheckBox>(window, "autoStart");
+  auto* thermalEnabled =
+      control<QCheckBox>(window, "thermalEnabled");
+  auto* thermalStopOnCritical =
+      control<QCheckBox>(window, "thermalStopOnCritical");
+  auto* thermalWarning =
+      control<QDoubleSpinBox>(window, "thermalWarning");
+  auto* thermalCritical =
+      control<QDoubleSpinBox>(window, "thermalCritical");
+  auto* saveThermal =
+      control<QPushButton>(window, "saveThermal");
   assert(statusBadge != nullptr);
   assert(autoStart != nullptr && !autoStart->isChecked());
+  assert(thermalEnabled != nullptr);
+  assert(thermalStopOnCritical != nullptr);
+  assert(thermalWarning != nullptr);
+  assert(thermalCritical != nullptr);
+  assert(saveThermal != nullptr);
+  assert(!thermalEnabled->isChecked());
+  assert(thermalWarning->value() == 75.0);
+  assert(thermalCritical->value() == 85.0);
+  assert(!thermalWarning->isEnabled());
+  assert(!thermalCritical->isEnabled());
+  assert(!thermalStopOnCritical->isEnabled());
+  assert(saveThermal->isEnabled());
+
+  thermalEnabled->click();
+  assert(thermalWarning->isEnabled());
+  assert(thermalCritical->isEnabled());
+  assert(thermalStopOnCritical->isEnabled());
+  thermalWarning->setValue(73.5);
+  thermalCritical->setValue(84.5);
+  thermalStopOnCritical->click();
+  saveThermal->click();
+
+  const auto thermalConfiguration =
+      openpuzzle::ConfigurationManager::load().gpu.thermal;
+  assert(thermalConfiguration.enabled);
+  assert(thermalConfiguration.stopOnCritical);
+  assert(thermalConfiguration.warningC == 73.5);
+  assert(thermalConfiguration.criticalC == 84.5);
 
   autoStart->click();
   assert(autoStart->isChecked());
@@ -240,6 +281,11 @@ int main(int argc, char* argv[]) {
     return statusBadge->text() == "Running";
   }));
   assert(statusBadge->property("active").toBool());
+  assert(!thermalEnabled->isEnabled());
+  assert(!thermalWarning->isEnabled());
+  assert(!thermalCritical->isEnabled());
+  assert(!thermalStopOnCritical->isEnabled());
+  assert(!saveThermal->isEnabled());
 
   assert(statusFile.open(
       QIODevice::WriteOnly |
@@ -255,6 +301,11 @@ int main(int argc, char* argv[]) {
   assert(waitUntil([statusBadge]() {
     return statusBadge->text() == "Stopped";
   }));
+  assert(thermalEnabled->isEnabled());
+  assert(thermalWarning->isEnabled());
+  assert(thermalCritical->isEnabled());
+  assert(thermalStopOnCritical->isEnabled());
+  assert(saveThermal->isEnabled());
 
   clickAndExpect(
       control<QPushButton>(window, "benchmark"),

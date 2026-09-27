@@ -112,7 +112,7 @@ QString themeStyleSheet(UiTheme theme) {
       font-size: 14px;
       font-weight: 700;
     }
-    QComboBox, QSpinBox, QLineEdit, QPlainTextEdit {
+    QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit, QPlainTextEdit {
       background: %10;
       color: %2;
       border: 1px solid %3;
@@ -125,7 +125,7 @@ QString themeStyleSheet(UiTheme theme) {
       color: %2;
       selection-background-color: %11;
     }
-    QComboBox:focus, QSpinBox:focus, QLineEdit:focus {
+    QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QLineEdit:focus {
       border: 1px solid %11;
     }
     QPushButton {

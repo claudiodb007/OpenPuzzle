@@ -1,11 +1,13 @@
 #include "MainWindow.hpp"
 
+#include "ThermalSettings.hpp"
 #include "openpuzzle/ui/RunCommandBuilder.hpp"
 
 #include <QByteArray>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
+#include <QDoubleSpinBox>
 #include <QFile>
 #include <QFileInfo>
 #include <QFrame>
@@ -161,6 +163,7 @@ MainWindow::MainWindow(QWidget* parent)
       settings.value("ui/theme", "light").toString());
 
   buildInterface();
+  loadThermalSettings();
 
   const int savedMode = settings.value(
       "run/mode",
@@ -472,6 +475,68 @@ void MainWindow::buildInterface() {
   runLayout->addLayout(actions);
   page->addWidget(runCard);
 
+  auto* thermalCard = new QFrame;
+  thermalCard->setObjectName("Card");
+  auto* thermalLayout = new QVBoxLayout(thermalCard);
+
+  thermalTitle_ = new QLabel;
+  thermalTitle_->setObjectName("CardTitle");
+  thermalLayout->addWidget(thermalTitle_);
+
+  thermalHint_ = new QLabel;
+  thermalHint_->setWordWrap(true);
+  thermalHint_->setObjectName("HintText");
+  thermalLayout->addWidget(thermalHint_);
+
+  thermalEnabled_ = new QCheckBox;
+  thermalEnabled_->setProperty(
+      "controlId", "thermalEnabled");
+  thermalLayout->addWidget(thermalEnabled_);
+
+  auto* thermalGrid = new QGridLayout;
+  thermalGrid->setHorizontalSpacing(14);
+  thermalGrid->setVerticalSpacing(8);
+
+  thermalWarningName_ = formLabel(QString());
+  thermalCriticalName_ = formLabel(QString());
+
+  thermalWarning_ = new QDoubleSpinBox;
+  thermalWarning_->setProperty(
+      "controlId", "thermalWarning");
+  thermalWarning_->setRange(30.0, 110.0);
+  thermalWarning_->setDecimals(1);
+  thermalWarning_->setSingleStep(0.5);
+  thermalWarning_->setSuffix(" °C");
+
+  thermalCritical_ = new QDoubleSpinBox;
+  thermalCritical_->setProperty(
+      "controlId", "thermalCritical");
+  thermalCritical_->setRange(30.5, 120.0);
+  thermalCritical_->setDecimals(1);
+  thermalCritical_->setSingleStep(0.5);
+  thermalCritical_->setSuffix(" °C");
+
+  thermalGrid->addWidget(thermalWarningName_, 0, 0);
+  thermalGrid->addWidget(thermalCriticalName_, 0, 1);
+  thermalGrid->addWidget(thermalWarning_, 1, 0);
+  thermalGrid->addWidget(thermalCritical_, 1, 1);
+  thermalLayout->addLayout(thermalGrid);
+
+  thermalStopOnCritical_ = new QCheckBox;
+  thermalStopOnCritical_->setProperty(
+      "controlId", "thermalStopOnCritical");
+  thermalLayout->addWidget(thermalStopOnCritical_);
+
+  auto* thermalActions = new QHBoxLayout;
+  thermalActions->addStretch();
+  saveThermal_ = new QPushButton;
+  saveThermal_->setProperty(
+      "controlId", "saveThermal");
+  saveThermal_->setObjectName("SecondaryButton");
+  thermalActions->addWidget(saveThermal_);
+  thermalLayout->addLayout(thermalActions);
+  page->addWidget(thermalCard);
+
   auto* toolsCard = new QFrame;
   toolsCard->setObjectName("Card");
   auto* toolsLayout = new QVBoxLayout(toolsCard);
@@ -677,6 +742,25 @@ void MainWindow::buildInterface() {
       this,
       &MainWindow::configureAutomaticStart);
   connect(
+      thermalEnabled_,
+      &QCheckBox::toggled,
+      this,
+      [this]() {
+        updateThermalControlState();
+      });
+  connect(
+      thermalWarning_,
+      &QDoubleSpinBox::valueChanged,
+      this,
+      [this](double warningC) {
+        thermalCritical_->setMinimum(warningC + 0.5);
+      });
+  connect(
+      saveThermal_,
+      &QPushButton::clicked,
+      this,
+      &MainWindow::saveThermalSettings);
+  connect(
       language_,
       &QComboBox::currentIndexChanged,
       this,
@@ -714,11 +798,71 @@ RunMode MainWindow::selectedRunMode() const {
       mode_->currentData().toInt());
 }
 
+void MainWindow::loadThermalSettings() {
+  const auto settings = ThermalSettingsStore::load();
+
+  const QSignalBlocker enabledBlocker(thermalEnabled_);
+  const QSignalBlocker stopBlocker(thermalStopOnCritical_);
+  const QSignalBlocker warningBlocker(thermalWarning_);
+  const QSignalBlocker criticalBlocker(thermalCritical_);
+
+  thermalEnabled_->setChecked(settings.enabled);
+  thermalStopOnCritical_->setChecked(
+      settings.stopOnCritical);
+  thermalWarning_->setValue(settings.warningC);
+  thermalCritical_->setMinimum(settings.warningC + 0.5);
+  thermalCritical_->setValue(settings.criticalC);
+  updateThermalControlState();
+}
+
+void MainWindow::updateThermalControlState() {
+  const bool editable = !active_ && !busy_;
+  const bool policyEnabled =
+      editable && thermalEnabled_->isChecked();
+
+  thermalEnabled_->setEnabled(editable);
+  thermalWarning_->setEnabled(policyEnabled);
+  thermalCritical_->setEnabled(policyEnabled);
+  thermalStopOnCritical_->setEnabled(policyEnabled);
+  saveThermal_->setEnabled(editable);
+}
+
+void MainWindow::saveThermalSettings() {
+  ThermalSettings settings;
+  settings.enabled = thermalEnabled_->isChecked();
+  settings.stopOnCritical =
+      thermalStopOnCritical_->isChecked();
+  settings.warningC = thermalWarning_->value();
+  settings.criticalC = thermalCritical_->value();
+
+  switch (ThermalSettingsStore::save(settings)) {
+  case ThermalSettingsSaveResult::Saved:
+    showOutput(
+        t("thermal_safety"),
+        t("thermal_saved_message"));
+    break;
+  case ThermalSettingsSaveResult::Invalid:
+    showOutput(
+        t("thermal_safety"),
+        t("thermal_invalid"));
+    break;
+  case ThermalSettingsSaveResult::Failed:
+    showOutput(
+        t("thermal_safety"),
+        t("thermal_save_failed"));
+    break;
+  }
+}
+
 void MainWindow::applyLanguage() {
   subtitle_->setText(t("subtitle"));
   currentStateTitle_->setText(t("current_state"));
   newExecutionTitle_->setText(t("new_execution"));
   toolsTitle_->setText(t("tools"));
+  thermalTitle_->setText(t("thermal_safety"));
+  thermalHint_->setText(t("thermal_hint"));
+  thermalWarningName_->setText(t("thermal_warning"));
+  thermalCriticalName_->setText(t("thermal_critical"));
   detailsTitle_->setText(t("details"));
 
   puzzleName_->setText(t("puzzle"));
@@ -733,6 +877,10 @@ void MainWindow::applyLanguage() {
   mode_->setItemText(4, t("kangaroo_cuda"));
   rusticlRadeonsi_->setText(t("rusticl_radeonsi"));
   autoStart_->setText(t("auto_start"));
+  thermalEnabled_->setText(t("thermal_enabled"));
+  thermalStopOnCritical_->setText(
+      t("thermal_stop_on_critical"));
+  saveThermal_->setText(t("save_thermal"));
 
   refresh_->setText(t("refresh"));
   start_->setText(t("start"));
@@ -809,6 +957,7 @@ void MainWindow::updateActionAvailability() {
   openclDevice_->setEnabled(idle);
   cpuThreads_->setEnabled(idle);
   rusticlRadeonsi_->setEnabled(idle);
+  updateThermalControlState();
 
   const QString busyHint =
       active_ ? t("busy_active") : QString();

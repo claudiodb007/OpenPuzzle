@@ -6,6 +6,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <locale>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -84,13 +85,15 @@ std::optional<double> readJsonDoubleAfterKey(
     return std::nullopt;
   }
 
-  try {
-    std::size_t consumed = 0;
-    const double value = std::stod(text.substr(colon + 1), &consumed);
-    return consumed > 0 ? std::optional<double>(value) : std::nullopt;
-  } catch (...) {
+  std::istringstream input(text.substr(colon + 1));
+  input.imbue(std::locale::classic());
+
+  double value = 0.0;
+  if (!(input >> value)) {
     return std::nullopt;
   }
+
+  return value;
 }
 
 std::optional<bool> readJsonBooleanAfterKey(

@@ -252,6 +252,13 @@ devices exist and only a subset is selected, OpenPuzzle retains conservative
 whole-host monitoring rather than guessing the physical mapping. Mixed CUDA
 plus OpenCL mode combines both resolved scopes when possible.
 
+The desktop interface exposes the persisted thermal policy without changing
+the runtime contract. Operators can enable monitoring, edit the warning and
+critical thresholds, and select diagnostic-only monitoring or an orderly stop
+at the critical threshold. The same policy validator and private configuration
+file are used by the CLI and UI. Thermal controls are read-only during an
+active execution and saved changes apply to the next GPU runtime.
+
 ## Local states
 
 `openpuzzle status` can report:
