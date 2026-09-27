@@ -34,6 +34,7 @@
 #include "openpuzzle/runtime/KangarooWalkSeed.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 #include "openpuzzle/runtime/RunBenchmarkPreparation.hpp"
+#include "openpuzzle/runtime/RuntimeStatusTelemetry.hpp"
 #include "openpuzzle/runtime/RuntimeThermalObserver.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
@@ -812,6 +813,60 @@ void printAssignment(const client::RangeAssignment &assignment) {
 int showStatus(const std::vector<std::string> &args) {
   (void)args;
 
+  std::optional<std::vector<GpuTelemetrySnapshot>>
+      telemetrySnapshots;
+
+  const auto printGpuTelemetry =
+      [&telemetrySnapshots](
+          const client::ClientExecutionState &state) {
+        std::string backend = state.backend;
+        std::transform(
+            backend.begin(),
+            backend.end(),
+            backend.begin(),
+            [](const unsigned char character) {
+              return static_cast<char>(std::tolower(character));
+            });
+
+        if (backend != "cuda" && backend != "opencl") {
+          return;
+        }
+
+        if (!telemetrySnapshots) {
+          telemetrySnapshots = GpuTelemetry::readAll();
+        }
+
+        const auto snapshot =
+            RuntimeStatusTelemetry::select(
+                state.backend,
+                state.device,
+                state.gpuName,
+                *telemetrySnapshots);
+
+        if (!snapshot) {
+          return;
+        }
+
+        const std::string temperature =
+            RuntimeStatusTelemetry::temperatureText(*snapshot);
+        const std::string power =
+            RuntimeStatusTelemetry::powerText(*snapshot);
+
+        if (!temperature.empty()) {
+          std::cout
+              << "Temperature........ "
+              << temperature
+              << '\n';
+        }
+
+        if (!power.empty()) {
+          std::cout
+              << "Power.............. "
+              << power
+              << '\n';
+        }
+      };
+
   std::vector<std::string>
       executionSlots = {
           "gpu",
@@ -959,6 +1014,8 @@ int showStatus(const std::vector<std::string> &args) {
               << result.progress.speedMKeys
               << " MKey/s\n";
 
+          printGpuTelemetry(state);
+
           const auto statusEngine =
               normalizedGpuName(state.engine);
 
@@ -976,6 +1033,7 @@ int showStatus(const std::vector<std::string> &args) {
           std::cout
               << "Progress........... runtime managed\n";
         } else {
+          printGpuTelemetry(state);
           std::cout
               << "Progress........... "
               << "waiting for engine output\n";
@@ -1069,6 +1127,8 @@ int showStatus(const std::vector<std::string> &args) {
           << result.progress.speedMKeys
           << " MKey/s\n";
 
+      printGpuTelemetry(state);
+
       const auto statusEngine =
           normalizedGpuName(state.engine);
 
@@ -1086,6 +1146,7 @@ int showStatus(const std::vector<std::string> &args) {
       std::cout
           << "Progress........... runtime managed\n";
     } else {
+      printGpuTelemetry(state);
       std::cout << "Progress........... "
                 << "waiting for engine output\n";
     }

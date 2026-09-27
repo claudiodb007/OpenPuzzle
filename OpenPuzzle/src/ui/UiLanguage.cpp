@@ -49,6 +49,8 @@ const QHash<QString, QStringList>& translations() {
       {"auto_start_disabled_message", {"The current execution was not stopped.", "A execução atual não foi parada.", "L’exécution actuelle n’a pas été arrêtée.", "La ejecución actual no se ha detenido."}},
       {"auto_start_failed", {"Automatic startup could not be changed", "Não foi possível alterar o arranque automático", "Impossible de modifier le démarrage automatique", "No se pudo cambiar el inicio automático"}},
       {"speed", {"Speed", "Velocidade", "Vitesse", "Velocidad"}},
+      {"temperature", {"Temperature", "Temperatura", "Température", "Temperatura"}},
+      {"power", {"Power", "Potência", "Puissance", "Potencia"}},
       {"progress", {"Progress", "Progresso", "Progression", "Progreso"}},
       {"assignment", {"Assignment", "Atribuição", "Attribution", "Asignación"}},
       {"slot", {"Slot", "Slot", "Slot", "Slot"}},

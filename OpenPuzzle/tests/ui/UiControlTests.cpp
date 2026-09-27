@@ -354,6 +354,8 @@ int main(int argc, char* argv[]) {
       "Engine............. BitCrack\n"
       "Backend............ CUDA\n"
       "Speed.............. 1487.41 MKey/s\n"
+      "Temperature........ 70.0 C\n"
+      "Power.............. 220.0 W / 245.0 W\n"
       "Progress........... uploaded\n\n"
       "Slot............... opencl\n"
       "Status............. running\n"
@@ -386,6 +388,26 @@ int main(int argc, char* argv[]) {
   assert(statusBadge->property("active").toBool());
   assert(messagesOutput->toPlainText() ==
          messageBeforeStatusRefresh);
+
+  bool temperatureValueVisible = false;
+  bool powerValueVisible = false;
+  bool temperatureLabelVisible = false;
+  bool powerLabelVisible = false;
+  for (auto* label : window.findChildren<QLabel*>()) {
+    temperatureValueVisible =
+        temperatureValueVisible || label->text() == "70.0 C";
+    powerValueVisible =
+        powerValueVisible ||
+        label->text() == "220.0 W / 245.0 W";
+    temperatureLabelVisible =
+        temperatureLabelVisible || label->text() == "Temperature";
+    powerLabelVisible =
+        powerLabelVisible || label->text() == "Power";
+  }
+  assert(temperatureValueVisible);
+  assert(powerValueVisible);
+  assert(temperatureLabelVisible);
+  assert(powerLabelVisible);
 
   refresh->click();
   assert(statusBadge->text() == "Running");

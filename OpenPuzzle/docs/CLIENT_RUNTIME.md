@@ -152,6 +152,15 @@ owns heartbeat telemetry collection; the remaining workers omit the optional
 field and therefore cannot erase or duplicate the shared machine snapshot.
 Thermal enforcement remains disabled unless explicitly configured below.
 
+While a GPU execution is active, `openpuzzle status` appends its safely matched
+temperature and current/configured power immediately after the speed. The Qt
+desktop interface renders those fields in the corresponding runtime card.
+CUDA runtime device indexes map exactly to `cuda-N`; OpenCL is displayed only
+when one physical sensor reading can be associated without ambiguity. CPU,
+missing-sensor and ambiguous-device cards do not gain placeholder readings.
+Status and interface telemetry remain read-only and do not alter the running
+engine or its hardware configuration.
+
 The local configuration also contains a disabled-by-default thermal policy:
 
 ```json

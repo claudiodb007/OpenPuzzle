@@ -1224,6 +1224,23 @@ void MainWindow::rebuildSlotCards(
         createMetric(t("progress"), statusField(slot, "Progress")),
         2, 1);
 
+    const bool hasTemperature =
+        slot.fields.contains("Temperature");
+    const bool hasPower = slot.fields.contains("Power");
+
+    if (hasTemperature || hasPower) {
+      metrics->addWidget(
+          createMetric(
+              t("temperature"),
+              statusField(slot, "Temperature")),
+          3, 0);
+      metrics->addWidget(
+          createMetric(
+              t("power"),
+              statusField(slot, "Power")),
+          3, 1);
+    }
+
     cardLayout->addLayout(metrics);
     slotsLayout_->addWidget(card, 1);
   }

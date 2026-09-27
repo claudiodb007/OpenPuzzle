@@ -12,14 +12,17 @@
   the authenticated Admin Nodes dashboard.
 - Place temperature and power directly beside the speed of the matching active
   GPU assignment, including dynamic `cuda-N` and legacy `primary` slots.
+- Show the same safely matched temperature and power values inside each active
+  GPU card in the Qt desktop interface.
 - Refuse ambiguous physical-device associations instead of showing a reading
   beside the wrong OpenCL or generic GPU slot.
 - Keep the public website and public network-status API free of temperatures,
   power values and physical GPU identifiers.
 - Retain compatibility with clients up to 1.0.28, which omit the optional
   telemetry heartbeat field.
-- Pass all 132 automated client tests, including heartbeat serialization,
-  physical-device deduplication, supervisor ownership and privacy contracts.
+- Pass all 133 automated client tests, including heartbeat serialization,
+  physical-device deduplication, runtime-status selection, desktop presentation,
+  supervisor ownership and privacy contracts.
 
 ## 1.0.28 — GPU telemetry and thermal safety
 

@@ -46,6 +46,12 @@ assigned to the wrong GPU.
 Global temperature and power summary cards are intentionally omitted. The
 per-assignment reading remains the authoritative operational view.
 
+The Qt desktop interface uses the same runtime-slot relationship locally.
+Each active GPU card places temperature and current/configured power directly
+below its speed and progress. CUDA device indexes are exact; an OpenCL reading
+is shown only when its physical vendor association is unique. CPU cards remain
+unchanged, and unavailable or ambiguous sensor values are omitted.
+
 ## Privacy boundary
 
 GPU telemetry is restricted to the authenticated administrative dashboard.
@@ -69,11 +75,11 @@ critical temperature when explicitly configured with `--stop-on-critical`.
 
 BitCrack CUDA and OpenCL, KeyHunt CPU, optional PSCKangaroo routing,
 multi-CUDA supervision, assignment fairness, client identity, the desktop
-interface and the updater contract are unchanged.
+execution controls and the updater contract are unchanged.
 
 ## Validation
 
-The complete client suite contains 132 automated tests. Coverage includes:
+The complete client suite contains 133 automated tests. Coverage includes:
 
 - optional heartbeat serialization and backward compatibility;
 - NVIDIA and AMD physical-device snapshots;
@@ -81,12 +87,13 @@ The complete client suite contains 132 automated tests. Coverage includes:
 - single-supervisor ownership during multi-GPU execution;
 - dynamic CUDA and legacy primary-slot association contracts;
 - ambiguous-device rejection;
+- runtime-status formatting and desktop GPU-card presentation;
 - administrative-only presentation and public API privacy;
 - existing runtime, thermal safety and release contracts.
 
-Production validation confirmed a live CUDA `primary` assignment with its
-temperature, power draw and power limit displayed immediately after the GPU
-speed. The public network-status API remained telemetry-free.
+Production validation confirmed five simultaneous CUDA assignments with each
+temperature, power draw and power limit displayed immediately after its own
+GPU speed. The public network-status API remained telemetry-free.
 
 ## Upgrade and rig validation
 
@@ -112,7 +119,8 @@ On a multi-GPU rig, start all usable CUDA devices with:
       --devices all
 
 Verify that Admin Nodes places one current temperature and power reading after
-the speed of every active `cuda-N` assignment.
+the speed of every active `cuda-N` assignment. Opening `openpuzzle-ui` shows
+the corresponding local readings inside the same five runtime cards.
 
 The portable updater package retains the established identity:
 

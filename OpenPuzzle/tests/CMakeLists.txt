@@ -1679,6 +1679,22 @@ add_test(
 )
 
 add_executable(
+    RuntimeStatusTelemetryTests
+    runtime/RuntimeStatusTelemetryTests.cpp
+)
+
+target_link_libraries(
+    RuntimeStatusTelemetryTests
+    PRIVATE
+        OpenPuzzleCore
+)
+
+add_test(
+    NAME RuntimeStatusTelemetryTests
+    COMMAND RuntimeStatusTelemetryTests
+)
+
+add_executable(
     RuntimeThermalHysteresisTests
     runtime/RuntimeThermalHysteresisTests.cpp
 )

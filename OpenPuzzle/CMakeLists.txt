@@ -126,6 +126,7 @@ add_library(OpenPuzzleCore
     src/scheduler/DefaultSchedulingPolicy.cpp
     src/runtime/RuntimeDispatcher.cpp
     src/runtime/RuntimeCoordinator.cpp
+    src/runtime/RuntimeStatusTelemetry.cpp
     src/runtime/ExecutionPlanner.cpp
     src/runtime/ExecutionRequestBuilder.cpp
     src/runtime/LocalExecutionBackend.cpp
