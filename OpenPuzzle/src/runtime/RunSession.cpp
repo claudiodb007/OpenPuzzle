@@ -815,9 +815,11 @@ int showStatus(const std::vector<std::string> &args) {
 
   std::optional<std::vector<GpuTelemetrySnapshot>>
       telemetrySnapshots;
+  const auto thermalPolicy =
+      ConfigurationManager::load().gpu.thermal;
 
   const auto printGpuTelemetry =
-      [&telemetrySnapshots](
+      [&telemetrySnapshots, &thermalPolicy](
           const client::ClientExecutionState &state) {
         std::string backend = state.backend;
         std::transform(
@@ -843,7 +845,16 @@ int showStatus(const std::vector<std::string> &args) {
                 state.gpuName,
                 *telemetrySnapshots);
 
+        const std::string thermalState =
+            RuntimeStatusTelemetry::thermalStateText(
+                thermalPolicy,
+                snapshot);
+
         if (!snapshot) {
+          std::cout
+              << "Thermal state....... "
+              << thermalState
+              << '\n';
           return;
         }
 
@@ -865,6 +876,11 @@ int showStatus(const std::vector<std::string> &args) {
               << power
               << '\n';
         }
+
+        std::cout
+            << "Thermal state....... "
+            << thermalState
+            << '\n';
       };
 
   std::vector<std::string>

@@ -132,4 +132,15 @@ std::string RuntimeStatusTelemetry::powerText(
   return "limit " + fixed(*snapshot.powerLimitW) + " W";
 }
 
+std::string RuntimeStatusTelemetry::thermalStateText(
+    const GpuThermalPolicyConfiguration &policy,
+    const std::optional<GpuTelemetrySnapshot> &snapshot) {
+  return GpuThermalPolicy::stateName(
+      GpuThermalPolicy::evaluate(
+          policy,
+          snapshot
+              ? snapshot->temperatureC
+              : std::optional<double>{}));
+}
+
 } // namespace openpuzzle

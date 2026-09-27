@@ -18,7 +18,10 @@ log and the file is restricted to the current user.
 
 The dashboard keeps a centered maximum content width on large displays and
 shows puzzle, engine, backend, speed and synchronization progress as separate
-metrics. The raw CLI response remains available in the details panel.
+metrics. GPU cards also show temperature and power plus a localized thermal
+state badge derived from the active policy. Normal is green, warning is amber,
+critical or invalid is red, and disabled or unavailable monitoring is neutral.
+The raw CLI response remains available in the details panel.
 
 The official OpenPuzzle logo and icon are embedded in the desktop executable.
 Users can choose a light interface or the black-and-gold OpenPuzzle theme.
@@ -108,6 +111,8 @@ The status dashboard creates one card per runtime slot, including CUDA,
 OpenCL, CPU/KeyHunt and compatible primary or GPU slots. Command messages and
 the automatically refreshed raw status use separate tabs. Automatic refreshes
 preserve the detailed-status scroll position and never replace command output.
+Thermal badges are shown only when the CLI supplies a GPU thermal state, so CPU
+cards remain unchanged.
 
 The header indicator exposes only two stable states: `Running` with a green
 background while at least one runtime is active (including the short

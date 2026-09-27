@@ -88,6 +88,22 @@ QString statusField(
   return value.isEmpty() ? QStringLiteral("—") : value;
 }
 
+QString thermalStateKey(QString state) {
+  state = state.trimmed().toLower();
+  static const QStringList knownStates = {
+      "disabled",
+      "unavailable",
+      "normal",
+      "warning",
+      "critical",
+      "invalid",
+  };
+
+  return knownStates.contains(state)
+      ? "thermal_state_" + state
+      : QString();
+}
+
 QString systemdQuote(QString value) {
   value.replace("%", "%%");
   value.replace("\\", "\\\\");
@@ -1356,10 +1372,36 @@ void MainWindow::rebuildSlotCards(
       slotName = t("primary_slot");
     }
 
-    auto* title = new QLabel(
-        t("slot") + " " + slotName);
+    auto* cardHeader = new QHBoxLayout;
+    cardHeader->setContentsMargins(0, 0, 0, 0);
+
+    auto* title = new QLabel(t("slot") + " " + slotName);
     title->setObjectName("SlotTitle");
-    cardLayout->addWidget(title);
+    cardHeader->addWidget(title);
+    cardHeader->addStretch();
+
+    const QString rawThermalState =
+        slot.fields.value("Thermal state");
+    const QString thermalKey =
+        thermalStateKey(rawThermalState);
+    if (!rawThermalState.isEmpty()) {
+      auto* thermalBadge = new QLabel(
+          thermalKey.isEmpty()
+              ? rawThermalState
+              : t(thermalKey));
+      thermalBadge->setObjectName("ThermalBadge");
+      thermalBadge->setProperty(
+          "controlId",
+          "thermalStateBadge");
+      thermalBadge->setProperty(
+          "thermalState",
+          rawThermalState.trimmed().toLower());
+      thermalBadge->setAlignment(Qt::AlignCenter);
+      thermalBadge->setToolTip(t("thermal_state"));
+      cardHeader->addWidget(thermalBadge);
+    }
+
+    cardLayout->addLayout(cardHeader);
 
     auto* metrics = new QGridLayout;
     metrics->setContentsMargins(0, 0, 0, 0);

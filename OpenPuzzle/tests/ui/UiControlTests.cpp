@@ -417,6 +417,7 @@ int main(int argc, char* argv[]) {
       "Speed.............. 1487.41 MKey/s\n"
       "Temperature........ 70.0 C\n"
       "Power.............. 220.0 W / 245.0 W\n"
+      "Thermal state....... NORMAL\n"
       "Progress........... uploaded\n\n"
       "Slot............... opencl\n"
       "Status............. running\n"
@@ -454,6 +455,7 @@ int main(int argc, char* argv[]) {
   bool powerValueVisible = false;
   bool temperatureLabelVisible = false;
   bool powerLabelVisible = false;
+  bool thermalStateVisible = false;
   for (auto* label : window.findChildren<QLabel*>()) {
     temperatureValueVisible =
         temperatureValueVisible || label->text() == "70.0 C";
@@ -464,11 +466,20 @@ int main(int argc, char* argv[]) {
         temperatureLabelVisible || label->text() == "Temperature";
     powerLabelVisible =
         powerLabelVisible || label->text() == "Power";
+    thermalStateVisible =
+        thermalStateVisible ||
+        (
+            label->property("controlId").toString() ==
+                "thermalStateBadge" &&
+            label->property("thermalState").toString() ==
+                "normal" &&
+            label->text() == "Normal");
   }
   assert(temperatureValueVisible);
   assert(powerValueVisible);
   assert(temperatureLabelVisible);
   assert(powerLabelVisible);
+  assert(thermalStateVisible);
 
   refresh->click();
   assert(statusBadge->text() == "Running");

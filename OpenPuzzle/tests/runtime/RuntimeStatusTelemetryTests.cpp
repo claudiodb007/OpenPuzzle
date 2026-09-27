@@ -44,6 +44,17 @@ int main() {
   assert(RuntimeStatusTelemetry::powerText(*cuda) ==
          "279.4 W / 280.0 W");
 
+  GpuThermalPolicyConfiguration policy;
+  assert(RuntimeStatusTelemetry::thermalStateText(
+             policy,
+             cuda) == "DISABLED");
+  policy.enabled = true;
+  policy.warningC = 55.0;
+  policy.criticalC = 65.0;
+  assert(RuntimeStatusTelemetry::thermalStateText(
+             policy,
+             cuda) == "WARNING");
+
   GpuTelemetrySnapshot amd =
       reading("AMD", "card1", 1, 81.0, 174.5, 220.0);
   amd.temperatureLabel = "junction";
@@ -59,6 +70,9 @@ int main() {
          "81.0 C (junction)");
   assert(RuntimeStatusTelemetry::powerText(*opencl) ==
          "174.5 W / 220.0 W");
+  assert(RuntimeStatusTelemetry::thermalStateText(
+             policy,
+             opencl) == "CRITICAL");
 
   const auto ambiguous = RuntimeStatusTelemetry::select(
       "OpenCL",
@@ -85,6 +99,10 @@ int main() {
   limitOnly.powerLimitW = 150.0;
   assert(RuntimeStatusTelemetry::temperatureText(limitOnly).empty());
   assert(RuntimeStatusTelemetry::powerText(limitOnly) == "limit 150.0 W");
+
+  assert(RuntimeStatusTelemetry::thermalStateText(
+             policy,
+             std::nullopt) == "UNAVAILABLE");
 
   std::cout << "RuntimeStatusTelemetryTests passed\n";
   return 0;

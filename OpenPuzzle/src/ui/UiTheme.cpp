@@ -74,6 +74,27 @@ QString themeStyleSheet(UiTheme theme) {
       font-size: 15px;
       font-weight: 700;
     }
+    QLabel#ThermalBadge {
+      background: %5;
+      border-radius: 11px;
+      color: %2;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 9px;
+    }
+    QLabel#ThermalBadge[thermalState="normal"] {
+      background: #15803d;
+      color: #ffffff;
+    }
+    QLabel#ThermalBadge[thermalState="warning"] {
+      background: #b45309;
+      color: #ffffff;
+    }
+    QLabel#ThermalBadge[thermalState="critical"],
+    QLabel#ThermalBadge[thermalState="invalid"] {
+      background: #b91c1c;
+      color: #ffffff;
+    }
     QLabel#StatusBadge {
       background: %14;
       border-radius: 13px;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "openpuzzle/hardware/GpuTelemetry.hpp"
+#include "openpuzzle/hardware/GpuThermalPolicy.hpp"
 
 #include <optional>
 #include <string>
@@ -27,6 +28,10 @@ public:
 
   static std::string powerText(
       const GpuTelemetrySnapshot &snapshot);
+
+  static std::string thermalStateText(
+      const GpuThermalPolicyConfiguration &policy,
+      const std::optional<GpuTelemetrySnapshot> &snapshot);
 };
 
 } // namespace openpuzzle

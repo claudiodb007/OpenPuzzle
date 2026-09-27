@@ -33,6 +33,10 @@ int main() {
          "Proteção térmica");
   assert(translated(UiLanguage::English, "save_thermal") ==
          "Save thermal settings");
+  assert(translated(UiLanguage::Portuguese, "thermal_state_warning") ==
+         "Aviso");
+  assert(translated(UiLanguage::French, "thermal_state_critical") ==
+         "Critique");
 
   assert(themeFromCode("unknown") == UiTheme::Light);
   assert(themeFromCode("dark") == UiTheme::Dark);
@@ -56,6 +60,14 @@ int main() {
   assert(dark.contains(
       "QLabel#StatusBadge[active=\"true\"] {\n"
       "      background: #15803d;"));
+  assert(dark.contains(
+      "QLabel#ThermalBadge[thermalState=\"normal\"] {\n"
+      "      background: #15803d;"));
+  assert(dark.contains(
+      "QLabel#ThermalBadge[thermalState=\"warning\"] {\n"
+      "      background: #b45309;"));
+  assert(dark.contains(
+      "QLabel#ThermalBadge[thermalState=\"critical\"],"));
   assert(!dark.contains(
       "QFrame#Card {\n      background: #27351f;"));
 

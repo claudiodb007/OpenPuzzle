@@ -155,6 +155,9 @@ Thermal enforcement remains disabled unless explicitly configured below.
 While a GPU execution is active, `openpuzzle status` appends its safely matched
 temperature and current/configured power immediately after the speed. The Qt
 desktop interface renders those fields in the corresponding runtime card.
+Status also evaluates the persisted thermal policy for that GPU and reports
+`DISABLED`, `UNAVAILABLE`, `NORMAL`, `WARNING`, `CRITICAL` or `INVALID`.
+This evaluation is read-only and does not replace the runtime observer.
 CUDA runtime device indexes map exactly to `cuda-N`; OpenCL is displayed only
 when one physical sensor reading can be associated without ambiguity. CPU,
 missing-sensor and ambiguous-device cards do not gain placeholder readings.
@@ -257,7 +260,10 @@ the runtime contract. Operators can enable monitoring, edit the warning and
 critical thresholds, and select diagnostic-only monitoring or an orderly stop
 at the critical threshold. The same policy validator and private configuration
 file are used by the CLI and UI. Thermal controls are read-only during an
-active execution and saved changes apply to the next GPU runtime.
+active execution and saved changes apply to the next GPU runtime. Every active
+GPU card carries a localized thermal-state badge: green for `NORMAL`, amber for
+`WARNING`, red for `CRITICAL` or `INVALID`, and neutral for disabled or
+unavailable monitoring.
 
 ## Local states
 
