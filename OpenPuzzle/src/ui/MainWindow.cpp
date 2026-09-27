@@ -249,6 +249,25 @@ MainWindow::MainWindow(QWidget* parent)
   refreshStatus();
 }
 
+MainWindow::~MainWindow() {
+  refreshTimer_->stop();
+  statusTimeout_->stop();
+
+  const auto processes = findChildren<QProcess*>();
+  for (auto* process : processes) {
+    QObject::disconnect(process, nullptr, this, nullptr);
+    if (process->state() == QProcess::NotRunning) {
+      continue;
+    }
+
+    process->terminate();
+    if (!process->waitForFinished(500)) {
+      process->kill();
+      process->waitForFinished(1000);
+    }
+  }
+}
+
 void MainWindow::buildInterface() {
   setWindowTitle("OpenPuzzle");
   setMinimumSize(820, 620);

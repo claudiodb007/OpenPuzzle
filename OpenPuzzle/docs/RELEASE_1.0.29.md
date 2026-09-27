@@ -51,6 +51,8 @@ Each active GPU card places temperature and current/configured power directly
 below its speed and progress. CUDA device indexes are exact; an OpenCL reading
 is shown only when its physical vendor association is unique. CPU cards remain
 unchanged, and unavailable or ambiguous sensor values are omitted.
+The interface also stops and reaps an in-flight status refresh during shutdown
+so closing the window cannot leave a child process behind.
 
 ## Privacy boundary
 

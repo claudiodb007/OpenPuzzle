@@ -100,6 +100,8 @@ int main(int argc, char* argv[]) {
   const QString systemctlPath = temporary.filePath("systemctl");
   const QString logPath = temporary.filePath("commands.log");
   const QString statusPath = temporary.filePath("status.txt");
+  const QString statusHoldPath =
+      temporary.filePath("hold-status");
   const QString runtimeLogPath =
       temporary.filePath("ui-runtime.log");
 
@@ -123,6 +125,10 @@ int main(int argc, char* argv[]) {
       << "fi\n"
       << "if [[ \"${1:-}\" == status ]]; then\n"
       << "  cat \"$OPENPUZZLE_TEST_STATUS\"\n"
+      << "  if [[ -f \"$OPENPUZZLE_TEST_STATUS_HOLD\" ]]; then\n"
+      << "    trap 'exit 0' TERM\n"
+      << "    while :; do :; done\n"
+      << "  fi\n"
       << "fi\n";
   script.flush();
   cli.close();
@@ -147,6 +153,9 @@ int main(int argc, char* argv[]) {
   qputenv("OPENPUZZLE_CLI", cliPath.toUtf8());
   qputenv("OPENPUZZLE_TEST_LOG", logPath.toUtf8());
   qputenv("OPENPUZZLE_TEST_STATUS", statusPath.toUtf8());
+  qputenv(
+      "OPENPUZZLE_TEST_STATUS_HOLD",
+      statusHoldPath.toUtf8());
   qputenv(
       "OPENPUZZLE_UI_RUNTIME_LOG",
       runtimeLogPath.toUtf8());
@@ -485,6 +494,17 @@ int main(int argc, char* argv[]) {
   assert(statusBadge->text() == "Stopped");
   assert(!statusBadge->property("active").toBool());
   assert(!start->isEnabled());
+
+  const int statusCallsBeforeShutdown =
+      logContents(logPath).count("status\n");
+  QFile statusHold(statusHoldPath);
+  assert(statusHold.open(QIODevice::WriteOnly));
+  statusHold.close();
+  refresh->click();
+  assert(waitUntil([&]() {
+    return logContents(logPath).count("status\n") >
+           statusCallsBeforeShutdown;
+  }));
 
   return 0;
 }

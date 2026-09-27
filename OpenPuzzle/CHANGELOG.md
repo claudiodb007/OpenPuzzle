@@ -14,6 +14,8 @@
   GPU assignment, including dynamic `cuda-N` and legacy `primary` slots.
 - Show the same safely matched temperature and power values inside each active
   GPU card in the Qt desktop interface.
+- Stop and reap in-flight CLI control processes when the desktop interface
+  closes, including an active status refresh.
 - Refuse ambiguous physical-device associations instead of showing a reading
   beside the wrong OpenCL or generic GPU slot.
 - Keep the public website and public network-status API free of temperatures,
