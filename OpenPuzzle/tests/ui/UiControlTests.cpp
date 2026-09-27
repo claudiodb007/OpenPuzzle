@@ -13,6 +13,7 @@
 #include <QFileInfo>
 #include <QLabel>
 #include <QPlainTextEdit>
+#include <QProcess>
 #include <QPushButton>
 #include <QSettings>
 #include <QStandardPaths>
@@ -494,6 +495,15 @@ int main(int argc, char* argv[]) {
   assert(statusBadge->text() == "Stopped");
   assert(!statusBadge->property("active").toBool());
   assert(!start->isEnabled());
+
+  assert(waitUntil([&window]() {
+    for (auto* process : window.findChildren<QProcess*>()) {
+      if (process->state() != QProcess::NotRunning) {
+        return false;
+      }
+    }
+    return true;
+  }));
 
   const int statusCallsBeforeShutdown =
       logContents(logPath).count("status\n");
