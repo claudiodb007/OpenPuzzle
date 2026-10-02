@@ -195,6 +195,7 @@ MainWindow::MainWindow(QWidget* parent)
 
   buildInterface();
   loadThermalSettings();
+  thermalHistory_.load();
 
   const int savedMode = settings.value(
       "run/mode",
@@ -663,9 +664,33 @@ void MainWindow::buildInterface() {
   runtimeLogOutput_->setMinimumHeight(180);
   runtimeLogOutput_->setMaximumHeight(280);
 
+  auto* thermalHistoryTab = new QWidget;
+  auto* thermalHistoryLayout =
+      new QVBoxLayout(thermalHistoryTab);
+  thermalHistoryLayout->setContentsMargins(0, 0, 0, 0);
+  thermalHistoryLayout->setSpacing(8);
+
+  thermalHistoryOutput_ = new QPlainTextEdit;
+  thermalHistoryOutput_->setProperty(
+      "controlId", "thermalHistoryOutput");
+  thermalHistoryOutput_->setReadOnly(true);
+  thermalHistoryOutput_->setMinimumHeight(180);
+  thermalHistoryOutput_->setMaximumHeight(280);
+  thermalHistoryLayout->addWidget(thermalHistoryOutput_);
+
+  auto* thermalHistoryActions = new QHBoxLayout;
+  thermalHistoryActions->addStretch();
+  clearThermalHistory_ = new QPushButton;
+  clearThermalHistory_->setProperty(
+      "controlId", "clearThermalHistory");
+  clearThermalHistory_->setObjectName("SecondaryButton");
+  thermalHistoryActions->addWidget(clearThermalHistory_);
+  thermalHistoryLayout->addLayout(thermalHistoryActions);
+
   detailsTabs_->addTab(output_, QString());
   detailsTabs_->addTab(statusOutput_, QString());
   detailsTabs_->addTab(runtimeLogOutput_, QString());
+  detailsTabs_->addTab(thermalHistoryTab, QString());
   page->addWidget(detailsTabs_);
   page->addStretch(1);
 
@@ -818,6 +843,11 @@ void MainWindow::buildInterface() {
       this,
       &MainWindow::saveThermalSettings);
   connect(
+      clearThermalHistory_,
+      &QPushButton::clicked,
+      this,
+      &MainWindow::confirmClearThermalHistory);
+  connect(
       language_,
       &QComboBox::currentIndexChanged,
       this,
@@ -964,9 +994,14 @@ void MainWindow::applyLanguage() {
   statusOutput_->setPlaceholderText(t("status_hint"));
   runtimeLogOutput_->setPlaceholderText(
       t("runtime_log_hint"));
+  thermalHistoryOutput_->setPlaceholderText(
+      t("thermal_history_empty"));
+  clearThermalHistory_->setText(
+      t("thermal_history_clear"));
   detailsTabs_->setTabText(0, t("messages"));
   detailsTabs_->setTabText(1, t("status_details"));
   detailsTabs_->setTabText(2, t("runtime_log"));
+  detailsTabs_->setTabText(3, t("thermal_history"));
   statusBar()->showMessage(t("footer"));
 
   updateStatusBadge();
@@ -984,6 +1019,7 @@ void MainWindow::applyLanguage() {
   updateThermalAlerts(
       statusOutput_->toPlainText(),
       false);
+  refreshThermalHistory();
 
   updateSelectionRules();
   updateActionAvailability();
@@ -1563,6 +1599,10 @@ void MainWindow::updateThermalAlerts(
   }
 
   QStringList messages;
+  const bool historySaved = thermalHistory_.append(
+      update.transitions,
+      thermalStopOnCritical_->isChecked());
+  refreshThermalHistory();
   for (const auto& transition : update.transitions) {
     const QString temperature =
         transition.device.temperature.isEmpty()
@@ -1588,7 +1628,89 @@ void MainWindow::updateThermalAlerts(
             .arg(transition.device.name)
             .arg(temperature));
   }
+  if (!historySaved) {
+    messages.push_back(t("thermal_history_save_failed"));
+  }
   statusBar()->showMessage(messages.join(" · "), 10000);
+}
+
+void MainWindow::refreshThermalHistory() {
+  QStringList lines;
+  const auto& entries = thermalHistory_.entries();
+
+  for (auto found = entries.crbegin();
+       found != entries.crend();
+       ++found) {
+    const QString temperature =
+        found->temperature.isEmpty()
+            ? t("unavailable")
+            : found->temperature;
+    QString key;
+    switch (found->kind) {
+    case ThermalAlertTransitionKind::Warning:
+      key = "thermal_transition_warning";
+      break;
+    case ThermalAlertTransitionKind::Critical:
+      key = "thermal_transition_critical";
+      break;
+    case ThermalAlertTransitionKind::Invalid:
+      key = "thermal_transition_invalid";
+      break;
+    case ThermalAlertTransitionKind::Recovered:
+      key = "thermal_transition_recovered";
+      break;
+    }
+
+    QString message = t(key)
+                          .arg(found->deviceName)
+                          .arg(temperature);
+    if (found->kind ==
+        ThermalAlertTransitionKind::Critical) {
+      message += " " + t(
+          found->stopRequested
+              ? "thermal_alert_stop_requested"
+              : "thermal_alert_diagnostic_only");
+    }
+
+    lines.push_back(
+        found->timestampUtc
+                .toLocalTime()
+                .toString(Qt::ISODate) +
+        " — " + message);
+  }
+
+  thermalHistoryOutput_->setPlainText(
+      lines.isEmpty()
+          ? t("thermal_history_empty")
+          : lines.join('\n'));
+  clearThermalHistory_->setEnabled(!entries.isEmpty());
+}
+
+void MainWindow::confirmClearThermalHistory() {
+  if (thermalHistory_.entries().isEmpty()) {
+    return;
+  }
+
+  if (QMessageBox::question(
+          this,
+          t("thermal_history_clear_title"),
+          t("thermal_history_clear_question"),
+          QMessageBox::Yes | QMessageBox::No,
+          QMessageBox::No) != QMessageBox::Yes) {
+    return;
+  }
+
+  if (!thermalHistory_.clear()) {
+    statusBar()->showMessage(
+        t("thermal_history_clear_failed"),
+        10000);
+    return;
+  }
+
+  refreshThermalHistory();
+  statusBar()->showMessage(
+      t("thermal_history_cleared"),
+      5000);
 }
 
 void MainWindow::startExecution() {

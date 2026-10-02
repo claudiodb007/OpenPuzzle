@@ -397,6 +397,8 @@ if(OPENPUZZLE_BUILD_UI)
             src/ui/MainWindow.hpp
             src/ui/ThermalAlerts.cpp
             src/ui/ThermalAlerts.hpp
+            src/ui/ThermalHistory.cpp
+            src/ui/ThermalHistory.hpp
             src/ui/RunCommandBuilder.cpp
             src/ui/UiLanguage.cpp
             src/ui/UiLanguage.hpp

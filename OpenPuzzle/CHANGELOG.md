@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.32 — Local thermal history
+
+- Keep a local history of GPU Warning, Critical, Invalid and recovery
+  transitions in the desktop interface.
+- Record the local timestamp, affected runtime slot, reported temperature and
+  critical-protection action without duplicating unchanged states after an
+  interface restart.
+- Retain only the newest 200 events in a user-readable JSON file protected by
+  owner-only permissions.
+- Add a translated Thermal history tab and a confirmed clear action without
+  sending history data to the coordination server or public API.
+- Pass all 136 automated tests, including persistence, bounded retention,
+  deduplication, file permissions, localization and desktop integration.
+
 ## 1.0.31 — Desktop thermal alerts
 
 - Show a persistent localized warning in the desktop interface when an active

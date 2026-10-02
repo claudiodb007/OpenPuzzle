@@ -99,6 +99,9 @@ int main(int argc, char* argv[]) {
   const QString isolatedConfig = temporary.filePath("config");
   assert(QDir().mkpath(isolatedConfig));
   qputenv("XDG_CONFIG_HOME", isolatedConfig.toUtf8());
+  const QString isolatedData = temporary.filePath("data");
+  assert(QDir().mkpath(isolatedData));
+  qputenv("XDG_DATA_HOME", isolatedData.toUtf8());
 
   const QString cliPath = temporary.filePath("openpuzzle");
   const QString systemctlPath = temporary.filePath("systemctl");
@@ -187,6 +190,10 @@ int main(int argc, char* argv[]) {
       control<QLabel>(window, "thermalAlertTitle");
   auto* thermalAlertMessage =
       control<QLabel>(window, "thermalAlertMessage");
+  auto* thermalHistoryOutput =
+      control<QPlainTextEdit>(window, "thermalHistoryOutput");
+  auto* clearThermalHistory =
+      control<QPushButton>(window, "clearThermalHistory");
   assert(statusBadge != nullptr);
   assert(autoStart != nullptr && !autoStart->isChecked());
   assert(thermalEnabled != nullptr);
@@ -197,7 +204,12 @@ int main(int argc, char* argv[]) {
   assert(thermalAlertBanner != nullptr);
   assert(thermalAlertTitle != nullptr);
   assert(thermalAlertMessage != nullptr);
+  assert(thermalHistoryOutput != nullptr);
+  assert(clearThermalHistory != nullptr);
   assert(thermalAlertBanner->isHidden());
+  assert(thermalHistoryOutput->toPlainText() ==
+         "No thermal events have been recorded.");
+  assert(!clearThermalHistory->isEnabled());
   assert(!thermalEnabled->isChecked());
   assert(thermalWarning->value() == 75.0);
   assert(thermalCritical->value() == 85.0);
@@ -530,9 +542,17 @@ int main(int argc, char* argv[]) {
          "GPU temperature warning");
   assert(thermalAlertMessage->text().contains("CUDA"));
   assert(thermalAlertMessage->text().contains("76.0 C"));
+  assert(thermalHistoryOutput->toPlainText().contains(
+      "CUDA reached the warning temperature (76.0 C)."));
+  assert(clearThermalHistory->isEnabled());
+  assert(QFile::exists(
+      isolatedData +
+      "/OpenPuzzle/thermal-history.json"));
 
   refresh->click();
   assert(statusBadge->text() == "Running");
+  assert(thermalHistoryOutput->toPlainText().count(
+             "reached the warning temperature") == 1);
 
   assert(statusFile.open(
       QIODevice::WriteOnly |

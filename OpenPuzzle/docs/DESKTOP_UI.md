@@ -32,6 +32,17 @@ whether the active policy requested an orderly stop or is diagnostic-only.
 These alerts remain entirely local and do not change clocks, fans or power
 limits.
 
+Every warning, critical, invalid-sensor and recovery transition is also added
+to the Thermal history tab with its local time, runtime slot, reported
+temperature and the critical-protection action in effect at that moment. The
+history survives interface restarts, retains only the newest 200 events and
+does not duplicate an unchanged device state when the interface is reopened.
+It is stored with user-only permissions in
+`~/.local/share/OpenPuzzle/thermal-history.json`. A translated Clear thermal
+history action removes the complete local file after explicit confirmation.
+The history is never included in heartbeats, the private server dashboard or
+the public network-status API.
+
 The official OpenPuzzle logo and icon are embedded in the desktop executable.
 Users can choose a light interface or the black-and-gold OpenPuzzle theme.
 Theme and language preferences are stored locally. English is the default;

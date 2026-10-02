@@ -3,6 +3,7 @@
 #include "UiLanguage.hpp"
 #include "UiTheme.hpp"
 #include "ThermalAlerts.hpp"
+#include "ThermalHistory.hpp"
 #include "openpuzzle/ui/RunCommandBuilder.hpp"
 
 #include <QMainWindow>
@@ -57,6 +58,8 @@ private:
   void updateThermalAlerts(
       const QString& statusOutput,
       bool announceTransitions = true);
+  void refreshThermalHistory();
+  void confirmClearThermalHistory();
   void startExecution();
   void runCommand(
       const QString& titleKey,
@@ -119,6 +122,8 @@ private:
   QPlainTextEdit* output_ = nullptr;
   QPlainTextEdit* statusOutput_ = nullptr;
   QPlainTextEdit* runtimeLogOutput_ = nullptr;
+  QPlainTextEdit* thermalHistoryOutput_ = nullptr;
+  QPushButton* clearThermalHistory_ = nullptr;
   QTabWidget* detailsTabs_ = nullptr;
   QProcess* statusProcess_ = nullptr;
   QTimer* refreshTimer_ = nullptr;
@@ -130,6 +135,7 @@ private:
   bool cliAvailable_ = true;
   QString lastSolutionNoticeId_;
   ThermalAlertTracker thermalAlertTracker_;
+  ThermalHistoryStore thermalHistory_;
   UiLanguage currentLanguage_ = UiLanguage::English;
   UiTheme currentTheme_ = UiTheme::Light;
 };

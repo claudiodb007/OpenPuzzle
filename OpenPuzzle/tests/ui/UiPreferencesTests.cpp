@@ -45,6 +45,14 @@ int main() {
              UiLanguage::English,
              "thermal_transition_recovered") ==
          "%1 returned to a normal temperature (%2).");
+  assert(translated(
+             UiLanguage::Portuguese,
+             "thermal_history") ==
+         "Histórico térmico");
+  assert(translated(
+             UiLanguage::French,
+             "thermal_history_clear") ==
+         "Effacer l’historique thermique");
 
   assert(themeFromCode("unknown") == UiTheme::Light);
   assert(themeFromCode("dark") == UiTheme::Dark);
