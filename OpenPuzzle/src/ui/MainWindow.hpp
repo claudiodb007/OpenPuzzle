@@ -2,6 +2,7 @@
 
 #include "UiLanguage.hpp"
 #include "UiTheme.hpp"
+#include "ThermalAlerts.hpp"
 #include "openpuzzle/ui/RunCommandBuilder.hpp"
 
 #include <QMainWindow>
@@ -10,6 +11,7 @@
 class QComboBox;
 class QCheckBox;
 class QDoubleSpinBox;
+class QFrame;
 class QHBoxLayout;
 class QLabel;
 class QPlainTextEdit;
@@ -52,6 +54,9 @@ private:
   QString runtimeLogPath() const;
   QString systemctlExecutable() const;
   void rebuildSlotCards(const QString& statusOutput);
+  void updateThermalAlerts(
+      const QString& statusOutput,
+      bool announceTransitions = true);
   void startExecution();
   void runCommand(
       const QString& titleKey,
@@ -75,6 +80,9 @@ private:
   QLabel* thermalCriticalName_ = nullptr;
   QLabel* detailsTitle_ = nullptr;
   QLabel* statusBadge_ = nullptr;
+  QFrame* thermalAlertBanner_ = nullptr;
+  QLabel* thermalAlertTitle_ = nullptr;
+  QLabel* thermalAlertMessage_ = nullptr;
   QLabel* summary_ = nullptr;
   QLabel* puzzleName_ = nullptr;
   QLabel* modeName_ = nullptr;
@@ -121,6 +129,7 @@ private:
   bool busy_ = false;
   bool cliAvailable_ = true;
   QString lastSolutionNoticeId_;
+  ThermalAlertTracker thermalAlertTracker_;
   UiLanguage currentLanguage_ = UiLanguage::English;
   UiTheme currentTheme_ = UiTheme::Light;
 };

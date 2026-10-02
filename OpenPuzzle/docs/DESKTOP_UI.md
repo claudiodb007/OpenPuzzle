@@ -23,6 +23,15 @@ state badge derived from the active policy. Normal is green, warning is amber,
 critical or invalid is red, and disabled or unavailable monitoring is neutral.
 The raw CLI response remains available in the details panel.
 
+When an active GPU enters Warning, Critical or Invalid state, the interface
+shows a persistent alert above the runtime dashboard with the affected slot and
+temperature. A transition is announced once in the interface status bar;
+three-second polling does not repeat it. The alert disappears when every GPU
+returns to Normal, and that recovery is announced once. Critical alerts state
+whether the active policy requested an orderly stop or is diagnostic-only.
+These alerts remain entirely local and do not change clocks, fans or power
+limits.
+
 The official OpenPuzzle logo and icon are embedded in the desktop executable.
 Users can choose a light interface or the black-and-gold OpenPuzzle theme.
 Theme and language preferences are stored locally. English is the default;

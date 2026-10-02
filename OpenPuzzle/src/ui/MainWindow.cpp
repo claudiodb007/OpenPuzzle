@@ -104,6 +104,21 @@ QString thermalStateKey(QString state) {
       : QString();
 }
 
+QString thermalAlertLevelName(
+    const ThermalAlertLevel level) {
+  switch (level) {
+  case ThermalAlertLevel::Critical:
+    return QStringLiteral("critical");
+  case ThermalAlertLevel::Invalid:
+    return QStringLiteral("invalid");
+  case ThermalAlertLevel::Warning:
+    return QStringLiteral("warning");
+  case ThermalAlertLevel::None:
+  default:
+    return QStringLiteral("none");
+  }
+}
+
 QString systemdQuote(QString value) {
   value.replace("%", "%%");
   value.replace("\\", "\\\\");
@@ -367,6 +382,32 @@ void MainWindow::buildInterface() {
   statusBadge_->setAlignment(Qt::AlignCenter);
   header->addWidget(statusBadge_);
   page->addLayout(header);
+
+  thermalAlertBanner_ = new QFrame;
+  thermalAlertBanner_->setObjectName("ThermalAlertBanner");
+  thermalAlertBanner_->setProperty(
+      "controlId", "thermalAlertBanner");
+  thermalAlertBanner_->setProperty(
+      "thermalAlertLevel", "none");
+  auto* thermalAlertLayout =
+      new QVBoxLayout(thermalAlertBanner_);
+  thermalAlertLayout->setContentsMargins(16, 12, 16, 12);
+  thermalAlertLayout->setSpacing(4);
+
+  thermalAlertTitle_ = new QLabel;
+  thermalAlertTitle_->setObjectName("ThermalAlertTitle");
+  thermalAlertTitle_->setProperty(
+      "controlId", "thermalAlertTitle");
+  thermalAlertMessage_ = new QLabel;
+  thermalAlertMessage_->setObjectName("ThermalAlertMessage");
+  thermalAlertMessage_->setProperty(
+      "controlId", "thermalAlertMessage");
+  thermalAlertMessage_->setWordWrap(true);
+
+  thermalAlertLayout->addWidget(thermalAlertTitle_);
+  thermalAlertLayout->addWidget(thermalAlertMessage_);
+  thermalAlertBanner_->setVisible(false);
+  page->addWidget(thermalAlertBanner_);
 
   auto* stateCard = new QFrame;
   stateCard->setObjectName("Card");
@@ -940,6 +981,9 @@ void MainWindow::applyLanguage() {
           : t("safe_stop_hint"));
 
   rebuildSlotCards(statusOutput_->toPlainText());
+  updateThermalAlerts(
+      statusOutput_->toPlainText(),
+      false);
 
   updateSelectionRules();
   updateActionAvailability();
@@ -1057,6 +1101,7 @@ void MainWindow::handleStatusResult() {
 
   setTextPreservingScroll(statusOutput_, result);
   refreshRuntimeLog();
+  updateThermalAlerts(result);
 
   const auto runtimeSlots = parseRuntimeSlots(result);
   QString solutionAssignmentId;
@@ -1456,6 +1501,94 @@ void MainWindow::rebuildSlotCards(
   }
 
   slotsHost_->setVisible(slotsLayout_->count() > 0);
+}
+
+void MainWindow::updateThermalAlerts(
+    const QString& statusOutput,
+    const bool announceTransitions) {
+  const ThermalAlertUpdate update =
+      thermalAlertTracker_.update(statusOutput);
+
+  if (update.level == ThermalAlertLevel::None) {
+    thermalAlertBanner_->setVisible(false);
+  } else {
+    QString titleKey;
+    switch (update.level) {
+    case ThermalAlertLevel::Critical:
+      titleKey = "thermal_alert_critical_title";
+      break;
+    case ThermalAlertLevel::Invalid:
+      titleKey = "thermal_alert_invalid_title";
+      break;
+    case ThermalAlertLevel::Warning:
+      titleKey = "thermal_alert_warning_title";
+      break;
+    case ThermalAlertLevel::None:
+      break;
+    }
+
+    QStringList deviceDescriptions;
+    for (const auto& device : update.activeDevices) {
+      QString description = device.name;
+      if (!device.temperature.isEmpty()) {
+        description += " — " + device.temperature;
+      }
+      deviceDescriptions.push_back(description);
+    }
+
+    QString message = deviceDescriptions.join(" · ");
+    if (update.level == ThermalAlertLevel::Critical) {
+      message += "\n" + t(
+          thermalStopOnCritical_->isChecked()
+              ? "thermal_alert_stop_requested"
+              : "thermal_alert_diagnostic_only");
+    } else if (update.level == ThermalAlertLevel::Invalid) {
+      message += "\n" + t("thermal_alert_invalid_message");
+    }
+
+    thermalAlertTitle_->setText(t(titleKey));
+    thermalAlertMessage_->setText(message);
+    thermalAlertBanner_->setProperty(
+        "thermalAlertLevel",
+        thermalAlertLevelName(update.level));
+    thermalAlertBanner_->style()->unpolish(
+        thermalAlertBanner_);
+    thermalAlertBanner_->style()->polish(
+        thermalAlertBanner_);
+    thermalAlertBanner_->setVisible(true);
+  }
+
+  if (!announceTransitions || update.transitions.isEmpty()) {
+    return;
+  }
+
+  QStringList messages;
+  for (const auto& transition : update.transitions) {
+    const QString temperature =
+        transition.device.temperature.isEmpty()
+            ? t("unavailable")
+            : transition.device.temperature;
+    QString key;
+    switch (transition.kind) {
+    case ThermalAlertTransitionKind::Warning:
+      key = "thermal_transition_warning";
+      break;
+    case ThermalAlertTransitionKind::Critical:
+      key = "thermal_transition_critical";
+      break;
+    case ThermalAlertTransitionKind::Invalid:
+      key = "thermal_transition_invalid";
+      break;
+    case ThermalAlertTransitionKind::Recovered:
+      key = "thermal_transition_recovered";
+      break;
+    }
+    messages.push_back(
+        t(key)
+            .arg(transition.device.name)
+            .arg(temperature));
+  }
+  statusBar()->showMessage(messages.join(" · "), 10000);
 }
 
 void MainWindow::startExecution() {

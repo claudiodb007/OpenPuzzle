@@ -181,6 +181,12 @@ int main(int argc, char* argv[]) {
       control<QDoubleSpinBox>(window, "thermalCritical");
   auto* saveThermal =
       control<QPushButton>(window, "saveThermal");
+  auto* thermalAlertBanner =
+      control<QWidget>(window, "thermalAlertBanner");
+  auto* thermalAlertTitle =
+      control<QLabel>(window, "thermalAlertTitle");
+  auto* thermalAlertMessage =
+      control<QLabel>(window, "thermalAlertMessage");
   assert(statusBadge != nullptr);
   assert(autoStart != nullptr && !autoStart->isChecked());
   assert(thermalEnabled != nullptr);
@@ -188,6 +194,10 @@ int main(int argc, char* argv[]) {
   assert(thermalWarning != nullptr);
   assert(thermalCritical != nullptr);
   assert(saveThermal != nullptr);
+  assert(thermalAlertBanner != nullptr);
+  assert(thermalAlertTitle != nullptr);
+  assert(thermalAlertMessage != nullptr);
+  assert(thermalAlertBanner->isHidden());
   assert(!thermalEnabled->isChecked());
   assert(thermalWarning->value() == 75.0);
   assert(thermalCritical->value() == 85.0);
@@ -480,9 +490,7 @@ int main(int argc, char* argv[]) {
   assert(temperatureLabelVisible);
   assert(powerLabelVisible);
   assert(thermalStateVisible);
-
-  refresh->click();
-  assert(statusBadge->text() == "Running");
+  assert(thermalAlertBanner->isHidden());
 
   auto* statusOutput =
       control<QPlainTextEdit>(window, "statusOutput");
@@ -491,6 +499,40 @@ int main(int argc, char* argv[]) {
       "Slot............... cuda"));
   assert(statusOutput->toPlainText().contains(
       "Slot............... opencl"));
+
+  assert(statusFile.open(
+      QIODevice::WriteOnly |
+      QIODevice::Truncate |
+      QIODevice::Text));
+  statusFile.write(
+      "OpenPuzzle Status\n"
+      "-----------------\n\n"
+      "Slot............... cuda\n"
+      "Status............. running\n"
+      "Assignment......... cuda-id\n"
+      "Puzzle............. 71\n"
+      "Engine............. BitCrack\n"
+      "Backend............ CUDA\n"
+      "Temperature........ 76.0 C\n"
+      "Power.............. 220.0 W / 245.0 W\n"
+      "Thermal state....... WARNING\n"
+      "Progress........... uploaded\n");
+  statusFile.close();
+  refresh->click();
+  assert(waitUntil([thermalAlertBanner]() {
+    return !thermalAlertBanner->isHidden();
+  }));
+  assert(
+      thermalAlertBanner
+          ->property("thermalAlertLevel")
+          .toString() == "warning");
+  assert(thermalAlertTitle->text() ==
+         "GPU temperature warning");
+  assert(thermalAlertMessage->text().contains("CUDA"));
+  assert(thermalAlertMessage->text().contains("76.0 C"));
+
+  refresh->click();
+  assert(statusBadge->text() == "Running");
 
   assert(statusFile.open(
       QIODevice::WriteOnly |
@@ -511,7 +553,7 @@ int main(int argc, char* argv[]) {
   statusFile.close();
   refresh->click();
 
-  assert(waitUntil([&window]() {
+  assert(waitUntil([&window, statusOutput]() {
     int slotCount = 0;
     for (auto* widget : window.findChildren<QWidget*>()) {
       if (widget->property("controlId").toString() ==
@@ -519,7 +561,9 @@ int main(int argc, char* argv[]) {
         ++slotCount;
       }
     }
-    return slotCount == 1;
+    return slotCount == 1 &&
+        statusOutput->toPlainText().contains(
+            "Engine............. KeyHunt");
   }));
   assert(statusOutput->toPlainText().contains(
       "Engine............. KeyHunt"));

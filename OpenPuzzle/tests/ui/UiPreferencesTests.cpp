@@ -37,6 +37,14 @@ int main() {
          "Aviso");
   assert(translated(UiLanguage::French, "thermal_state_critical") ==
          "Critique");
+  assert(translated(
+             UiLanguage::Portuguese,
+             "thermal_alert_warning_title") ==
+         "Aviso de temperatura da GPU");
+  assert(translated(
+             UiLanguage::English,
+             "thermal_transition_recovered") ==
+         "%1 returned to a normal temperature (%2).");
 
   assert(themeFromCode("unknown") == UiTheme::Light);
   assert(themeFromCode("dark") == UiTheme::Dark);
@@ -68,6 +76,10 @@ int main() {
       "      background: #b45309;"));
   assert(dark.contains(
       "QLabel#ThermalBadge[thermalState=\"critical\"],"));
+  assert(dark.contains(
+      "QFrame#ThermalAlertBanner[thermalAlertLevel=\"warning\"]"));
+  assert(dark.contains(
+      "QFrame#ThermalAlertBanner[thermalAlertLevel=\"critical\"]"));
   assert(!dark.contains(
       "QFrame#Card {\n      background: #27351f;"));
 

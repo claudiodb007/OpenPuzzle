@@ -77,10 +77,33 @@ if(TARGET OpenPuzzleUi)
         COMMAND UiThermalSettingsTests
     )
 
+    add_executable(UiThermalAlertsTests
+        ui/UiThermalAlertsTests.cpp
+        ../src/ui/ThermalAlerts.cpp
+        ../src/ui/ThermalAlerts.hpp
+    )
+
+    target_include_directories(UiThermalAlertsTests
+        PRIVATE
+            ../src/ui
+    )
+
+    target_link_libraries(UiThermalAlertsTests
+        PRIVATE
+            Qt6::Core
+    )
+
+    add_test(
+        NAME UiThermalAlertsTests
+        COMMAND UiThermalAlertsTests
+    )
+
     add_executable(UiControlTests
         ui/UiControlTests.cpp
         ../src/ui/MainWindow.cpp
         ../src/ui/MainWindow.hpp
+        ../src/ui/ThermalAlerts.cpp
+        ../src/ui/ThermalAlerts.hpp
         ../src/ui/RunCommandBuilder.cpp
         ../src/ui/UiLanguage.cpp
         ../src/ui/UiLanguage.hpp

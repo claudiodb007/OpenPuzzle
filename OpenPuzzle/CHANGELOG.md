@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — Desktop thermal alerts
+
+- Show a persistent localized warning in the desktop interface when an active
+  GPU enters Warning, Critical or Invalid thermal state.
+- Identify every affected runtime slot and its reported temperature directly
+  above the runtime dashboard.
+- Announce warning, critical, invalid-sensor and recovery transitions once,
+  without repeating notifications during three-second status polling.
+- State whether a critical condition requested the configured orderly stop or
+  remained diagnostic-only.
+- Keep alerts local and read-only without changing GPU fans, clocks or power
+  limits.
+
 ## 1.0.30 — Desktop thermal safety controls
 
 - Add desktop controls for enabling or disabling the persisted GPU thermal

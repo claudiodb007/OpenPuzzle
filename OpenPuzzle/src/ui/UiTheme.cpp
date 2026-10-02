@@ -95,6 +95,32 @@ QString themeStyleSheet(UiTheme theme) {
       background: #b91c1c;
       color: #ffffff;
     }
+    QFrame#ThermalAlertBanner {
+      background: %9;
+      border: 1px solid %3;
+      border-radius: 10px;
+    }
+    QFrame#ThermalAlertBanner[thermalAlertLevel="warning"] {
+      background: #78350f;
+      border-color: #d97706;
+    }
+    QFrame#ThermalAlertBanner[thermalAlertLevel="critical"] {
+      background: #7f1d1d;
+      border-color: #ef4444;
+    }
+    QFrame#ThermalAlertBanner[thermalAlertLevel="invalid"] {
+      background: #581c87;
+      border-color: #a855f7;
+    }
+    QLabel#ThermalAlertTitle {
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 750;
+    }
+    QLabel#ThermalAlertMessage {
+      color: #ffffff;
+      font-size: 13px;
+    }
     QLabel#StatusBadge {
       background: %14;
       border-radius: 13px;
