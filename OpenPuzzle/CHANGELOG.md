@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — Desktop thermal alerts
+## 1.0.31 — Desktop thermal alerts
 
 - Show a persistent localized warning in the desktop interface when an active
   GPU enters Warning, Critical or Invalid thermal state.
@@ -12,6 +12,8 @@
   remained diagnostic-only.
 - Keep alerts local and read-only without changing GPU fans, clocks or power
   limits.
+- Pass all 135 automated tests, including alert parsing, transition
+  deduplication, recovery, localization and desktop control integration.
 
 ## 1.0.30 — Desktop thermal safety controls
 
