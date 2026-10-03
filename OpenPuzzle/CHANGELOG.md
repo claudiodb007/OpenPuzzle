@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.33 — Multi-GPU telemetry recovery and thermal-history safety
+
+- Transfer private GPU heartbeat telemetry collection to a surviving worker
+  when the current multi-GPU telemetry owner exits, without restarting a GPU
+  worker or interrupting unrelated assignments.
+- Keep the shared machine sensor snapshot fresh while remaining GPUs continue;
+  the server API, assignment protocol and public telemetry boundary are unchanged.
+- Preserve an unreadable local thermal-history file rather than replacing it
+  with an empty history, and show an actionable error in the desktop interface.
+- Pass all 137 automated client tests, including forked ownership transfer and
+  unreadable-history handling. Validate the CUDA ownership handoff on a live
+  two-GPU rig: the first worker stopped orderly, the second continued its
+  assignment and private telemetry rows received fresh readings.
+
 ## 1.0.32 — Local thermal history
 
 - Keep a local history of GPU Warning, Critical, Invalid and recovery
