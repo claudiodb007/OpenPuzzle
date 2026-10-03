@@ -36,6 +36,7 @@
 #include "openpuzzle/runtime/RunBenchmarkPreparation.hpp"
 #include "openpuzzle/runtime/RuntimeStatusTelemetry.hpp"
 #include "openpuzzle/runtime/RuntimeThermalObserver.hpp"
+#include "openpuzzle/runtime/SharedTelemetryOwner.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 #include "openpuzzle/workers/WorkerEngineCapability.hpp"
@@ -1909,6 +1910,8 @@ int runMultiGpu(
         "Critical GPU temperature blocked multi-GPU startup");
   }
 
+  SharedTelemetryOwner telemetryOwner;
+
   for (std::size_t workerIndex = 0;
        workerIndex < workers.size();
        ++workerIndex) {
@@ -1916,6 +1919,10 @@ int runMultiGpu(
     worker.pid = fork();
 
     if (worker.pid == 0) {
+      client::ClientHeartbeatService::setSharedTelemetryOwner(
+          telemetryOwner.state(),
+          static_cast<int>(workerIndex));
+
       if (setenv(
               "OPENPUZZLE_EXECUTION_SLOT",
               worker.slot.c_str(),
@@ -2082,6 +2089,20 @@ int runMultiGpu(
     const auto workerIndex = found->second;
     const auto& worker = workers[workerIndex];
     remaining.erase(found);
+
+    if (telemetryOwner.index() ==
+            static_cast<int>(workerIndex) &&
+        !remaining.empty()) {
+      const auto next =
+          std::min_element(
+              remaining.begin(),
+              remaining.end(),
+              [](const auto& left, const auto& right) {
+                return left.second < right.second;
+              });
+      telemetryOwner.promote(
+          static_cast<int>(next->second));
+    }
 
     const int exitCode =
         WIFEXITED(status)

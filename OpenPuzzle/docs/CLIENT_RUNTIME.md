@@ -150,6 +150,8 @@ Administrative reporting does not enable the thermal policy and never changes
 clocks, fans or power limits. In supervised multi-GPU mode, exactly one worker
 owns heartbeat telemetry collection; the remaining workers omit the optional
 field and therefore cannot erase or duplicate the shared machine snapshot.
+If that worker exits, the supervisor transfers ownership to one surviving
+worker. A failed worker is not restarted and no GPU reset is attempted.
 Thermal enforcement remains disabled unless explicitly configured below.
 
 While a GPU execution is active, `openpuzzle status` appends its safely matched

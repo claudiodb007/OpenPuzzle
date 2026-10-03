@@ -24,6 +24,9 @@ namespace openpuzzle::client {
 
 namespace {
 
+const std::atomic<int>* sharedTelemetryOwner = nullptr;
+int telemetryWorkerIndex = -1;
+
 std::string trim(
     std::string value) {
   while (!value.empty() &&
@@ -104,6 +107,13 @@ bool processIdentityMatches(
 }
 
 } // namespace
+
+void ClientHeartbeatService::setSharedTelemetryOwner(
+    const std::atomic<int>* owner,
+    int workerIndex) {
+  sharedTelemetryOwner = owner;
+  telemetryWorkerIndex = workerIndex;
+}
 
 std::string
 ClientHeartbeatService::platform() {
@@ -297,6 +307,12 @@ ClientHeartbeatService::telemetry() {
 }
 
 bool ClientHeartbeatService::shouldCollectTelemetry() {
+  if (sharedTelemetryOwner != nullptr) {
+    return sharedTelemetryOwner->load(
+               std::memory_order_acquire) ==
+           telemetryWorkerIndex;
+  }
+
   const char* owner =
       std::getenv(TelemetryOwnerEnvironment);
 

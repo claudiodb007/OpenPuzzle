@@ -1424,6 +1424,17 @@ add_test(
     COMMAND ClientHeartbeatServiceTests
 )
 
+add_executable(SharedTelemetryOwnerTests
+    runtime/SharedTelemetryOwnerTests.cpp
+)
+target_include_directories(SharedTelemetryOwnerTests
+    PRIVATE ../include
+)
+add_test(
+    NAME SharedTelemetryOwnerTests
+    COMMAND SharedTelemetryOwnerTests
+)
+
 add_executable(ClientGpuTelemetryTests
     client/ClientGpuTelemetryTests.cpp
 )

@@ -3,6 +3,7 @@
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <cstdlib>
 #include <filesystem>
@@ -165,6 +166,17 @@ int main() {
   assert(nonOwnerHeartbeat.valid());
   assert(!nonOwnerHeartbeat.gpuTelemetryReported);
   assert(nonOwnerHeartbeat.gpuTelemetry.empty());
+
+  std::atomic<int> sharedOwner{0};
+  ClientHeartbeatService::setSharedTelemetryOwner(
+      &sharedOwner, 1);
+  assert(!ClientHeartbeatService::collectLocalHeartbeat()
+              .gpuTelemetryReported);
+  sharedOwner.store(1, std::memory_order_release);
+  assert(ClientHeartbeatService::collectLocalHeartbeat()
+             .gpuTelemetryReported);
+  ClientHeartbeatService::setSharedTelemetryOwner(
+      nullptr, -1);
 
   if (hadTelemetryOwner) {
     assert(

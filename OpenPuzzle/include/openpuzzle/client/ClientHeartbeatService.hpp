@@ -4,6 +4,7 @@
 #include "openpuzzle/hardware/GpuInfo.hpp"
 #include "openpuzzle/hardware/GpuTelemetry.hpp"
 
+#include <atomic>
 #include <string>
 
 namespace openpuzzle::client {
@@ -18,6 +19,11 @@ class ClientHeartbeatService {
 public:
   static constexpr const char* TelemetryOwnerEnvironment =
       "OPENPUZZLE_HEARTBEAT_TELEMETRY_OWNER";
+
+  // Called in a supervised worker after fork, before its first heartbeat.
+  static void setSharedTelemetryOwner(
+      const std::atomic<int>* owner,
+      int workerIndex);
 
   ClientHeartbeatResult send(
       const std::string& serverUrl) const;
