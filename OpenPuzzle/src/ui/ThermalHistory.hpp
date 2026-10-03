@@ -33,6 +33,7 @@ public:
 
   const QVector<ThermalHistoryEntry>& entries() const;
   QString path() const;
+  bool needsRecovery() const;
 
   static QString defaultPath();
 
@@ -44,6 +45,7 @@ private:
   QString path_;
   int maximumEntries_ = 200;
   QVector<ThermalHistoryEntry> entries_;
+  bool needsRecovery_ = false;
 };
 
 } // namespace openpuzzle::ui

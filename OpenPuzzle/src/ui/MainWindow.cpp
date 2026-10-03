@@ -1680,14 +1680,19 @@ void MainWindow::refreshThermalHistory() {
   }
 
   thermalHistoryOutput_->setPlainText(
-      lines.isEmpty()
-          ? t("thermal_history_empty")
-          : lines.join('\n'));
-  clearThermalHistory_->setEnabled(!entries.isEmpty());
+      thermalHistory_.needsRecovery()
+          ? t("thermal_history_recovery")
+          : (lines.isEmpty()
+                 ? t("thermal_history_empty")
+                 : lines.join('\n')));
+  clearThermalHistory_->setEnabled(
+      !entries.isEmpty() ||
+      thermalHistory_.needsRecovery());
 }
 
 void MainWindow::confirmClearThermalHistory() {
-  if (thermalHistory_.entries().isEmpty()) {
+  if (thermalHistory_.entries().isEmpty() &&
+      !thermalHistory_.needsRecovery()) {
     return;
   }
 

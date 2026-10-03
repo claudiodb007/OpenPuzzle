@@ -110,6 +110,45 @@ int main() {
   assert(restored.entries().isEmpty());
   assert(!QFile::exists(path));
 
+  const auto verifyUnreadableHistory = [&](const QByteArray& contents) {
+    QFile original(path);
+    assert(original.open(QIODevice::WriteOnly));
+    assert(original.write(contents) == contents.size());
+    original.close();
+
+    ThermalHistoryStore protectedHistory(path, 3);
+    assert(!protectedHistory.load());
+    assert(protectedHistory.needsRecovery());
+    assert(!protectedHistory.append(
+        {transition(
+            ThermalAlertTransitionKind::Warning,
+            "CUDA-0",
+            "77.0 C")},
+        false,
+        first));
+
+    QFile preserved(path);
+    assert(preserved.open(QIODevice::ReadOnly));
+    assert(preserved.readAll() == contents);
+    preserved.close();
+
+    assert(protectedHistory.clear());
+    assert(!protectedHistory.needsRecovery());
+    assert(protectedHistory.append(
+        {transition(
+            ThermalAlertTransitionKind::Warning,
+            "CUDA-0",
+            "77.0 C")},
+        false,
+        first));
+    assert(protectedHistory.entries().size() == 1);
+    assert(protectedHistory.clear());
+  };
+
+  verifyUnreadableHistory("{malformed JSON");
+  verifyUnreadableHistory(
+      "{\"version\":2,\"entries\":[]}");
+
   std::cout << "UiThermalHistoryTests passed\n";
   return 0;
 }

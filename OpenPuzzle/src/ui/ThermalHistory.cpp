@@ -60,13 +60,14 @@ ThermalHistoryStore::ThermalHistoryStore(
       maximumEntries_(qMax(1, maximumEntries)) {}
 
 bool ThermalHistoryStore::load() {
-  entries_.clear();
-
   QFile file(path_);
   if (!file.exists()) {
+    entries_.clear();
+    needsRecovery_ = false;
     return true;
   }
   if (!file.open(QIODevice::ReadOnly)) {
+    needsRecovery_ = true;
     return false;
   }
 
@@ -75,12 +76,14 @@ bool ThermalHistoryStore::load() {
       QJsonDocument::fromJson(file.readAll(), &error);
   if (error.error != QJsonParseError::NoError ||
       !document.isObject()) {
+    needsRecovery_ = true;
     return false;
   }
 
   const QJsonObject root = document.object();
   if (root.value("version").toInt() != 1 ||
       !root.value("entries").isArray()) {
+    needsRecovery_ = true;
     return false;
   }
 
@@ -121,6 +124,7 @@ bool ThermalHistoryStore::load() {
         loaded.size() - maximumEntries_);
   }
   entries_ = std::move(loaded);
+  needsRecovery_ = false;
   return true;
 }
 
@@ -130,6 +134,10 @@ bool ThermalHistoryStore::append(
     const QDateTime& timestampUtc) {
   if (transitions.isEmpty()) {
     return true;
+  }
+
+  if (needsRecovery_) {
+    return false;
   }
 
   const QVector<ThermalHistoryEntry> previous = entries_;
@@ -174,6 +182,7 @@ bool ThermalHistoryStore::clear() {
     return false;
   }
   entries_.clear();
+  needsRecovery_ = false;
   return true;
 }
 
@@ -184,6 +193,10 @@ ThermalHistoryStore::entries() const {
 
 QString ThermalHistoryStore::path() const {
   return path_;
+}
+
+bool ThermalHistoryStore::needsRecovery() const {
+  return needsRecovery_;
 }
 
 QString ThermalHistoryStore::defaultPath() {

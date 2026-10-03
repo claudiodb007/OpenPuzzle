@@ -53,6 +53,10 @@ int main() {
              UiLanguage::French,
              "thermal_history_clear") ==
          "Effacer l’historique thermique");
+  assert(translated(
+             UiLanguage::Portuguese,
+             "thermal_history_recovery")
+             .contains("O ficheiro foi preservado"));
 
   assert(themeFromCode("unknown") == UiTheme::Light);
   assert(themeFromCode("dark") == UiTheme::Dark);

@@ -155,3 +155,12 @@ private key, and repeated status polling does not repeat the same notification.
 Safe Stop is disabled while Kangaroo is active because that workload has no
 bounded range completion point. `Parar agora` invokes the existing controlled
 stop path and preserves any checkpoint produced by the engine.
+# Thermal history recovery
+
+If the local thermal history cannot be read (for example, damaged JSON or an
+unknown future format), the interface retains the original file and does not
+overwrite it when another thermal transition occurs. The Thermal history tab
+shows the problem and enables the existing, confirmed Clear action even when
+no entries can be displayed. Clearing removes the unreadable file and permits
+new events to be recorded. This recovery does not change the thermal policy
+or an active execution.
