@@ -1505,6 +1505,27 @@ add_test(
     COMMAND ClientRuntimeControlTests
 )
 
+# Fault injection is confined to this test executable: the GNU/Clang Linux
+# linker redirects process identity reads and pidfd sends to controlled wrappers.
+add_executable(RuntimeStopFailureTests
+    runtime/RuntimeStopFailureTests.cpp
+)
+
+target_link_libraries(RuntimeStopFailureTests
+    PRIVATE OpenPuzzleCore
+)
+
+target_link_options(RuntimeStopFailureTests
+    PRIVATE
+        -Wl,--wrap=_ZN10openpuzzle20LinuxProcessIdentity9startTimeEi
+        -Wl,--wrap=_ZN10openpuzzle20LinuxProcessIdentity15signalIfMatchesEimi
+)
+
+add_test(
+    NAME RuntimeStopFailureTests
+    COMMAND RuntimeStopFailureTests
+)
+
 add_executable(ExecutionSlotTests
     runtime/ExecutionSlotTests.cpp
 )

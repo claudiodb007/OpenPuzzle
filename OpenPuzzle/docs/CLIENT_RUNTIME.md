@@ -337,6 +337,18 @@ The request does not terminate an engine and does not cancel searched coverage. 
 If the server already rejected or finalized the assignment, openpuzzle stops
 the engine without repeatedly submitting the same transition.
 
+A failed runtime stop signal is not evidence that the runtime has exited.
+The client keeps a complete runtime control marker when its process identity
+cannot be read or a pidfd signal fails, allowing a later stop retry. For a
+readable live identity, the marker continues to block a second runtime in the
+same slot. Only a confirmed stale identity (absent PID, different boot or
+start time) or an incomplete legacy marker is cleaned automatically.
+
+When a runtime stop fails and its control marker is retained, `openpuzzle stop`
+reports the affected slot and returns an error. It preserves assignment state
+and does not fall back to stopping an engine behind the live supervisor. Other
+slots still receive their own stop requests; a partial failure is reported.
+
 An active runtime also protects its assignment state against a temporary
 failure while reading the engine process identity. Without a launcher
 `exit.code`, the client preserves `client.state` and retries monitoring instead

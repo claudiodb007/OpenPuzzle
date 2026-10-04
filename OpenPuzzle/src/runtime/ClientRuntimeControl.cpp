@@ -398,52 +398,62 @@ bool ClientRuntimeControl::requestStop() {
 
 bool ClientRuntimeControl::requestStop(
     const std::string& executionSlot) {
-  const auto pid =
-      runtimePid(executionSlot);
+  const auto pid = runtimePid(executionSlot);
+  const auto bootId = runtimeBootId(executionSlot);
+  const auto startTime = runtimeStartTime(executionSlot);
 
-  const auto bootId =
-      runtimeBootId(executionSlot);
+  const auto removeStaleMarker = [&]() {
+    std::error_code error;
+    std::filesystem::remove(pidPath(executionSlot), error);
+    return false;
+  };
 
-  const auto startTime =
-      runtimeStartTime(executionSlot);
+  // Incomplete legacy markers cannot authorize a signal.
+  if (!pid || !bootId || !startTime) {
+    return removeStaleMarker();
+  }
 
   const auto currentBootId =
-      client::ClientStateStore::
-          currentBootId();
+      client::ClientStateStore::currentBootId();
 
-  if (!pid ||
-      !bootId ||
-      !startTime ||
-      currentBootId.empty() ||
-      *bootId != currentBootId) {
-    std::error_code error;
-
-    std::filesystem::remove(
-        pidPath(executionSlot),
-        error);
-
+  if (currentBootId.empty()) {
     return false;
   }
 
-  if (!LinuxProcessIdentity::
-          signalIfMatches(
-              *pid,
-              *startTime,
-              SIGTERM)) {
-    /*
-     * Process disappeared, PID identity changed, or pidfd signalling is
-     * unavailable. Fail closed and never signal by numeric PID alone.
-     */
-    std::error_code error;
+  if (*bootId != currentBootId) {
+    return removeStaleMarker();
+  }
 
-    std::filesystem::remove(
-        pidPath(executionSlot),
-        error);
+  if (kill(*pid, 0) != 0) {
+    if (errno == ESRCH) {
+      return removeStaleMarker();
+    }
 
+    if (errno != EPERM) {
+      return false;
+    }
+  }
+
+  const auto currentStartTime =
+      LinuxProcessIdentity::startTime(*pid);
+
+  if (!currentStartTime) {
+    // Unreadability does not prove exit. Check the read/exit race once more.
+    if (kill(*pid, 0) != 0 && errno == ESRCH) {
+      return removeStaleMarker();
+    }
     return false;
   }
 
-  return true;
+  if (*currentStartTime != *startTime) {
+    return removeStaleMarker();
+  }
+
+  // Signalling revalidates through a pidfd. Permission, syscall availability
+  // and other signal failures do not prove that this runtime has stopped.
+  // Keep its control marker so retries and duplicate-launch protection work.
+  return LinuxProcessIdentity::signalIfMatches(
+      *pid, *startTime, SIGTERM);
 }
 
 bool ClientRuntimeControl::requestSafeStop() {

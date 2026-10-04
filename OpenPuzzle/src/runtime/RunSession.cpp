@@ -1187,8 +1187,8 @@ int stopExecution() {
   std::cout << "OpenPuzzle\n"
             << "----------\n";
 
-  bool concurrentStopRequested =
-      false;
+  bool concurrentStopRequested = false;
+  bool concurrentStopFailed = false;
 
   std::vector<std::string> executionSlots = {
       "gpu",
@@ -1217,15 +1217,20 @@ int stopExecution() {
           << "Stop requested..... "
           << slot
           << '\n';
+    } else if (ClientRuntimeControl::runtimePid(slot)) {
+      concurrentStopFailed = true;
+      std::cerr
+          << "Unable to request stop for " << slot << ".\n"
+          << "Runtime control and local state were preserved.\n";
     }
   }
 
-  if (concurrentStopRequested) {
-    std::cout
-        << "The active runtimes are "
-        << "shutting down.\n";
-
-    return 0;
+  if (concurrentStopRequested || concurrentStopFailed) {
+    if (concurrentStopRequested) {
+      std::cout
+          << "The signalled runtimes are shutting down.\n";
+    }
+    return concurrentStopFailed ? 1 : 0;
   }
 
   /*
@@ -1238,6 +1243,13 @@ int stopExecution() {
         << "The active runtime is shutting down.\n";
 
     return 0;
+  }
+
+  if (ClientRuntimeControl::runtimePid()) {
+    std::cerr
+        << "Unable to request stop for the active runtime.\n"
+        << "Runtime control and local state were preserved.\n";
+    return 1;
   }
 
   const auto state =
