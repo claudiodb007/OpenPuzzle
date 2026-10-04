@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.37 — Preserve uncertain identity across runtime controls
+
+- Report temporarily unavailable process identity in status instead of claiming
+  that a supervisor is idle or an engine has stopped.
+- Distinguish unknown identities from confirmed stale PID controls in doctor,
+  including state-only engines and discovered CUDA/OpenCL worker slots.
+- Check primary and concurrent workers together during safe stop; report partial
+  failure while retaining successful requests for other slots.
+- Make repeated safe-stop requests idempotent, preserving existing request bytes
+  and retaining a new request if process identity becomes unreadable afterward.
+- Block installation and safe-update preparation when a runtime or engine identity
+  is uncertain, and include dynamic GPU slots in update checks.
+- Pass 140 native client tests before applying the release identity, including
+  unreadable boot/start identities, denied probes, dynamic slots, mixed safe-stop
+  outcomes, state preservation and confirmed inactive identities.
+
 ## 1.0.36 — Preserve occupied slots during unreadable runtime identity
 
 - Refuse a new continuous runtime when an existing slot's complete process
