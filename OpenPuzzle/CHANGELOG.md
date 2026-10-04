@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.36 — Preserve occupied slots during unreadable runtime identity
+
+- Refuse a new continuous runtime when an existing slot's complete process
+  identity is temporarily unreadable or the current boot ID is unavailable.
+- Preserve the existing runtime marker, safe-stop request and assignment state
+  instead of treating uncertain identity as evidence that a slot is free.
+- Recheck identity after an exclusive-create collision, preserving a runtime
+  that appears between the first inspection and the acquisition attempt.
+- Keep normal acquisition after a confirmed process exit, a different boot or
+  same-boot PID reuse; retain the established incomplete-legacy cleanup.
+- Keep read-only running inspection limited to positively verified identities.
+- Pass 139 native client tests before applying the release identity, including
+  unavailable identity, probe failures, retries, slot isolation, creation
+  collisions, stale cleanup and an exit during an identity read.
+
 ## 1.0.35 — Runtime control survives failed stop requests
 
 - Preserve a complete runtime control marker when process identity is
