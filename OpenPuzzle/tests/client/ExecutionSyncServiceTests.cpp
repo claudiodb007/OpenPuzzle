@@ -1603,6 +1603,7 @@ int main() {
 
     assert(result.hasState);
     assert(!result.running);
+    assert(result.identityUnavailable);
     assert(!result.interrupted);
     assert(!result.hasExitCode);
     assert(!result.completionUploaded);
@@ -1619,6 +1620,7 @@ int main() {
     // An uncertain engine may also outlive its main runtime.
     const auto withoutRuntime =
         unavailableIdentity.tick("http://127.0.0.1:1");
+    assert(withoutRuntime.identityUnavailable);
     assert(!withoutRuntime.interrupted);
     assert(!withoutRuntime.hasExitCode);
     assert(!withoutRuntime.stateRemoved);
@@ -1628,6 +1630,7 @@ int main() {
     assert(ClientStateStore::load());
 
     const auto inspected = unavailableIdentity.inspect();
+    assert(inspected.identityUnavailable);
     assert(!inspected.interrupted);
     assert(!inspected.hasExitCode);
     assert(ClientStateStore::load());

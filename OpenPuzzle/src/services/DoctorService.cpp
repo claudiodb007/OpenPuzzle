@@ -1,6 +1,7 @@
 #include "openpuzzle/services/DoctorService.hpp"
 
 #include "openpuzzle/client/ClientStateStore.hpp"
+#include "openpuzzle/client/ExecutionSyncService.hpp"
 #include "openpuzzle/config/ConfigurationManager.hpp"
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/hardware/GpuInfo.hpp"
@@ -533,28 +534,36 @@ int DoctorService::execute(
             profileAction);
   }
 
-  const std::vector<std::string> slots = {
-      "primary", "gpu", "cpu", "cuda", "opencl"};
+  const auto slots = ClientRuntimeControl::executionSlots();
   int activeRuntimes = 0;
+  int unavailableIdentities = 0;
   int stalePidFiles = 0;
   int preservedStates = 0;
 
+  client::ExecutionSyncService sync;
   for (const auto &slot : slots) {
     const auto pid = ClientRuntimeControl::runtimePid(slot);
-    const bool running = ClientRuntimeControl::running(slot);
+    const auto identity = ClientRuntimeControl::runtimeIdentityStatus(slot);
+    const bool running = identity == ClientRuntimeControl::RuntimeIdentityStatus::Running;
     const bool pidFilePresent =
         std::filesystem::is_regular_file(
             ClientRuntimeControl::pidPath(slot), error);
-    const bool statePresent =
-        client::ClientStateStore::load(slot).has_value();
+    const auto execution = sync.inspect(slot);
+    const bool statePresent = execution.hasState;
 
     if (running) {
       ++activeRuntimes;
-    } else if (pidFilePresent && pid.has_value()) {
+    } else if (identity == ClientRuntimeControl::RuntimeIdentityStatus::Inactive &&
+               pidFilePresent && pid.has_value()) {
       ++stalePidFiles;
     }
 
-    if (statePresent && !running) {
+    if (identity == ClientRuntimeControl::RuntimeIdentityStatus::Unavailable ||
+        execution.identityUnavailable) {
+      ++unavailableIdentities;
+    }
+    if (statePresent && identity == ClientRuntimeControl::RuntimeIdentityStatus::Inactive &&
+        !execution.running && !execution.identityUnavailable) {
       ++preservedStates;
     }
   }
@@ -562,8 +571,16 @@ int DoctorService::execute(
   std::cout << "\nRuntime state\n"
             << "-------------\n"
             << "Active runtimes.... " << activeRuntimes << '\n'
+            << "Unknown identities. " << unavailableIdentities << '\n'
             << "Preserved states... " << preservedStates << '\n'
             << "Stale PID files.... " << stalePidFiles << '\n';
+
+  if (unavailableIdentities > 0) {
+    warning(summary,
+            "OP-DOCTOR-006",
+            "process identity is temporarily unavailable; local state was preserved",
+            "inspect openpuzzle status and retry after process identity becomes readable");
+  }
 
   if (stalePidFiles > 0) {
     warning(summary,

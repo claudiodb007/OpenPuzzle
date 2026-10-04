@@ -641,6 +641,8 @@ ExecutionSyncService::inspect(
       processIdentityStatus(*state);
   result.running =
       processStatus == ProcessIdentityStatus::Running;
+  result.identityUnavailable =
+      processStatus == ProcessIdentityStatus::Unknown;
 
   const auto detectedSolution =
       solutionFile(
@@ -711,6 +713,8 @@ ExecutionSyncService::tick(
       processIdentityStatus(*state);
   result.running =
       processStatus == ProcessIdentityStatus::Running;
+  result.identityUnavailable =
+      processStatus == ProcessIdentityStatus::Unknown;
 
   const auto detectedSolution =
       solutionFile(

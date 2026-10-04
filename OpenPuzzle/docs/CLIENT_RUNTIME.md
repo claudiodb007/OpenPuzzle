@@ -429,3 +429,26 @@ OpenPuzzle protects sensitive local storage using owner-only permissions:
 
 These permissions are applied both when files are created and when existing
 local state is loaded.
+
+### Unavailable process identity in runtime controls
+
+`status` reports `identity unavailable` when the current boot ID, process start
+identity or existence probe cannot be read reliably. This includes engine state
+without a supervisor marker. A failed read does not mean `idle` or `stopped`.
+`doctor` counts these slots under `Unknown identities` and emits `OP-DOCTOR-006`;
+it reserves stale PID warnings for positively inactive controls. These read-only
+checks include the primary, legacy and discovered `cuda-N` / `opencl-N` slots.
+
+`safestop` checks all these runtime slots, including primary alongside concurrent
+workers. An uncertain identity or failed request returns an error without claiming
+that new assignments are blocked everywhere. Requests already made for other
+slots remain in place, including requests from earlier commands. Repeated requests
+are idempotent and never truncate an existing request. If identity becomes unreadable
+after creating a request, that request is retained and the command reports failure;
+a confirmed inactive runtime can still have its new request cleared.
+
+Both regular installation and `update --safe` refuse uncertain runtime or engine
+identities. Read-only `update --check` and `--download-only` remain available.
+Installation checks include dynamic GPU slots and are repeated immediately before
+installing. A safe update does not roll back existing requests when a peer request
+fails, and it waits while a process remains active or its identity is unavailable.

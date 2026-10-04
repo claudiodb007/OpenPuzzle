@@ -1,6 +1,7 @@
 #include "openpuzzle/core/commands/UpdateCommand.hpp"
 
 #include "openpuzzle/client/ClientStateStore.hpp"
+#include "openpuzzle/client/ExecutionSyncService.hpp"
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 
@@ -34,9 +35,6 @@ namespace {
 constexpr const char* kManifestUrl =
     "https://github.com/claudiodb007/OpenPuzzle/"
     "releases/latest/download/SHA256SUMS.txt";
-
-constexpr std::array<const char*, 5> kExecutionSlots = {
-    "primary", "gpu", "cpu", "cuda", "opencl"};
 
 struct ProcessResult {
   int exitCode = 1;
@@ -154,67 +152,29 @@ bool commandExists(const std::string& command) {
   return false;
 }
 
-bool processExists(int pid) {
-  if (pid <= 0) {
-    return false;
-  }
-  if (kill(pid, 0) == 0) {
-    return true;
-  }
-  return errno == EPERM;
-}
-
 std::optional<std::string> activeExecution() {
-  for (const char* slot : kExecutionSlots) {
-    const auto state =
-        client::ClientStateStore::load(slot);
-
-    const auto currentBootId =
-        client::ClientStateStore::
-            currentBootId();
-
-    bool executionIdentityMatches = false;
-
-    if (state &&
-        !state->bootId.empty() &&
-        state->processStartTime != 0 &&
-        !currentBootId.empty() &&
-        state->bootId == currentBootId &&
-        processExists(state->pid)) {
-      const auto currentStartTime =
-          LinuxProcessIdentity::
-              startTime(state->pid);
-
-      executionIdentityMatches =
-          currentStartTime &&
-          *currentStartTime ==
-              state->processStartTime;
-    }
-
-    if (state &&
-        executionIdentityMatches) {
+  client::ExecutionSyncService sync;
+  for (const auto& slot : ClientRuntimeControl::executionSlots()) {
+    const auto execution = sync.inspect(slot);
+    if (execution.hasState && (execution.running || execution.identityUnavailable)) {
       std::ostringstream description;
-      description
-          << "slot "
-          << slot
-          << ", PID "
-          << state->pid;
-
-      if (!state->assignmentId.empty()) {
-        description
-            << ", assignment "
-            << state->assignmentId;
+      description << "slot " << slot << ", PID " << execution.state.pid;
+      if (execution.identityUnavailable) {
+        description << ", execution identity unavailable";
       }
-
+      if (!execution.state.assignmentId.empty()) {
+        description << ", assignment " << execution.state.assignmentId;
+      }
       return description.str();
     }
-
-    if (ClientRuntimeControl::running(slot)) {
+    const auto status = ClientRuntimeControl::runtimeIdentityStatus(slot);
+    if (status != ClientRuntimeControl::RuntimeIdentityStatus::Inactive) {
       std::ostringstream description;
-      description << "slot " << slot << ", runtime marker active";
-      if (const auto runtimePid =
-              ClientRuntimeControl::runtimePid(slot)) {
-        description << ", PID " << *runtimePid;
+      description << "slot " << slot
+                  << (status == ClientRuntimeControl::RuntimeIdentityStatus::Running
+                          ? ", runtime marker active" : ", runtime identity unavailable");
+      if (const auto pid = ClientRuntimeControl::runtimePid(slot)) {
+        description << ", PID " << *pid;
       }
       return description.str();
     }
@@ -224,7 +184,7 @@ std::optional<std::string> activeExecution() {
 
 std::vector<std::string> runningRuntimeSlots() {
   std::vector<std::string> slots;
-  for (const char* slot : kExecutionSlots) {
+  for (const auto& slot : ClientRuntimeControl::executionSlots()) {
     if (ClientRuntimeControl::running(slot)) {
       slots.emplace_back(slot);
     }
@@ -232,23 +192,35 @@ std::vector<std::string> runningRuntimeSlots() {
   return slots;
 }
 
+std::optional<std::string> unavailableIdentitySlot() {
+  client::ExecutionSyncService sync;
+  for (const auto& slot : ClientRuntimeControl::executionSlots()) {
+    if (ClientRuntimeControl::runtimeIdentityStatus(slot) ==
+            ClientRuntimeControl::RuntimeIdentityStatus::Unavailable ||
+        sync.inspect(slot).identityUnavailable) {
+      return slot;
+    }
+  }
+  return std::nullopt;
+}
+
 bool requestSafeStopAndWait(std::string& error) {
+  if (const auto slot = unavailableIdentitySlot()) {
+    error = "process identity unavailable for slot " + *slot +
+        "; existing safe-stop requests were retained";
+    return false;
+  }
   const auto slots = runningRuntimeSlots();
   if (slots.empty()) {
     error = "an execution is active but no controllable runtime was found";
     return false;
   }
 
-  std::vector<std::string> requested;
   for (const auto& slot : slots) {
     if (!ClientRuntimeControl::requestSafeStop(slot)) {
-      for (const auto& previous : requested) {
-        ClientRuntimeControl::clearSafeStop(previous);
-      }
       error = "unable to request safe stop for runtime slot " + slot;
       return false;
     }
-    requested.push_back(slot);
   }
 
   std::cout
@@ -530,11 +502,20 @@ int UpdateCommand::run(
     return 1;
   }
 
+  if (options->safe) {
+    if (const auto slot = unavailableIdentitySlot()) {
+      printError("OP-UPDATE-006",
+                 "process identity unavailable for slot " + *slot,
+                 "Inspect openpuzzle status and retry after identity becomes readable.");
+      return 1;
+    }
+  }
+
   if (!options->checkOnly && !options->downloadOnly && !options->safe) {
     if (const auto active = activeExecution()) {
       printError(
           "OP-UPDATE-001",
-          "an OpenPuzzle execution is active (" + *active + ")",
+          "OpenPuzzle process state blocks installation (" + *active + ")",
           "Run 'openpuzzle safestop', wait for it to finish, then rerun 'openpuzzle update'.");
       return 1;
     }
@@ -722,7 +703,7 @@ int UpdateCommand::run(
   if (const auto active = activeExecution()) {
     printError(
         "OP-UPDATE-001",
-        "an OpenPuzzle execution became active before installation (" +
+        "OpenPuzzle process state blocks installation at the final check (" +
             *active + ")",
         "Wait for idle state and retry the update.");
     return 1;

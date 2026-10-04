@@ -169,6 +169,14 @@ ClientRuntimeControl::runtimeStartTime(
   return startTime;
 }
 
+std::vector<std::string> ClientRuntimeControl::executionSlots() {
+  std::vector<std::string> slots = {"primary", "gpu", "cpu", "cuda", "opencl"};
+  const auto dynamicSlots = ExecutionSlot::discoverGpuSlots(
+      pidPath("primary").parent_path());
+  slots.insert(slots.end(), dynamicSlots.begin(), dynamicSlots.end());
+  return slots;
+}
+
 bool ClientRuntimeControl::running() {
   return running(
       client::ClientStateStore::
@@ -502,11 +510,14 @@ bool ClientRuntimeControl::requestSafeStop(
           path.c_str(),
           O_WRONLY |
               O_CREAT |
-              O_TRUNC,
+              O_EXCL,
           0600);
 
   if (descriptor < 0) {
-    return false;
+    // Repeated requests are idempotent; never truncate a previous request.
+    std::error_code error;
+    return errno == EEXIST && std::filesystem::is_regular_file(path, error) &&
+        runtimeIdentityStatus(executionSlot) == RuntimeIdentityStatus::Running;
   }
 
   const std::string value =
@@ -532,8 +543,12 @@ bool ClientRuntimeControl::requestSafeStop(
     return false;
   }
 
-  if (!running(executionSlot)) {
-    clearSafeStop(executionSlot);
+  const auto status = runtimeIdentityStatus(executionSlot);
+  if (status != RuntimeIdentityStatus::Running) {
+    // The request still prevents new work if identity became unreadable.
+    if (status == RuntimeIdentityStatus::Inactive) {
+      clearSafeStop(executionSlot);
+    }
     return false;
   }
 

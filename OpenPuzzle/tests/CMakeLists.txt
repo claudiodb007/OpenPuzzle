@@ -1549,6 +1549,21 @@ add_test(
     COMMAND RuntimeAcquireFailureTests
 )
 
+# Local-only fault injection for runtime/engine visibility and update refusal.
+add_executable(RuntimeIdentityVisibilityTests
+    runtime/RuntimeIdentityVisibilityTests.cpp
+)
+target_link_libraries(RuntimeIdentityVisibilityTests PRIVATE OpenPuzzleCore)
+target_link_options(RuntimeIdentityVisibilityTests PRIVATE
+    -Wl,--wrap=_ZN10openpuzzle20LinuxProcessIdentity9startTimeEi
+    -Wl,--wrap=_ZN10openpuzzle6client16ClientStateStore13currentBootIdB5cxx11Ev
+    -Wl,--wrap=kill
+    -Wl,--wrap=_ZN10openpuzzle10GpuManager12listCudaGpusEv
+    -Wl,--wrap=_ZN10openpuzzle10GpuManager14listOpenClGpusEv
+    -Wl,--wrap=_ZN10openpuzzle12GpuTelemetry7readAllEv
+)
+add_test(NAME RuntimeIdentityVisibilityTests COMMAND RuntimeIdentityVisibilityTests)
+
 add_executable(ExecutionSlotTests
     runtime/ExecutionSlotTests.cpp
 )

@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace openpuzzle {
 
@@ -64,12 +65,14 @@ public:
   static bool running(
       const std::string& executionSlot);
 
-private:
+  // Unavailable is not evidence that the slot is free or the runtime stopped.
   enum class RuntimeIdentityStatus {
     Inactive,
     Running,
     Unavailable
   };
+
+  static std::vector<std::string> executionSlots();
 
   static RuntimeIdentityStatus runtimeIdentityStatus(
       const std::string& executionSlot);

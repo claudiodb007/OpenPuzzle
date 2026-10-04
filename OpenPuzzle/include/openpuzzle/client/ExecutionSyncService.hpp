@@ -26,6 +26,7 @@ struct ExecutionSyncResult {
   std::string solutionPath;
 
   bool running = false;
+  bool identityUnavailable = false;
 
   /*
    * O processo desapareceu sem produzir exit.code.

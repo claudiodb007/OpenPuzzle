@@ -884,33 +884,20 @@ int showStatus(const std::vector<std::string> &args) {
             << '\n';
       };
 
-  std::vector<std::string>
-      executionSlots = {
-          "gpu",
-          "cpu",
-          "cuda",
-          "opencl",
-      };
-
-  const auto dynamicSlots =
-      ExecutionSlot::discoverGpuSlots(
-          client::ClientStateStore::
-              path("primary").parent_path());
-
-  executionSlots.insert(
-      executionSlots.end(),
-      dynamicSlots.begin(),
-      dynamicSlots.end());
+  const auto executionSlots = ClientRuntimeControl::executionSlots();
 
   bool slotStateFound = false;
 
   for (const auto& slot :
        executionSlots) {
+    if (slot == "primary") {
+      continue;
+    }
     if (
         client::ClientStateStore::
             load(slot) ||
-        ClientRuntimeControl::
-            running(slot)) {
+        ClientRuntimeControl::runtimeIdentityStatus(slot) !=
+            ClientRuntimeControl::RuntimeIdentityStatus::Inactive) {
       slotStateFound = true;
       break;
     }
@@ -929,43 +916,26 @@ int showStatus(const std::vector<std::string> &args) {
       const auto result =
           syncService.inspect(slot);
 
-      const auto runtimePid =
-          ClientRuntimeControl::
-              runtimePid(slot);
-
-      if (
-          !result.hasState &&
-          !(
-              runtimePid &&
-              ClientRuntimeControl::
-                  running(slot)
-          )) {
+      const auto runtimeStatus = ClientRuntimeControl::runtimeIdentityStatus(slot);
+      if (!result.hasState &&
+          runtimeStatus == ClientRuntimeControl::RuntimeIdentityStatus::Inactive) {
         continue;
       }
-
-      std::cout
-          << "\nSlot............... "
-          << slot
-          << '\n';
-
+      std::cout << "\nSlot............... " << slot << '\n';
       if (!result.hasState) {
-        std::cout
-            << "Status............. "
-            << (
-                   runtimePid &&
-                           ClientRuntimeControl::
-                               running(slot)
-                       ? "waiting"
-                       : "idle")
-            << '\n'
-            << "Execution.......... none\n";
-
+        std::cout << "Status............. "
+                  << (runtimeStatus == ClientRuntimeControl::RuntimeIdentityStatus::Unavailable
+                          ? "identity unavailable" : "waiting")
+                  << "\nExecution.......... none\n";
         continue;
       }
 
       const auto& state =
           result.state;
 
+      if (runtimeStatus == ClientRuntimeControl::RuntimeIdentityStatus::Unavailable) {
+        std::cout << "Runtime identity... unavailable\n";
+      }
       std::cout
           << "Status............. "
           << (
@@ -974,7 +944,7 @@ int showStatus(const std::vector<std::string> &args) {
                      : (
                            result.running
                                ? "running"
-                               : "stopped"))
+                               : (result.identityUnavailable ? "identity unavailable" : "stopped")))
           << '\n'
           << "Assignment......... "
           << state.assignmentId
@@ -1083,25 +1053,20 @@ int showStatus(const std::vector<std::string> &args) {
             << "-----------------\n";
 
   if (!result.hasState) {
-    const auto runtimePid =
-        ClientRuntimeControl::runtimePid();
-
-    if (runtimePid &&
-        ClientRuntimeControl::running()) {
-      std::cout
-          << "Status............. waiting\n"
-          << "Execution.......... none\n"
-          << "Runtime PID........ "
-          << *runtimePid
-          << '\n';
-
+    const auto slot = client::ClientStateStore::executionSlot();
+    const auto identity = ClientRuntimeControl::runtimeIdentityStatus(slot);
+    if (identity != ClientRuntimeControl::RuntimeIdentityStatus::Inactive) {
+      std::cout << "Status............. "
+                << (identity == ClientRuntimeControl::RuntimeIdentityStatus::Unavailable
+                        ? "identity unavailable" : "waiting")
+                << "\nExecution.......... none\n";
+      if (const auto pid = ClientRuntimeControl::runtimePid(slot)) {
+        std::cout << "Runtime PID........ " << *pid << '\n';
+      }
       return 0;
     }
-
-    std::cout
-        << "Status............. idle\n"
-        << "Execution.......... none\n";
-
+    std::cout << "Status............. idle\n"
+              << "Execution.......... none\n";
     return 0;
   }
 
@@ -1114,7 +1079,7 @@ int showStatus(const std::vector<std::string> &args) {
                        : (
                              result.running
                                  ? "running"
-                                 : "stopped"))
+                                 : (result.identityUnavailable ? "identity unavailable" : "stopped")))
             << '\n'
             << "Assignment......... " << state.assignmentId << '\n'
             << "Puzzle............. " << state.puzzle << '\n'
@@ -1307,93 +1272,36 @@ int safeStopExecution() {
   std::cout << "OpenPuzzle Safe Stop\n"
             << "--------------------\n";
 
-  std::vector<std::string> activeSlots;
-
-  std::vector<std::string> executionSlots = {
-      "gpu",
-      "cpu",
-      "cuda",
-      "opencl",
-  };
-
-  const auto dynamicSlots =
-      ExecutionSlot::discoverGpuSlots(
-          client::ClientStateStore::
-              path("primary").parent_path());
-
-  executionSlots.insert(
-      executionSlots.end(),
-      dynamicSlots.begin(),
-      dynamicSlots.end());
-
-  for (const auto& slot : executionSlots) {
-    if (
-        ClientRuntimeControl::
-            running(slot)) {
-      activeSlots.push_back(slot);
+  bool active = false;
+  bool failed = false;
+  for (const auto& slot : ClientRuntimeControl::executionSlots()) {
+    const auto status = ClientRuntimeControl::runtimeIdentityStatus(slot);
+    if (status == ClientRuntimeControl::RuntimeIdentityStatus::Inactive) {
+      continue;
     }
+    active = true;
+    if (status == ClientRuntimeControl::RuntimeIdentityStatus::Unavailable ||
+        !ClientRuntimeControl::requestSafeStop(slot)) {
+      std::cerr << "Unable to confirm safe stop for " << slot
+                << ". Runtime identity or request unavailable.\n";
+      failed = true;
+      continue;
+    }
+    std::cout << "Safe stop requested. " << slot << '\n';
   }
 
-  if (!activeSlots.empty()) {
-    std::vector<std::string> requestedSlots;
-
-    for (const auto& slot : activeSlots) {
-      if (!ClientRuntimeControl::
-               requestSafeStop(slot)) {
-        for (const auto& requested :
-             requestedSlots) {
-          ClientRuntimeControl::
-              clearSafeStop(requested);
-        }
-
-        std::cerr
-            << "Unable to request safe stop for "
-            << slot
-            << ".\n"
-            << "No partial safe-stop request "
-            << "was retained.\n";
-
-        return 1;
-      }
-
-      requestedSlots.push_back(slot);
-
-      std::cout
-          << "Safe stop requested. "
-          << slot
-          << '\n';
-    }
-
-    std::cout
-        << "Current ranges...... will finish\n"
-        << "New assignments..... blocked\n"
-        << "Runtime exit........ automatic\n";
-
+  if (failed) {
+    std::cerr << "Existing safe-stop requests were retained. "
+              << "Inspect status and retry.\n";
+    return 1;
+  }
+  if (!active) {
+    std::cout << "No active OpenPuzzle runtime.\n";
     return 0;
   }
-
-  if (ClientRuntimeControl::running()) {
-    if (!ClientRuntimeControl::
-             requestSafeStop()) {
-      std::cerr
-          << "Unable to create the safe-stop "
-          << "request.\n";
-
-      return 1;
-    }
-
-    std::cout
-        << "Safe stop requested. primary\n"
-        << "Current range....... will finish\n"
-        << "New assignment...... blocked\n"
-        << "Runtime exit........ automatic\n";
-
-    return 0;
-  }
-
-  std::cout
-      << "No active OpenPuzzle runtime.\n";
-
+  std::cout << "Current ranges...... will finish\n"
+            << "New assignments..... blocked\n"
+            << "Runtime exit........ automatic\n";
   return 0;
 }
 
