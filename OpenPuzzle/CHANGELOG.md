@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.35 — Runtime control survives failed stop requests
+
+- Preserve a complete runtime control marker when process identity is
+  temporarily unreadable or a pidfd stop signal fails.
+- Clean only confirmed stale process identities and incomplete legacy markers;
+  failed signalling alone no longer discards control of an active runtime.
+- Keep duplicate-launch protection for a readable live identity and preserve
+  existing safe-stop requests when a failed stop is retried.
+- Report runtime stop failures with a non-zero exit code, retaining assignment
+  state instead of falling back to stopping the engine behind its supervisor.
+- Continue independent stop requests for other GPU slots while reporting a
+  partial failure rather than claiming that every runtime is shutting down.
+- Pass 138 native client tests before applying the release identity, including
+  unavailable/denied signals, retries, unreadable identity, slot isolation,
+  assignment preservation and partial-stop fault injection.
+
 ## 1.0.34 — Recovery of stale execution identities
 
 - Distinguish a running execution, a confirmed stale process identity and a
