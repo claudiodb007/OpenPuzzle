@@ -64,6 +64,15 @@ struct ExecutionSyncResult {
 
 class ExecutionSyncService {
 public:
+  using ProcessStartTimeReader =
+      std::optional<std::uint64_t> (*)(int);
+
+  ExecutionSyncService();
+
+  // Allows deterministic testing of temporary /proc read failures.
+  explicit ExecutionSyncService(
+      ProcessStartTimeReader processStartTimeReader);
+
   ExecutionSyncResult inspect() const;
 
   ExecutionSyncResult inspect(
@@ -109,11 +118,16 @@ public:
       const std::string& errorCode);
 
 private:
-  static bool processExists(
-      int pid);
+  enum class ProcessIdentityStatus {
+    Running,
+    Stopped,
+    Unknown
+  };
 
-  static bool processIdentityMatches(
-      const ClientExecutionState& state);
+  ProcessStartTimeReader processStartTimeReader_;
+
+  ProcessIdentityStatus processIdentityStatus(
+      const ClientExecutionState& state) const;
 
   static bool readExitCode(
       const std::string& workspace,

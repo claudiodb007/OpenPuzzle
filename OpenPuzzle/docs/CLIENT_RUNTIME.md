@@ -292,6 +292,17 @@ If the engine already terminated, OpenPuzzle synchronizes its final state
 before requesting new work. Temporary network failures retain local state and
 are retried.
 
+Recovery distinguishes a confirmed stopped engine from an unreadable process
+identity. A missing PID, a different boot or a reused PID/start time enters
+interruption synchronization even while the recovering OpenPuzzle runtime owns
+the slot. Without `exit.code`, this reports `cancelled` with exit code `-3` and
+the last public progress; it never claims that the range was completed.
+
+If a live process's identity cannot be read, synchronization preserves local
+state and retries without uploading progress or completion. The presence or
+absence of the main runtime does not prove whether that engine is alive.
+Completion still requires the established engine proof and exact range count.
+
 Assignments rejected permanently by the server are stopped and released
 locally. Invalid local or protocol state is preserved for diagnosis.
 

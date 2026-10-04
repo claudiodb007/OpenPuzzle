@@ -1473,6 +1473,92 @@ int main() {
   }
 
   /*
+   * The recovering runtime is itself active. Confirmed absence, PID reuse
+   * and reboot must still synchronize cancelled/-3, never completed.
+   * Only accepted cancellation or explicit rejection removes local state.
+   */
+  for (int scenario = 0; scenario < 6; ++scenario) {
+    const auto recoveryWorkspace =
+        temporaryHome / ("workspace-active-recovery-" + std::to_string(scenario));
+    const auto peerWorkspace = temporaryHome / "workspace-active-peer";
+    std::filesystem::create_directories(recoveryWorkspace);
+    std::filesystem::create_directories(peerWorkspace);
+
+    auto state = makeState(recoveryWorkspace, static_cast<int>(getpid()));
+    assert(state.processStartTime > 0);
+    if (scenario == 1) {
+      ++state.processStartTime;
+    } else if (scenario == 2) {
+      state.bootId = "00000000-0000-0000-0000-000000000000";
+    } else {
+      state.pid = 999999999;
+    }
+
+    const auto peer = makeState(peerWorkspace, static_cast<int>(getpid()));
+    assert(ClientStateStore::save(peer, "opencl-7"));
+    assert(ClientStateStore::save(state));
+    assert(openpuzzle::ClientRuntimeControl::acquire());
+    assert(openpuzzle::ClientRuntimeControl::running());
+
+    writeFile(recoveryWorkspace / "bitcrack.log",
+              "GPU | 1 target 425.64 MKey/s "
+              "(123,354,480,640 total) [00:04:48]\r");
+
+    ExecutionSyncResult result;
+    if (scenario == 5) {
+      result = service.tick("http://127.0.0.1:1");
+    } else {
+      const std::string expectedBody =
+          "{\"assignment_id\":\"11111111-1111-4111-8111-111111111111\","
+          "\"client_id\":\"22222222-2222-4222-8222-222222222222\","
+          "\"exit_code\":-3,\"status\":\"cancelled\","
+          "\"keys_checked\":\"123354480640\"}";
+      const auto response = scenario == 3
+          ? R"JSON({"success":false,"error":"assignment_not_found"})JSON"
+          : (scenario == 4
+                 ? R"JSON({"success":false,"error":"invalid_exit_code"})JSON"
+                 : R"JSON({"success":true})JSON");
+      OneShotHttpServer server(
+          scenario == 3 ? "404 Not Found" : (scenario == 4 ? "400 Bad Request" : "200 OK"),
+          response, "/api/range/complete", expectedBody);
+      result = service.tick(server.url());
+      assert(result.hasExitCode);
+      server.wait();
+    }
+
+    assert(result.hasState);
+    assert(!result.running);
+    assert(result.interrupted);
+    assert(result.hasExitCode);
+    assert(result.exitCode == -3);
+    assert(!result.calibrationAttempted);
+    assert(openpuzzle::ClientRuntimeControl::running());
+
+    const auto expectedStatus = scenario == 3
+        ? AssignmentUploadStatus::AssignmentRejected
+        : (scenario == 4 ? AssignmentUploadStatus::PermanentFailure
+                         : (scenario == 5 ? AssignmentUploadStatus::TemporaryFailure
+                                          : AssignmentUploadStatus::Uploaded));
+    assert(result.completionStatus == expectedStatus);
+    assert(result.completionUploaded == (scenario < 3));
+    assert(result.stateRemoved == (scenario < 4));
+    assert(ClientStateStore::load().has_value() == (scenario >= 4));
+    const auto peerAfter = ClientStateStore::load("opencl-7");
+    assert(peerAfter);
+    assert(peerAfter->pid == peer.pid);
+    assert(peerAfter->processStartTime == peer.processStartTime);
+    assert(std::filesystem::exists(recoveryWorkspace / "bitcrack.log"));
+
+    openpuzzle::ClientRuntimeControl::release();
+    if (scenario >= 4) {
+      assert(ClientStateStore::remove());
+    }
+    assert(ClientStateStore::remove("opencl-7"));
+    std::filesystem::remove_all(recoveryWorkspace);
+    std::filesystem::remove_all(peerWorkspace);
+  }
+
+  /*
    * A temporary engine identity read failure must not cancel the assignment
    * while the main runtime is still provably alive.
    */
@@ -1498,9 +1584,6 @@ int main() {
 
     assert(currentStartTime);
 
-    state.processStartTime =
-        *currentStartTime + 1;
-
     assert(
         ClientStateStore::save(
             state));
@@ -1509,21 +1592,57 @@ int main() {
         openpuzzle::ClientRuntimeControl::
             acquire());
 
+    const ExecutionSyncService unavailableIdentity(
+        [](int) -> std::optional<std::uint64_t> {
+          return std::nullopt;
+        });
+
     const auto result =
-        service.tick(
+        unavailableIdentity.tick(
             "http://127.0.0.1:1");
 
     assert(result.hasState);
     assert(!result.running);
-    assert(result.interrupted);
+    assert(!result.interrupted);
     assert(!result.hasExitCode);
     assert(!result.completionUploaded);
+    assert(
+        result.completionStatus ==
+        AssignmentUploadStatus::NotAttempted);
     assert(!result.stateRemoved);
     assert(!result.completionError.empty());
     assert(ClientStateStore::load());
 
     openpuzzle::ClientRuntimeControl::
         release();
+
+    // An uncertain engine may also outlive its main runtime.
+    const auto withoutRuntime =
+        unavailableIdentity.tick("http://127.0.0.1:1");
+    assert(!withoutRuntime.interrupted);
+    assert(!withoutRuntime.hasExitCode);
+    assert(!withoutRuntime.stateRemoved);
+    assert(
+        withoutRuntime.completionStatus ==
+        AssignmentUploadStatus::NotAttempted);
+    assert(ClientStateStore::load());
+
+    const auto inspected = unavailableIdentity.inspect();
+    assert(!inspected.interrupted);
+    assert(!inspected.hasExitCode);
+    assert(ClientStateStore::load());
+
+    // A readable exit.code is not enough to finalize an uncertain process.
+    writeFile(runtimeGapWorkspace / "exit.code", "0\n");
+    writeFile(runtimeGapWorkspace / "bitcrack.log", "Reached end of keyspace\n");
+    const auto uncertainExit =
+        unavailableIdentity.tick("http://127.0.0.1:1");
+    assert(!uncertainExit.hasExitCode);
+    assert(!uncertainExit.stateRemoved);
+    assert(
+        uncertainExit.completionStatus ==
+        AssignmentUploadStatus::NotAttempted);
+    assert(ClientStateStore::load());
 
     assert(
         ClientStateStore::remove());

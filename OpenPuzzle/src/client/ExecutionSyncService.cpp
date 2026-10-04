@@ -5,7 +5,6 @@
 #include "openpuzzle/engines/EngineParserFactory.hpp"
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/performance/AdaptiveProfileUpdater.hpp"
-#include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
 
 #include <boost/multiprecision/cpp_int.hpp>
@@ -23,21 +22,20 @@
 
 namespace openpuzzle::client {
 
-bool ExecutionSyncService::processExists(
-    int pid) {
-  if (pid <= 0) {
-    return false;
-  }
+ExecutionSyncService::ExecutionSyncService()
+    : ExecutionSyncService(
+          openpuzzle::LinuxProcessIdentity::startTime) {}
 
-  if (kill(pid, 0) == 0) {
-    return true;
-  }
+ExecutionSyncService::ExecutionSyncService(
+    ProcessStartTimeReader processStartTimeReader)
+    : processStartTimeReader_(
+          processStartTimeReader
+              ? processStartTimeReader
+              : openpuzzle::LinuxProcessIdentity::startTime) {}
 
-  return errno == EPERM;
-}
-
-bool ExecutionSyncService::processIdentityMatches(
-    const ClientExecutionState& state) {
+ExecutionSyncService::ProcessIdentityStatus
+ExecutionSyncService::processIdentityStatus(
+    const ClientExecutionState& state) const {
   /*
    * OpenPuzzle <= 1.0.16 has no boot_id and OpenPuzzle <= 1.0.17 has no
    * process_start_time.
@@ -46,30 +44,48 @@ bool ExecutionSyncService::processIdentityMatches(
    * enters recovery rather than trusting a recycled numeric PID.
    */
   if (state.bootId.empty() ||
-      state.processStartTime == 0) {
-    return false;
+      state.processStartTime == 0 ||
+      state.pid <= 0) {
+    return ProcessIdentityStatus::Stopped;
   }
 
   const auto currentBootId =
       ClientStateStore::currentBootId();
 
-  if (currentBootId.empty() ||
-      state.bootId != currentBootId) {
-    return false;
+  if (currentBootId.empty()) {
+    return ProcessIdentityStatus::Unknown;
   }
 
-  if (!processExists(state.pid)) {
-    return false;
+  if (state.bootId != currentBootId) {
+    return ProcessIdentityStatus::Stopped;
+  }
+
+  if (kill(state.pid, 0) != 0) {
+    if (errno == ESRCH) {
+      return ProcessIdentityStatus::Stopped;
+    }
+
+    if (errno != EPERM) {
+      return ProcessIdentityStatus::Unknown;
+    }
   }
 
   const auto currentStartTime =
-      openpuzzle::LinuxProcessIdentity::
-          startTime(state.pid);
+      processStartTimeReader_(state.pid);
 
-  return
-      currentStartTime &&
-      *currentStartTime ==
-          state.processStartTime;
+  if (!currentStartTime) {
+    // The process may have exited between kill(0) and the /proc read.
+    // Only ESRCH proves absence; a denied/unreadable stat is still uncertain.
+    if (kill(state.pid, 0) != 0 && errno == ESRCH) {
+      return ProcessIdentityStatus::Stopped;
+    }
+
+    return ProcessIdentityStatus::Unknown;
+  }
+
+  return *currentStartTime == state.processStartTime
+             ? ProcessIdentityStatus::Running
+             : ProcessIdentityStatus::Stopped;
 }
 
 bool ExecutionSyncService::readExitCode(
@@ -621,8 +637,10 @@ ExecutionSyncService::inspect(
 
   result.hasState = true;
   result.state = *state;
+  const auto processStatus =
+      processIdentityStatus(*state);
   result.running =
-      processIdentityMatches(*state);
+      processStatus == ProcessIdentityStatus::Running;
 
   const auto detectedSolution =
       solutionFile(
@@ -657,7 +675,8 @@ ExecutionSyncService::inspect(
     result.hasExitCode = true;
     result.exitCode = exitCode;
   } else {
-    result.interrupted = true;
+    result.interrupted =
+        processStatus == ProcessIdentityStatus::Stopped;
   }
 
   return result;
@@ -688,9 +707,10 @@ ExecutionSyncService::tick(
   result.hasState = true;
   result.state = *state;
 
+  const auto processStatus =
+      processIdentityStatus(*state);
   result.running =
-      processIdentityMatches(
-          *state);
+      processStatus == ProcessIdentityStatus::Running;
 
   const auto detectedSolution =
       solutionFile(
@@ -751,6 +771,13 @@ ExecutionSyncService::tick(
     return result;
   }
 
+  if (processStatus == ProcessIdentityStatus::Unknown) {
+    result.completionError =
+        "Process identity temporarily unavailable; "
+        "local state was preserved";
+    return result;
+  }
+
   int exitCode = 0;
 
   /*
@@ -767,25 +794,9 @@ ExecutionSyncService::tick(
           exitCode)) {
     result.interrupted = true;
 
-    /*
-     * A leitura de /proc pode falhar momentaneamente mesmo com o runtime
-     * principal ainda ativo. Nesse caso não transformar uma identidade
-     * incerta numa falsa interrupção: isso cancelaria o assignment e
-     * removeria client.state enquanto o motor continuava a pesquisar.
-     *
-     * O runtime volta a tentar no ciclo seguinte. Uma recuperação iniciada
-     * depois de o runtime desaparecer continua a usar o fluxo normal abaixo.
-     */
-    if (
-        openpuzzle::ClientRuntimeControl::
-            running(executionSlot)) {
-      result.completionError =
-          "Process identity temporarily unavailable; "
-          "local state was preserved";
-
-      return result;
-    }
-
+    // A live OpenPuzzle runtime is not evidence that its engine is alive.
+    // Definitively stale identities must synchronize interruption even
+    // when this very runtime owns the slot and is performing recovery.
     exitCode = -3;
   }
 
