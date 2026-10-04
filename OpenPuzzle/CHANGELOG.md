@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.34 — Recovery of stale execution identities
+
+- Distinguish a running execution, a confirmed stale process identity and a
+  temporarily unreadable identity instead of treating every mismatch alike.
+- Recover missing processes, same-boot PID reuse and previous-boot assignments
+  even while the recovering OpenPuzzle runtime owns the slot.
+- Report interruptions without `exit.code` as `cancelled` with code `-3` and
+  the last public progress; never treat them as completed range coverage.
+- Preserve uncertain identities without uploading progress or completion,
+  including when the engine outlives the main runtime.
+- Retain local state on temporary API failures or permanent protocol errors;
+  remove only the affected slot after accepted cancellation or explicit server
+  rejection, while preserving protected results and unrelated execution slots.
+- Extend the existing 137-test client suite with active-runtime cancellation,
+  PID reuse, reboot, API failure, rejection and unreadable-identity regressions.
+
 ## 1.0.33 — Multi-GPU telemetry recovery and thermal-history safety
 
 - Transfer private GPU heartbeat telemetry collection to a surviving worker
