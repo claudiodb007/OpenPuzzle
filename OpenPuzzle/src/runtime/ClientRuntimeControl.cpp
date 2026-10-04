@@ -77,19 +77,6 @@ ClientRuntimeControl::safeStopPath(
          filename;
 }
 
-bool ClientRuntimeControl::processExists(
-    int pid) {
-  if (pid <= 0) {
-    return false;
-  }
-
-  if (kill(pid, 0) == 0) {
-    return true;
-  }
-
-  return errno == EPERM;
-}
-
 std::optional<int>
 ClientRuntimeControl::runtimePid() {
   return runtimePid(
@@ -190,37 +177,68 @@ bool ClientRuntimeControl::running() {
 
 bool ClientRuntimeControl::running(
     const std::string& executionSlot) {
-  const auto pid =
-      runtimePid(executionSlot);
+  return runtimeIdentityStatus(executionSlot) ==
+      RuntimeIdentityStatus::Running;
+}
 
-  const auto bootId =
-      runtimeBootId(executionSlot);
+ClientRuntimeControl::RuntimeIdentityStatus
+ClientRuntimeControl::runtimeIdentityStatus(
+    const std::string& executionSlot) {
+  const auto path = pidPath(executionSlot);
+  std::ifstream input(path);
 
-  const auto startTime =
-      runtimeStartTime(
-          executionSlot);
+  if (!input.is_open()) {
+    std::error_code error;
+    const bool exists = std::filesystem::exists(path, error);
+    return exists || error
+        ? RuntimeIdentityStatus::Unavailable
+        : RuntimeIdentityStatus::Inactive;
+  }
+
+  int pid = 0;
+  std::string bootId;
+  std::uint64_t startTime = 0;
+  if (!(input >> pid >> bootId >> startTime) ||
+      pid <= 0 || bootId.empty() || startTime == 0) {
+    // Incomplete legacy markers retain the established stale cleanup.
+    return RuntimeIdentityStatus::Inactive;
+  }
 
   const auto currentBootId =
       client::ClientStateStore::
           currentBootId();
 
-  if (!pid ||
-      !bootId ||
-      !startTime ||
-      currentBootId.empty() ||
-      *bootId != currentBootId ||
-      !processExists(*pid)) {
-    return false;
+  if (currentBootId.empty()) {
+    return RuntimeIdentityStatus::Unavailable;
+  }
+
+  if (bootId != currentBootId) {
+    return RuntimeIdentityStatus::Inactive;
+  }
+
+  if (kill(pid, 0) != 0) {
+    if (errno == ESRCH) {
+      return RuntimeIdentityStatus::Inactive;
+    }
+    if (errno != EPERM) {
+      return RuntimeIdentityStatus::Unavailable;
+    }
   }
 
   const auto currentStartTime =
       LinuxProcessIdentity::
-          startTime(*pid);
+          startTime(pid);
 
-  return
-      currentStartTime &&
-      *currentStartTime ==
-          *startTime;
+  if (!currentStartTime) {
+    // A failed identity read does not prove exit. Recheck the read/exit race.
+    return kill(pid, 0) != 0 && errno == ESRCH
+        ? RuntimeIdentityStatus::Inactive
+        : RuntimeIdentityStatus::Unavailable;
+  }
+
+  return *currentStartTime == startTime
+      ? RuntimeIdentityStatus::Running
+      : RuntimeIdentityStatus::Inactive;
 }
 
 bool ClientRuntimeControl::acquire() {
@@ -236,7 +254,8 @@ bool ClientRuntimeControl::acquire() {
     return false;
   }
 
-  if (running()) {
+  const auto slot = client::ClientStateStore::executionSlot();
+  if (runtimeIdentityStatus(slot) != RuntimeIdentityStatus::Inactive) {
     return false;
   }
 
@@ -314,13 +333,13 @@ bool ClientRuntimeControl::acquire() {
       return false;
     }
 
-    if (running()) {
+    if (runtimeIdentityStatus(slot) != RuntimeIdentityStatus::Inactive) {
       return false;
     }
 
     /*
-     * Marcador inválido, pertencente a outro boot
-     * ou processo já terminado.
+     * Only a confirmed stale identity or incomplete legacy marker may be
+     * replaced. An unreadable identity still protects the existing runtime.
      */
     std::filesystem::remove(
         path,

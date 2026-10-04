@@ -349,6 +349,17 @@ reports the affected slot and returns an error. It preserves assignment state
 and does not fall back to stopping an engine behind the live supervisor. Other
 slots still receive their own stop requests; a partial failure is reported.
 
+Starting another continuous runtime also preserves a slot whose complete
+runtime identity is temporarily unreadable. Failure to read the current boot
+ID or the existing process start time is not evidence that the slot is free.
+Acquisition fails before clearing its safe-stop request or replacing its PID
+marker, and it leaves assignment state unchanged. The same check is repeated
+if a marker appears during the exclusive-create attempt. Once the process is
+confirmed absent, from another boot or a reused PID, normal stale cleanup and
+acquisition can proceed; incomplete legacy markers keep their established
+cleanup behavior. Read-only `running()` still means a positively verified
+live identity, rather than presenting an uncertain identity as running.
+
 An active runtime also protects its assignment state against a temporary
 failure while reading the engine process identity. Without a launcher
 `exit.code`, the client preserves `client.state` and retries monitoring instead

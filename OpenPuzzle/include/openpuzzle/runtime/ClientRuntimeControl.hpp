@@ -65,7 +65,14 @@ public:
       const std::string& executionSlot);
 
 private:
-  static bool processExists(int pid);
+  enum class RuntimeIdentityStatus {
+    Inactive,
+    Running,
+    Unavailable
+  };
+
+  static RuntimeIdentityStatus runtimeIdentityStatus(
+      const std::string& executionSlot);
 };
 
 } // namespace openpuzzle

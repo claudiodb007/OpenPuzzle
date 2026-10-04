@@ -1526,6 +1526,29 @@ add_test(
     COMMAND RuntimeStopFailureTests
 )
 
+# Acquisition fault injection stays local to this executable. A real child is
+# kept alive through a pipe; no GPU, API request or termination signal is used.
+add_executable(RuntimeAcquireFailureTests
+    runtime/RuntimeAcquireFailureTests.cpp
+)
+
+target_link_libraries(RuntimeAcquireFailureTests
+    PRIVATE OpenPuzzleCore
+)
+
+target_link_options(RuntimeAcquireFailureTests
+    PRIVATE
+        -Wl,--wrap=_ZN10openpuzzle20LinuxProcessIdentity9startTimeEi
+        -Wl,--wrap=_ZN10openpuzzle6client16ClientStateStore13currentBootIdB5cxx11Ev
+        -Wl,--wrap=kill
+        -Wl,--wrap=open
+)
+
+add_test(
+    NAME RuntimeAcquireFailureTests
+    COMMAND RuntimeAcquireFailureTests
+)
+
 add_executable(ExecutionSlotTests
     runtime/ExecutionSlotTests.cpp
 )
