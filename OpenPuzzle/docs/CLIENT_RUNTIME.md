@@ -468,3 +468,23 @@ configuration remain disabled until a subsequent status confirms the state.
 Refresh, diagnostics, update checks and auditing remain available. Stop controls
 can retry the CLI's identity-checked requests; Kangaroo retains its safe-stop
 restriction. Language changes preserve the warning and disabled controls.
+
+### Desktop status query failures
+
+The desktop interface waits for its first valid status response before enabling
+new searches, benchmarks, self-tests, Kangaroo installation or thermal settings.
+Normal command exit with code zero and recognized status for every reported slot
+are required. The older supervisor-only output with a positive runtime PID remains
+supported. Empty, malformed or incomplete output does not confirm an idle client.
+
+A failed command, process error or ten-second status timeout shows `Status
+unavailable` and blocks new work. Last confirmed assignment details, slot cards,
+solution state and thermal readings/history remain intact. Diagnostic errors are
+shown separately from these retained status details. Partial output from a timed
+out or crashed status process is never accepted as a successful response.
+
+Refresh and diagnostics remain available when the CLI can be started. Stop
+controls retain their established availability for the last confirmed occupied
+slots. The interface does not report a failed query as a stopped execution, and
+language changes preserve the failure reason. A later valid response restores
+normal controls or the explicit process-identity warning described above.

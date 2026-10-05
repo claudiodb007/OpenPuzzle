@@ -134,6 +134,7 @@ QString themeStyleSheet(UiTheme theme) {
       color: %7;
     }
     QLabel#StatusBadge[identityUnavailable="true"],
+    QLabel#StatusBadge[statusUnavailable="true"],
     QLabel#RuntimeIdentityBadge {
       background: #b45309;
       color: #ffffff;

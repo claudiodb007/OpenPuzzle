@@ -95,6 +95,28 @@ bool slotActive(const RuntimeSlotStatus& slot) {
           !slotIdentityUnavailable(slot));
 }
 
+bool validRuntimeStatus(const QVector<RuntimeSlotStatus>& runtimeSlots) {
+  if (runtimeSlots.isEmpty()) {
+    return false;
+  }
+  static const QStringList states = {
+      "idle", "running", "waiting", "stopped", "solution found",
+      "identity unavailable"};
+  for (const auto& slot : runtimeSlots) {
+    const QString state = slot.fields.value("Status").toLower();
+    if (states.contains(state)) {
+      continue;
+    }
+    // Retain compatibility with the older supervisor-only PID output.
+    bool validPid = false;
+    const qlonglong pid = slot.fields.value("Runtime PID").toLongLong(&validPid);
+    if (!state.isEmpty() || !validPid || pid <= 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 QString statusField(
     const RuntimeSlotStatus& slot,
     const QString& key) {
@@ -249,9 +271,9 @@ MainWindow::MainWindow(QWidget* parent)
       statusProcess_,
       &QProcess::finished,
       this,
-      [this](int, QProcess::ExitStatus) {
+      [this](int exitCode, QProcess::ExitStatus exitStatus) {
         statusTimeout_->stop();
-        handleStatusResult();
+        handleStatusResult(exitCode, exitStatus == QProcess::NormalExit);
       });
 
   connect(
@@ -259,15 +281,16 @@ MainWindow::MainWindow(QWidget* parent)
       &QProcess::errorOccurred,
       this,
       [this](QProcess::ProcessError error) {
-        if (error != QProcess::FailedToStart) {
-          return;
+        statusProcessError_ = true;
+        if (error == QProcess::FailedToStart) {
+          statusTimeout_->stop();
+          cliAvailable_ = false;
         }
-
-        statusTimeout_->stop();
-        updateStatusBadge();
-        summary_->setText(t("control_failed"));
-        cliAvailable_ = false;
-        updateActionAvailability();
+        if (!statusTimedOut_) {
+          markStatusUnavailable(
+              error == QProcess::FailedToStart ? "control_failed" : "status_failed",
+              statusProcess_->errorString());
+        }
       });
 
   statusTimeout_->setSingleShot(true);
@@ -279,9 +302,9 @@ MainWindow::MainWindow(QWidget* parent)
       this,
       [this]() {
         if (statusProcess_->state() != QProcess::NotRunning) {
+          statusTimedOut_ = true;
+          markStatusUnavailable("status_timeout");
           statusProcess_->kill();
-          updateStatusBadge();
-          summary_->setText(t("status_timeout"));
         }
       });
 
@@ -439,6 +462,7 @@ void MainWindow::buildInterface() {
   stateLayout->addLayout(stateHeader);
 
   summary_ = new QLabel;
+  summary_->setProperty("controlId", "statusSummary");
   summary_->setWordWrap(true);
   stateLayout->addWidget(summary_);
 
@@ -917,7 +941,8 @@ void MainWindow::loadThermalSettings() {
 }
 
 void MainWindow::updateThermalControlState() {
-  const bool editable = !active_ && !identityUnavailable_ && !busy_;
+  const bool editable = statusAvailable_ &&
+      !active_ && !identityUnavailable_ && !busy_;
   const bool policyEnabled =
       editable && thermalEnabled_->isChecked();
 
@@ -1019,12 +1044,7 @@ void MainWindow::applyLanguage() {
   statusBar()->showMessage(t("footer"));
 
   updateStatusBadge();
-  summary_->setText(
-      solutionFound_
-          ? t("solution_saved")
-          : (identityUnavailable_
-                 ? t("identity_unavailable_message")
-                 : (active_ ? t("runtime_active") : t("no_execution"))));
+  updateStatusSummary();
 
   safeStop_->setToolTip(
       kangarooActive_
@@ -1048,7 +1068,7 @@ void MainWindow::applyTheme() {
 void MainWindow::updateActionAvailability() {
   const bool ready = !busy_ && cliAvailable_;
   const bool occupied = active_ || identityUnavailable_;
-  const bool idle = !occupied && !solutionFound_ && ready;
+  const bool idle = statusAvailable_ && !occupied && !solutionFound_ && ready;
 
   start_->setEnabled(idle);
   safeStop_->setEnabled(
@@ -1073,9 +1093,11 @@ void MainWindow::updateActionAvailability() {
   updateThermalControlState();
 
   const QString busyHint =
-      identityUnavailable_
-          ? t("identity_unavailable_message")
-          : (active_ ? t("busy_active") : QString());
+      !statusAvailable_
+          ? t("status_unavailable_hint")
+          : (identityUnavailable_
+                 ? t("identity_unavailable_message")
+                 : (active_ ? t("busy_active") : QString()));
   benchmark_->setToolTip(busyHint);
   selfTest_->setToolTip(busyHint);
   installKangaroo_->setToolTip(busyHint);
@@ -1126,39 +1148,54 @@ void MainWindow::refreshStatus() {
 
   const QString executable = cliExecutable();
   if (executable.isEmpty()) {
-    updateStatusBadge();
-    summary_->setText(t("cli_missing"));
     cliAvailable_ = false;
-    updateActionAvailability();
+    markStatusUnavailable("cli_missing");
     return;
   }
 
   cliAvailable_ = true;
+  statusTimedOut_ = false;
+  statusProcessError_ = false;
   updateActionAvailability();
+  statusTimeout_->start();
   statusProcess_->start(
       executable,
       QStringList{QStringLiteral("status")});
-  statusTimeout_->start();
 }
 
-void MainWindow::handleStatusResult() {
+void MainWindow::handleStatusResult(int exitCode, bool normalExit) {
   const QString result = QString::fromUtf8(
       statusProcess_->readAll()).trimmed();
 
   busy_ = false;
 
-  if (result.isEmpty()) {
-    updateStatusBadge();
-    summary_->setText(t("empty_status"));
-    updateActionAvailability();
+  if (statusTimedOut_) {
+    markStatusUnavailable("status_timeout");
     return;
   }
+  if (!normalExit || exitCode != 0 || statusProcessError_) {
+    markStatusUnavailable("status_failed", result);
+    return;
+  }
+
+  if (result.isEmpty()) {
+    markStatusUnavailable("empty_status");
+    return;
+  }
+
+  const auto runtimeSlots = parseRuntimeSlots(result);
+  if (!validRuntimeStatus(runtimeSlots)) {
+    markStatusUnavailable("invalid_status", result);
+    return;
+  }
+
+  statusAvailable_ = true;
+  statusIssueKey_.clear();
 
   setTextPreservingScroll(statusOutput_, result);
   refreshRuntimeLog();
   updateThermalAlerts(result);
 
-  const auto runtimeSlots = parseRuntimeSlots(result);
   active_ = false;
   identityUnavailable_ = false;
   kangarooActive_ = false;
@@ -1192,35 +1229,51 @@ void MainWindow::handleStatusResult() {
           : t("safe_stop_hint"));
   updateActionAvailability();
 
-  if (solutionFound_) {
-    summary_->setText(t("solution_saved"));
-    rebuildSlotCards(result);
-    showSolutionNotice(solutionAssignmentId);
-    return;
-  }
-
-  if (identityUnavailable_) {
-    summary_->setText(t("identity_unavailable_message"));
-    rebuildSlotCards(result);
-    return;
-  }
-
-  if (!active_) {
-    summary_->setText(t("no_execution"));
-    rebuildSlotCards(result);
-    return;
-  }
+  updateStatusSummary();
   rebuildSlotCards(result);
-  summary_->setText(t("runtime_active"));
+  if (solutionFound_) {
+    showSolutionNotice(solutionAssignmentId);
+  }
+}
+
+void MainWindow::markStatusUnavailable(
+    const QString& reasonKey,
+    const QString& details) {
+  statusAvailable_ = false;
+  statusIssueKey_ = reasonKey;
+  busy_ = false;
+  updateStatusBadge();
+  updateStatusSummary();
+  updateActionAvailability();
+  if (!details.isEmpty()) {
+    showOutput(t("status_unavailable"), details);
+  }
+}
+
+void MainWindow::updateStatusSummary() {
+  if (!statusAvailable_) {
+    summary_->setText(statusIssueKey_ == "consulting"
+        ? t("consulting")
+        : t(statusIssueKey_) + " " + t("status_unavailable_hint"));
+    return;
+  }
+  summary_->setText(solutionFound_
+      ? t("solution_saved")
+      : (identityUnavailable_
+             ? t("identity_unavailable_message")
+             : (active_ ? t("runtime_active") : t("no_execution"))));
 }
 
 void MainWindow::updateStatusBadge() {
   statusBadge_->setText(
-      identityUnavailable_
-          ? t("identity_unavailable")
-          : (active_ ? t("running") : t("stopped")));
+      !statusAvailable_
+          ? t(statusIssueKey_ == "consulting" ? "status_pending" : "status_unavailable")
+          : (identityUnavailable_
+                 ? t("identity_unavailable")
+                 : (active_ ? t("running") : t("stopped"))));
   statusBadge_->setProperty("active", active_);
   statusBadge_->setProperty("identityUnavailable", identityUnavailable_);
+  statusBadge_->setProperty("statusUnavailable", !statusAvailable_);
   statusBadge_->style()->unpolish(statusBadge_);
   statusBadge_->style()->polish(statusBadge_);
 }

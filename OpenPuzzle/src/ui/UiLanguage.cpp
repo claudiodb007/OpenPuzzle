@@ -22,6 +22,15 @@ const QHash<QString, QStringList>& translations() {
       {"stopped", {"Stopped", "Parado", "Arrêté", "Detenido"}},
       {"unavailable", {"Unavailable", "Indisponível", "Indisponible", "No disponible"}},
       {"identity_unavailable", {"Identity unavailable", "Identidade indisponível", "Identité indisponible", "Identidad no disponible"}},
+      {"status_pending", {"Checking status", "A consultar o estado", "Lecture de l’état", "Consultando el estado"}},
+      {"status_unavailable", {"Status unavailable", "Estado indisponível", "État indisponible", "Estado no disponible"}},
+      {"status_failed", {"The status command failed.", "O comando de estado falhou.", "La commande d’état a échoué.", "El comando de estado falló."}},
+      {"invalid_status", {"The client returned incomplete or unrecognized status information.", "O cliente devolveu informação de estado incompleta ou desconhecida.", "Le client a renvoyé un état incomplet ou non reconnu.", "El cliente devolvió información de estado incompleta o desconocida."}},
+      {"status_unavailable_hint", {
+          "Refresh status or run diagnostics before starting new work. Last confirmed details are retained.",
+          "Atualize o estado ou execute o diagnóstico antes de iniciar novo trabalho. Os últimos detalhes confirmados são conservados.",
+          "Actualisez l’état ou lancez le diagnostic avant de démarrer un nouveau travail. Les derniers détails confirmés sont conservés.",
+          "Actualice el estado o ejecute el diagnóstico antes de iniciar un nuevo trabajo. Se conservan los últimos detalles confirmados."}},
       {"identity_unavailable_message", {
           "An execution cannot be confirmed. Refresh status or run diagnostics before starting new work.",
           "Não foi possível confirmar uma execução. Atualize o estado ou execute o diagnóstico antes de iniciar novo trabalho.",

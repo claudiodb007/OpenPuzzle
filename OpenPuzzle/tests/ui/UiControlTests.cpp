@@ -173,6 +173,12 @@ int main(int argc, char* argv[]) {
   MainWindow window;
   window.show();
 
+  assert(waitUntil([&]() {
+    auto* start = control<QPushButton>(window, "start");
+    auto* badge = control<QLabel>(window, "statusBadge");
+    return start && start->isEnabled() && badge && badge->text() == "Stopped";
+  }));
+
   auto* statusBadge = control<QLabel>(window, "statusBadge");
   auto* autoStart = control<QCheckBox>(window, "autoStart");
   auto* thermalEnabled =

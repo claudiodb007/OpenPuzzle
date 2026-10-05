@@ -42,7 +42,11 @@ private:
   void updateSelectionRules();
   void updateActionAvailability();
   void refreshStatus();
-  void handleStatusResult();
+  void handleStatusResult(int exitCode, bool normalExit);
+  void markStatusUnavailable(
+      const QString& reasonKey,
+      const QString& details = QString());
+  void updateStatusSummary();
   void updateStatusBadge();
   void refreshRuntimeLog();
   void showSolutionNotice(const QString& assignmentId);
@@ -130,6 +134,10 @@ private:
   QTimer* statusTimeout_ = nullptr;
   bool active_ = false;
   bool identityUnavailable_ = false;
+  bool statusAvailable_ = false;
+  bool statusTimedOut_ = false;
+  bool statusProcessError_ = false;
+  QString statusIssueKey_ = QStringLiteral("consulting");
   bool solutionFound_ = false;
   bool kangarooActive_ = false;
   bool busy_ = false;
