@@ -1147,6 +1147,8 @@ void MainWindow::refreshStatus() {
     return;
   }
 
+  statusRequestGeneration_ = launchGeneration_;
+
   const QString executable = cliExecutable();
   if (executable.isEmpty()) {
     cliAvailable_ = false;
@@ -1167,6 +1169,12 @@ void MainWindow::refreshStatus() {
 void MainWindow::handleStatusResult(int exitCode, bool normalExit) {
   const QString result = QString::fromUtf8(
       statusProcess_->readAll()).trimmed();
+
+  // A pre-launch observation cannot settle the new launch reservation.
+  if (launchPending_ && statusRequestGeneration_ != launchGeneration_) {
+    QTimer::singleShot(1200, this, &MainWindow::refreshStatus);
+    return;
+  }
 
   launchPending_ = false;
 
@@ -1240,6 +1248,10 @@ void MainWindow::handleStatusResult(int exitCode, bool normalExit) {
 void MainWindow::markStatusUnavailable(
     const QString& reasonKey,
     const QString& details) {
+  if (launchPending_ && statusRequestGeneration_ != launchGeneration_) {
+    return;
+  }
+
   statusAvailable_ = false;
   statusIssueKey_ = reasonKey;
   launchPending_ = false;
@@ -1896,6 +1908,9 @@ void MainWindow::startExecution() {
     return;
   }
 
+  ++launchGeneration_;
+  launchPending_ = true;
+
   showOutput(
       t("execution_started"),
       executable + " " + arguments.join(' ') +
@@ -1903,8 +1918,6 @@ void MainWindow::startExecution() {
           QString::number(processId) +
           "\n" + t("runtime_log_path") + ": " +
           logPath);
-
-  launchPending_ = true;
   updateActionAvailability();
   QTimer::singleShot(
       1200,

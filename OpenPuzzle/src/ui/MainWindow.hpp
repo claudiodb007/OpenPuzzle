@@ -142,6 +142,8 @@ private:
   bool solutionFound_ = false;
   bool kangarooActive_ = false;
   bool launchPending_ = false;
+  quint64 launchGeneration_ = 0;
+  quint64 statusRequestGeneration_ = 0;
   bool cliAvailable_ = true;
   QString lastSolutionNoticeId_;
   ThermalAlertTracker thermalAlertTracker_;

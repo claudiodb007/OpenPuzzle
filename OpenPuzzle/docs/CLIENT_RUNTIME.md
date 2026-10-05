@@ -503,3 +503,20 @@ reservation, including normal exit, nonzero exit, process crash and failure to
 start. A status timeout terminates only the status subprocess and leaves the
 foreground command running. Language changes preserve disabled controls. Later
 control availability follows the last confirmed runtime and identity state.
+
+### Desktop launch and status query ordering
+
+Each desktop status query records the successful detached launch generation at
+which it starts. A query started before a new launch cannot settle that launch's
+pending reservation. Its output, process errors and timeout do not replace the
+last confirmed status, runtime cards, solution notice or thermal readings, and
+they do not enable execution or configuration controls. Language changes keep
+the reservation. A timeout still terminates only the status subprocess.
+
+After an older query finishes, the interface schedules another query. A query
+started after the launch retains the established behavior: a valid response
+updates the runtime state and control availability, while a failed response
+reports unavailable status and leaves new searches disabled until a valid query
+recovers. This ordering does not prove runtime registration or process liveness;
+it prevents a pre-launch query from being treated as a post-launch observation.
+The foreground command reservation remains independent.
