@@ -129,6 +129,7 @@ private:
   QTimer* refreshTimer_ = nullptr;
   QTimer* statusTimeout_ = nullptr;
   bool active_ = false;
+  bool identityUnavailable_ = false;
   bool solutionFound_ = false;
   bool kangarooActive_ = false;
   bool busy_ = false;

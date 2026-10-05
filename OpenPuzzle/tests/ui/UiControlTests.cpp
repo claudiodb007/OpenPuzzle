@@ -10,6 +10,7 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QElapsedTimer>
+#include <QEvent>
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
@@ -280,6 +281,153 @@ int main(int argc, char* argv[]) {
   assert(stop != nullptr && !stop->isEnabled());
   assert(installKangaroo != nullptr);
   assert(installKangaroo->isEnabled());
+
+  auto* identityRefresh = control<QPushButton>(window, "refresh");
+  auto* identityStatus = control<QPlainTextEdit>(window, "statusOutput");
+  assert(identityRefresh != nullptr);
+  assert(identityStatus != nullptr);
+  const auto readStatus = [&](const QByteArray& output) {
+    assert(waitUntil([&]() { return identityRefresh->isEnabled(); }));
+    assert(statusFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    assert(statusFile.write(output) == output.size());
+    statusFile.close();
+    identityRefresh->click();
+    assert(waitUntil([&]() {
+      return identityStatus->toPlainText() ==
+          QString::fromUtf8(output).trimmed();
+    }));
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+  };
+  const auto visibleControls = [&](const char* id) {
+    int count = 0;
+    for (auto* widget : window.findChildren<QWidget*>()) {
+      if (widget->property("controlId").toString() == id &&
+          widget->isVisible()) {
+        ++count;
+      }
+    }
+    return count;
+  };
+  const auto expectUnknown = [&](bool knownWorker, int expectedSlots) {
+    assert(statusBadge->text() == "Identity unavailable");
+    assert(statusBadge->property("identityUnavailable").toBool());
+    assert(statusBadge->property("active").toBool() == knownWorker);
+    assert(visibleControls("runtimeSlot") == expectedSlots);
+    assert(visibleControls("runtimeIdentityBadge") == 1);
+    assert(!start->isEnabled());
+    const QString beforeStart = logContents(logPath);
+    start->click();
+    assert(logContents(logPath) == beforeStart);
+    for (const char* id : {"benchmark", "selfTest", "installKangaroo"}) {
+      auto* button = control<QPushButton>(window, id);
+      assert(button != nullptr && !button->isEnabled());
+      const QString before = logContents(logPath);
+      button->click();
+      assert(logContents(logPath) == before);
+    }
+    assert(!thermalEnabled->isEnabled());
+    assert(!saveThermal->isEnabled());
+    assert(safeStop->isEnabled());
+    assert(stop->isEnabled());
+    for (const char* id : {"refresh", "doctor", "updates", "audit"}) {
+      assert(control<QPushButton>(window, id)->isEnabled());
+    }
+  };
+
+  // An unreadable primary supervisor must not imply stopped or running,
+  // including the legacy output that still contains a runtime PID.
+  readStatus("Status............. identity unavailable\n"
+             "Execution.......... none\n");
+  expectUnknown(false, 1);
+  readStatus("Status............. identity unavailable\n"
+             "Runtime PID........ 12345\nExecution.......... none\n");
+  expectUnknown(false, 1);
+
+  // State-only engines and dynamic supervisors have no Runtime PID field.
+  readStatus("Slot............... opencl-1\n"
+             "Status............. identity unavailable\n"
+             "Assignment......... uncertain-engine\n"
+             "Engine............. BitCrack\nBackend............ OpenCL\n");
+  expectUnknown(false, 1);
+  readStatus("Slot............... cuda-2\n"
+             "Status............. identity unavailable\n"
+             "Execution.......... none\n");
+  expectUnknown(false, 1);
+  readStatus("Slot............... cpu\nStatus............. stopped\n"
+             "Runtime identity... unavailable\n"
+             "Assignment......... preserved-state\n");
+  expectUnknown(false, 1);
+
+  // An uncertain supervisor can coexist with a confirmed active engine.
+  readStatus("Slot............... cpu\nStatus............. running\n"
+             "Runtime identity... unavailable\n"
+             "Assignment......... active-engine\nEngine............. KeyHunt\n");
+  expectUnknown(true, 1);
+
+  // A known worker must remain visible beside an uncertain worker.
+  readStatus("Slot............... cuda-0\nStatus............. running\n"
+             "Assignment......... known-worker\n\n"
+             "Slot............... opencl-1\n"
+             "Status............. identity unavailable\n"
+             "Assignment......... uncertain-worker\n");
+  expectUnknown(true, 2);
+
+  QComboBox* identityLanguage = nullptr;
+  for (auto* combo : window.findChildren<QComboBox*>()) {
+    if (combo->findData("pt") >= 0 && combo->findData("fr") >= 0) {
+      identityLanguage = combo;
+      break;
+    }
+  }
+  assert(identityLanguage != nullptr);
+  const QStringList identityLabels = {
+      "Identity unavailable", "Identidade indisponível",
+      "Identité indisponible", "Identidad no disponible"};
+  const QStringList identityMessages = {
+      "An execution cannot be confirmed. Refresh status or run diagnostics before starting new work.",
+      "Não foi possível confirmar uma execução. Atualize o estado ou execute o diagnóstico antes de iniciar novo trabalho.",
+      "Une exécution ne peut pas être confirmée. Actualisez l’état ou lancez le diagnostic avant de démarrer un nouveau travail.",
+      "No se pudo confirmar una ejecución. Actualice el estado o ejecute el diagnóstico antes de iniciar un nuevo trabajo."};
+  for (int index = 0; index < identityLabels.size(); ++index) {
+    identityLanguage->setCurrentIndex(index);
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    assert(statusBadge->text() == identityLabels[index]);
+    assert(!start->isEnabled() && !saveThermal->isEnabled());
+    assert(control<QLabel>(window, "runtimeIdentityBadge")->text() ==
+           identityLabels[index]);
+    bool messageVisible = false;
+    for (auto* label : window.findChildren<QLabel*>()) {
+      messageVisible = messageVisible ||
+          (label->isVisible() && label->text() == identityMessages[index]);
+    }
+    assert(messageVisible);
+  }
+  identityLanguage->setCurrentIndex(0);
+
+  readStatus("Slot............... primary\n"
+             "Status............. identity unavailable\n"
+             "Engine............. Kangaroo\nBackend............ CUDA\n");
+  assert(statusBadge->text() == "Identity unavailable");
+  assert(!safeStop->isEnabled());
+  assert(stop->isEnabled() && !start->isEnabled());
+
+  readStatus("Slot............... cuda-0\nStatus............. running\n"
+             "Assignment......... known-worker\n");
+  assert(statusBadge->text() == "Running");
+  assert(!statusBadge->property("identityUnavailable").toBool());
+  assert(visibleControls("runtimeSlot") == 1);
+  assert(visibleControls("runtimeIdentityBadge") == 0);
+  assert(!start->isEnabled());
+  assert(safeStop->isEnabled());
+  readStatus("Runtime PID........ 12345\nExecution.......... none\n");
+  assert(statusBadge->text() == "Running");
+  assert(statusBadge->property("active").toBool());
+  assert(!statusBadge->property("identityUnavailable").toBool());
+  readStatus("Status............. idle\nExecution.......... none\n");
+  assert(statusBadge->text() == "Stopped");
+  assert(!statusBadge->property("identityUnavailable").toBool());
+  assert(visibleControls("runtimeSlot") == 0);
+  assert(start->isEnabled() && saveThermal->isEnabled());
 
   assert(statusFile.open(
       QIODevice::WriteOnly |

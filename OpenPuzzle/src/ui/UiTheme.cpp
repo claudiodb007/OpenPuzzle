@@ -133,6 +133,17 @@ QString themeStyleSheet(UiTheme theme) {
       background: %6;
       color: %7;
     }
+    QLabel#StatusBadge[identityUnavailable="true"],
+    QLabel#RuntimeIdentityBadge {
+      background: #b45309;
+      color: #ffffff;
+    }
+    QLabel#RuntimeIdentityBadge {
+      border-radius: 11px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 9px;
+    }
     QFrame#Card {
       background: %8;
       border: 1px solid %3;

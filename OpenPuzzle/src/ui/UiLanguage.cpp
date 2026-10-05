@@ -21,6 +21,12 @@ const QHash<QString, QStringList>& translations() {
       {"running", {"Running", "Em execução", "En cours", "En ejecución"}},
       {"stopped", {"Stopped", "Parado", "Arrêté", "Detenido"}},
       {"unavailable", {"Unavailable", "Indisponível", "Indisponible", "No disponible"}},
+      {"identity_unavailable", {"Identity unavailable", "Identidade indisponível", "Identité indisponible", "Identidad no disponible"}},
+      {"identity_unavailable_message", {
+          "An execution cannot be confirmed. Refresh status or run diagnostics before starting new work.",
+          "Não foi possível confirmar uma execução. Atualize o estado ou execute o diagnóstico antes de iniciar novo trabalho.",
+          "Une exécution ne peut pas être confirmée. Actualisez l’état ou lancez le diagnostic avant de démarrer un nouveau travail.",
+          "No se pudo confirmar una ejecución. Actualice el estado o ejecute el diagnóstico antes de iniciar un nuevo trabajo."}},
       {"current_state", {"Current status", "Estado atual", "État actuel", "Estado actual"}},
       {"refresh", {"Refresh", "Atualizar", "Actualiser", "Actualizar"}},
       {"consulting", {"Reading client status...", "A consultar o estado do cliente...", "Lecture de l’état du client...", "Consultando el estado del cliente..."}},

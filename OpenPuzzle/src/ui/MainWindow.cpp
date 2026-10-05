@@ -81,6 +81,20 @@ QVector<RuntimeSlotStatus> parseRuntimeSlots(
   return runtimeSlots;
 }
 
+bool slotIdentityUnavailable(const RuntimeSlotStatus& slot) {
+  return slot.fields.value("Status").compare(
+             "identity unavailable", Qt::CaseInsensitive) == 0 ||
+         slot.fields.value("Runtime identity").compare(
+             "unavailable", Qt::CaseInsensitive) == 0;
+}
+
+bool slotActive(const RuntimeSlotStatus& slot) {
+  const QString state = slot.fields.value("Status").toLower();
+  return state == "running" || state == "waiting" ||
+         (slot.fields.contains("Runtime PID") &&
+          !slotIdentityUnavailable(slot));
+}
+
 QString statusField(
     const RuntimeSlotStatus& slot,
     const QString& key) {
@@ -903,7 +917,7 @@ void MainWindow::loadThermalSettings() {
 }
 
 void MainWindow::updateThermalControlState() {
-  const bool editable = !active_ && !busy_;
+  const bool editable = !active_ && !identityUnavailable_ && !busy_;
   const bool policyEnabled =
       editable && thermalEnabled_->isChecked();
 
@@ -1008,7 +1022,9 @@ void MainWindow::applyLanguage() {
   summary_->setText(
       solutionFound_
           ? t("solution_saved")
-          : (active_ ? t("runtime_active") : t("no_execution")));
+          : (identityUnavailable_
+                 ? t("identity_unavailable_message")
+                 : (active_ ? t("runtime_active") : t("no_execution"))));
 
   safeStop_->setToolTip(
       kangarooActive_
@@ -1031,12 +1047,13 @@ void MainWindow::applyTheme() {
 
 void MainWindow::updateActionAvailability() {
   const bool ready = !busy_ && cliAvailable_;
-  const bool idle = !active_ && !solutionFound_ && ready;
+  const bool occupied = active_ || identityUnavailable_;
+  const bool idle = !occupied && !solutionFound_ && ready;
 
   start_->setEnabled(idle);
   safeStop_->setEnabled(
-      ready && active_ && !kangarooActive_);
-  stop_->setEnabled(ready && active_);
+      ready && occupied && !kangarooActive_);
+  stop_->setEnabled(ready && occupied);
   refresh_->setEnabled(!busy_);
 
   benchmark_->setEnabled(idle);
@@ -1056,7 +1073,9 @@ void MainWindow::updateActionAvailability() {
   updateThermalControlState();
 
   const QString busyHint =
-      active_ ? t("busy_active") : QString();
+      identityUnavailable_
+          ? t("identity_unavailable_message")
+          : (active_ ? t("busy_active") : QString());
   benchmark_->setToolTip(busyHint);
   selfTest_->setToolTip(busyHint);
   installKangaroo_->setToolTip(busyHint);
@@ -1140,28 +1159,30 @@ void MainWindow::handleStatusResult() {
   updateThermalAlerts(result);
 
   const auto runtimeSlots = parseRuntimeSlots(result);
+  active_ = false;
+  identityUnavailable_ = false;
+  kangarooActive_ = false;
   QString solutionAssignmentId;
   for (const auto& slot : runtimeSlots) {
+    const bool slotRunning = slotActive(slot);
+    const bool slotUnknown = slotIdentityUnavailable(slot);
+    active_ = active_ || slotRunning;
+    identityUnavailable_ = identityUnavailable_ || slotUnknown;
+    kangarooActive_ = kangarooActive_ ||
+        ((slotRunning || slotUnknown) &&
+         slot.fields.value("Engine").compare(
+             "Kangaroo", Qt::CaseInsensitive) == 0);
     if (slot.fields.value("Status").compare(
             "solution found",
-            Qt::CaseInsensitive) == 0) {
+            Qt::CaseInsensitive) == 0 && solutionAssignmentId.isEmpty()) {
       solutionAssignmentId = slot.fields.value("Assignment");
       if (solutionAssignmentId.isEmpty()) {
         solutionAssignmentId = QStringLiteral("solution");
       }
-      break;
     }
   }
 
   solutionFound_ = !solutionAssignmentId.isEmpty();
-  active_ =
-      result.contains("Status............. running") ||
-      result.contains("Status............. waiting") ||
-      result.contains("Runtime PID........");
-
-  kangarooActive_ =
-      active_ &&
-      result.contains("Engine............. Kangaroo");
 
   updateStatusBadge();
 
@@ -1178,6 +1199,12 @@ void MainWindow::handleStatusResult() {
     return;
   }
 
+  if (identityUnavailable_) {
+    summary_->setText(t("identity_unavailable_message"));
+    rebuildSlotCards(result);
+    return;
+  }
+
   if (!active_) {
     summary_->setText(t("no_execution"));
     rebuildSlotCards(result);
@@ -1189,8 +1216,11 @@ void MainWindow::handleStatusResult() {
 
 void MainWindow::updateStatusBadge() {
   statusBadge_->setText(
-      active_ ? t("running") : t("stopped"));
+      identityUnavailable_
+          ? t("identity_unavailable")
+          : (active_ ? t("running") : t("stopped")));
   statusBadge_->setProperty("active", active_);
+  statusBadge_->setProperty("identityUnavailable", identityUnavailable_);
   statusBadge_->style()->unpolish(statusBadge_);
   statusBadge_->style()->polish(statusBadge_);
 }
@@ -1423,17 +1453,15 @@ void MainWindow::rebuildSlotCards(
     delete item;
   }
 
-  if (!active_) {
+  if (!active_ && !identityUnavailable_) {
     slotsHost_->setVisible(false);
     return;
   }
 
   const auto runtimeSlots = parseRuntimeSlots(statusOutput);
   for (const auto& slot : runtimeSlots) {
-    const QString state = slot.fields.value("Status").toLower();
-    if (state != "running" &&
-        state != "waiting" &&
-        !slot.fields.contains("Runtime PID")) {
+    const bool identityUnavailable = slotIdentityUnavailable(slot);
+    if (!slotActive(slot) && !identityUnavailable) {
       continue;
     }
 
@@ -1460,6 +1488,15 @@ void MainWindow::rebuildSlotCards(
     title->setObjectName("SlotTitle");
     cardHeader->addWidget(title);
     cardHeader->addStretch();
+
+    if (identityUnavailable) {
+      auto* identityBadge = new QLabel(t("identity_unavailable"));
+      identityBadge->setObjectName("RuntimeIdentityBadge");
+      identityBadge->setProperty("controlId", "runtimeIdentityBadge");
+      identityBadge->setAlignment(Qt::AlignCenter);
+      identityBadge->setToolTip(t("identity_unavailable_message"));
+      cardHeader->addWidget(identityBadge);
+    }
 
     const QString rawThermalState =
         slot.fields.value("Thermal state");

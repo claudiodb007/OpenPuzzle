@@ -452,3 +452,19 @@ identities. Read-only `update --check` and `--download-only` remain available.
 Installation checks include dynamic GPU slots and are repeated immediately before
 installing. A safe update does not roll back existing requests when a peer request
 fails, and it waits while a process remains active or its identity is unavailable.
+
+### Unavailable process identity in the desktop interface
+
+The desktop interface shows `Identity unavailable` when `status` reports an
+uncertain engine or supervisor identity. This includes primary, legacy and
+dynamic GPU slots, engine state without a supervisor marker, and a stopped
+engine whose supervisor reports `Runtime identity... unavailable`.
+
+Affected slot cards remain visible with an identity warning. The warning takes
+precedence over the global running badge even when another slot is confirmed
+active. A runtime PID alone does not override an explicit identity warning.
+Starting searches, benchmarking, self-tests, Kangaroo installation and thermal
+configuration remain disabled until a subsequent status confirms the state.
+Refresh, diagnostics, update checks and auditing remain available. Stop controls
+can retry the CLI's identity-checked requests; Kangaroo retains its safe-stop
+restriction. Language changes preserve the warning and disabled controls.
