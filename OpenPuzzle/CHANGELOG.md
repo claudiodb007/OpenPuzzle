@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.40 — Keep desktop commands reserved across status updates
+
+- Keep foreground desktop commands reserved until their own process finishes
+  or fails to start, preventing background status replies from enabling another
+  command or a new search while the first command is still in progress.
+- Separate command reservation from the existing pending detached runtime launch.
+- Keep command buttons, execution choices and thermal configuration disabled
+  across valid status replies, query errors, timeouts and language changes.
+- Continue updating visible runtime status while a foreground command is active;
+  a query timeout terminates only the status subprocess.
+- Release only the matching command's reservation on normal exit, nonzero exit,
+  crash or failure to start; restore controls according to the confirmed state.
+- Pass 142 native client tests before applying the release identity, adding
+  UiCommandBusyTests for held commands, status updates, failures and recovery.
+
 ## 1.0.39 — Preserve confirmed desktop state when status queries fail
 
 - Wait for the first valid status response before enabling new searches,
