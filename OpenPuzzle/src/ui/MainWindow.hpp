@@ -71,7 +71,7 @@ private:
   void runSelfTest();
   void confirmStop();
   void confirmKangarooInstall();
-  void setBusy(bool busy);
+  void releaseCommand(QProcess* process);
   QString cliExecutable() const;
   void showOutput(const QString& title, const QString& output);
   QString t(const QString& key) const;
@@ -130,6 +130,7 @@ private:
   QPushButton* clearThermalHistory_ = nullptr;
   QTabWidget* detailsTabs_ = nullptr;
   QProcess* statusProcess_ = nullptr;
+  QProcess* commandProcess_ = nullptr;
   QTimer* refreshTimer_ = nullptr;
   QTimer* statusTimeout_ = nullptr;
   bool active_ = false;
@@ -140,7 +141,7 @@ private:
   QString statusIssueKey_ = QStringLiteral("consulting");
   bool solutionFound_ = false;
   bool kangarooActive_ = false;
-  bool busy_ = false;
+  bool launchPending_ = false;
   bool cliAvailable_ = true;
   QString lastSolutionNoticeId_;
   ThermalAlertTracker thermalAlertTracker_;

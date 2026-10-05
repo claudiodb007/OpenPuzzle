@@ -942,7 +942,7 @@ void MainWindow::loadThermalSettings() {
 
 void MainWindow::updateThermalControlState() {
   const bool editable = statusAvailable_ &&
-      !active_ && !identityUnavailable_ && !busy_;
+      !active_ && !identityUnavailable_ && !launchPending_ && !commandProcess_;
   const bool policyEnabled =
       editable && thermalEnabled_->isChecked();
 
@@ -1066,7 +1066,8 @@ void MainWindow::applyTheme() {
 }
 
 void MainWindow::updateActionAvailability() {
-  const bool ready = !busy_ && cliAvailable_;
+  const bool busy = launchPending_ || commandProcess_;
+  const bool ready = !busy && cliAvailable_;
   const bool occupied = active_ || identityUnavailable_;
   const bool idle = statusAvailable_ && !occupied && !solutionFound_ && ready;
 
@@ -1074,7 +1075,7 @@ void MainWindow::updateActionAvailability() {
   safeStop_->setEnabled(
       ready && occupied && !kangarooActive_);
   stop_->setEnabled(ready && occupied);
-  refresh_->setEnabled(!busy_);
+  refresh_->setEnabled(!busy);
 
   benchmark_->setEnabled(idle);
   selfTest_->setEnabled(idle);
@@ -1167,7 +1168,7 @@ void MainWindow::handleStatusResult(int exitCode, bool normalExit) {
   const QString result = QString::fromUtf8(
       statusProcess_->readAll()).trimmed();
 
-  busy_ = false;
+  launchPending_ = false;
 
   if (statusTimedOut_) {
     markStatusUnavailable("status_timeout");
@@ -1241,7 +1242,7 @@ void MainWindow::markStatusUnavailable(
     const QString& details) {
   statusAvailable_ = false;
   statusIssueKey_ = reasonKey;
-  busy_ = false;
+  launchPending_ = false;
   updateStatusBadge();
   updateStatusSummary();
   updateActionAvailability();
@@ -1809,6 +1810,10 @@ void MainWindow::confirmClearThermalHistory() {
 }
 
 void MainWindow::startExecution() {
+  if (launchPending_ || commandProcess_) {
+    return;
+  }
+
   const QString executable = cliExecutable();
   if (executable.isEmpty()) {
     QMessageBox::critical(
@@ -1899,7 +1904,7 @@ void MainWindow::startExecution() {
           "\n" + t("runtime_log_path") + ": " +
           logPath);
 
-  busy_ = true;
+  launchPending_ = true;
   updateActionAvailability();
   QTimer::singleShot(
       1200,
@@ -1910,6 +1915,10 @@ void MainWindow::startExecution() {
 void MainWindow::runCommand(
     const QString& titleKey,
     const QStringList& arguments) {
+  if (launchPending_ || commandProcess_) {
+    return;
+  }
+
   const QString executable = cliExecutable();
   if (executable.isEmpty()) {
     QMessageBox::critical(
@@ -1919,8 +1928,9 @@ void MainWindow::runCommand(
     return;
   }
 
-  setBusy(true);
   auto* process = new QProcess(this);
+  commandProcess_ = process;
+  updateActionAvailability();
   process->setProcessChannelMode(
       QProcess::MergedChannels);
 
@@ -1937,7 +1947,7 @@ void MainWindow::runCommand(
             t(titleKey),
             result);
         process->deleteLater();
-        setBusy(false);
+        releaseCommand(process);
         QTimer::singleShot(
             700,
             this,
@@ -1957,7 +1967,7 @@ void MainWindow::runCommand(
             t("error"),
             t("control_failed"));
         process->deleteLater();
-        setBusy(false);
+        releaseCommand(process);
       });
 
   process->start(executable, arguments);
@@ -2027,8 +2037,11 @@ void MainWindow::confirmKangarooInstall() {
   }
 }
 
-void MainWindow::setBusy(bool busy) {
-  busy_ = busy;
+void MainWindow::releaseCommand(QProcess* process) {
+  if (commandProcess_ != process) {
+    return;
+  }
+  commandProcess_ = nullptr;
   updateActionAvailability();
 }
 

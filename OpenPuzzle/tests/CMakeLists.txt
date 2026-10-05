@@ -208,6 +208,50 @@ if(TARGET OpenPuzzleUi)
         COMMAND UiStatusFailureTests
     )
 
+    add_executable(UiCommandBusyTests
+        ui/UiCommandBusyTests.cpp
+        ../src/ui/MainWindow.cpp
+        ../src/ui/MainWindow.hpp
+        ../src/ui/ThermalAlerts.cpp
+        ../src/ui/ThermalAlerts.hpp
+        ../src/ui/ThermalHistory.cpp
+        ../src/ui/ThermalHistory.hpp
+        ../src/ui/RunCommandBuilder.cpp
+        ../src/ui/UiLanguage.cpp
+        ../src/ui/UiLanguage.hpp
+        ../src/ui/UiTheme.cpp
+        ../src/ui/UiTheme.hpp
+        ../resources/openpuzzle-ui.qrc
+    )
+
+    set_target_properties(UiCommandBusyTests
+        PROPERTIES
+            AUTOMOC ON
+            AUTORCC ON
+    )
+
+    target_include_directories(UiCommandBusyTests
+        PRIVATE
+            ../include
+            ../src/ui
+    )
+
+    target_link_libraries(UiCommandBusyTests
+        PRIVATE
+            OpenPuzzleUiSettings
+            Qt6::Widgets
+    )
+
+    target_compile_definitions(UiCommandBusyTests
+        PRIVATE
+            OPENPUZZLE_VERSION="${PROJECT_VERSION}"
+    )
+
+    add_test(
+        NAME UiCommandBusyTests
+        COMMAND UiCommandBusyTests
+    )
+
     add_test(
         NAME DesktopUiInstallTests
         COMMAND

@@ -488,3 +488,18 @@ controls retain their established availability for the last confirmed occupied
 slots. The interface does not report a failed query as a stopped execution, and
 language changes preserve the failure reason. A later valid response restores
 normal controls or the explicit process-identity warning described above.
+
+### Desktop command reservation
+
+The desktop interface reserves its foreground command until that command exits
+or fails to start. Background status replies, query failures and query timeouts
+do not release this reservation. New searches, other commands, execution choices
+and thermal configuration remain disabled while the foreground command is in
+progress; status polling continues to update the visible runtime state.
+
+The pending detached runtime launch has a separate flag and retains its existing
+status-based release. A completed foreground command releases only its own
+reservation, including normal exit, nonzero exit, process crash and failure to
+start. A status timeout terminates only the status subprocess and leaves the
+foreground command running. Language changes preserve disabled controls. Later
+control availability follows the last confirmed runtime and identity state.
