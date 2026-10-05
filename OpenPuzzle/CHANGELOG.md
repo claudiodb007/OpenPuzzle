@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.39 — Preserve confirmed desktop state when status queries fail
+
+- Wait for the first valid status response before enabling new searches,
+  benchmarks, self-tests, Kangaroo installation or thermal configuration.
+- Show an explicit status warning after failed commands, process errors,
+  empty or invalid responses and the existing ten-second query timeout.
+- Reject partial idle output from failed, crashed or timed-out status commands;
+  require successful exit and recognized status for every reported slot.
+- Preserve last confirmed slot cards, assignment details, solution state and
+  thermal readings/history while blocking new work after a failed query.
+- Keep diagnostics and refresh available when the CLI can start; retain stop
+  availability for previously confirmed occupied slots and Kangaroo restrictions.
+- Preserve the failure reason across all four UI languages; a later valid status
+  restores normal controls or the existing process-identity warning.
+- Pass 141 native client tests before the release identity, adding
+  UiStatusFailureTests for startup, command failures, timeouts and recovery.
+
 ## 1.0.38 — Show unavailable execution identity in the desktop interface
 
 - Show an explicit identity warning when an engine or supervisor identity cannot
