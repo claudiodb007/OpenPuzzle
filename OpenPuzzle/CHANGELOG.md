@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.41 — Keep pending desktop launches across older status replies
+
+- Ignore status observations from queries started before a successful detached
+  launch, preventing an older idle response from re-enabling Start afterward.
+- Preserve the pending launch reservation across older query errors, crashes,
+  empty or invalid responses, read errors and timeouts.
+- Retain last confirmed status and disabled command, execution and thermal
+  controls until a query started after the launch settles the reservation.
+- Schedule another status query after an older query finishes; keep language
+  changes and foreground command reservations independent of query completion.
+- Retain established handling for fresh running, idle, unknown-identity and
+  failed responses; a timeout terminates only the status subprocess.
+- Pass 143 native client tests before applying the release identity, adding
+  UiLaunchStatusTests for response ordering and subsequent status recovery.
+
 ## 1.0.40 — Keep desktop commands reserved across status updates
 
 - Keep foreground desktop commands reserved until their own process finishes
