@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.38 — Show unavailable execution identity in the desktop interface
+
+- Show an explicit identity warning when an engine or supervisor identity cannot
+  be confirmed, instead of displaying stopped or inferring running from a PID.
+- Keep affected primary, legacy and dynamic GPU slot cards visible, including
+  uncertain supervisors with saved engine state and mixed worker states.
+- Disable new searches, benchmarks, self-tests, Kangaroo installation and thermal
+  configuration while any execution identity is unavailable.
+- Keep refresh, diagnostics, update checks and auditing available; allow retries
+  through CLI stop controls while retaining the Kangaroo safe-stop restriction.
+- Preserve identity warnings and disabled controls across all four UI languages;
+  restore the established controls when a later status confirms running or idle.
+- Pass 140 native client tests before applying the release identity, extending
+  UiControlTests with uncertain identities, mixed slots, language changes and
+  transitions back to confirmed states.
+
 ## 1.0.37 — Preserve uncertain identity across runtime controls
 
 - Report temporarily unavailable process identity in status instead of claiming
