@@ -574,3 +574,29 @@ numeric start times as unavailable (zero), while keeping the assignment visible.
 Missing legacy identity fields retain the same unavailable defaults. Tests exercise
 these cases only in temporary directories; short writes are induced in isolated
 child processes with a file-size limit and never launch an engine or assignment.
+
+### Stable local client identity
+
+The first client registration creates `~/.config/OpenPuzzle/client.id` under a
+private, persistent `client.id.lock` file. Cooperating client processes serialize
+both reading and first creation with an exclusive process lock. All simultaneous
+first callers receive the same complete UUID; the lock file is never removed
+after use, so later callers cannot accidentally lock a different inode.
+
+Only an absent identity file allows UUID generation. Empty, malformed, unreadable
+or non-regular identity files return a controlled failure and retain their bytes.
+A valid UUID with no line ending, LF or CRLF is accepted without changing its
+text or case. Extra records or invalid hexadecimal characters are rejected.
+Identity and lock symlinks are rejected without changing their targets.
+
+UUID generation uses the classic locale. Atomic private publication prevents a
+failed write from leaving a partial identity that a later call might register.
+The existing atomic writer does not provide a transaction across multiple files
+or a guarantee that directory entries survive a power loss. A failed creation
+can be retried when the storage problem is resolved.
+
+An existing damaged identity is not silently reset: preserve it and recover the
+original UUID from a known backup or matching local assignment before retrying.
+This change does not rotate existing valid UUIDs or register any client during
+validation. Mixed client versions that do not use the lock are not covered by
+the serialization guarantee.

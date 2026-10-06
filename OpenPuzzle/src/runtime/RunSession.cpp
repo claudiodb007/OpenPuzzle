@@ -3152,7 +3152,7 @@ ClientIterationResult RunSession::runOnce(
   const std::string clientId = client::ClientIdentity::loadOrCreate();
 
   if (clientId.empty()) {
-    std::cerr << "Unable to create local client identity\n";
+    std::cerr << "Unable to load or create local client identity; check ~/.config/OpenPuzzle/client.id\n";
 
     return 1;
   }

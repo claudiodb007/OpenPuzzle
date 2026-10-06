@@ -2228,3 +2228,8 @@ add_test(NAME ClientStateEncodingTests COMMAND ClientStateEncodingTests)
 add_executable(PersistenceFailureTests core/PersistenceFailureTests.cpp)
 target_link_libraries(PersistenceFailureTests PRIVATE OpenPuzzleCore)
 add_test(NAME PersistenceFailureTests COMMAND PersistenceFailureTests)
+
+add_executable(ClientIdentityIntegrityTests client/ClientIdentityIntegrityTests.cpp)
+target_link_libraries(ClientIdentityIntegrityTests PRIVATE OpenPuzzleCore)
+add_test(NAME ClientIdentityIntegrityTests COMMAND ClientIdentityIntegrityTests)
+set_tests_properties(ClientIdentityIntegrityTests PROPERTIES TIMEOUT 15)
