@@ -542,3 +542,35 @@ legacy configuration layouts remain supported. Configuration and execution
 metadata writers escape string contents consistently. Recovery decodes execution
 strings without changing their original command contents. These changes do not
 alter engine selection, assignment allocation or execution of recovered commands.
+
+
+### Complete local files and strict numeric recovery
+
+Configuration loading parses the complete JSON document before applying any field.
+An incomplete document returns the established defaults without rewriting the file;
+numeric fields with trailing text, fractional device IDs or non-finite values do not
+become partial settings. Flat and nested legacy layouts remain readable. Execution
+recovery also reads complete JSON fields: whitespace and field order do not change
+status or `echo_output`, and a later command containing `true` cannot override a
+stored `false`. Invalid recovery counters retain their unavailable defaults.
+
+Configuration, execution metadata and client-state writers serialize numbers with
+the classic locale. JSON decimals use a dot and integers have no regional grouping;
+finite doubles retain round-trip precision. Non-finite configuration values are
+rejected, and non-finite execution speeds do not replace a previous state file.
+
+These writers publish a complete, owner-only temporary file by renaming it within
+the destination directory. Failed writes, flushes or renames preserve the prior
+file; cleanup removes only the temporary file created by that operation. Temporary
+names are unique for each writer. Each file is published separately: this is not a
+transaction across execution.json and state.json and does not promise directory
+persistence across a sudden power loss. ExecutionPersistence retains its existing
+void API and silent failure reporting; configuration and client-state saves return
+false on failure.
+
+Client-state escaping preserves carriage returns, newlines and literal backslashes.
+Strict unsigned identity parsing treats negative, signed, overflowing or partially
+numeric start times as unavailable (zero), while keeping the assignment visible.
+Missing legacy identity fields retain the same unavailable defaults. Tests exercise
+these cases only in temporary directories; short writes are induced in isolated
+child processes with a file-size limit and never launch an engine or assignment.

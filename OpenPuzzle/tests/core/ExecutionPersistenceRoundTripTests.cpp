@@ -7,6 +7,7 @@
 
 #include <cassert>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <unistd.h>
@@ -57,6 +58,37 @@ int main() {
   assert(json.get<std::string>("status") == "FAILED");
   assert(json.get<int>("exit_code") == 7);
   assert(json.get<std::string>("keys_checked") == "12345");
+  // JSON whitespace and field order cannot change recovery status or booleans.
+  {
+    std::ofstream file(workspace.stateFile(42));
+    file << R"({"status":"FINISHED","exit_code":0,"lines_read":2,"average_speed":123.5})";
+  }
+  auto recoveredState = recovery.load(42);
+  assert(recoveredState.status == openpuzzle::RecoveryStatus::Finished);
+  assert(recoveredState.exitCode == 0 && recoveredState.linesRead == 2);
+  assert(recoveredState.averageSpeed == 123.5);
+  {
+    std::ofstream file(workspace.executionFile(42));
+    file << R"({"echo_output":false,"command":"echo true","execution_id":7,"job_id":42})";
+  }
+  auto recoveredContext = recovery.buildExecutionContext(42);
+  assert(!recoveredContext.echoOutput && recoveredContext.command == "echo true");
+  assert(recoveredContext.executionId == 7 && recoveredContext.jobId == 42);
+  {
+    std::ofstream file(workspace.stateFile(42));
+    file << R"({"status":"RUNNING","exit_code":"2suffix","lines_read":-1,"average_speed":"123.5suffix"})";
+  }
+  recoveredState = recovery.load(42);
+  assert(recoveredState.status == openpuzzle::RecoveryStatus::Running);
+  assert(recoveredState.exitCode == -1 && recoveredState.linesRead == 0);
+  assert(recoveredState.averageSpeed == 0.0);
+  {
+    std::ofstream file(workspace.executionFile(42));
+    file << R"({"execution_id":7,"puzzle_id":71,"job_id":42,"command":"echo true")";
+  }
+  recoveredContext = recovery.buildExecutionContext(42);
+  assert(recoveredContext.executionId == 0 && recoveredContext.puzzleId == 0);
+  assert(recoveredContext.command.empty() && recoveredContext.jobId == 42);
   fs::remove_all(root);
   std::cout << "ExecutionPersistenceRoundTripTests passed\n";
 }

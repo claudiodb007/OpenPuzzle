@@ -2,12 +2,15 @@
 
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/core/JsonString.hpp"
+#include "openpuzzle/core/JsonNumber.hpp"
+#include "openpuzzle/core/AtomicFile.hpp"
 
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
 #include <cstdlib>
-#include <cctype>
+#include <charconv>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <locale>
@@ -35,104 +38,52 @@ std::optional<std::string> findJsonString(
   return std::nullopt;
 }
 
-std::optional<std::string> readJsonStringAfterKey(
-    const std::string& text,
+std::optional<int> readJsonIntegerAfterKey(
+    const boost::property_tree::ptree& document,
     const std::string& key) {
-  try {
-    std::istringstream input(text);
-    boost::property_tree::ptree document;
-    boost::property_tree::read_json(input, document);
-    return findJsonString(document, key);
-  } catch (...) {
+  const auto text = findJsonString(document, key);
+  if (!text) {
     return std::nullopt;
   }
-}
-
-std::optional<int> readJsonIntegerAfterKey(const std::string &text,
-                                           const std::string &key) {
-  const auto keyPosition = text.find("\"" + key + "\"");
-
-  if (keyPosition == std::string::npos) {
+  int value = 0;
+  const auto parsed = std::from_chars(
+      text->data(), text->data() + text->size(), value);
+  if (parsed.ec != std::errc{} || parsed.ptr != text->data() + text->size()) {
     return std::nullopt;
   }
-
-  const auto colon = text.find(':', keyPosition);
-
-  if (colon == std::string::npos) {
-    return std::nullopt;
-  }
-
-  std::size_t position = colon + 1;
-
-  while (position < text.size() &&
-         std::isspace(static_cast<unsigned char>(text[position]))) {
-    ++position;
-  }
-
-  std::size_t consumed = 0;
-
-  try {
-    const int value = std::stoi(text.substr(position), &consumed);
-
-    return value;
-  } catch (...) {
-    return std::nullopt;
-  }
+  return value;
 }
 
 std::optional<double> readJsonDoubleAfterKey(
-    const std::string &text,
-    const std::string &key) {
-  const auto keyPosition = text.find("\"" + key + "\"");
-
-  if (keyPosition == std::string::npos) {
+    const boost::property_tree::ptree& document,
+    const std::string& key) {
+  const auto text = findJsonString(document, key);
+  if (!text) {
     return std::nullopt;
   }
-
-  const auto colon = text.find(':', keyPosition);
-  if (colon == std::string::npos) {
-    return std::nullopt;
-  }
-
-  std::istringstream input(text.substr(colon + 1));
+  std::istringstream input(*text);
   input.imbue(std::locale::classic());
-
   double value = 0.0;
-  if (!(input >> value)) {
+  if (!(input >> value) || !std::isfinite(value)) {
     return std::nullopt;
   }
-
+  input >> std::ws;
+  if (!input.eof()) {
+    return std::nullopt;
+  }
   return value;
 }
 
 std::optional<bool> readJsonBooleanAfterKey(
-    const std::string &text,
-    const std::string &key) {
-  const auto keyPosition = text.find("\"" + key + "\"");
-
-  if (keyPosition == std::string::npos) {
-    return std::nullopt;
-  }
-
-  const auto colon = text.find(':', keyPosition);
-  if (colon == std::string::npos) {
-    return std::nullopt;
-  }
-
-  std::size_t position = colon + 1;
-  while (position < text.size() &&
-         std::isspace(static_cast<unsigned char>(text[position]))) {
-    ++position;
-  }
-
-  if (text.compare(position, 4, "true") == 0) {
+    const boost::property_tree::ptree& document,
+    const std::string& key) {
+  const auto text = findJsonString(document, key);
+  if (text == "true") {
     return true;
   }
-
-  if (text.compare(position, 5, "false") == 0) {
+  if (text == "false") {
     return false;
   }
-
   return std::nullopt;
 }
 
@@ -188,13 +139,21 @@ Configuration ConfigurationManager::load() {
     return config;
   }
 
-  if (const auto value = readJsonStringAfterKey(text, "cuda")) {
+  boost::property_tree::ptree document;
+  try {
+    std::istringstream input(text);
+    boost::property_tree::read_json(input, document);
+  } catch (...) {
+    return config;
+  }
+
+  if (const auto value = findJsonString(document, "cuda")) {
     config.bitcrack.cudaPath = *value;
-  } else if (const auto legacy = readJsonStringAfterKey(text, "bitcrack")) {
+  } else if (const auto legacy = findJsonString(document, "bitcrack")) {
     config.bitcrack.cudaPath = *legacy;
   }
 
-  if (const auto value = readJsonStringAfterKey(text, "opencl")) {
+  if (const auto value = findJsonString(document, "opencl")) {
     config.bitcrack.openclPath = *value;
   } else if (!config.bitcrack.cudaPath.empty()) {
     config.bitcrack.openclPath =
@@ -202,43 +161,43 @@ Configuration ConfigurationManager::load() {
             .string();
   }
 
-  if (const auto value = readJsonStringAfterKey(text, "engine_id")) {
+  if (const auto value = findJsonString(document, "engine_id")) {
     config.engine.id = *value;
   }
 
-  if (const auto value = readJsonStringAfterKey(text, "backend")) {
+  if (const auto value = findJsonString(document, "backend")) {
     config.engine.backend = *value;
   }
 
-  if (const auto value = readJsonStringAfterKey(text, "executable")) {
+  if (const auto value = findJsonString(document, "executable")) {
     config.engine.executable = *value;
   }
 
-  if (const auto value = readJsonIntegerAfterKey(text, "gpu_device")) {
+  if (const auto value = readJsonIntegerAfterKey(document, "gpu_device")) {
     config.gpu.device = *value;
   }
 
-  if (const auto value = readJsonStringAfterKey(text, "rusticl_enable")) {
+  if (const auto value = findJsonString(document, "rusticl_enable")) {
     config.gpu.rusticlEnable = *value;
   }
 
-  if (const auto value = readJsonBooleanAfterKey(text, "thermal_enabled")) {
+  if (const auto value = readJsonBooleanAfterKey(document, "thermal_enabled")) {
     config.gpu.thermal.enabled = *value;
   }
 
-  if (const auto value = readJsonBooleanAfterKey(text, "thermal_stop_on_critical")) {
+  if (const auto value = readJsonBooleanAfterKey(document, "thermal_stop_on_critical")) {
     config.gpu.thermal.stopOnCritical = *value;
   }
 
-  if (const auto value = readJsonDoubleAfterKey(text, "thermal_warning_c")) {
+  if (const auto value = readJsonDoubleAfterKey(document, "thermal_warning_c")) {
     config.gpu.thermal.warningC = *value;
   }
 
-  if (const auto value = readJsonDoubleAfterKey(text, "thermal_critical_c")) {
+  if (const auto value = readJsonDoubleAfterKey(document, "thermal_critical_c")) {
     config.gpu.thermal.criticalC = *value;
   }
 
-  if (const auto value = readJsonIntegerAfterKey(text, "duration_minutes")) {
+  if (const auto value = readJsonIntegerAfterKey(document, "duration_minutes")) {
     if (*value > 0) {
       config.assignment.durationMinutes = *value;
     }
@@ -257,20 +216,13 @@ bool ConfigurationManager::save(const Configuration &config) {
     return false;
   }
 
-  std::ofstream output(
-      path,
-      std::ios::trunc);
-
-  if (!output) {
+  if (!std::isfinite(config.gpu.thermal.warningC) ||
+      !std::isfinite(config.gpu.thermal.criticalC)) {
     return false;
   }
 
-  try {
-    WorkspaceSecurity::protectFile(
-        path);
-  } catch (...) {
-    return false;
-  }
+  std::ostringstream output;
+  output.imbue(std::locale::classic());
 
   output << "{\n"
          << "  \"engine\": {\n"
@@ -295,9 +247,9 @@ bool ConfigurationManager::save(const Configuration &config) {
          << "    \"thermal_stop_on_critical\": "
          << (config.gpu.thermal.stopOnCritical ? "true" : "false") << ",\n"
          << "    \"thermal_warning_c\": "
-         << config.gpu.thermal.warningC << ",\n"
+         << encodeJsonDouble(config.gpu.thermal.warningC) << ",\n"
          << "    \"thermal_critical_c\": "
-         << config.gpu.thermal.criticalC << "\n"
+         << encodeJsonDouble(config.gpu.thermal.criticalC) << "\n"
          << "  },\n"
          << "  \"assignment\": {\n"
          << "    \"duration_minutes\": " << config.assignment.durationMinutes
@@ -305,10 +257,7 @@ bool ConfigurationManager::save(const Configuration &config) {
          << "  }\n"
          << "}\n";
 
-  output.close();
-
-  return static_cast<bool>(
-      output);
+  return writePrivateFileAtomically(path, output.str());
 }
 
 } // namespace openpuzzle

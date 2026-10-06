@@ -2,12 +2,16 @@
 
 #include "openpuzzle/runtime/ExecutionSlot.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+#include "openpuzzle/core/AtomicFile.hpp"
 
+#include <charconv>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <locale>
+#include <sstream>
 #include <string>
 
 namespace openpuzzle::client {
@@ -29,6 +33,7 @@ std::string escapeValue(
       break;
 
     case '\r':
+      escaped += "\\r";
       break;
 
     default:
@@ -50,6 +55,8 @@ std::string unescapeValue(
     if (escaped) {
       if (character == 'n') {
         result += '\n';
+      } else if (character == 'r') {
+        result += '\r';
       } else {
         result += character;
       }
@@ -74,7 +81,7 @@ std::string unescapeValue(
 }
 
 void writeField(
-    std::ofstream& output,
+    std::ostream& output,
     const std::string& name,
     const std::string& value) {
   output
@@ -95,12 +102,11 @@ int parseInteger(
     return 0;
   }
 
-  try {
-    return std::stoi(
-        iterator->second);
-  } catch (...) {
-    return 0;
-  }
+  int value = 0;
+  const auto& text = iterator->second;
+  const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
+  return parsed.ec == std::errc{} && parsed.ptr == text.data() + text.size()
+      ? value : 0;
 }
 
 std::uint64_t parseUnsigned64(
@@ -114,24 +120,11 @@ std::uint64_t parseUnsigned64(
     return 0;
   }
 
-  try {
-    std::size_t consumed = 0;
-
-    const auto value =
-        std::stoull(
-            iterator->second,
-            &consumed,
-            10);
-
-    if (consumed !=
-        iterator->second.size()) {
-      return 0;
-    }
-
-    return value;
-  } catch (...) {
-    return 0;
-  }
+  std::uint64_t value = 0;
+  const auto& text = iterator->second;
+  const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
+  return parsed.ec == std::errc{} && parsed.ptr == text.data() + text.size()
+      ? value : 0;
 }
 
 std::string valueOf(
@@ -244,29 +237,8 @@ bool ClientStateStore::save(
     return false;
   }
 
-  const auto temporaryPath =
-      statePath.string() +
-      ".tmp";
-
-  std::ofstream output(
-      temporaryPath,
-      std::ios::trunc);
-
-  if (!output) {
-    return false;
-  }
-
-  try {
-    WorkspaceSecurity::protectFile(
-        temporaryPath);
-  } catch (...) {
-    output.close();
-
-    std::filesystem::remove(
-        temporaryPath);
-
-    return false;
-  }
+  std::ostringstream output;
+  output.imbue(std::locale::classic());
 
   output
       << "active=1\n"
@@ -372,38 +344,7 @@ bool ClientStateStore::save(
       "command",
       state.command);
 
-  output.close();
-
-  if (!output) {
-    std::filesystem::remove(
-        temporaryPath);
-
-    return false;
-  }
-
-  std::error_code error;
-
-  std::filesystem::rename(
-      temporaryPath,
-      statePath,
-      error);
-
-  if (!error) {
-    return true;
-  }
-
-  std::filesystem::remove(
-      statePath,
-      error);
-
-  error.clear();
-
-  std::filesystem::rename(
-      temporaryPath,
-      statePath,
-      error);
-
-  return !error;
+  return writePrivateFileAtomically(statePath, output.str());
 }
 
 std::optional<ClientExecutionState>
