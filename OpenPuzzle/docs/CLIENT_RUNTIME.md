@@ -520,3 +520,25 @@ reports unavailable status and leaves new searches disabled until a valid query
 recovers. This ordering does not prove runtime registration or process liveness;
 it prevents a pre-launch query from being treated as a post-launch observation.
 The foreground command reservation remains independent.
+
+### Confirmation dialogs and persisted client data
+
+Stop and Kangaroo installation confirmations recheck the current availability
+of their controls after the dialog closes. Status polling continues while a
+confirmation is open. A newly occupied or unavailable client cannot proceed
+with installation, and a newly idle client does not receive the confirmed Stop
+command. Existing Stop retries for occupied slots with unavailable identity or
+status remain supported. Cancelling a confirmation performs no command.
+
+Thermal history loading treats malformed entries as a recovery condition for
+the entire file, including malformed entries after valid ones. Existing in-memory
+history and the original file remain intact; appending stays blocked until an
+explicit clear. Missing optional temperature and stop-request fields retain their
+legacy defaults, while fields with invalid types are rejected.
+
+Configuration string values are decoded as JSON fields, preserving quoted paths,
+backslashes, control characters and escaped Unicode. Existing nested and flat
+legacy configuration layouts remain supported. Configuration and execution
+metadata writers escape string contents consistently. Recovery decodes execution
+strings without changing their original command contents. These changes do not
+alter engine selection, assignment allocation or execution of recovered commands.

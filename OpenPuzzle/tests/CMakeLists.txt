@@ -296,6 +296,50 @@ if(TARGET OpenPuzzleUi)
         COMMAND UiLaunchStatusTests
     )
 
+    add_executable(UiConfirmationTests
+        ui/UiConfirmationTests.cpp
+        ../src/ui/MainWindow.cpp
+        ../src/ui/MainWindow.hpp
+        ../src/ui/ThermalAlerts.cpp
+        ../src/ui/ThermalAlerts.hpp
+        ../src/ui/ThermalHistory.cpp
+        ../src/ui/ThermalHistory.hpp
+        ../src/ui/RunCommandBuilder.cpp
+        ../src/ui/UiLanguage.cpp
+        ../src/ui/UiLanguage.hpp
+        ../src/ui/UiTheme.cpp
+        ../src/ui/UiTheme.hpp
+        ../resources/openpuzzle-ui.qrc
+    )
+
+    set_target_properties(UiConfirmationTests
+        PROPERTIES
+            AUTOMOC ON
+            AUTORCC ON
+    )
+
+    target_include_directories(UiConfirmationTests
+        PRIVATE
+            ../include
+            ../src/ui
+    )
+
+    target_link_libraries(UiConfirmationTests
+        PRIVATE
+            OpenPuzzleUiSettings
+            Qt6::Widgets
+    )
+
+    target_compile_definitions(UiConfirmationTests
+        PRIVATE
+            OPENPUZZLE_VERSION="${PROJECT_VERSION}"
+    )
+
+    add_test(
+        NAME UiConfirmationTests
+        COMMAND UiConfirmationTests
+    )
+
     add_test(
         NAME DesktopUiInstallTests
         COMMAND
@@ -2164,3 +2208,11 @@ add_test(
     NAME KangarooWalkSeedTests
     COMMAND KangarooWalkSeedTests
 )
+
+add_executable(ConfigurationJsonRoundTripTests config/ConfigurationJsonRoundTripTests.cpp)
+target_link_libraries(ConfigurationJsonRoundTripTests PRIVATE OpenPuzzleCore)
+add_test(NAME ConfigurationJsonRoundTripTests COMMAND ConfigurationJsonRoundTripTests)
+
+add_executable(ExecutionPersistenceRoundTripTests core/ExecutionPersistenceRoundTripTests.cpp)
+target_link_libraries(ExecutionPersistenceRoundTripTests PRIVATE OpenPuzzleCore)
+add_test(NAME ExecutionPersistenceRoundTripTests COMMAND ExecutionPersistenceRoundTripTests)

@@ -1,4 +1,5 @@
 #include "openpuzzle/runtime/ExecutionPersistence.hpp"
+#include "openpuzzle/core/JsonString.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -23,9 +24,9 @@ void ExecutionPersistence::writeExecutionFile(
   executionFile << "  \"puzzle_id\": " << context.puzzleId << ",\n";
   executionFile << "  \"job_id\": " << context.jobId << ",\n";
   executionFile << "  \"range_id\": " << context.rangeId << ",\n";
-  executionFile << "  \"engine\": \"" << context.engine << "\",\n";
-  executionFile << "  \"command\": \"" << context.command << "\",\n";
-  executionFile << "  \"workspace\": \"" << context.workspace << "\",\n";
+  executionFile << "  \"engine\": \"" << escapeJsonString(context.engine) << "\",\n";
+  executionFile << "  \"command\": \"" << escapeJsonString(context.command) << "\",\n";
+  executionFile << "  \"workspace\": \"" << escapeJsonString(context.workspace) << "\",\n";
   executionFile << "  \"echo_output\": "
                 << (context.echoOutput ? "true" : "false") << "\n";
   executionFile << "}\n";
@@ -47,11 +48,11 @@ void ExecutionPersistence::writeStateFile(
   }
 
   stateFile << "{\n";
-  stateFile << "  \"status\": \"" << status << "\",\n";
+  stateFile << "  \"status\": \"" << escapeJsonString(status) << "\",\n";
   stateFile << "  \"exit_code\": " << result.exitCode << ",\n";
   stateFile << "  \"lines_read\": " << result.linesRead << ",\n";
   stateFile << "  \"average_speed\": " << result.averageSpeed << ",\n";
-  stateFile << "  \"keys_checked\": \"" << result.keysChecked << "\"\n";
+  stateFile << "  \"keys_checked\": \"" << escapeJsonString(result.keysChecked) << "\"\n";
   stateFile << "}\n";
 }
 

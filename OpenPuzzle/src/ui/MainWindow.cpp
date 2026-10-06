@@ -2032,7 +2032,7 @@ void MainWindow::confirmStop() {
           t("stop_title"),
           t("stop_question"),
           QMessageBox::Yes | QMessageBox::No,
-          QMessageBox::No) == QMessageBox::Yes) {
+          QMessageBox::No) == QMessageBox::Yes && stop_->isEnabled()) {
     runCommand("stop_now", {"stop"});
   }
 }
@@ -2043,7 +2043,7 @@ void MainWindow::confirmKangarooInstall() {
           t("install_title"),
           t("install_question"),
           QMessageBox::Yes | QMessageBox::No,
-          QMessageBox::No) == QMessageBox::Yes) {
+          QMessageBox::No) == QMessageBox::Yes && installKangaroo_->isEnabled()) {
     runCommand(
         "install_kangaroo",
         {"engine", "install", "psckangaroo"});

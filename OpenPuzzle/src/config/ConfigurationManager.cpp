@@ -1,6 +1,10 @@
 #include "openpuzzle/config/ConfigurationManager.hpp"
 
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+#include "openpuzzle/core/JsonString.hpp"
+
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
 
 #include <cstdlib>
 #include <cctype>
@@ -17,26 +21,31 @@ namespace openpuzzle {
 
 namespace {
 
-std::optional<std::string> readJsonStringAfterKey(const std::string &text,
-                                                  const std::string &key) {
-  const auto keyPosition = text.find("\"" + key + "\"");
+std::optional<std::string> findJsonString(
+    const boost::property_tree::ptree& node,
+    const std::string& key) {
+  for (const auto& field : node) {
+    if (field.first == key && field.second.empty()) {
+      return field.second.data();
+    }
+    if (const auto value = findJsonString(field.second, key)) {
+      return value;
+    }
+  }
+  return std::nullopt;
+}
 
-  if (keyPosition == std::string::npos) {
+std::optional<std::string> readJsonStringAfterKey(
+    const std::string& text,
+    const std::string& key) {
+  try {
+    std::istringstream input(text);
+    boost::property_tree::ptree document;
+    boost::property_tree::read_json(input, document);
+    return findJsonString(document, key);
+  } catch (...) {
     return std::nullopt;
   }
-
-  const auto colon = text.find(':', keyPosition);
-
-  const auto firstQuote = text.find('"', colon);
-
-  const auto lastQuote = text.find('"', firstQuote + 1);
-
-  if (colon == std::string::npos || firstQuote == std::string::npos ||
-      lastQuote == std::string::npos) {
-    return std::nullopt;
-  }
-
-  return text.substr(firstQuote + 1, lastQuote - firstQuote - 1);
 }
 
 std::optional<int> readJsonIntegerAfterKey(const std::string &text,
@@ -138,20 +147,6 @@ std::string readFile(const std::string &path) {
   buffer << input.rdbuf();
 
   return buffer.str();
-}
-
-std::string escapeJson(const std::string &value) {
-  std::string escaped;
-
-  for (const char character : value) {
-    if (character == '\\' || character == '"') {
-      escaped.push_back('\\');
-    }
-
-    escaped.push_back(character);
-  }
-
-  return escaped;
 }
 
 } // namespace
@@ -279,20 +274,20 @@ bool ConfigurationManager::save(const Configuration &config) {
 
   output << "{\n"
          << "  \"engine\": {\n"
-         << "    \"engine_id\": \"" << escapeJson(config.engine.id) << "\",\n"
-         << "    \"backend\": \"" << escapeJson(config.engine.backend)
+         << "    \"engine_id\": \"" << escapeJsonString(config.engine.id) << "\",\n"
+         << "    \"backend\": \"" << escapeJsonString(config.engine.backend)
          << "\",\n"
-         << "    \"executable\": \"" << escapeJson(config.engine.executable)
+         << "    \"executable\": \"" << escapeJsonString(config.engine.executable)
          << "\"\n"
          << "  },\n"
          << "  \"bitcrack\": {\n"
-         << "    \"cuda\": \"" << escapeJson(config.bitcrack.cudaPath)
+         << "    \"cuda\": \"" << escapeJsonString(config.bitcrack.cudaPath)
          << "\",\n"
-         << "    \"opencl\": \"" << escapeJson(config.bitcrack.openclPath)
+         << "    \"opencl\": \"" << escapeJsonString(config.bitcrack.openclPath)
          << "\"\n"
          << "  },\n"
          << "  \"gpu_device\": " << config.gpu.device << ",\n"
-         << "  \"rusticl_enable\": \"" << escapeJson(config.gpu.rusticlEnable)
+         << "  \"rusticl_enable\": \"" << escapeJsonString(config.gpu.rusticlEnable)
          << "\",\n"
          << "  \"thermal\": {\n"
          << "    \"thermal_enabled\": "

@@ -1,5 +1,8 @@
 #include "openpuzzle/core/RecoveryManager.hpp"
 
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
+
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -74,69 +77,19 @@ static std::uint64_t extractUInt64(const std::string &text,
   }
 }
 
-static std::string extractString(const std::string &text,
-                                 const std::string &key,
-                                 const std::string &defaultValue) {
-  auto pos = text.find(key);
-
-  if (pos == std::string::npos) {
+static std::string extractString(const std::string& text,
+                                 const std::string& key,
+                                 const std::string& defaultValue) {
+  try {
+    std::istringstream input(text);
+    boost::property_tree::ptree document;
+    boost::property_tree::read_json(input, document);
+    const auto value = document.get_optional<std::string>(
+        key.substr(1, key.size() - 2));
+    return value ? *value : defaultValue;
+  } catch (...) {
     return defaultValue;
   }
-
-  pos = text.find(':', pos);
-
-  if (pos == std::string::npos) {
-    return defaultValue;
-  }
-
-  auto quote = text.find('"', pos + 1);
-
-  if (quote == std::string::npos) {
-    return defaultValue;
-  }
-
-  std::string value;
-  bool escaped = false;
-
-  for (std::size_t i = quote + 1; i < text.size(); ++i) {
-    char c = text[i];
-
-    if (escaped) {
-      switch (c) {
-      case 'n':
-        value.push_back('\n');
-        break;
-      case 't':
-        value.push_back('\t');
-        break;
-      case '"':
-        value.push_back('"');
-        break;
-      case '\\':
-        value.push_back('\\');
-        break;
-      default:
-        value.push_back(c);
-        break;
-      }
-
-      escaped = false;
-      continue;
-    }
-
-    if (c == '\\') {
-      escaped = true;
-      continue;
-    }
-
-    if (c == '"') {
-      return value;
-    }
-
-    value.push_back(c);
-  }
-
-  return defaultValue;
 }
 
 static bool extractBool(const std::string &text, const std::string &key,

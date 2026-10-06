@@ -91,10 +91,18 @@ bool ThermalHistoryStore::load() {
   for (const QJsonValue& value :
        root.value("entries").toArray()) {
     if (!value.isObject()) {
-      continue;
+      needsRecovery_ = true;
+      return false;
     }
 
     const QJsonObject object = value.toObject();
+    if ((!object.value("temperature").isUndefined() &&
+         !object.value("temperature").isString()) ||
+        (!object.value("stop_requested").isUndefined() &&
+         !object.value("stop_requested").isBool())) {
+      needsRecovery_ = true;
+      return false;
+    }
     ThermalHistoryEntry entry;
     entry.timestampUtc = QDateTime::fromString(
         object.value("timestamp_utc").toString(),
@@ -111,7 +119,8 @@ bool ThermalHistoryStore::load() {
         !kindFromName(
             object.value("kind").toString(),
             entry.kind)) {
-      continue;
+      needsRecovery_ = true;
+      return false;
     }
 
     entry.timestampUtc = entry.timestampUtc.toUTC();

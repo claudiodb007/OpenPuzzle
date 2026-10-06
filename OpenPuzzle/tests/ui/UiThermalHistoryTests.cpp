@@ -149,6 +149,19 @@ int main() {
   verifyUnreadableHistory(
       "{\"version\":2,\"entries\":[]}");
 
+  // Valid JSON with a damaged entry must not be silently filtered and saved
+  // over the original history when the next transition arrives.
+  verifyUnreadableHistory("{\"version\":1,\"entries\":[42]}");
+  verifyUnreadableHistory("{\"version\":1,\"entries\":[{\"kind\":\"warning\"}]}");
+  verifyUnreadableHistory(
+      "{\"version\":1,\"entries\":[{\"timestamp_utc\":\"2026-10-02T12:00:00.000Z\","
+      "\"device\":\"CUDA-0\",\"temperature\":\"76.0 C\",\"kind\":\"warning\","
+      "\"stop_requested\":false},null]}");
+  verifyUnreadableHistory(
+      "{\"version\":1,\"entries\":[{\"timestamp_utc\":\"2026-10-02T12:00:00.000Z\","
+      "\"device\":\"CUDA-0\",\"temperature\":\"76.0 C\",\"kind\":\"warning\","
+      "\"stop_requested\":\"true\"}]}");
+
   std::cout << "UiThermalHistoryTests passed\n";
   return 0;
 }
