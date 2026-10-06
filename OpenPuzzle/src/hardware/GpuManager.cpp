@@ -1,4 +1,5 @@
 #include "openpuzzle/hardware/GpuManager.hpp"
+#include "openpuzzle/config/ConfigurationManager.hpp"
 
 #include "openpuzzle/tools/ToolManager.hpp"
 
@@ -411,81 +412,21 @@ GpuManager::listAllGpus() {
   return result;
 }
 
-bool GpuManager::selectGpu(
-    int device) {
-  fs::path configPath =
-      ToolManager::configPath();
-
-  fs::create_directories(
-      configPath.parent_path());
-
-  std::string bitcrack;
-
-  if (const auto path =
-          ToolManager::bitcrackPath()) {
-    bitcrack = *path;
-  }
-
-  std::ofstream output(
-      configPath);
-
-  if (!output) {
+bool GpuManager::selectGpu(int device) {
+  if (device < 0) {
     return false;
   }
-
-  output
-      << "{\n"
-      << "  \"bitcrack\": \""
-      << bitcrack
-      << "\",\n"
-      << "  \"gpu_device\": "
-      << device
-      << "\n"
-      << "}\n";
-
-  return true;
+  const auto loaded = ConfigurationManager::loadChecked();
+  if (!loaded) {
+    return false;
+  }
+  auto configuration = *loaded;
+  configuration.gpu.device = device;
+  return ConfigurationManager::save(configuration);
 }
 
 int GpuManager::selectedGpu() {
-  std::ifstream input(
-      ToolManager::configPath());
-
-  if (!input) {
-    return 0;
-  }
-
-  std::stringstream buffer;
-  buffer << input.rdbuf();
-
-  const std::string text =
-      buffer.str();
-
-  const auto key =
-      text.find(
-          "\"gpu_device\"");
-
-  if (key ==
-      std::string::npos) {
-    return 0;
-  }
-
-  const auto colon =
-      text.find(
-          ':',
-          key);
-
-  if (colon ==
-      std::string::npos) {
-    return 0;
-  }
-
-  try {
-    return std::stoi(
-        text.substr(
-            colon + 1));
-  } catch (...) {
-    return 0;
-  }
+  return ConfigurationManager::load().gpu.device;
 }
 
 GpuInfo GpuManager::currentGpu() {

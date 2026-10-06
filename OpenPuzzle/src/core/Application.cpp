@@ -1,4 +1,5 @@
 #include "openpuzzle/core/Application.hpp"
+#include "openpuzzle/config/ConfigurationManager.hpp"
 
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/adapters/bitcrack/BitCrackOutputParser.hpp"
@@ -780,7 +781,12 @@ int Application::cmdGpuList() {
 }
 int Application::cmdGpuSelect(const std::vector<std::string> &a) {
   int d = getIntArg(a, "--device", 0);
-  GpuManager::selectGpu(d);
+  if (!GpuManager::selectGpu(d)) {
+    std::cerr << "GPU selection failed; configuration unchanged.\n"
+              << "Check the device number and "
+              << ConfigurationManager::configPath() << "\n";
+    return 1;
+  }
   std::cout << "Selected GPU device... " << d << "\n";
   return 0;
 }

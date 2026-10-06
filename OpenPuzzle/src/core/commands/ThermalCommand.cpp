@@ -174,7 +174,17 @@ int ThermalCommand::run(
     return 0;
   }
 
-  auto configuration = ConfigurationManager::load();
+  const auto loaded = ConfigurationManager::loadChecked();
+  if (!loaded) {
+    std::cerr
+        << "OpenPuzzle thermal configuration failed\n"
+        << "---------------------------------------\n"
+        << "Problem............ configuration is unreadable or invalid\n"
+        << "Configuration path. " << ConfigurationManager::configPath() << '\n'
+        << "Configuration...... unchanged\n";
+    return 1;
+  }
+  auto configuration = *loaded;
   auto policy = configuration.gpu.thermal;
   const auto previous = policy;
 

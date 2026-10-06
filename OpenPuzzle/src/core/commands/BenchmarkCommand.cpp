@@ -88,30 +88,21 @@ static std::string normalizeBackend(
 }
 
 int BenchmarkCommand::run(const std::vector<std::string> &args) const {
-  CommandContext context;
-
-  if (!context.initialize()) {
-    std::cerr
-        << "OpenPuzzle benchmark failed\n"
-        << "---------------------------\n"
-        << "Error code......... OP-BENCH-000\n"
-        << "Problem............ "
-        << context.lastError()
-        << '\n'
-        << "Action............. run: openpuzzle doctor\n";
-    return 1;
+  const auto loaded = ConfigurationManager::loadChecked();
+  if (!loaded) {
+    throw benchmarkError(
+        "OP-BENCH-010",
+        "configuration is unreadable or invalid; original file preserved",
+        "check ~/.config/OpenPuzzle/config.json before retrying");
   }
-
+  auto configuration = *loaded;
   int gpu = getIntArg(
       args,
       "--gpu",
       getIntArg(
           args,
           "--d",
-          context.gpu));
-
-  auto configuration =
-      ConfigurationManager::load();
+          configuration.gpu.device));
 
   const std::string configuredBackend =
       configuration.engine.backend.empty()
@@ -157,21 +148,6 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
         "add --backend opencl or remove --rusticl-enable");
   }
 
-  if (backend == "opencl" && !rusticlSelector.empty()) {
-    RusticlEnvironment::apply(rusticlSelector);
-  }
-
-  if (hasRusticlSelector &&
-      configuration.gpu.rusticlEnable != rusticlSelector) {
-    configuration.gpu.rusticlEnable = rusticlSelector;
-    if (!ConfigurationManager::save(configuration)) {
-      throw benchmarkError(
-          "OP-BENCH-009",
-          "unable to persist the Rusticl selector",
-          "check ownership and write permissions for ~/.config/OpenPuzzle");
-    }
-  }
-
   if (!ToolManager::supportsBackend(backend)) {
     throw benchmarkError(
         "OP-ENGINE-002",
@@ -212,6 +188,35 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
         "OP-BENCH-008",
         "launch parameters must be positive",
         "use positive --blocks, --threads and --points values");
+  }
+
+  CommandContext context;
+
+  if (!context.initialize(backend)) {
+    std::cerr
+        << "OpenPuzzle benchmark failed\n"
+        << "---------------------------\n"
+        << "Error code......... OP-BENCH-000\n"
+        << "Problem............ "
+        << context.lastError()
+        << '\n'
+        << "Action............. run: openpuzzle doctor\n";
+    return 1;
+  }
+
+  if (backend == "opencl" && !rusticlSelector.empty()) {
+    RusticlEnvironment::apply(rusticlSelector);
+  }
+
+  if (hasRusticlSelector &&
+      configuration.gpu.rusticlEnable != rusticlSelector) {
+    configuration.gpu.rusticlEnable = rusticlSelector;
+    if (!ConfigurationManager::save(configuration)) {
+      throw benchmarkError(
+          "OP-BENCH-009",
+          "unable to persist the Rusticl selector",
+          "check ownership and write permissions for ~/.config/OpenPuzzle");
+    }
   }
 
   std::cout << "====================================\n";

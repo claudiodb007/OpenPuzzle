@@ -43,7 +43,11 @@ ThermalSettingsSaveResult ThermalSettingsStore::save(
     return ThermalSettingsSaveResult::Invalid;
   }
 
-  auto configuration = ConfigurationManager::load();
+  const auto loaded = ConfigurationManager::loadChecked();
+  if (!loaded) {
+    return ThermalSettingsSaveResult::Failed;
+  }
+  auto configuration = *loaded;
   configuration.gpu.thermal = policy;
 
   return ConfigurationManager::save(configuration)

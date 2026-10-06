@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <unistd.h>
 
@@ -63,6 +64,17 @@ int main() {
   assert(preserved.engine.id == "bitcrack");
   assert(preserved.gpu.device == 7);
   assert(preserved.assignment.durationMinutes == 42);
+
+  const fs::path configPath = ConfigurationManager::configPath();
+  for (const auto& damaged : {std::string{}, std::string("{\"engine\":{\"backend\":\"opencl\"},"), std::string("[]")}) {
+    { std::ofstream output(configPath); output << damaged; }
+    assert(ThermalSettingsStore::save(configured) == ThermalSettingsSaveResult::Failed);
+    std::ifstream input(configPath);
+    const std::string preservedText{std::istreambuf_iterator<char>(input), {}};
+    assert(preservedText == damaged);
+  }
+  fs::remove(configPath);
+  assert(ThermalSettingsStore::save(configured) == ThermalSettingsSaveResult::Saved);
 
   if (previousHome) {
     assert(setenv("HOME", savedHome.c_str(), 1) == 0);

@@ -600,3 +600,42 @@ original UUID from a known backup or matching local assignment before retrying.
 This change does not rotate existing valid UUIDs or register any client during
 validation. Mixed client versions that do not use the lock are not covered by
 the serialization guarantee.
+
+
+### Configuration read failures during updates
+
+Thermal CLI updates, desktop thermal saves and Rusticl benchmark selector updates
+require a successfully read configuration. Only a missing `config.json` supplies
+creation defaults; existing empty, malformed or unreadable files fail these
+operations without replacing their bytes. The thermal CLI reports the configuration
+path, desktop saving reports failure, and benchmark stops before context/device
+initialization with `OP-BENCH-010`. No automatic repair is attempted.
+
+Configuration documents must be JSON objects. Arrays and scalar roots are rejected
+rather than treating fields inside unrelated array entries as settings. Existing
+flat and nested object layouts and established typed-field defaults remain supported.
+The general `load()` API retains its fallback defaults for read-only consumers;
+`loadChecked()` distinguishes unavailable existing settings from missing files.
+
+Reading uses a nonblocking descriptor, rejects non-regular files and final-path
+symlinks, and protects the opened regular file through its descriptor. A FIFO cannot
+hang the configuration reader, and a symlink target is neither read nor chmodded.
+This does not reject symlinks in parent directories or serialize a read/modify/write
+cycle against other processes. Explicit full `save()` remains available to callers
+that intentionally supply a complete configuration. Regression tests use temporary
+homes and isolated children, without real engines, registration or assignments.
+
+
+GPU selection now updates only the device in the supported configuration fields,
+preserving engine/backend/executable paths, thermal policy, Rusticl selector and
+assignment duration through the existing atomic writer. Negative device indices
+are refused. The CLI returns failure instead of printing success when saving fails.
+Selected-device reads share the configuration parser, so fractional identifiers or
+malformed documents cannot select a numeric prefix from raw JSON text. Unknown
+configuration fields retain the existing full-save behavior; they are not preserved
+by this change.
+
+Benchmark validates its duration, sample count and launch parameters before applying
+or persisting a Rusticl selector. Rejected arguments leave both the selector file
+and the process Rusticl environment unchanged. No real benchmark is used to test
+this ordering: isolated invalid requests fail before GPU discovery/search.

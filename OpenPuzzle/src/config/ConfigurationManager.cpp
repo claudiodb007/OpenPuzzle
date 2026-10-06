@@ -8,6 +8,7 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
+#include <cerrno>
 #include <cstdlib>
 #include <charconv>
 #include <cmath>
@@ -17,6 +18,10 @@
 #include <optional>
 #include <sstream>
 #include <string>
+
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 namespace fs = std::filesystem;
 
@@ -87,17 +92,37 @@ std::optional<bool> readJsonBooleanAfterKey(
   return std::nullopt;
 }
 
-std::string readFile(const std::string &path) {
-  std::ifstream input(path);
-
-  if (!input) {
-    return {};
+std::optional<std::string> readFile(
+    const std::string& path, bool& missing) {
+  missing = false;
+  const int descriptor = ::open(
+      path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
+  if (descriptor < 0) {
+    missing = errno == ENOENT;
+    return std::nullopt;
   }
-
-  std::stringstream buffer;
-  buffer << input.rdbuf();
-
-  return buffer.str();
+  struct Input {
+    int descriptor;
+    ~Input() { ::close(descriptor); }
+  } input{descriptor};
+  struct stat metadata {};
+  if (::fstat(descriptor, &metadata) != 0 || !S_ISREG(metadata.st_mode)) {
+    return std::nullopt;
+  }
+  // Protect the file that was opened, without following a changed path.
+  if (::fchmod(descriptor, S_IRUSR | S_IWUSR) != 0) {
+    return std::nullopt;
+  }
+  std::string contents;
+  char buffer[4096];
+  for (;;) {
+    const ssize_t count = ::read(descriptor, buffer, sizeof(buffer));
+    if (count < 0 && errno == EINTR) continue;
+    if (count < 0) return std::nullopt;
+    if (count == 0) break;
+    contents.append(buffer, static_cast<std::size_t>(count));
+  }
+  return contents;
 }
 
 } // namespace
@@ -113,38 +138,33 @@ std::string ConfigurationManager::configPath() {
 }
 
 Configuration ConfigurationManager::load() {
+  return loadChecked().value_or(Configuration{});
+}
+
+std::optional<Configuration> ConfigurationManager::loadChecked() {
   Configuration config;
-
-  const fs::path path =
-      configPath();
-
-  try {
-    WorkspaceSecurity::prepare(
-        path.parent_path());
-
-    if (fs::is_regular_file(
-            path)) {
-      WorkspaceSecurity::protectFile(
-          path);
-    }
-  } catch (...) {
-    return config;
-  }
-
-  const auto text =
-      readFile(
-          path.string());
-
-  if (text.empty()) {
-    return config;
-  }
-
+  const fs::path path = configPath();
   boost::property_tree::ptree document;
   try {
-    std::istringstream input(text);
+    WorkspaceSecurity::prepare(path.parent_path());
+    bool missing = false;
+    const auto text = readFile(path.string(), missing);
+    if (missing) {
+      return config;
+    }
+    if (!text) {
+      return std::nullopt;
+    }
+    // Configuration is a JSON object. An existing empty file, array or scalar
+    // must not be mistaken for missing settings during an update.
+    const auto first = text->find_first_not_of(" \t\r\n");
+    if (first == std::string::npos || (*text)[first] != '{') {
+      return std::nullopt;
+    }
+    std::istringstream input(*text);
     boost::property_tree::read_json(input, document);
   } catch (...) {
-    return config;
+    return std::nullopt;
   }
 
   if (const auto value = findJsonString(document, "cuda")) {
