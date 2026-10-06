@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.42 — Preserve desktop controls and persisted client data
+
+- Recheck Kangaroo installation availability after confirmation; a status change
+  to running, uncertain identity or unavailable status blocks installation.
+- Recheck Stop availability after confirmation; a newly idle client receives no
+  stale Stop command, while existing retries for occupied slots remain supported.
+- Preserve thermal history when any stored entry is malformed, including an
+  invalid entry after valid records; block appending until an explicit clear.
+- Decode configuration string fields correctly, preserving quoted paths,
+  backslashes, control characters and escaped Unicode in current and legacy layouts.
+- Escape execution metadata as JSON and decode recovered command strings without
+  losing quotes, backslashes or control characters.
+- Validate five reproduced defects together in one correction commit with all
+  146 native client tests passing; add three regression suites and extend history tests.
+
 ## 1.0.41 — Keep pending desktop launches across older status replies
 
 - Ignore status observations from queries started before a successful detached
