@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.43 — Preserve local files and numeric recovery
+
+- Parse complete configuration JSON before applying settings; reject incomplete
+  documents and numeric prefixes with trailing text instead of partially loading them.
+- Serialize JSON and client-state numbers independently of regional formatting;
+  retain finite double precision with the shortest round-trip decimal representation.
+- Publish private configuration, execution metadata and client-state files atomically;
+  failed writes, flushes or renames preserve the previous file and clean up only
+  the temporary file created by that operation.
+- Preserve carriage returns alongside newlines and literal backslashes in saved
+  client-state commands, paths and GPU names.
+- Treat negative, signed, overflowing or partially numeric process start identities
+  as unavailable without discarding the occupied assignment or legacy defaults.
+- Recover execution status and booleans from JSON fields independently of whitespace
+  and field order; unrelated text cannot override a stored false value.
+- Validate six reproduced defects in one correction commit with all 149 native
+  client tests passing; add three regression suites and expand execution recovery tests.
+
 ## 1.0.42 — Preserve desktop controls and persisted client data
 
 - Recheck Kangaroo installation availability after confirmation; a status change
