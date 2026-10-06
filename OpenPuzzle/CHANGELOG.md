@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.45 — Preserve configuration during control updates
+
+- Preserve existing empty, malformed or unreadable configuration files when
+  thermal controls, GPU selection or benchmark selector updates cannot load them.
+- Distinguish a missing configuration from a failed read, require a JSON object,
+  retain compatible flat/nested layouts and established typed-field defaults.
+- Reject non-regular files and final-path symlinks without blocking on FIFOs or
+  changing permissions on symlink targets; protect the opened regular descriptor.
+- Keep supported engine, backend, executable, thermal and Rusticl settings when
+  changing the GPU device, using the existing atomic configuration writer.
+- Share strict saved-device parsing and report GPU selection failure through the
+  CLI instead of printing success when the configuration cannot be saved.
+- Validate benchmark parameters before changing the Rusticl environment or file;
+  damaged configuration stops benchmark initialization with OP-BENCH-010.
+- Validate grouped corrections in one commit with all 152 native client tests
+  passing, adding ConfigurationReadFailureTests and ConfigurationUpdateFailureTests
+  and extending desktop thermal-save regression coverage.
+
 ## 1.0.44 — Preserve a stable local client identity
 
 - Serialize identity reading and first creation across cooperating client processes;
