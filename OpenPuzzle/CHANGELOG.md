@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.44 — Preserve a stable local client identity
+
+- Serialize identity reading and first creation across cooperating client processes;
+  concurrent first callers receive the same complete UUID under a persistent lock.
+- Reject malformed identities and extra records instead of registering a partial
+  first line; retain existing valid UUIDs, including their case and LF/CRLF layout.
+- Preserve empty, unreadable or non-regular identity files rather than silently
+  replacing them with a new UUID; only an absent file permits first creation.
+- Generate UUID text with the classic locale so regional digit grouping cannot
+  change its format or anonymous client identity.
+- Publish a new private identity atomically; failed writes leave no partial UUID
+  and can be retried after storage recovers. Reject identity and lock symlinks.
+- Validate five reproduced defects in one correction commit with all 150 native
+  client tests passing, adding ClientIdentityIntegrityTests for concurrency,
+  write failures, invalid data, legacy line endings and locale-independent UUIDs.
+
 ## 1.0.43 — Preserve local files and numeric recovery
 
 - Parse complete configuration JSON before applying settings; reject incomplete
