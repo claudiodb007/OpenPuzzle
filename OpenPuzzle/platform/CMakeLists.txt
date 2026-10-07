@@ -1,0 +1,31 @@
+# This target deliberately isolates the first ported process components.
+# The complete application still contains Linux-only persistence/runtime code.
+if(WIN32)
+    add_library(OpenPuzzlePlatform
+        ../src/core/WindowsProcessRunner.cpp
+        ../src/runtime/WindowsProcessIdentity.cpp
+        ../src/core/ProcessRunnerFactory.cpp)
+    target_compile_definitions(OpenPuzzlePlatform PRIVATE _WIN32_WINNT=0x0601)
+    add_executable(WindowsProcessFixture ../tests/windows/WindowsProcessFixture.cpp)
+    add_executable(WindowsProcessRunnerTests ../tests/windows/WindowsProcessRunnerTests.cpp)
+    target_link_libraries(WindowsProcessRunnerTests PRIVATE OpenPuzzlePlatform)
+    add_test(NAME WindowsProcessRunnerTests COMMAND WindowsProcessRunnerTests $<TARGET_FILE:WindowsProcessFixture>)
+    add_executable(WindowsProcessIdentityTests ../tests/windows/WindowsProcessIdentityTests.cpp)
+    target_link_libraries(WindowsProcessIdentityTests PRIVATE OpenPuzzlePlatform)
+    add_test(NAME WindowsProcessIdentityTests COMMAND WindowsProcessIdentityTests $<TARGET_FILE:WindowsProcessFixture>)
+    if(MINGW)
+        foreach(name WindowsProcessFixture WindowsProcessRunnerTests WindowsProcessIdentityTests)
+            target_link_options(${name} PRIVATE -municode)
+        endforeach()
+    endif()
+    set_tests_properties(WindowsProcessRunnerTests WindowsProcessIdentityTests PROPERTIES TIMEOUT 40)
+else()
+    add_library(OpenPuzzlePlatform ../src/core/PosixProcessRunner.cpp ../src/core/ProcessRunnerFactory.cpp)
+    foreach(name PosixProcessRunnerTests PosixProcessRunnerTimeoutTests)
+        add_executable(${name} ../tests/core/${name}.cpp)
+        target_link_libraries(${name} PRIVATE OpenPuzzlePlatform)
+        add_test(NAME ${name} COMMAND ${name})
+        set_tests_properties(${name} PROPERTIES TIMEOUT 40)
+    endforeach()
+endif()
+target_include_directories(OpenPuzzlePlatform PUBLIC ../include)

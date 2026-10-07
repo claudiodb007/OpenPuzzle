@@ -6,6 +6,14 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(OPENPUZZLE_BUILD_PLATFORM_TESTS_ONLY
+       "Build isolated process portability tests without engines or GPU discovery" OFF)
+if(OPENPUZZLE_BUILD_PLATFORM_TESTS_ONLY)
+    enable_testing()
+    add_subdirectory(platform)
+    return()
+endif()
+
 find_package(SQLite3 REQUIRED)
 
 set(
@@ -148,7 +156,8 @@ add_library(OpenPuzzleCore
     src/workers/WorkerRuntime.cpp
     src/workers/WorkerRegistry.cpp
     src/core/ProcessRunner.cpp
-    src/core/PosixProcessRunner.cpp
+    $<$<NOT:$<BOOL:${WIN32}>>:src/core/PosixProcessRunner.cpp>
+    $<$<BOOL:${WIN32}>:src/core/WindowsProcessRunner.cpp>
     src/core/ProcessRunnerFactory.cpp
     src/core/ExecutionManager.cpp
     src/core/ExecutionSession.cpp
