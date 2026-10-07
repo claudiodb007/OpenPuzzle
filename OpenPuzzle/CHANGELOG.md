@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.46 — Validate integer options before changing client controls
+
+- Share complete decimal integer parsing across CLI controls. Reject missing or
+  empty values, fractional numbers, trailing text, overflow and duplicate aliases.
+- Use defaults only when an option is absent; retain signed decimal input and
+  leading zeroes when the complete value is within the supported integer range.
+- Reject invalid GPU, benchmark and job options before updating configuration,
+  applying Rusticl selectors or initializing device and database contexts.
+- Validate run options before runtime acquisition, preserved execution recovery,
+  assignment requests and multi-GPU or concurrent supervisor startup.
+- Keep existing command-specific bounds for positive puzzle and launch settings,
+  non-negative device indices and supported assignment duration.
+- Group the corrections in one commit and validate all 154 native client tests,
+  adding CliIntegerTests and CliArgumentIntegrityTests with isolated control fixtures.
+
 ## 1.0.45 — Preserve configuration during control updates
 
 - Preserve existing empty, malformed or unreadable configuration files when
