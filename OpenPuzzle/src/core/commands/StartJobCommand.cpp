@@ -1,3 +1,4 @@
+#include "openpuzzle/core/CliInteger.hpp"
 #include "openpuzzle/core/commands/StartJobCommand.hpp"
 
 #include "openpuzzle/core/CommandContext.hpp"
@@ -22,14 +23,6 @@ static bool hasArg(const std::vector<std::string> &args,
   return false;
 }
 
-static int getIntArg(const std::vector<std::string> &args,
-                     const std::string &name, int fallback) {
-  for (std::size_t i = 0; i + 1 < args.size(); ++i)
-    if (args[i] == name)
-      return std::stoi(args[i + 1]);
-
-  return fallback;
-}
 
 static std::string getStringArg(const std::vector<std::string> &args,
                                 const std::string &name,
@@ -42,24 +35,29 @@ static std::string getStringArg(const std::vector<std::string> &args,
 }
 
 int StartJobCommand::run(const std::vector<std::string> &args) const {
-  CommandContext context;
+  int puzzle = cliIntegerArgument(args, {"--puzzle"}, 71);
 
+  int job = cliIntegerArgument(args, {"--job"}, 0);
+
+  int blocks = cliIntegerArgument(args, {"--blocks", "--b"}, 256);
+
+  int threads = cliIntegerArgument(args, {"--threads", "--t"}, 256);
+
+  int points = cliIntegerArgument(args, {"--points", "--p"}, 256);
+
+  int device = cliIntegerArgument(args, {"--device", "--d"}, GpuManager::selectedGpu());
+
+  if (puzzle <= 0 || job < 0 || device < 0 ||
+      blocks <= 0 || threads <= 0 || points <= 0) {
+    throw std::runtime_error(
+        "Invalid start-job integers: puzzle and launch parameters must be positive; job and device must be non-negative");
+  }
+
+  CommandContext context;
   if (!context.initialize()) {
     std::cerr << context.lastError() << "\n";
     return 1;
   }
-
-  int puzzle = getIntArg(args, "--puzzle", 71);
-
-  int job = getIntArg(args, "--job", 0);
-
-  int blocks = getIntArg(args, "--blocks", getIntArg(args, "--b", 256));
-
-  int threads = getIntArg(args, "--threads", getIntArg(args, "--t", 256));
-
-  int points = getIntArg(args, "--points", getIntArg(args, "--p", 256));
-
-  int device = getIntArg(args, "--device", getIntArg(args, "--d", context.gpu));
 
   std::string engine = getStringArg(args, "--engine", "bitcrack");
   std::string backend = getStringArg(args, "--backend", "cuda");

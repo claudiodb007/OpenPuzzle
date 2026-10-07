@@ -639,3 +639,26 @@ Benchmark validates its duration, sample count and launch parameters before appl
 or persisting a Rusticl selector. Rejected arguments leave both the selector file
 and the process Rusticl environment unchanged. No real benchmark is used to test
 this ordering: isolated invalid requests fail before GPU discovery/search.
+
+### Integer command arguments and validation before startup
+
+Numeric CLI options require a complete decimal integer within the `int` range.
+An absent option retains its documented default; an explicitly present option
+without a value, an empty value, a fraction, trailing text or integer overflow is
+rejected. Optional signs and leading zeroes remain supported. Repeating a numeric
+option, including its short alias, is rejected rather than silently choosing one
+value. `gpu-select` cannot save a truncated device number or a default substituted
+for a missing value. Benchmark syntax errors report `OP-BENCH-011` before context
+initialization or Rusticl environment/configuration updates; existing range checks
+retain their diagnostic codes.
+
+`run` and `claim` validate puzzle, device, launch parameters and target duration
+before recovering existing executions, starting supervisors, acquiring runtime
+control or requesting work. Blocks, threads and points must be positive; GPU
+indices must be non-negative; durations remain between 1 and 360 minutes. This
+also applies to dry runs and the internal `runOnce()` entry point. Multi-GPU and
+concurrent launches cannot bypass this validation. `start-job` validates its
+numeric arguments before opening or creating the local database. Regression
+coverage uses temporary homes and invalid requests, without searches or real
+assignment requests. This change does not introduce a general parser for string
+options or alter engine-specific maximum launch sizes.

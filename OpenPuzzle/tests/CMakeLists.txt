@@ -2244,3 +2244,12 @@ add_executable(ConfigurationUpdateFailureTests config/ConfigurationUpdateFailure
 target_link_libraries(ConfigurationUpdateFailureTests PRIVATE OpenPuzzleCore)
 add_test(NAME ConfigurationUpdateFailureTests COMMAND ConfigurationUpdateFailureTests)
 set_tests_properties(ConfigurationUpdateFailureTests PROPERTIES TIMEOUT 15)
+
+add_executable(CliIntegerTests core/CliIntegerTests.cpp)
+target_include_directories(CliIntegerTests PRIVATE ../include)
+add_test(NAME CliIntegerTests COMMAND CliIntegerTests)
+
+add_executable(CliArgumentIntegrityTests core/CliArgumentIntegrityTests.cpp)
+target_link_libraries(CliArgumentIntegrityTests PRIVATE OpenPuzzleCore)
+add_test(NAME CliArgumentIntegrityTests COMMAND CliArgumentIntegrityTests)
+set_tests_properties(CliArgumentIntegrityTests PROPERTIES TIMEOUT 15)

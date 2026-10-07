@@ -1,3 +1,4 @@
+#include "openpuzzle/core/CliInteger.hpp"
 #include "openpuzzle/core/commands/BenchmarkCommand.hpp"
 
 #include "openpuzzle/config/ConfigurationManager.hpp"
@@ -35,15 +36,6 @@ static bool hasArg(const std::vector<std::string> &args,
   return false;
 }
 
-static int getIntArg(const std::vector<std::string> &args,
-                     const std::string &name, int fallback) {
-  for (std::size_t i = 0; i + 1 < args.size(); ++i) {
-    if (args[i] == name)
-      return std::stoi(args[i + 1]);
-  }
-
-  return fallback;
-}
 
 static std::string getStringArg(
     const std::vector<std::string> &args,
@@ -88,6 +80,19 @@ static std::string normalizeBackend(
 }
 
 int BenchmarkCommand::run(const std::vector<std::string> &args) const {
+  // Validate every numeric option before any context or Rusticl mutation.
+  try {
+    (void) cliIntegerArgument(args, {"--gpu", "--d"}, 0);
+    (void) cliIntegerArgument(args, {"--seconds"}, 30);
+    (void) cliIntegerArgument(args, {"--samples"}, 8);
+    (void) cliIntegerArgument(args, {"--blocks", "--b"}, 256);
+    (void) cliIntegerArgument(args, {"--threads", "--t"}, 256);
+    (void) cliIntegerArgument(args, {"--points", "--p"}, 256);
+  } catch (const std::exception& error) {
+    throw benchmarkError("OP-BENCH-011", error.what(),
+        "supply each numeric option once, with a complete integer value");
+  }
+
   const auto loaded = ConfigurationManager::loadChecked();
   if (!loaded) {
     throw benchmarkError(
@@ -96,13 +101,7 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
         "check ~/.config/OpenPuzzle/config.json before retrying");
   }
   auto configuration = *loaded;
-  int gpu = getIntArg(
-      args,
-      "--gpu",
-      getIntArg(
-          args,
-          "--d",
-          configuration.gpu.device));
+  int gpu = cliIntegerArgument(args, {"--gpu", "--d"}, configuration.gpu.device);
 
   const std::string configuredBackend =
       configuration.engine.backend.empty()
@@ -163,11 +162,11 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
   bool real = hasArg(args, "--real");
   bool autoMode = hasArg(args, "--auto");
 
-  int seconds = getIntArg(args, "--seconds", 30);
-  int samples = getIntArg(args, "--samples", 8);
-  int blocks = getIntArg(args, "--blocks", getIntArg(args, "--b", 256));
-  int threads = getIntArg(args, "--threads", getIntArg(args, "--t", 256));
-  int points = getIntArg(args, "--points", getIntArg(args, "--p", 256));
+  int seconds = cliIntegerArgument(args, {"--seconds"}, 30);
+  int samples = cliIntegerArgument(args, {"--samples"}, 8);
+  int blocks = cliIntegerArgument(args, {"--blocks", "--b"}, 256);
+  int threads = cliIntegerArgument(args, {"--threads", "--t"}, 256);
+  int points = cliIntegerArgument(args, {"--points", "--p"}, 256);
 
   if (seconds < 10 || seconds > 300) {
     throw benchmarkError(

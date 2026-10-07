@@ -1,3 +1,4 @@
+#include "openpuzzle/core/CliInteger.hpp"
 #include "openpuzzle/runtime/RunSession.hpp"
 #include "openpuzzle/client/SolutionExporter.hpp"
 
@@ -162,13 +163,7 @@ std::string getArgument(const std::vector<std::string> &args,
 
 int getIntegerArgument(const std::vector<std::string> &args,
                        const std::string &name, int fallback) {
-  const auto value = getArgument(args, name);
-
-  if (value.empty()) {
-    return fallback;
-  }
-
-  return std::stoi(value);
+  return cliIntegerArgument(args, {name}, fallback);
 }
 
 bool hasArgument(const std::vector<std::string> &args,
@@ -188,36 +183,11 @@ std::string selectedBackend(
 int selectedGpuDevice(
     const std::vector<std::string> &args,
     int fallback) {
-  const std::string value =
-      getArgument(
-          args,
-          "--device");
-
-  if (value.empty()) {
-    return fallback;
+  const int device = cliIntegerArgument(args, {"--device"}, fallback);
+  if (device < 0) {
+    throw std::runtime_error("GPU device must be a non-negative whole number");
   }
-
-  std::size_t consumed = 0;
-  long long parsed = -1;
-
-  try {
-    parsed = std::stoll(value, &consumed);
-  } catch (...) {
-    throw std::runtime_error(
-        "GPU device must be a "
-        "non-negative whole number");
-  }
-
-  if (
-      consumed != value.size() ||
-      parsed < 0 ||
-      parsed > 2147483647LL) {
-    throw std::runtime_error(
-        "GPU device must be a "
-        "non-negative whole number");
-  }
-
-  return static_cast<int>(parsed);
+  return device;
 }
 
 RuntimeThermalObserver::DeviceScope
@@ -684,6 +654,33 @@ int selectedPuzzle(const std::vector<std::string> &args) {
   }
 
   return getIntegerArgument(args, "--puzzle", 0);
+}
+
+void validateRunIntegerArguments(const std::vector<std::string>& args) {
+  const int puzzle = cliIntegerArgument(args, {"--puzzle"}, 0);
+  if (puzzle < 0 || (hasArgument(args, "--puzzle") && puzzle == 0)) {
+    throw std::runtime_error("--puzzle must be positive");
+  }
+  (void) selectedPuzzle(args);
+  for (const auto name : {"--device", "--opencl-device"}) {
+    if (cliIntegerArgument(args, {name}, 0) < 0) {
+      throw std::runtime_error(std::string(name) + " must be non-negative");
+    }
+  }
+  const auto requirePositive = [&](std::initializer_list<std::string_view> names) {
+    if (cliIntegerArgument(args, names, 1) < 1) {
+      throw std::runtime_error(std::string(*names.begin()) + " must be positive");
+    }
+  };
+  requirePositive({"--blocks", "--b"});
+  requirePositive({"--threads", "--t"});
+  requirePositive({"--points", "--p"});
+  requirePositive({"--cpu-threads"});
+  const int duration = cliIntegerArgument(args, {"--duration-minutes"}, 5);
+  if (duration < 1 || duration > 360) {
+    throw std::runtime_error("Duration must be between 1 and 360 minutes");
+  }
+  (void) requestedDurationMinutes(args); // Also check the environment override.
 }
 
 std::optional<double> measuredSpeedMKeys(const std::vector<std::string> &args) {
@@ -2359,6 +2356,16 @@ void RunSession::validateConcurrentGpuSelection(
 
 int RunSession::run(
     const std::vector<std::string> &args) const {
+  if (!args.empty() && (args.front() == "run" || args.front() == "claim")) {
+    try {
+      validateRunIntegerArguments(args);
+    } catch (const std::exception& error) {
+      std::cerr << "OpenPuzzle argument validation failed\n"
+                << "Problem............ " << error.what() << '\n'
+                << "Assignment......... not requested\n";
+      return 1;
+    }
+  }
   if (!args.empty() &&
       args.front() == "run" &&
       hasArgument(args, "--devices")) {
@@ -2489,6 +2496,15 @@ ClientIterationResult RunSession::runOnce(
   if (subcommand != "claim" && subcommand != "run") {
     std::cerr << "Unknown range command: " << subcommand << '\n';
 
+    return 1;
+  }
+
+  try {
+    validateRunIntegerArguments(args);
+  } catch (const std::exception& error) {
+    std::cerr << "OpenPuzzle argument validation failed\n"
+              << "Problem............ " << error.what() << '\n'
+              << "Assignment......... not requested\n";
     return 1;
   }
 
@@ -3431,35 +3447,17 @@ ClientIterationResult RunSession::runOnce(
   int blocks =
       cpuBackend
           ? 0
-          : getIntegerArgument(
-                args,
-                "--blocks",
-                getIntegerArgument(
-                    args,
-                    "--b",
-                    256));
+          : cliIntegerArgument(args, {"--blocks", "--b"}, 256);
 
   int threads =
       cpuBackend
           ? selectedCpuThreads(args)
-          : getIntegerArgument(
-                args,
-                "--threads",
-                getIntegerArgument(
-                    args,
-                    "--t",
-                    256));
+          : cliIntegerArgument(args, {"--threads", "--t"}, 256);
 
   int points =
       cpuBackend
           ? 0
-          : getIntegerArgument(
-                args,
-                "--points",
-                getIntegerArgument(
-                    args,
-                    "--p",
-                    256));
+          : cliIntegerArgument(args, {"--points", "--p"}, 256);
 
   const bool manualProfile =
       hasArgument(args, "--blocks") || hasArgument(args, "--b") ||

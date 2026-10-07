@@ -1,3 +1,4 @@
+#include "openpuzzle/core/CliInteger.hpp"
 #include "openpuzzle/core/Application.hpp"
 #include "openpuzzle/config/ConfigurationManager.hpp"
 
@@ -94,8 +95,7 @@ std::string Application::getArg(const std::vector<std::string> &a,
 }
 int Application::getIntArg(const std::vector<std::string> &a,
                            const std::string &n, int d) {
-  auto s = getArg(a, n, "");
-  return s.empty() ? d : std::stoi(s);
+  return cliIntegerArgument(a, {n}, d);
 }
 static void printApplicationHelp() {
   std::cout
@@ -793,11 +793,10 @@ int Application::cmdGpuSelect(const std::vector<std::string> &a) {
 
 int Application::cmdBitcrackCommand(const std::vector<std::string> &a) {
   int n = getIntArg(a, "--puzzle", 71), jid = getIntArg(a, "--job", 0),
-      b = getIntArg(a, "--blocks", getIntArg(a, "--b", 256)),
-      t = getIntArg(a, "--threads", getIntArg(a, "--t", 256)),
-      pt = getIntArg(a, "--points", getIntArg(a, "--p", 256)),
-      dev = getIntArg(a, "--device",
-                      getIntArg(a, "--d", GpuManager::selectedGpu()));
+      b = cliIntegerArgument(a, {"--blocks", "--b"}, 256),
+      t = cliIntegerArgument(a, {"--threads", "--t"}, 256),
+      pt = cliIntegerArgument(a, {"--points", "--p"}, 256),
+      dev = cliIntegerArgument(a, {"--device", "--d"}, GpuManager::selectedGpu());
   Database db;
   if (!ensureDb(db))
     return 1;
