@@ -261,6 +261,10 @@ target_link_libraries(OpenPuzzleCore
         SQLite::SQLite3
 )
 
+if(WIN32)
+    target_link_libraries(OpenPuzzleCore PUBLIC advapi32)
+endif()
+
 target_compile_options(OpenPuzzleCore
     PRIVATE
         -Wall -Wextra -Wpedantic
@@ -394,6 +398,10 @@ if(OPENPUZZLE_BUILD_UI)
                 include
                 src/ui
         )
+
+        if(WIN32)
+            target_link_libraries(OpenPuzzleUiSettings PUBLIC advapi32)
+        endif()
 
         target_compile_options(OpenPuzzleUiSettings
             PRIVATE

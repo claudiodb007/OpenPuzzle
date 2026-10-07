@@ -4,6 +4,7 @@
 #include "openpuzzle/core/JsonString.hpp"
 #include "openpuzzle/core/JsonNumber.hpp"
 #include "openpuzzle/core/AtomicFile.hpp"
+#include "openpuzzle/core/LocalPaths.hpp"
 
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -19,9 +20,11 @@
 #include <sstream>
 #include <string>
 
+#ifndef _WIN32
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -94,6 +97,9 @@ std::optional<bool> readJsonBooleanAfterKey(
 
 std::optional<std::string> readFile(
     const std::string& path, bool& missing) {
+#ifdef _WIN32
+  return windowsFile::readPrivate(pathFromUtf8(path), missing);
+#else
   missing = false;
   const int descriptor = ::open(
       path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
@@ -123,18 +129,13 @@ std::optional<std::string> readFile(
     contents.append(buffer, static_cast<std::size_t>(count));
   }
   return contents;
+#endif
 }
 
 } // namespace
 
 std::string ConfigurationManager::configPath() {
-  const char *home = std::getenv("HOME");
-
-  fs::path path = home ? fs::path(home) : fs::current_path();
-
-  path /= ".config/OpenPuzzle/config.json";
-
-  return path.string();
+  return pathUtf8(localPaths::configDirectory() / "config.json");
 }
 
 Configuration ConfigurationManager::load() {
@@ -143,12 +144,12 @@ Configuration ConfigurationManager::load() {
 
 std::optional<Configuration> ConfigurationManager::loadChecked() {
   Configuration config;
-  const fs::path path = configPath();
   boost::property_tree::ptree document;
   try {
+    const fs::path path = pathFromUtf8(configPath());
     WorkspaceSecurity::prepare(path.parent_path());
     bool missing = false;
-    const auto text = readFile(path.string(), missing);
+    const auto text = readFile(pathUtf8(path), missing);
     if (missing) {
       return config;
     }
@@ -176,9 +177,17 @@ std::optional<Configuration> ConfigurationManager::loadChecked() {
   if (const auto value = findJsonString(document, "opencl")) {
     config.bitcrack.openclPath = *value;
   } else if (!config.bitcrack.cudaPath.empty()) {
-    config.bitcrack.openclPath =
-        (fs::path(config.bitcrack.cudaPath).parent_path() / "clBitCrack")
-            .string();
+    try {
+#ifdef _WIN32
+      const auto filename = "clBitCrack.exe";
+#else
+      const auto filename = "clBitCrack";
+#endif
+      config.bitcrack.openclPath = pathUtf8(
+          pathFromUtf8(config.bitcrack.cudaPath).parent_path() / filename);
+    } catch (...) {
+      return std::nullopt;
+    }
   }
 
   if (const auto value = findJsonString(document, "engine_id")) {
@@ -227,9 +236,9 @@ std::optional<Configuration> ConfigurationManager::loadChecked() {
 }
 
 bool ConfigurationManager::save(const Configuration &config) {
-  const fs::path path = configPath();
-
+  fs::path path;
   try {
+    path = pathFromUtf8(configPath());
     WorkspaceSecurity::prepare(
         path.parent_path());
   } catch (...) {

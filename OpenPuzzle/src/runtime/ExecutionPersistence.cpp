@@ -1,3 +1,4 @@
+#include "openpuzzle/core/LocalPaths.hpp"
 #include "openpuzzle/runtime/ExecutionPersistence.hpp"
 #include "openpuzzle/core/JsonString.hpp"
 #include "openpuzzle/core/JsonNumber.hpp"
@@ -31,7 +32,7 @@ void ExecutionPersistence::writeExecutionFile(
                 << (context.echoOutput ? "true" : "false") << "\n";
   executionFile << "}\n";
   writePrivateFileAtomically(
-      std::filesystem::path(context.workspace) / "execution.json", executionFile.str());
+      pathFromUtf8(context.workspace) / "execution.json", executionFile.str());
 }
 
 void ExecutionPersistence::writeStateFile(
@@ -56,7 +57,7 @@ void ExecutionPersistence::writeStateFile(
   stateFile << "  \"keys_checked\": \"" << escapeJsonString(result.keysChecked) << "\"\n";
   stateFile << "}\n";
   writePrivateFileAtomically(
-      std::filesystem::path(context.workspace) / "state.json", stateFile.str());
+      pathFromUtf8(context.workspace) / "state.json", stateFile.str());
 }
 
 } // namespace openpuzzle

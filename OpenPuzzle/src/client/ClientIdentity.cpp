@@ -2,6 +2,7 @@
 
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/core/AtomicFile.hpp"
+#include "openpuzzle/core/LocalPaths.hpp"
 
 #include <cerrno>
 #include <cstdlib>
@@ -13,28 +14,19 @@
 #include <sstream>
 #include <string>
 
+#ifndef _WIN32
 #include <fcntl.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 namespace openpuzzle::client {
 
 namespace {
 
 std::filesystem::path identityPath() {
-  const char* home =
-      std::getenv("HOME");
-
-  std::filesystem::path root =
-      home
-          ? std::filesystem::path(home)
-          : std::filesystem::current_path();
-
-  return root /
-         ".config" /
-         "OpenPuzzle" /
-         "client.id";
+  return localPaths::configDirectory() / "client.id";
 }
 
 std::string generateUuid() {
@@ -91,6 +83,7 @@ std::string generateUuid() {
 
 // Keep the lock file in place: unlinking it would allow another caller to
 // lock a different inode while an earlier caller still owns this lock.
+#ifndef _WIN32
 class Descriptor {
 public:
   explicit Descriptor(int value) : value_(value) {}
@@ -107,6 +100,8 @@ bool regularPrivateFile(int descriptor) {
   return ::fstat(descriptor, &metadata) == 0 && S_ISREG(metadata.st_mode) &&
          ::fchmod(descriptor, S_IRUSR | S_IWUSR) == 0;
 }
+
+#endif
 
 bool validUuid(const std::string& identity) {
   if (identity.size() != 36) {
@@ -125,6 +120,7 @@ bool validUuid(const std::string& identity) {
   return true;
 }
 
+#ifndef _WIN32
 std::string readIdentity(int descriptor) {
   struct stat metadata {};
   if (::fstat(descriptor, &metadata) != 0 || !S_ISREG(metadata.st_mode)) {
@@ -148,13 +144,29 @@ std::string readIdentity(int descriptor) {
   return validUuid(contents) ? contents : std::string{};
 }
 
+#endif
+
 } // namespace
 
 std::string ClientIdentity::loadOrCreate() {
-  const auto path = identityPath();
   try {
+    const auto path = identityPath();
     WorkspaceSecurity::prepare(path.parent_path());
 
+#ifdef _WIN32
+    const windowsFile::Lock lock(std::filesystem::path(path).concat(L".lock"));
+    if (!lock.locked()) return {};
+    bool missing = false;
+    auto contents = windowsFile::readPrivate(path, missing, 40);
+    if (contents) {
+      if (!contents->empty() && contents->back() == '\n') {
+        contents->pop_back();
+        if (!contents->empty() && contents->back() == '\r') contents->pop_back();
+      }
+      return validUuid(*contents) ? *contents : std::string{};
+    }
+    if (!missing) return {};
+#else
     const Descriptor lock(::open(
         (path.string() + ".lock").c_str(),
         O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK,
@@ -178,6 +190,8 @@ std::string ClientIdentity::loadOrCreate() {
       return identity;
     }
     if (errno != ENOENT) return {};
+
+#endif
 
     const auto identity = generateUuid();
     return writePrivateFileAtomically(path, identity + "\n")

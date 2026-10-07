@@ -8,8 +8,13 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+#include "openpuzzle/core/WindowsPrivateFile.hpp"
+#include <atomic>
+#else
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 namespace openpuzzle {
 
@@ -19,6 +24,44 @@ namespace openpuzzle {
 inline bool writePrivateFileAtomically(
     const std::filesystem::path& path,
     const std::string& contents) {
+#ifdef _WIN32
+  using namespace windowsFile;
+  if (!safePath(path)) return false;
+  Security security;
+  if (!security.attributes()) return false;
+  const DWORD attributes = GetFileAttributesW(path.c_str());
+  if (attributes != INVALID_FILE_ATTRIBUTES &&
+      (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_READONLY))) return false;
+  if (attributes == INVALID_FILE_ATTRIBUTES && GetLastError() != ERROR_FILE_NOT_FOUND) return false;
+  static std::atomic<unsigned long long> sequence{0};
+  std::filesystem::path temporary;
+  HANDLE raw = INVALID_HANDLE_VALUE;
+  for (int attempt = 0; attempt < 64; ++attempt) {
+    temporary = path;
+    temporary += L".tmp." + std::to_wstring(GetCurrentProcessId()) + L"." +
+                 std::to_wstring(sequence++) + L"." + std::to_wstring(GetTickCount64());
+    raw = CreateFileW(temporary.c_str(), GENERIC_WRITE | READ_CONTROL | WRITE_DAC,
+                      0, security.attributes(), CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (raw != INVALID_HANDLE_VALUE) break;
+    if (GetLastError() != ERROR_FILE_EXISTS && GetLastError() != ERROR_ALREADY_EXISTS) return false;
+  }
+  if (raw == INVALID_HANDLE_VALUE) return false;
+  Handle output(raw);
+  bool success = security.protect(raw);
+  std::size_t position = 0;
+  while (success && position < contents.size()) {
+    DWORD written = 0;
+    const auto count = static_cast<DWORD>((std::min)(contents.size() - position,
+                                      static_cast<std::size_t>((std::numeric_limits<DWORD>::max)())));
+    success = WriteFile(raw, contents.data() + position, count, &written, nullptr) && written > 0;
+    if (success) position += written;
+  }
+  if (success) success = FlushFileBuffers(raw) != 0;
+  if (!output.close()) success = false;
+  if (success) success = MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
+  if (!success) DeleteFileW(temporary.c_str());
+  return success;
+#else
   std::string pattern = path.string() + ".tmp.XXXXXX";
   std::vector<char> temporary(pattern.begin(), pattern.end());
   temporary.push_back('\0');
@@ -58,6 +101,7 @@ inline bool writePrivateFileAtomically(
     ::unlink(temporary.data());
   }
   return success;
+#endif
 }
 
 } // namespace openpuzzle

@@ -1,3 +1,4 @@
+#include "openpuzzle/core/LocalPaths.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
 
 #include "openpuzzle/runtime/ExecutionSlot.hpp"
@@ -160,6 +161,10 @@ ClientStateStore::executionSlot() {
 }
 
 std::string ClientStateStore::currentBootId() {
+#ifdef _WIN32
+  // Windows process identity will use creation time, never Linux boot IDs.
+  return {};
+#else
   std::ifstream input(
       "/proc/sys/kernel/random/boot_id");
 
@@ -182,6 +187,7 @@ std::string ClientStateStore::currentBootId() {
   }
 
   return bootId;
+#endif
 }
 
 std::filesystem::path
@@ -193,24 +199,12 @@ ClientStateStore::path() {
 std::filesystem::path
 ClientStateStore::path(
     const std::string& executionSlot) {
-  const char* home =
-      std::getenv("HOME");
-
-  const std::filesystem::path root =
-      home
-          ? std::filesystem::path(home)
-          : std::filesystem::current_path();
-
   const std::string filename =
       "client" +
       ExecutionSlot::fileSuffix(executionSlot) +
       ".state";
 
-  return root /
-         ".local" /
-         "share" /
-         "OpenPuzzle" /
-         filename;
+  return localPaths::dataDirectory() / filename;
 }
 
 bool ClientStateStore::save(
@@ -227,10 +221,9 @@ bool ClientStateStore::save(
     return false;
   }
 
-  const auto statePath =
-      path(executionSlot);
-
+  std::filesystem::path statePath;
   try {
+    statePath = path(executionSlot);
     WorkspaceSecurity::prepare(
         statePath.parent_path());
   } catch (...) {
@@ -356,10 +349,9 @@ ClientStateStore::load() {
 std::optional<ClientExecutionState>
 ClientStateStore::load(
     const std::string& executionSlot) {
-  const auto statePath =
-      path(executionSlot);
-
+  std::filesystem::path statePath;
   try {
+    statePath = path(executionSlot);
     WorkspaceSecurity::prepare(
         statePath.parent_path());
 
@@ -372,8 +364,15 @@ ClientStateStore::load(
     return std::nullopt;
   }
 
+#ifdef _WIN32
+  bool missing = false;
+  const auto contents = windowsFile::readPrivate(statePath, missing);
+  if (!contents) return std::nullopt;
+  std::istringstream input(*contents);
+#else
   std::ifstream input(
       statePath);
+#endif
 
   if (!input) {
     return std::nullopt;
@@ -545,14 +544,15 @@ bool ClientStateStore::remove() {
 
 bool ClientStateStore::remove(
     const std::string& executionSlot) {
-  std::error_code error;
-
-  const bool removed =
-      std::filesystem::remove(
-          path(executionSlot),
-          error);
-
-  return removed || !error;
+  try {
+    const auto statePath = path(executionSlot);
+#ifdef _WIN32
+    if (!windowsFile::safePath(statePath)) return false;
+#endif
+    std::error_code error;
+    const bool removed = std::filesystem::remove(statePath, error);
+    return removed || !error;
+  } catch (...) { return false; }
 }
 
 } // namespace openpuzzle::client

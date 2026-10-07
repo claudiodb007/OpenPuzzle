@@ -6,6 +6,8 @@
 #include <charconv>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
+#include "openpuzzle/core/LocalPaths.hpp"
 #include <locale>
 #include <optional>
 #include <sstream>
@@ -18,7 +20,8 @@ std::optional<boost::property_tree::ptree> readDocument(
     const std::filesystem::path& path) {
   try {
     boost::property_tree::ptree document;
-    boost::property_tree::read_json(path.string(), document);
+    std::ifstream input(path);
+    boost::property_tree::read_json(input, document);
     return document;
   } catch (...) {
     return std::nullopt;
@@ -93,7 +96,7 @@ RecoveryState RecoveryManager::load(int jobId) const {
 ExecutionContext RecoveryManager::buildExecutionContext(int jobId) const {
   ExecutionContext ctx;
   ctx.jobId = jobId;
-  ctx.workspace = workspaceManager_.jobWorkspace(jobId).string();
+  ctx.workspace = pathUtf8(workspaceManager_.jobWorkspace(jobId));
   const auto document = readDocument(workspaceManager_.executionFile(jobId));
   if (!document) {
     return ctx;
@@ -106,7 +109,7 @@ ExecutionContext RecoveryManager::buildExecutionContext(int jobId) const {
   ctx.engine = extractString(*document, "engine", "");
   ctx.command = extractString(*document, "command", "");
   ctx.workspace = extractString(
-      *document, "workspace", workspaceManager_.jobWorkspace(ctx.jobId).string());
+      *document, "workspace", pathUtf8(workspaceManager_.jobWorkspace(ctx.jobId)));
   ctx.echoOutput = extractBool(*document, "echo_output", true);
   return ctx;
 }

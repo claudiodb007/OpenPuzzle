@@ -2253,3 +2253,8 @@ add_executable(CliArgumentIntegrityTests core/CliArgumentIntegrityTests.cpp)
 target_link_libraries(CliArgumentIntegrityTests PRIVATE OpenPuzzleCore)
 add_test(NAME CliArgumentIntegrityTests COMMAND CliArgumentIntegrityTests)
 set_tests_properties(CliArgumentIntegrityTests PROPERTIES TIMEOUT 15)
+
+add_executable(PortableStorageTests core/PortableStorageTests.cpp)
+target_link_libraries(PortableStorageTests PRIVATE OpenPuzzleCore)
+add_test(NAME PortableStorageTests COMMAND PortableStorageTests)
+set_tests_properties(PortableStorageTests PROPERTIES TIMEOUT 45)
