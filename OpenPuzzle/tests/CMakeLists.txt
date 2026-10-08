@@ -2262,3 +2262,7 @@ set_tests_properties(PortableStorageTests PROPERTIES TIMEOUT 45)
 add_executable(WindowsRuntimeRecordTests runtime/WindowsRuntimeRecordTests.cpp)
 target_include_directories(WindowsRuntimeRecordTests PRIVATE ${CMAKE_SOURCE_DIR}/include)
 add_test(NAME WindowsRuntimeRecordTests COMMAND WindowsRuntimeRecordTests)
+
+add_executable(WindowsEngineFormatTests runtime/WindowsEngineFormatTests.cpp)
+target_include_directories(WindowsEngineFormatTests PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_test(NAME WindowsEngineFormatTests COMMAND WindowsEngineFormatTests)

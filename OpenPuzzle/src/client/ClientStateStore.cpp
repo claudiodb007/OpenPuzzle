@@ -145,6 +145,17 @@ std::string valueOf(
 
 std::string
 ClientStateStore::executionSlot() {
+#ifdef _WIN32
+  // Use the current OS environment, consistent with the Windows launch and
+  // control APIs. The CRT may retain its own earlier environment snapshot.
+  char slot[64]{};
+  const DWORD count = GetEnvironmentVariableA(
+      "OPENPUZZLE_EXECUTION_SLOT", slot, sizeof(slot));
+  if (count > 0 && count < sizeof(slot) &&
+      ExecutionSlot::valid(std::string(slot, count))) {
+    return std::string(slot, count);
+  }
+#else
   const char* value =
       std::getenv(
           "OPENPUZZLE_EXECUTION_SLOT");
@@ -156,6 +167,7 @@ ClientStateStore::executionSlot() {
       return slot;
     }
   }
+#endif
 
   return "primary";
 }

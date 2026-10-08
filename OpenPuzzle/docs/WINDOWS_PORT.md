@@ -1,4 +1,4 @@
-# Windows x64 port: process, storage and runtime control foundation
+# Windows x64 port: process, storage, runtime control and engine lifecycle
 
 Source base: Linux release 1.0.46, commit
 `129ada590c4e7591f24251aa4c7fc89e7bfb21db`.
@@ -9,11 +9,15 @@ MSVC x64 compilation/execution of its two Windows suites in the user VM. This
 storage stage was subsequently committed as
 `577e489fba52d81770b6ee91b288ead1ca4c5596`, with 155 native Linux tests,
 three isolated Linux suites and four native MSVC Windows suites approved.
-This runtime-control stage builds on that storage commit. It is not a complete
-Windows client or an installer. The isolated target now registers six Windows suites. The normal Linux
-build continues to select PosixProcessRunner; its release version stays 1.0.46.
+The runtime-control stage was committed as
+`1e7677a4b7a0c09bc521a68b233de9528a50f49d`, with 156 native Linux tests,
+four isolated Linux suites and six native MSVC Windows suites approved in the
+user reports. This engine-lifecycle stage builds on that exact commit.
+It is not a complete Windows client or installer. The isolated target now
+registers eight Windows suites. Linux continues to select PosixProcessRunner;
+its release version stays 1.0.46.
 
-## Implemented behavior
+## Existing shell process runner
 
 - Launch commands through the Windows system cmd.exe, with a Unicode command
   line. Commands use Windows shell syntax; Linux single-quote escaping is not
@@ -103,10 +107,56 @@ recovery after termination of an owned fixture. WindowsProcessIdentityTests now
 changes only its owned child process DACL to confirm that an unreadable live
 identity remains Unavailable. No installed runtime or search engine is touched.
 
+## Direct engine launch and persisted lifecycle
+
+`WindowsEngineProcess` is a separate direct executable/argument API. Unlike the
+existing general-purpose shell runner, it uses an absolute application path with
+CreateProcessW and never invokes cmd.exe. Its argument encoder follows Microsoft
+C/C++ runtime rules, including empty arguments, quotes and trailing backslashes.
+Shell metacharacters remain literal argument bytes. Invalid UTF-8, embedded NUL
+and oversized command lines are rejected before workspace creation. The application
+must pass typed arguments; existing Linux shell command strings are not accepted.
+
+The engine starts suspended, joins an owned Job Object, and publishes its complete
+PID/creation-FILETIME/generation identity atomically before resuming. A failed
+publication cannot run the child or replace the previous identity marker. A stable
+workspace lock serializes concurrent starts. Running or unreadable identities refuse
+a replacement. Only selected standard handles are inherited, and stdin receives EOF.
+
+Each new generation has its own private `engine.log` and identity-bound `exit.windows`.
+The workspace marker `engine.windows.identity` uses `windows-engine-filetime-v1`;
+it is separate from the runtime slot marker and the legacy ClientExecutionState
+schema. Exit parsing accepts the full unsigned DWORD range, including 259 as a
+completed exit code. Malformed or foreign completion records do not become success.
+Log flush and completion publication are checked; failed publication retains existing
+bytes and can be retried. Previous generation logs/results are preserved.
+
+Owned descendants are stopped when the engine exits or is stopped. Closing the owning
+Job Object on an owner crash also terminates its engine tree. Recovery can distinguish
+a live process, proven inactive identity and unavailable identity. A crash without a
+published completion does not invent an exit code. This API does not adopt an engine
+owned by another live supervisor.
+
+`runWindowsEngineInSlot` acquires the selected runtime slot, polls the owned engine
+and cooperative stop requests, and releases only its own slot. Stop and timeout end
+the owned tree. Safe stop permits the current engine to finish naturally and returns
+that intent to the caller, which must avoid launching another engine. The function
+returns exit code, stop intent, safe-stop intent and timeout status; it never requests
+an assignment or automatically starts a next engine. The Windows slot selector now
+reads the current OS environment value rather than a potentially stale CRT getenv
+copy. Dynamic slot selection is asserted in the runtime-control regression fixture.
+
+WindowsEngineFormatTests checks literal argument encoding and strict identity/exit
+formats on both platforms. WindowsEngineLifecycleTests uses only local helpers to
+check Unicode executable paths, arguments and cwd, fast exits, restricted inheritance,
+concurrent launches, preserved publication failures, process-tree cleanup, owner crash,
+stop/safe-stop intent and timeout. Its fixtures never call a server or search for keys.
+The real RunSession and Windows engine binaries still require integration and testing.
+
 ## Native validation on Windows x64
 
-The delivery ZIP also contains seven statically linked x64 fixture/test
-executables under `bin/windows-x64`. To execute the six suites immediately,
+The delivery ZIP also contains ten statically linked x64 fixture/test
+executables under `bin/windows-x64`. To execute the eight suites immediately,
 without installing a compiler, run from the extracted package root:
 
 ```powershell
@@ -133,7 +183,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\OpenPuzzle\platform\va
 
 ExecutionPolicy Bypass applies only to this process. The script creates a fresh
 report/build directory under `%USERPROFILE%\OpenPuzzle\relatorios\windows-platform`,
-compiles x64 with MSVC and checks that JUnit contains all six registered test names,
+compiles x64 with MSVC and checks that JUnit contains all eight registered test names,
 without failures or skipped tests. Send SUMMARY.txt and, if anything fails,
 validation.log and ctest-results.xml. Neither the existing Linux configuration
 nor a production installation is used by these tests.
@@ -150,8 +200,8 @@ ctest --test-dir .\build-windows -C Release --output-on-failure
 
 1. Connect the process abstraction to RunSession, background launch, runtime
    engine launch, ExecutionStopper and checkpoint recovery. The isolated Windows
-   slot acquisition/status/control API exists; the real runtime polling and
-   persisted engine identity schema remain to be integrated. Replace `/proc`,
+   slot and engine APIs now exist. Connect their polling and generation records
+   to the real assignment loop and existing ClientExecutionState/recovery schema. Replace `/proc`,
    fork and signal operations and retain unknown-identity handling. Adapt
    command construction and detached/background process ownership separately.
 2. Port HTTP helpers and device discovery, including GpuManager, GpuTelemetry
@@ -172,22 +222,23 @@ this process foundation validated on Windows.
 - [CreateProcessW](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw)
 - [Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)
 - [GetProcessTimes](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getprocesstimes)
+- [Microsoft C/C++ argument parsing](https://learn.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments)
+- [CRT environment copies](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/getenv-wgetenv)
 - [Microsoft C++ Build Tools](https://learn.microsoft.com/en-us/cpp/overview/acquire-msvc)
 
-## Validation status of this runtime-control stage
+## Validation status of this engine-lifecycle stage
 
-The sources cross-compile to Windows x64: seven executables, six registered suites.
-Four isolated Linux suites pass, including the new runtime record parser. The normal
-Linux runtime-control implementation is unchanged; main Linux registers 156 tests.
-The delivery environment checks the full CLI/UI build and affected storage/UI tests.
-Full native Linux regression proof remains the integration gate: `integrate-linux.sh`
-requires 156/156 native Linux tests and 4/4 isolated tests with exact JUnit names and
-zero skipped tests before making one commit. Local process/GPU/catalogue fixture
-limitations from the preceding stage are not reported as native regression passes.
+Windows x64 cross-compilation produces ten executables and eight registered suites.
+The delivery environment checks the full Linux CLI/UI build, 17 affected tests and
+five isolated Linux suites. The main Linux build registers 157 tests. Full native
+Linux regression remains the integration gate: `integrate-linux.sh` requires
+157/157 native Linux tests and 5/5 isolated tests with exact JUnit names and zero
+skipped tests before creating one commit. Local process/GPU/catalogue fixture
+limitations are not reported as full native regression passes.
 
-Native Windows execution and MSVC compilation of these six suites are pending until
-`validate-windows.ps1` runs in the VM. The preceding four-suite native storage report
-is evidence for the baseline only, not for these new runtime-control tests.
+Native Windows execution and MSVC compilation of the eight-suite engine package
+are pending until `validate-windows.ps1` runs in the VM. The preceding six-suite
+MSVC runtime-control result validates the baseline, not these new engine tests.
 
 Bundled Boost 1.83 headers retain their copyright/license notices in
 `third-party/BOOST_COPYRIGHT.txt`; no Boost binary dependency is introduced.

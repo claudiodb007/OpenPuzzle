@@ -4,6 +4,7 @@
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/core/AtomicFile.hpp"
 #include "openpuzzle/core/LocalPaths.hpp"
+#include "openpuzzle/client/ClientStateStore.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -131,11 +132,13 @@ int wmain(int argc,wchar_t** argv){
     // A force-killed owned test process leaves a stale identity. Only a proven
     // stale record authorizes replacement and cleanup of its matching requests.
     select("cuda-8");
+    require(client::ClientStateStore::executionSlot()=="cuda-8","Windows environment slot change was not observed");
     {
       Child crashed(exe,root,L"hold","cuda-8",root/L"crash-ready");waitFile(root/L"crash-ready");require(bytes(root/L"crash-ready")=="acquired","Crash fixture failed to acquire");
       require(Control::requestSafeStop("cuda-8"),"Crash fixture request failed");crashed.terminate();
       require(Control::runtimeIdentityStatus("cuda-8")==Status::Inactive,"Exited fixture still running");
       require(Control::acquire() && !Control::safeStopRequested("cuda-8"),"Stale fixture not recovered");
+      require(Control::runtimePid("cuda-8")==static_cast<int>(GetCurrentProcessId()) && !fs::exists(Control::safeStopPath("cuda-8")),"Recovered slot retained old controls or acquired another slot");
       require(Control::release(),"Recovered slot release failed");
     }
     select("opencl-2");

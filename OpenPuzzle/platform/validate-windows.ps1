@@ -2,7 +2,7 @@ param([string]$ReportRoot = '')
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $project = Split-Path -Parent $PSScriptRoot
-$baseCommit = '577e489fba52d81770b6ee91b288ead1ca4c5596'
+$baseCommit = '1e7677a4b7a0c09bc521a68b233de9528a50f49d'
 $transcribing = $false
 $report = $null
 function Invoke-Native {
@@ -105,11 +105,11 @@ try {
     $generators = @($capabilities.generators | Where-Object { $_.name -match "^Visual Studio $major " })
     if ($generators.Count -ne 1) { throw 'CMake does not support this installed Visual Studio version. Update CMake or select a supported C++ toolchain.' }
     $generator = $generators[0].name
-    Write-Host '===== WINDOWS PROCESS, STORAGE AND RUNTIME CONTROL ====='
+    Write-Host '===== WINDOWS PROCESS, STORAGE, CONTROL AND ENGINE LIFECYCLE ====='
     Write-Host "Linux source base: $baseCommit"
     Write-Host "Generator: $generator | Architecture: x64"
     $boost = Join-Path (Split-Path -Parent $project) 'third-party\include'
-    if (-not (Test-Path -LiteralPath (Join-Path $boost 'boost\property_tree\json_parser.hpp'))) { throw 'Bundled Boost headers are missing; extract the complete storage ZIP.' }
+    if (-not (Test-Path -LiteralPath (Join-Path $boost 'boost\property_tree\json_parser.hpp'))) { throw 'Bundled Boost headers are missing; extract the complete engine ZIP.' }
     $build = Join-Path $report 'build'
     Invoke-Native -Tool $cmake -ToolArguments @('-S', $project, '-B', $build, '-G', $generator, '-A', 'x64', "-DCMAKE_GENERATOR_INSTANCE=$($installation.installationPath)", '-DOPENPUZZLE_BUILD_PLATFORM_TESTS_ONLY=ON', "-DOPENPUZZLE_PLATFORM_BOOST_INCLUDE_DIR=$boost")
     Invoke-Native -Tool $cmake -ToolArguments @('--build', $build, '--config', 'Release', '--parallel', '4')
@@ -117,18 +117,18 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'CTest registration failed.' }
     Write-Utf8 -Path (Join-Path $report 'registered-tests.json') -Text $registrationJson
     $registration = $registrationJson | ConvertFrom-Json
-    $expected = @('PortableStorageTests', 'WindowsProcessIdentityTests', 'WindowsProcessRunnerTests', 'WindowsRuntimeControlTests', 'WindowsRuntimeRecordTests', 'WindowsStorageIdentityTests')
+    $expected = @('PortableStorageTests', 'WindowsEngineFormatTests', 'WindowsEngineLifecycleTests', 'WindowsProcessIdentityTests', 'WindowsProcessRunnerTests', 'WindowsRuntimeControlTests', 'WindowsRuntimeRecordTests', 'WindowsStorageIdentityTests')
     $registered = @($registration.tests | ForEach-Object { $_.name } | Sort-Object)
-    if ($registered.Count -ne 6 -or @(Compare-Object $expected $registered).Count -ne 0) {
-        throw 'CTest must register exactly the six Windows platform/storage/control suites.'
+    if ($registered.Count -ne 8 -or @(Compare-Object $expected $registered).Count -ne 0) {
+        throw 'CTest must register exactly the eight Windows platform/storage/control/engine suites.'
     }
     $junit = Join-Path $report 'ctest-results.xml'
     Invoke-Native -Tool $ctest -ToolArguments @('--test-dir', $build, '-C', 'Release', '--output-on-failure', '--no-tests=error', '--output-junit', $junit)
     [xml]$result = Get-Content -LiteralPath $junit -Raw
     $cases = @($result.SelectNodes('//testcase'))
     $names = @($cases | ForEach-Object { $_.GetAttribute('name') } | Sort-Object)
-    if ($cases.Count -ne 6 -or @(Compare-Object $expected $names).Count -ne 0) {
-        throw 'JUnit does not prove execution of all six registered Windows suites.'
+    if ($cases.Count -ne 8 -or @(Compare-Object $expected $names).Count -ne 0) {
+        throw 'JUnit does not prove execution of all eight registered Windows suites.'
     }
     foreach ($case in $cases) {
         if (@($case.SelectNodes('failure|error|skipped')).Count -ne 0 -or $case.GetAttribute('status') -notin @('', 'run', 'pass', 'passed')) {
@@ -141,11 +141,11 @@ try {
     })
     Write-Utf8 -Path (Join-Path $report 'SOURCE_SHA256SUMS.txt') -Text ($sourceHashes -join "`n")
     $summary = @(
-        'Windows runtime control foundation: native validation passed',
+        'Windows engine lifecycle foundation: native validation passed',
         "Linux source base: $baseCommit",
         "Generator: $generator",
         'Architecture: x64',
-        'Native Windows tests: 6/6 passed',
+        'Native Windows tests: 8/8 passed',
         'Full Windows application: not yet ported',
         'Only local fixture processes were launched; no assignments requested.',
         "Report: $report"
