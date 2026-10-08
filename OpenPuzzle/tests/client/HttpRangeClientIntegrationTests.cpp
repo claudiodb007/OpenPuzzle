@@ -5,6 +5,7 @@
 #include <csignal>
 #include <cstddef>
 #include <iostream>
+#include <locale>
 #include <string>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -655,6 +656,27 @@ int main() {
     );
 
     server.wait();
+  }
+
+  {
+    OneShotHttpServer server("200 OK", "{}", "/api/client/register",
+        "{\"client_id\":\"fixture ç & % \\n\\u0001\"}");
+    HttpRangeClient client(server.url());
+    assert(client.registerClient({"fixture ç & % \n\x01"}));
+    server.wait();
+  }
+  {
+    class DecimalComma : public std::numpunct<char> {
+      char do_decimal_point() const override {return ',';}
+    };
+    const auto original = std::locale();
+    std::locale::global(std::locale(std::locale::classic(),new DecimalComma));
+    OneShotHttpServer server("200 OK", "{}", "/api/range/progress",
+        "{\"assignment_id\":\"fixture\",\"client_id\":\"fixture\",\"status\":\"running\",\"speed_mkeys\":12.5,\"keys_checked\":\"100\"}");
+    HttpRangeClient client(server.url());
+    assert(client.progress("fixture","fixture",12.5,"100"));
+    server.wait();
+    std::locale::global(original);
   }
 
   std::cout

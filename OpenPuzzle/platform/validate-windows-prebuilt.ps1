@@ -12,12 +12,12 @@ try {
     if (-not $BinaryDirectory) { $BinaryDirectory = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'bin\windows-x64' }
     if (-not $ReportRoot) { $ReportRoot = Join-Path $env:USERPROFILE 'OpenPuzzle\relatorios\windows-platform' }
     $manifest = Get-Content -LiteralPath (Join-Path $BinaryDirectory 'BUILD_MANIFEST.json') -Raw | ConvertFrom-Json
-    if ($manifest.source_base -ne '1e7677a4b7a0c09bc521a68b233de9528a50f49d' -or $manifest.architecture -ne 'x86_64') {
+    if ($manifest.source_base -ne '8740366d1b91710e28962a7d2cd2366bfa7a18f2' -or $manifest.architecture -ne 'x86_64') {
         throw 'Unexpected binary build identity.'
     }
-    $expected = @('PortableStorageTests.exe','WindowsEngineFixture.exe','WindowsEngineFormatTests.exe','WindowsEngineLifecycleTests.exe','WindowsProcessFixture.exe','WindowsProcessIdentityTests.exe','WindowsProcessRunnerTests.exe','WindowsRuntimeControlTests.exe','WindowsRuntimeRecordTests.exe','WindowsStorageIdentityTests.exe')
+    $expected = @('HttpRangeClientTests.exe','HttpRequestPolicyTests.exe','PortableStorageTests.exe','WindowsEngineFixture.exe','WindowsEngineFormatTests.exe','WindowsEngineLifecycleTests.exe','WindowsHttpTransportTests.exe','WindowsProcessFixture.exe','WindowsProcessIdentityTests.exe','WindowsProcessRunnerTests.exe','WindowsRuntimeControlTests.exe','WindowsRuntimeRecordTests.exe','WindowsStorageIdentityTests.exe')
     $fileNames = @($manifest.files | ForEach-Object { $_.name } | Sort-Object)
-    if ($fileNames.Count -ne 10 -or @(Compare-Object $expected $fileNames).Count -ne 0) { throw 'Unexpected binary manifest files.' }
+    if ($fileNames.Count -ne 13 -or @(Compare-Object $expected $fileNames).Count -ne 0) { throw 'Unexpected binary manifest files.' }
     foreach ($file in $manifest.files) {
         $path = Join-Path $BinaryDirectory $file.name
         if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $file.sha256) { throw "Binary checksum mismatch: $($file.name)" }
@@ -28,13 +28,13 @@ try {
     $utf8 = New-Object System.Text.UTF8Encoding($false)
     $document = New-Object System.Xml.XmlDocument
     $suite = $document.CreateElement('testsuite')
-    $suite.SetAttribute('name','WindowsEngineLifecycleFoundation')
-    $suite.SetAttribute('tests','8')
+    $suite.SetAttribute('name','WindowsHttpClientFoundation')
+    $suite.SetAttribute('tests','11')
     $null = $document.AppendChild($suite)
     $failed = 0
     $fixture = (Resolve-Path -LiteralPath (Join-Path $BinaryDirectory 'WindowsProcessFixture.exe')).Path
     $engineFixture = (Resolve-Path -LiteralPath (Join-Path $BinaryDirectory 'WindowsEngineFixture.exe')).Path
-    foreach ($name in @('WindowsProcessRunnerTests','WindowsProcessIdentityTests','PortableStorageTests','WindowsStorageIdentityTests','WindowsRuntimeRecordTests','WindowsRuntimeControlTests','WindowsEngineFormatTests','WindowsEngineLifecycleTests')) {
+    foreach ($name in @('WindowsProcessRunnerTests','WindowsProcessIdentityTests','PortableStorageTests','WindowsStorageIdentityTests','WindowsRuntimeRecordTests','WindowsRuntimeControlTests','WindowsEngineFormatTests','WindowsEngineLifecycleTests','HttpRangeClientTests','HttpRequestPolicyTests','WindowsHttpTransportTests')) {
         Write-Host "===== $name ====="
         $start = New-Object System.Diagnostics.ProcessStartInfo
         $start.FileName = (Resolve-Path -LiteralPath (Join-Path $BinaryDirectory ($name + '.exe'))).Path
@@ -81,17 +81,17 @@ try {
     $suite.SetAttribute('failures',[string]$failed)
     $document.Save((Join-Path $report 'test-results.xml'))
     Copy-Item -LiteralPath (Join-Path $BinaryDirectory 'BUILD_MANIFEST.json') -Destination $report
-    if ($failed -ne 0) { throw "$failed Windows test suite(s) failed. Send test-results.xml and the eight logs." }
+    if ($failed -ne 0) { throw "$failed Windows test suite(s) failed. Send test-results.xml and the eleven logs." }
     $summary = @(
-        'Windows engine lifecycle foundation: native execution validation passed',
+        'Windows HTTP client foundation: native execution validation passed',
         "Linux source base: $($manifest.source_base)",
         "Port patch SHA-256: $($manifest.patch_sha256)",
         "Compiler: $($manifest.compiler) (cross-build)",
         'Architecture: x64',
-        'Native Windows executable tests: 8/8 passed',
+        'Native Windows executable tests: 11/11 passed',
         'MSVC build validation: pending; use validate-windows.ps1',
         'Full Windows application: not yet ported',
-        'Only local fixture processes were launched; no assignments requested.',
+        'Only local processes and a loopback HTTP fixture were used; no production assignments requested.',
         "Report: $report"
     ) -join "`n"
     [System.IO.File]::WriteAllText((Join-Path $report 'SUMMARY.txt'),$summary,$utf8)

@@ -268,8 +268,8 @@ target_link_libraries(OpenPuzzleCore
 )
 
 if(WIN32)
-    target_sources(OpenPuzzleCore PRIVATE src/runtime/WindowsProcessIdentity.cpp src/runtime/WindowsEngineProcess.cpp)
-    target_link_libraries(OpenPuzzleCore PUBLIC advapi32)
+    target_sources(OpenPuzzleCore PRIVATE src/runtime/WindowsProcessIdentity.cpp src/runtime/WindowsEngineProcess.cpp src/client/WindowsHttpTransport.cpp)
+    target_link_libraries(OpenPuzzleCore PUBLIC advapi32 winhttp)
 endif()
 
 target_compile_options(OpenPuzzleCore

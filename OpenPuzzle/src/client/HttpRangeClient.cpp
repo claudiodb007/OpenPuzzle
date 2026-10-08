@@ -10,7 +10,14 @@
 #include <regex>
 #include <sstream>
 #include <string>
+#ifdef _WIN32
+#include "openpuzzle/client/WindowsHttpTransport.hpp"
+#else
 #include <sys/wait.h>
+#endif
+#include "openpuzzle/core/JsonString.hpp"
+#include <locale>
+#include "openpuzzle/client/HttpRequestPolicy.hpp"
 #include <utility>
 
 namespace openpuzzle::client {
@@ -18,39 +25,7 @@ namespace openpuzzle::client {
 namespace {
 
 std::string jsonEscape(const std::string &value) {
-  std::string result;
-
-  result.reserve(value.size() + 8);
-
-  for (const char character : value) {
-    switch (character) {
-    case '\\':
-      result += "\\\\";
-      break;
-
-    case '"':
-      result += "\\\"";
-      break;
-
-    case '\n':
-      result += "\\n";
-      break;
-
-    case '\r':
-      result += "\\r";
-      break;
-
-    case '\t':
-      result += "\\t";
-      break;
-
-    default:
-      result += character;
-      break;
-    }
-  }
-
-  return result;
+  return escapeJsonString(value);
 }
 
 bool extractString(const std::string &json, const std::string &key,
@@ -382,6 +357,7 @@ HttpRangeClient::buildSolutionReportPayload(
     const std::string &assignmentId,
     const std::string &clientId) {
   std::ostringstream request;
+  request.imbue(std::locale::classic());
 
   /*
    * Este payload é deliberadamente mínimo.
@@ -438,6 +414,15 @@ bool HttpRangeClient::reportSolution(
       serverUrl_ +
       "/api/puzzle/report-solution";
 
+#ifdef _WIN32
+  const auto http = WindowsHttpTransport::request("POST", url, request);
+  std::string response = http.body;
+  if (!http.success()) {
+    lastErrorCode_ = parseErrorCode(response);
+    lastError_ = response.empty() ? http.error : response;
+    return false;
+  }
+#else
   std::ostringstream command;
 
   command
@@ -520,11 +505,14 @@ bool HttpRangeClient::reportSolution(
     return false;
   }
 
+#endif
+
   return true;
 }
 
 bool HttpRangeClient::registerClient(const ClientRegistration &registration) {
   lastError_.clear();
+  lastErrorCode_.clear();
 
   if (serverUrl_.empty()) {
     lastError_ = "Server URL is empty";
@@ -539,6 +527,7 @@ bool HttpRangeClient::registerClient(const ClientRegistration &registration) {
   }
 
   std::ostringstream request;
+  request.imbue(std::locale::classic());
 
   request << "{"
           << "\"client_id\":\"" << jsonEscape(registration.clientId) << "\""
@@ -546,6 +535,15 @@ bool HttpRangeClient::registerClient(const ClientRegistration &registration) {
 
   const std::string url = serverUrl_ + "/api/client/register";
 
+#ifdef _WIN32
+  const auto http = WindowsHttpTransport::request("POST", url, request.str());
+  std::string response = http.body;
+  if (!http.success()) {
+    lastErrorCode_ = parseErrorCode(response);
+    lastError_ = response.empty() ? http.error : response;
+    return false;
+  }
+#else
   std::ostringstream command;
 
   command << "curl"
@@ -596,11 +594,14 @@ bool HttpRangeClient::registerClient(const ClientRegistration &registration) {
     return false;
   }
 
+#endif
+
   return true;
 }
 
 bool HttpRangeClient::heartbeat(const ClientHeartbeat &heartbeat) {
   lastError_.clear();
+  lastErrorCode_.clear();
 
   if (serverUrl_.empty()) {
     lastError_ = "Server URL is empty";
@@ -615,6 +616,7 @@ bool HttpRangeClient::heartbeat(const ClientHeartbeat &heartbeat) {
   }
 
   std::ostringstream request;
+  request.imbue(std::locale::classic());
 
   request << "{"
           << "\"client_id\":\"" << jsonEscape(heartbeat.clientId) << "\","
@@ -728,6 +730,15 @@ bool HttpRangeClient::heartbeat(const ClientHeartbeat &heartbeat) {
 
   const std::string url = serverUrl_ + "/api/client/heartbeat";
 
+#ifdef _WIN32
+  const auto http = WindowsHttpTransport::request("POST", url, request.str());
+  std::string response = http.body;
+  if (!http.success()) {
+    lastErrorCode_ = parseErrorCode(response);
+    lastError_ = response.empty() ? http.error : response;
+    return false;
+  }
+#else
   std::ostringstream command;
 
   command << "curl"
@@ -778,6 +789,8 @@ bool HttpRangeClient::heartbeat(const ClientHeartbeat &heartbeat) {
     return false;
   }
 
+#endif
+
   return true;
 }
 
@@ -790,6 +803,7 @@ HttpRangeClient::claim(
     const std::string &backend,
     const std::string &searchMode) {
   lastError_.clear();
+  lastErrorCode_.clear();
 
   lastClaimStatus_ =
       RangeClaimStatus::Failed;
@@ -818,8 +832,8 @@ HttpRangeClient::claim(
     return std::nullopt;
   }
 
-  if (speedMKeys < 0.0) {
-    lastError_ = "Speed cannot be negative";
+  if (!HttpRequestPolicy::validSpeed(speedMKeys)) {
+    lastError_ = "Speed must be finite and non-negative";
 
     return std::nullopt;
   }
@@ -842,6 +856,7 @@ HttpRangeClient::claim(
   }
 
   std::ostringstream request;
+  request.imbue(std::locale::classic());
 
   request << "{"
           << "\"client_id\":\"" << jsonEscape(clientId) << "\","
@@ -868,6 +883,15 @@ HttpRangeClient::claim(
 
   const std::string url = serverUrl_ + "/api/range/claim";
 
+#ifdef _WIN32
+  const auto http = WindowsHttpTransport::request("POST", url, request.str());
+  std::string response = http.body;
+  if (!http.success()) {
+    lastErrorCode_ = parseErrorCode(response);
+    lastError_ = response.empty() ? http.error : response;
+    return std::nullopt;
+  }
+#else
   std::ostringstream command;
 
   command << "curl"
@@ -918,6 +942,8 @@ HttpRangeClient::claim(
 
     return std::nullopt;
   }
+
+#endif
 
   auto claimResult =
       parseClaimResult(response);
@@ -985,8 +1011,8 @@ bool HttpRangeClient::progress(const std::string &assignmentId,
     return false;
   }
 
-  if (speedMKeys < 0.0) {
-    lastError_ = "Speed cannot be negative";
+  if (!HttpRequestPolicy::validSpeed(speedMKeys)) {
+    lastError_ = "Speed must be finite and non-negative";
 
     return false;
   }
@@ -1006,6 +1032,7 @@ bool HttpRangeClient::progress(const std::string &assignmentId,
   }
 
   std::ostringstream request;
+  request.imbue(std::locale::classic());
 
   request << "{"
           << "\"assignment_id\":\"" << jsonEscape(assignmentId) << "\","
@@ -1017,6 +1044,15 @@ bool HttpRangeClient::progress(const std::string &assignmentId,
 
   const std::string url = serverUrl_ + "/api/range/progress";
 
+#ifdef _WIN32
+  const auto http = WindowsHttpTransport::request("POST", url, request.str());
+  std::string response = http.body;
+  if (!http.success()) {
+    lastErrorCode_ = parseErrorCode(response);
+    lastError_ = response.empty() ? http.error : response;
+    return false;
+  }
+#else
   std::ostringstream command;
 
   command << "curl"
@@ -1070,6 +1106,8 @@ bool HttpRangeClient::progress(const std::string &assignmentId,
 
     return false;
   }
+
+#endif
 
   return true;
 }
@@ -1133,6 +1171,7 @@ bool HttpRangeClient::complete(
   }
 
   std::ostringstream request;
+  request.imbue(std::locale::classic());
 
   request << "{"
           << "\"assignment_id\":\"" << jsonEscape(assignmentId) << "\","
@@ -1151,6 +1190,15 @@ bool HttpRangeClient::complete(
 
   const std::string url = serverUrl_ + "/api/range/complete";
 
+#ifdef _WIN32
+  const auto http = WindowsHttpTransport::request("POST", url, request.str());
+  std::string response = http.body;
+  if (!http.success()) {
+    lastErrorCode_ = parseErrorCode(response);
+    lastError_ = response.empty() ? http.error : response;
+    return false;
+  }
+#else
   std::ostringstream command;
 
   command << "curl"
@@ -1204,6 +1252,8 @@ bool HttpRangeClient::complete(
 
     return false;
   }
+
+#endif
 
   return true;
 }

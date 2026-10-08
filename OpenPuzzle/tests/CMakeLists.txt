@@ -2266,3 +2266,7 @@ add_test(NAME WindowsRuntimeRecordTests COMMAND WindowsRuntimeRecordTests)
 add_executable(WindowsEngineFormatTests runtime/WindowsEngineFormatTests.cpp)
 target_include_directories(WindowsEngineFormatTests PRIVATE ${CMAKE_SOURCE_DIR}/include)
 add_test(NAME WindowsEngineFormatTests COMMAND WindowsEngineFormatTests)
+
+add_executable(HttpRequestPolicyTests client/HttpRequestPolicyTests.cpp)
+target_include_directories(HttpRequestPolicyTests PRIVATE ../include)
+add_test(NAME HttpRequestPolicyTests COMMAND HttpRequestPolicyTests)

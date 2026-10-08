@@ -1,5 +1,5 @@
-# Isolate ported process, storage and slot-control components from the remaining runtime,
-# network, GPU and UI dependencies of the full application.
+# Isolate ported processes, storage, controls, engines and HTTP client components
+# from the remaining runtime, GPU and UI dependencies of the full application.
 if(WIN32)
     add_library(OpenPuzzlePlatform
         ../src/core/WindowsProcessRunner.cpp
@@ -114,4 +114,31 @@ if(WIN32)
     endif()
     add_test(NAME WindowsEngineLifecycleTests COMMAND WindowsEngineLifecycleTests $<TARGET_FILE:WindowsEngineFixture>)
     set_tests_properties(WindowsEngineLifecycleTests PROPERTIES TIMEOUT 45)
+endif()
+
+add_executable(HttpRequestPolicyTests ../tests/client/HttpRequestPolicyTests.cpp)
+target_include_directories(HttpRequestPolicyTests PRIVATE ../include)
+add_test(NAME HttpRequestPolicyTests COMMAND HttpRequestPolicyTests)
+if(WIN32)
+    add_library(OpenPuzzleHttpClient ../src/client/HttpRangeClient.cpp ../src/client/WindowsHttpTransport.cpp)
+    target_link_libraries(OpenPuzzleHttpClient PUBLIC OpenPuzzleStorage winhttp)
+    if(OPENPUZZLE_PLATFORM_BOOST_INCLUDE_DIR)
+        target_include_directories(OpenPuzzleHttpClient PRIVATE "${OPENPUZZLE_PLATFORM_BOOST_INCLUDE_DIR}")
+    endif()
+    target_compile_definitions(OpenPuzzleHttpClient PRIVATE _WIN32_WINNT=0x0601)
+    add_executable(HttpRangeClientTests ../tests/client/HttpRangeClientTests.cpp)
+    target_link_libraries(HttpRangeClientTests PRIVATE OpenPuzzleHttpClient)
+    add_test(NAME HttpRangeClientTests COMMAND HttpRangeClientTests)
+    add_executable(WindowsHttpTransportTests ../tests/windows/WindowsHttpTransportTests.cpp)
+    target_link_libraries(WindowsHttpTransportTests PRIVATE OpenPuzzleHttpClient ws2_32)
+    add_test(NAME WindowsHttpTransportTests COMMAND WindowsHttpTransportTests)
+    set_tests_properties(WindowsHttpTransportTests PROPERTIES TIMEOUT 45)
+    if(MSVC)
+        foreach(name OpenPuzzleHttpClient HttpRequestPolicyTests HttpRangeClientTests WindowsHttpTransportTests)
+            target_compile_options(${name} PRIVATE /utf-8)
+        endforeach()
+        target_compile_options(HttpRangeClientTests PRIVATE /UNDEBUG)
+    else()
+        target_compile_options(HttpRangeClientTests PRIVATE -UNDEBUG)
+    endif()
 endif()

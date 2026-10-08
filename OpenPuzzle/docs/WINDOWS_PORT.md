@@ -1,4 +1,4 @@
-# Windows x64 port: process, storage, runtime control and engine lifecycle
+# Windows x64 port: processes, storage, runtime, engines and HTTP client
 
 Source base: Linux release 1.0.46, commit
 `129ada590c4e7591f24251aa4c7fc89e7bfb21db`.
@@ -12,9 +12,12 @@ three isolated Linux suites and four native MSVC Windows suites approved.
 The runtime-control stage was committed as
 `1e7677a4b7a0c09bc521a68b233de9528a50f49d`, with 156 native Linux tests,
 four isolated Linux suites and six native MSVC Windows suites approved in the
-user reports. This engine-lifecycle stage builds on that exact commit.
+user reports. The engine-lifecycle stage was committed as
+`8740366d1b91710e28962a7d2cd2366bfa7a18f2`, with 157 native Linux tests,
+five isolated Linux suites and eight native MSVC Windows suites approved.
+This HTTP-client stage builds on that exact commit.
 It is not a complete Windows client or installer. The isolated target now
-registers eight Windows suites. Linux continues to select PosixProcessRunner;
+registers eleven Windows suites. Linux continues to select PosixProcessRunner;
 its release version stays 1.0.46.
 
 ## Existing shell process runner
@@ -155,8 +158,8 @@ The real RunSession and Windows engine binaries still require integration and te
 
 ## Native validation on Windows x64
 
-The delivery ZIP also contains ten statically linked x64 fixture/test
-executables under `bin/windows-x64`. To execute the eight suites immediately,
+The delivery ZIP also contains thirteen statically linked x64 fixture/test
+executables under `bin/windows-x64`. To execute the eleven suites immediately,
 without installing a compiler, run from the extracted package root:
 
 ```powershell
@@ -183,7 +186,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\OpenPuzzle\platform\va
 
 ExecutionPolicy Bypass applies only to this process. The script creates a fresh
 report/build directory under `%USERPROFILE%\OpenPuzzle\relatorios\windows-platform`,
-compiles x64 with MSVC and checks that JUnit contains all eight registered test names,
+compiles x64 with MSVC and checks that JUnit contains all eleven registered test names,
 without failures or skipped tests. Send SUMMARY.txt and, if anything fails,
 validation.log and ctest-results.xml. Neither the existing Linux configuration
 nor a production installation is used by these tests.
@@ -204,8 +207,9 @@ ctest --test-dir .\build-windows -C Release --output-on-failure
    to the real assignment loop and existing ClientExecutionState/recovery schema. Replace `/proc`,
    fork and signal operations and retain unknown-identity handling. Adapt
    command construction and detached/background process ownership separately.
-2. Port HTTP helpers and device discovery, including GpuManager, GpuTelemetry
-   and DoctorService. Windows AMD discovery cannot use Linux sysfs or Rusticl
+2. Connect DoctorService and remaining HTTP helpers to the native transport;
+   HttpRangeClient is already connected. Port device discovery, including
+   GpuManager and GpuTelemetry. Windows AMD discovery cannot use Linux sysfs or Rusticl
    selectors. Validate NVIDIA and AMD device association on actual hardware.
 3. Build and validate Windows engine executables, resolve SQLite/Qt dependencies
    and finish the full application CMake selection. Linux bundled executables
@@ -226,19 +230,72 @@ this process foundation validated on Windows.
 - [CRT environment copies](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/getenv-wgetenv)
 - [Microsoft C++ Build Tools](https://learn.microsoft.com/en-us/cpp/overview/acquire-msvc)
 
-## Validation status of this engine-lifecycle stage
+## Native HTTP transport and the existing client
 
-Windows x64 cross-compilation produces ten executables and eight registered suites.
-The delivery environment checks the full Linux CLI/UI build, 17 affected tests and
-five isolated Linux suites. The main Linux build registers 157 tests. Full native
-Linux regression remains the integration gate: `integrate-linux.sh` requires
-157/157 native Linux tests and 5/5 isolated tests with exact JUnit names and zero
-skipped tests before creating one commit. Local process/GPU/catalogue fixture
-limitations are not reported as full native regression passes.
+HttpRangeClient now compiles with WinHTTP on Windows and retains the existing
+curl runner on Linux. All six existing operations use the native transport:
+client registration, heartbeat, range claim, progress, completion and the solution
+signal. This compiles the real client code, not a substitute demonstration client.
+The separate OpenPuzzleHttpClient target does not make the entire application
+buildable on Windows yet.
 
-Native Windows execution and MSVC compilation of the eight-suite engine package
-are pending until `validate-windows.ps1` runs in the VM. The preceding six-suite
-MSVC runtime-control result validates the baseline, not these new engine tests.
+Requests preserve UTF-8 JSON bytes and use application/json headers. Shared request
+serialization now escapes all JSON control characters and uses the classic numeric
+locale. Claim/progress reject negative, infinite and NaN speeds before making a
+request; each operation clears stale API error codes. Endpoint names, assignment
+parsing, no-work responses and API error-code mapping retain their existing contracts.
+
+The Windows URL policy accepts ASCII HTTP/HTTPS URLs with percent-encoded paths,
+valid ports and no embedded credentials, fragments or control characters. Bounds
+are 16 KiB for URLs, 2 MiB for request bodies and 256 KiB for response bodies.
+Binary and chunked bodies are read with byte counts; oversized or truncated bodies
+fail with no partial body reported as success. HTTP failures retain complete,
+bounded error bodies for the existing client parser.
+
+WinHTTP uses Windows certificate validation and TLS 1.2, with no certificate
+bypass. Cookies and automatic authentication are disabled. Redirects are handled
+explicitly: up to three same-origin 301/302/307/308 redirects preserve the method
+and body, including POST; a different scheme, host or port is refused. There is no
+application retry loop. Connect, send and receive operations have timeouts, and
+body reads/redirects check the remaining deadline. These per-operation WinHTTP
+timeouts are not a guarantee of one strict wall-clock limit across DNS, connection
+and send phases. Loopback fixtures bypass proxy settings; other URLs use WinHTTP's
+system proxy configuration.
+
+WindowsHttpTransportTests exercises literal JSON and Unicode, GET/POST/HEAD,
+binary/chunked bodies, exact/oversized/truncated responses, canonical redirects,
+redirect loops, foreign-origin refusal, authentication challenges, stalled reads,
+invalid parameters and the six real client endpoints against a loopback server.
+Its broken-TLS fixture confirms that HTTPS attempts TLS and fails a broken handshake;
+it does not establish acceptance of a trusted certificate or rejection of an actual
+self-signed certificate. Trusted HTTPS and proxy integration remain to be validated
+before the full client uses a production server. No production API or GPU engine
+is used by these fixtures.
+
+## Validation status of the HTTP-client stage
+
+Windows x64 cross-compilation produces thirteen executables and eleven registered
+suites. This stage adds HttpRequestPolicyTests, HttpRangeClientTests and
+WindowsHttpTransportTests to the eight previously validated Windows suites.
+Native execution and MSVC compilation of this eleven-suite package remain pending
+until validate-windows.ps1 runs in the VM.
+
+The delivery environment verifies the complete Linux CLI/UI compilation, six
+HTTP/client-related suites and six isolated platform suites. It registers 158 main
+Linux tests. ExecutionSyncServiceTests also ran locally, but its self-process recovery
+fixture failed identically when relinked with the unchanged baseline HttpRangeClient;
+that environment result is preserved with the baseline comparison under verification.
+It is not counted as a regression pass. Full native regression is the integration
+gate: integrate-linux.sh requires 158/158 Linux tests and 6/6 isolated tests, exact
+CTest/JUnit names and zero skipped tests before creating one grouped commit.
 
 Bundled Boost 1.83 headers retain their copyright/license notices in
-`third-party/BOOST_COPYRIGHT.txt`; no Boost binary dependency is introduced.
+third-party/BOOST_COPYRIGHT.txt; no Boost binary dependency is introduced.
+
+HTTP API references:
+
+- [WinHttpOpen](https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpopen)
+- [WinHttpSendRequest](https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpsendrequest)
+- [WinHttpReadData](https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpreaddata)
+- [WinHttpSetTimeouts](https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpsettimeouts)
+- [WinHTTP option flags](https://learn.microsoft.com/en-us/windows/win32/winhttp/option-flags)

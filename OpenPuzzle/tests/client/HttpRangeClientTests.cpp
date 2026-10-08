@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <limits>
 #include <string>
 
 using namespace openpuzzle::client;
@@ -282,6 +283,18 @@ int main() {
         client.lastError() ==
         "Assignment identity is empty"
     );
+  }
+
+  {
+    assert(HttpRangeClient::buildSolutionReportPayload(std::string("a\0b",3), "ç\b\f\x01") ==
+        "{\"assignment_id\":\"a\\u0000b\",\"client_id\":\"ç\\b\\f\\u0001\"}");
+    for(double speed : {-1.0, std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
+      HttpRangeClient local("file:///unused");
+      assert(!local.claim("fixture",20,1,speed));
+      assert(local.lastError().find("finite") != std::string::npos);
+      assert(!local.progress("fixture","fixture",speed,"1"));
+      assert(local.lastError().find("finite") != std::string::npos);
+    }
   }
 
   std::cout
