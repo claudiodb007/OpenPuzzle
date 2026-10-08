@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(OPENPUZZLE_BUILD_PLATFORM_TESTS_ONLY
-       "Build isolated process portability tests without engines or GPU discovery" OFF)
+       "Build isolated process, storage and control tests without engines or GPU discovery" OFF)
 if(OPENPUZZLE_BUILD_PLATFORM_TESTS_ONLY)
     enable_testing()
     add_subdirectory(platform)
@@ -123,6 +123,12 @@ set(OPENPUZZLE_OPENCL_ENGINE_IDENTITY
     "OpenPuzzle-BitCrack 1.0.0 OpenCL protocol 2"
 )
 
+if(WIN32)
+    set(OPENPUZZLE_RUNTIME_CONTROL_SOURCE src/runtime/WindowsClientRuntimeControl.cpp)
+else()
+    set(OPENPUZZLE_RUNTIME_CONTROL_SOURCE src/runtime/ClientRuntimeControl.cpp)
+endif()
+
 add_library(OpenPuzzleCore
     src/config/ConfigurationManager.cpp
     src/app/ApplicationContext.cpp
@@ -186,7 +192,7 @@ add_library(OpenPuzzleCore
     src/runtime/RunBenchmarkPreparation.cpp
     src/runtime/RuntimeThermalObserver.cpp
     src/runtime/ClientRuntime.cpp
-    src/runtime/ClientRuntimeControl.cpp
+    ${OPENPUZZLE_RUNTIME_CONTROL_SOURCE}
     src/runtime/CudaDeviceSelection.cpp
     src/runtime/OpenclDeviceSelection.cpp
     src/runtime/ExecutionSlot.cpp
@@ -262,6 +268,7 @@ target_link_libraries(OpenPuzzleCore
 )
 
 if(WIN32)
+    target_sources(OpenPuzzleCore PRIVATE src/runtime/WindowsProcessIdentity.cpp)
     target_link_libraries(OpenPuzzleCore PUBLIC advapi32)
 endif()
 

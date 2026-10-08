@@ -9,6 +9,10 @@ class WindowsProcessIdentity {
 public:
   using CreationTime = std::uint64_t;
   static std::optional<CreationTime> creationTime(std::uint32_t pid);
+  enum class Status { Inactive, Running, Unavailable };
+  // Query identity and liveness through one pinned process handle. Failed
+  // queries are unavailable unless a complete process snapshot proves absence.
+  static Status status(std::uint32_t pid, CreationTime expected);
   // Query and termination refer to the same open process object, avoiding PID reuse.
   static bool terminateIfMatches(std::uint32_t pid, CreationTime expected,
                                  std::uint32_t exitCode = 124);

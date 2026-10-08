@@ -2258,3 +2258,7 @@ add_executable(PortableStorageTests core/PortableStorageTests.cpp)
 target_link_libraries(PortableStorageTests PRIVATE OpenPuzzleCore)
 add_test(NAME PortableStorageTests COMMAND PortableStorageTests)
 set_tests_properties(PortableStorageTests PROPERTIES TIMEOUT 45)
+
+add_executable(WindowsRuntimeRecordTests runtime/WindowsRuntimeRecordTests.cpp)
+target_include_directories(WindowsRuntimeRecordTests PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_test(NAME WindowsRuntimeRecordTests COMMAND WindowsRuntimeRecordTests)

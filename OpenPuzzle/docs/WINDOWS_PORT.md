@@ -1,4 +1,4 @@
-# Windows x64 port: process and storage foundation
+# Windows x64 port: process, storage and runtime control foundation
 
 Source base: Linux release 1.0.46, commit
 `129ada590c4e7591f24251aa4c7fc89e7bfb21db`.
@@ -6,8 +6,11 @@ Source base: Linux release 1.0.46, commit
 The process foundation was committed as
 `858045b6b7872a0300c280b90afe0ed6a11377d8` after 154 Linux tests and native
 MSVC x64 compilation/execution of its two Windows suites in the user VM. This
-storage stage builds on that commit. It is not a complete Windows client or
-an installer. The isolated target now registers four Windows suites. The normal Linux
+storage stage was subsequently committed as
+`577e489fba52d81770b6ee91b288ead1ca4c5596`, with 155 native Linux tests,
+three isolated Linux suites and four native MSVC Windows suites approved.
+This runtime-control stage builds on that storage commit. It is not a complete
+Windows client or an installer. The isolated target now registers six Windows suites. The normal Linux
 build continues to select PosixProcessRunner; its release version stays 1.0.46.
 
 ## Implemented behavior
@@ -26,8 +29,8 @@ build continues to select PosixProcessRunner; its release version stays 1.0.46.
 - Query a process creation FILETIME, then compare the expected identity and
   terminate using the same opened handle. Refuse an unreadable or mismatched
   identity. Windows FILETIME and Linux start ticks are different identity
-  formats; persisted identities must gain a platform discriminator before this
-  component is integrated with recovery.
+  formats. The runtime slot marker now uses an explicit Windows discriminator;
+  the separate persisted engine-state/recovery schema is still pending.
 
 The fixtures exercise silent and continuous output, closed output, descendant
 cleanup, callback exceptions, Unicode executable paths with spaces, unrelated
@@ -55,7 +58,8 @@ they do not call the coordination API or run a search engine.
   contenders open the same file without deletion sharing. Only a missing identity
   creates a UUID; unreadable/invalid identities fail and retain their bytes.
 - The Windows client state storage does not invent a Linux boot identifier.
-  Runtime process identity integration and its platform discriminator remain pending.
+  The engine-state/recovery schema remains pending; runtime slot markers use
+  the Windows-specific format described below.
 
 PortableStorageTests checks private access, Unicode paths/data, binary bytes,
 concurrent atomic writers, sharing failures, invalid settings/identity retention,
@@ -70,10 +74,39 @@ Path validation rejects existing junctions/reparse points; this stage does not
 claim resistance to arbitrary concurrent replacement of ancestor directories by
 another process with the same user rights.
 
+## Runtime slot ownership and cooperative control
+
+- A Windows runtime marker stores PID, `windows-filetime-v1`, and process creation
+  FILETIME. The bounded parser rejects incomplete, foreign-platform or future-format
+  records. Linux boot identifiers/start ticks are never interpreted as FILETIME.
+- Slot acquisition, release and request publication hold a stable private per-slot
+  LockFileEx lock. Only one cooperating process can acquire a slot. Release requires
+  both the caller PID and creation time to match the published identity.
+- Status distinguishes Running, Inactive and Unavailable. Access failure alone does
+  not prove termination: a complete process snapshot may prove absence; otherwise
+  uncertainty is retained. An opened handle confirms exit or identity mismatch.
+- Stop and safe-stop requests contain the complete runtime identity. Repeated
+  matching requests are idempotent. Foreign or unreadable requests are retained
+  and refused; they cannot authorize removal of a current marker.
+- Windows requestStop is cooperative: it publishes a request and never forcibly
+  terminates the runtime. A Windows runtime loop must poll stopRequested and
+  safeStopRequested, finish its work and release ownership. The local fixtures
+  implement that loop; the real RunSession/engine loop is not yet wired to it.
+- A proven stale marker may be replaced, removing only requests that match its old
+  identity. File publication failures never delete the previous marker first.
+  Cleanup of multiple request files is not a multi-file transaction.
+
+WindowsRuntimeRecordTests runs on both platforms. WindowsRuntimeControlTests
+uses eight actual fixture processes racing for one dynamic slot, foreign release,
+unreadable marker ACLs, old request identities, cooperative stop/safe stop and
+recovery after termination of an owned fixture. WindowsProcessIdentityTests now
+changes only its owned child process DACL to confirm that an unreadable live
+identity remains Unavailable. No installed runtime or search engine is touched.
+
 ## Native validation on Windows x64
 
-The delivery ZIP also contains five statically linked x64 fixture/test
-executables under `bin/windows-x64`. To execute the four suites immediately,
+The delivery ZIP also contains seven statically linked x64 fixture/test
+executables under `bin/windows-x64`. To execute the six suites immediately,
 without installing a compiler, run from the extracted package root:
 
 ```powershell
@@ -100,7 +133,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\OpenPuzzle\platform\va
 
 ExecutionPolicy Bypass applies only to this process. The script creates a fresh
 report/build directory under `%USERPROFILE%\OpenPuzzle\relatorios\windows-platform`,
-compiles x64 with MSVC and checks that JUnit contains all four registered test names,
+compiles x64 with MSVC and checks that JUnit contains all six registered test names,
 without failures or skipped tests. Send SUMMARY.txt and, if anything fails,
 validation.log and ctest-results.xml. Neither the existing Linux configuration
 nor a production installation is used by these tests.
@@ -116,7 +149,9 @@ ctest --test-dir .\build-windows -C Release --output-on-failure
 ## Remaining work before a Windows client can run
 
 1. Connect the process abstraction to RunSession, background launch, runtime
-   acquisition, ExecutionStopper and checkpoint recovery. Replace `/proc`,
+   engine launch, ExecutionStopper and checkpoint recovery. The isolated Windows
+   slot acquisition/status/control API exists; the real runtime polling and
+   persisted engine identity schema remain to be integrated. Replace `/proc`,
    fork and signal operations and retain unknown-identity handling. Adapt
    command construction and detached/background process ownership separately.
 2. Port HTTP helpers and device discovery, including GpuManager, GpuTelemetry
@@ -139,17 +174,20 @@ this process foundation validated on Windows.
 - [GetProcessTimes](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getprocesstimes)
 - [Microsoft C++ Build Tools](https://learn.microsoft.com/en-us/cpp/overview/acquire-msvc)
 
-## Validation status of this storage stage
+## Validation status of this runtime-control stage
 
-The delivered storage sources cross-compile to Windows x64. Three isolated
-Linux suites and fifteen affected Linux configuration/storage/UI suites pass.
-A full Linux CLI/UI build succeeds; full CTest in the delivery environment
-encountered process/GPU/catalogue fixture limitations and is not declared passed.
-`integrate-linux.sh` requires all 155 native Linux tests and all three isolated
-suites, including exact JUnit names and zero skipped tests, before committing.
-The new native Windows execution and MSVC build result are pending until the
-user runs `validate-windows.ps1` on the VM. Earlier process-only 2/2 evidence
-is not reused as evidence for the new storage suites.
+The sources cross-compile to Windows x64: seven executables, six registered suites.
+Four isolated Linux suites pass, including the new runtime record parser. The normal
+Linux runtime-control implementation is unchanged; main Linux registers 156 tests.
+The delivery environment checks the full CLI/UI build and affected storage/UI tests.
+Full native Linux regression proof remains the integration gate: `integrate-linux.sh`
+requires 156/156 native Linux tests and 4/4 isolated tests with exact JUnit names and
+zero skipped tests before making one commit. Local process/GPU/catalogue fixture
+limitations from the preceding stage are not reported as native regression passes.
+
+Native Windows execution and MSVC compilation of these six suites are pending until
+`validate-windows.ps1` runs in the VM. The preceding four-suite native storage report
+is evidence for the baseline only, not for these new runtime-control tests.
 
 Bundled Boost 1.83 headers retain their copyright/license notices in
 `third-party/BOOST_COPYRIGHT.txt`; no Boost binary dependency is introduced.

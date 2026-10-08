@@ -76,6 +76,14 @@ public:
 
   static RuntimeIdentityStatus runtimeIdentityStatus(
       const std::string& executionSlot);
+
+#ifdef _WIN32
+  // Cooperative Windows stop requests are bound to PID + creation FILETIME.
+  // The runtime loop must poll these; a request never forcibly terminates it.
+  static std::filesystem::path stopPath(const std::string& executionSlot);
+  static bool stopRequested(const std::string& executionSlot);
+  static bool clearStop(const std::string& executionSlot);
+#endif
 };
 
 } // namespace openpuzzle
