@@ -13,7 +13,8 @@ class WindowsRuntimeSession {
 public:
   WindowsRuntimeSession(std::string serverUrl, client::ClientHeartbeat capabilities,
                         std::function<bool()> preflight);
-  int runContinuous(const std::function<ClientIterationResult(WindowsRuntimeSession&)>& prepare);
+  int runContinuous(const std::function<ClientIterationResult(WindowsRuntimeSession&)>& prepare, bool once=false,
+      const std::function<ClientIterationResult()>& initialize={});
   ClientIterationResult execute(const std::filesystem::path& executable,
                                const std::vector<std::string>& arguments,
                                client::ClientExecutionState state);

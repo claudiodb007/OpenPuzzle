@@ -192,6 +192,8 @@ add_library(OpenPuzzleCore
     src/runtime/RunSession.cpp
     src/runtime/RunBenchmarkPreparation.cpp
     src/runtime/RuntimeThermalObserver.cpp
+    src/runtime/RunCommandOptions.cpp
+    src/runtime/RunAssignmentPlan.cpp
     src/runtime/ClientRuntime.cpp
     ${OPENPUZZLE_RUNTIME_PRODUCTION_SOURCE}
     ${OPENPUZZLE_RUNTIME_CONTROL_SOURCE}

@@ -134,17 +134,29 @@ ClientRuntimeDependencies WindowsRuntimeSession::dependencies() {
   return d;
 }
 int WindowsRuntimeSession::runContinuous(
-    const std::function<ClientIterationResult(WindowsRuntimeSession&)>& prepare) {
+    const std::function<ClientIterationResult(WindowsRuntimeSession&)>& prepare, bool once,
+    const std::function<ClientIterationResult()>& initialize) {
   if(!prepare || !preflight_())return 1;
   ClientRuntime runtime(dependencies());bool initialHeartbeat=true;
   return runtime.runContinuous(serverUrl_,[&]{
     if(hasState())return failure("Pending or unreadable assignment preserved; synchronize it before requesting work");
     if(initialHeartbeat){
+      if(initialize){const auto initialized=initialize();
+        if(initialized.status!=ClientIterationStatus::Completed)
+          return once?failure("Single-assignment initialization failed"):initialized;
+      }
       const auto heartbeat=dependencies().heartbeat(serverUrl_);
-      if(!heartbeat.success)return ClientIterationResult::retry(heartbeat.error);
+      if(!heartbeat.success)return once?failure("Single-assignment idle heartbeat failed"):ClientIterationResult::retry(heartbeat.error);
       initialHeartbeat=false;
     }
-    return prepare(*this);
+    auto result=prepare(*this);
+    if(once) {
+      if(result.status==ClientIterationStatus::Retry)return failure("Single assignment request failed; pending state preserved");
+      if(result.status==ClientIterationStatus::Unavailable)result=ClientIterationResult(0);
+      if(result.status==ClientIterationStatus::Completed && !Control::requestSafeStop(slot_))
+        return failure("Unable to finish the single-assignment runtime safely");
+    }
+    return result;
   });
 }
 ClientIterationResult WindowsRuntimeSession::execute(const std::filesystem::path& executable,

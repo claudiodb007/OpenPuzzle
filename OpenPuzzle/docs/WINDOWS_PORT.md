@@ -434,3 +434,71 @@ All 16 suites require a fresh native Windows/MSVC run for v2 before integration.
 This revision does not claim that the reported launch failure is fixed or that
 Windows antivirus caused it; the additional diagnostics establish the next failure
 precisely if the larger normal-start allowance is insufficient.
+
+## Windows run command preparation (base 0cb20ba)
+
+The user completed the runtime-session stage in commit
+0cb20ba8019034f66125814af23edab5de455395. Its source bytes match the delivered v2;
+the Windows 11/MSVC x64 report passed all sixteen suites. This stage builds on
+that commit and does not repeat or change the previous foundation commits.
+
+RunCommandOptions implements a strict, side-effect-free parser for run, direct
+puzzle/options, help/version and status/stop/safestop. It preserves puzzle=0 for
+server selection of the lowest open puzzle. Explicit puzzle and launch integers
+are bounded by int, durations by 1..360; unknown, duplicate and incompatible
+options are refused before identity creation or network calls. Concurrent device
+lists, claim-only and Linux-only options are deliberately refused in this stage.
+
+RunAssignmentPlan is pure: it validates identifiers, target syntax, inclusive
+hexadecimal ranges, puzzle/backend agreement and explicit metadata bounds, then
+produces an argv vector and state for linear BitCrack CUDA/OpenCL or KeyHunt CPU.
+It never builds a shell command or prepares files. Windows reserved directory
+names and unsafe assignment path components are refused. Unicode workspace paths
+remain UTF-8 in state and argv; CreateProcessW receives the existing wide encoding.
+Address validation is syntax-only, retaining the prior catalog contract.
+
+WindowsRunSession provides the native command orchestration over
+WindowsRuntimeSession and the real HttpRangeClient. A platform provider supplies
+verified executable bindings, device inventory, heartbeat capabilities, local
+metadata and engine/hardware/profile preflight. These declarations do not replace
+independent Windows hardware discovery or executable provenance checks. Explicit
+metadata/routing and preflight are validated before work. Dry-run/preflight-only
+remain local and do not create identity, acquire a runtime or call the server.
+
+An initialization callback inside the acquired runtime registers the stable local
+identity before the initial idle heartbeat; both acknowledgments precede claim.
+The previous three-argument runtime construction and default continuous behavior
+remain compatible. --once terminates after one completed or unavailable request;
+registration/heartbeat errors terminate a one-shot run without a claim.
+
+A private intent is persisted before claim. A valid response replaces it with the
+assignment receipt before planning or launching. An ambiguous response keeps the
+intent and blocks further claims, including after restarting the command. Malformed
+assignment metadata, an occupied workspace or failed launch preserves the receipt
+and existing bytes. This stage does not automatically reconcile uncertain claims;
+remote lease/receipt recovery is still required before requesting new work. The
+receipt is discarded only after an acknowledged successful execution and removal
+of its engine state. Existing/preserved solution state remains protected.
+
+Typed engine arguments launch through the established Windows engine/session
+supervisor, monitor, progress/completion API and private exporter. No shell, POSIX
+fork/wait or Linux workspace preparation is used. KeyHunt targets are written
+privately; its existing result filename is handled by ExecutionSyncService.
+Status is local and distinguishes unavailable identities/unreadable state and a
+preserved pending claim; stop and safestop publish identity-bound cooperative
+markers. Real engine binaries have not been executed or validated by these tests.
+
+This package registers nineteen native Windows suites (the previous sixteen plus
+RunCommandOptionsTests, RunAssignmentPlanTests and WindowsRunSessionTests), with
+21 x64 helper/test executables. Native fixtures test registration-before-heartbeat,
+failed initialization, automatic puzzle selection, CUDA/CPU direct argv, once,
+continuous safe stop, unavailable work and preserved invalid/uncertain claims and
+workspaces. Only local synthetic helper processes and loopback HTTP are used.
+The two common suites also run on Linux. Native Linux integration requires all
+163 full CLI/UI suites and 11 isolated suites with exact JUnit/CTest names before
+one commit. Cross-compilation is not native MSVC validation.
+
+Still pending: standalone Windows Application/CLI/UI wiring, native GPU discovery
+and telemetry, benchmark/profile provider, Kangaroo typed planning/checkpoint
+recovery, ambiguous-claim reconciliation, production HTTPS acceptance and installer.
+The Linux RunSession/Application behavior and product release 1.0.46 remain unchanged.

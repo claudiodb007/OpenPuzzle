@@ -23,6 +23,16 @@ int wmain(int argc,wchar_t** argv){try{
    if(finish==L"large")ExitProcess(0x80000000UL);
    return finish==L"failed"?7:0;
  }
+ if(mode==L"1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU"||mode==L"-m"){
+   std::string received;
+   for(int i=1;i<argc;++i)received+=pathUtf8(fs::path(argv[i]))+"\n";
+   if(!writePrivateFileAtomically(fs::current_path()/"fixture-arguments.txt",received))return 13;
+   std::cout<<"GPU fixture 12.50 MKey/s (8 total)"<<std::endl;
+   Sleep(100);
+   if(mode==L"-m")std::cout<<"End"<<std::endl;
+   else std::cout<<"Reached end of keyspace"<<std::endl;
+   return 0;
+ }
  if(mode==L"echo"){
    for(int i=2;i<argc;++i)std::cout<<i-2<<':'<<hex(pathUtf8(fs::path(argv[i])))<<std::endl;
    std::cerr<<"stderr"<<std::endl;
