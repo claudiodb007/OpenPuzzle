@@ -84,6 +84,11 @@ int main() {
 #else
     require(config==root/".config/OpenPuzzle" && data==root/".local/share/OpenPuzzle","Linux paths changed");
 #endif
+    require(!client::ClientStateStore::load("primary") &&
+            !client::ClientStateStore::load("cuda-7"),
+            "Absent client state unexpectedly loaded");
+    require(!fs::exists(config) && !fs::exists(data),
+            "Reading absent client state created storage directories");
     WorkspaceSecurity::prepare(config);expectPrivate(config);
     const auto file=config/pathFromUtf8("ficheiro ç 中文.txt");
     const std::string bytes = std::string("quotes \\\nç 中文") + '\0' + "binary";

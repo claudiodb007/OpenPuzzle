@@ -2,7 +2,7 @@ param([string]$ReportRoot = '')
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $project = Split-Path -Parent $PSScriptRoot
-$baseCommit = '0cb20ba8019034f66125814af23edab5de455395'
+$baseCommit = '5472e6274f8f89d2fab4475b6fc4867f0cd1a797'
 $transcribing = $false
 $report = $null
 function Invoke-Native {
@@ -105,11 +105,11 @@ try {
     $generators = @($capabilities.generators | Where-Object { $_.name -match "^Visual Studio $major " })
     if ($generators.Count -ne 1) { throw 'CMake does not support this installed Visual Studio version. Update CMake or select a supported C++ toolchain.' }
     $generator = $generators[0].name
-    Write-Host '===== WINDOWS RUN COMMAND PREPARATION ====='
+    Write-Host '===== WINDOWS LOCAL CLI ====='
     Write-Host "Linux source base: $baseCommit"
     Write-Host "Generator: $generator | Architecture: x64"
     $boost = Join-Path (Split-Path -Parent $project) 'third-party\include'
-    if (-not (Test-Path -LiteralPath (Join-Path $boost 'boost\property_tree\json_parser.hpp'))) { throw 'Bundled Boost headers are missing; extract the complete run command ZIP.' }
+    if (-not (Test-Path -LiteralPath (Join-Path $boost 'boost\property_tree\json_parser.hpp'))) { throw 'Bundled Boost headers are missing; extract the complete local CLI ZIP.' }
     $build = Join-Path $report 'build'
     Invoke-Native -Tool $cmake -ToolArguments @('-S', $project, '-B', $build, '-G', $generator, '-A', 'x64', "-DCMAKE_GENERATOR_INSTANCE=$($installation.installationPath)", '-DOPENPUZZLE_BUILD_PLATFORM_TESTS_ONLY=ON', "-DOPENPUZZLE_PLATFORM_BOOST_INCLUDE_DIR=$boost")
     Invoke-Native -Tool $cmake -ToolArguments @('--build', $build, '--config', 'Release', '--parallel', '4')
@@ -117,18 +117,18 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'CTest registration failed.' }
     Write-Utf8 -Path (Join-Path $report 'registered-tests.json') -Text $registrationJson
     $registration = $registrationJson | ConvertFrom-Json
-    $expected = @('HttpRangeClientTests', 'HttpRequestPolicyTests', 'WindowsHttpTransportTests', 'PortableStorageTests', 'WindowsEngineFormatTests', 'WindowsEngineLifecycleTests', 'WindowsProcessIdentityTests', 'WindowsProcessRunnerTests', 'WindowsRuntimeControlTests', 'WindowsRuntimeRecordTests', 'WindowsStorageIdentityTests', 'WindowsExecutionStateTests', 'WindowsExecutionSyncTests', 'ClientRuntimeLoopTests', 'PortableSolutionExporterTests', 'WindowsRuntimeSessionTests', 'RunCommandOptionsTests', 'RunAssignmentPlanTests', 'WindowsRunSessionTests')
+    $expected = @('HttpRangeClientTests', 'HttpRequestPolicyTests', 'WindowsHttpTransportTests', 'PortableStorageTests', 'WindowsEngineFormatTests', 'WindowsEngineLifecycleTests', 'WindowsProcessIdentityTests', 'WindowsProcessRunnerTests', 'WindowsRuntimeControlTests', 'WindowsRuntimeRecordTests', 'WindowsStorageIdentityTests', 'WindowsExecutionStateTests', 'WindowsExecutionSyncTests', 'ClientRuntimeLoopTests', 'PortableSolutionExporterTests', 'WindowsRuntimeSessionTests', 'RunCommandOptionsTests', 'RunAssignmentPlanTests', 'WindowsRunSessionTests', 'WindowsCliApplicationTests')
     $registered = @($registration.tests | ForEach-Object { $_.name } | Sort-Object)
-    if ($registered.Count -ne 19 -or @(Compare-Object $expected $registered).Count -ne 0) {
-        throw 'CTest must register exactly the nineteen Windows platform/storage/control/engine/HTTP suites.'
+    if ($registered.Count -ne 20 -or @(Compare-Object $expected $registered).Count -ne 0) {
+        throw 'CTest must register exactly the twenty Windows platform/storage/control/engine/HTTP suites.'
     }
     $junit = Join-Path $report 'ctest-results.xml'
     Invoke-Native -Tool $ctest -ToolArguments @('--test-dir', $build, '-C', 'Release', '--output-on-failure', '--no-tests=error', '--output-junit', $junit)
     [xml]$result = Get-Content -LiteralPath $junit -Raw
     $cases = @($result.SelectNodes('//testcase'))
     $names = @($cases | ForEach-Object { $_.GetAttribute('name') } | Sort-Object)
-    if ($cases.Count -ne 19 -or @(Compare-Object $expected $names).Count -ne 0) {
-        throw 'JUnit does not prove execution of all nineteen registered Windows suites.'
+    if ($cases.Count -ne 20 -or @(Compare-Object $expected $names).Count -ne 0) {
+        throw 'JUnit does not prove execution of all twenty registered Windows suites.'
     }
     foreach ($case in $cases) {
         if (@($case.SelectNodes('failure|error|skipped')).Count -ne 0 -or $case.GetAttribute('status') -notin @('', 'run', 'pass', 'passed')) {
@@ -141,11 +141,13 @@ try {
     })
     Write-Utf8 -Path (Join-Path $report 'SOURCE_SHA256SUMS.txt') -Text ($sourceHashes -join "`n")
     $summary = @(
-        'Windows run command preparation foundation: native validation passed',
+        'Windows local CLI foundation: native validation passed',
         "Linux source base: $baseCommit",
         "Generator: $generator",
         'Architecture: x64',
-        'Native Windows tests: 19/19 passed',
+        'Native Windows tests: 20/20 passed',
+        ('Windows CLI executable: ' + (Join-Path $build 'platform\Release\openpuzzle.exe')),
+        'Windows CLI preview: local commands available; standalone GPU search and UI pending',
         'Full Windows application: not yet ported',
         'Only local processes and a loopback HTTP fixture were used; no production assignments requested.',
         "Report: $report"

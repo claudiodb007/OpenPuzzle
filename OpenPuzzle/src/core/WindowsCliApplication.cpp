@@ -1,0 +1,110 @@
+#include "openpuzzle/core/WindowsCliApplication.hpp"
+#include "openpuzzle/core/LocalPaths.hpp"
+#include "openpuzzle/core/WindowsPrivateFile.hpp"
+#include "openpuzzle/config/ConfigurationManager.hpp"
+#include "openpuzzle/client/ClientStateStore.hpp"
+#include "openpuzzle/runtime/ClientRuntimeControl.hpp"
+#include "openpuzzle/runtime/ExecutionSlot.hpp"
+#include <algorithm>
+#include <set>
+#include <stdexcept>
+namespace openpuzzle {
+namespace fs=std::filesystem;
+namespace {
+using Control=ClientRuntimeControl;using Store=client::ClientStateStore;
+bool present(const fs::path& path){std::error_code e;auto s=fs::symlink_status(path,e);return (e&&e!=std::errc::no_such_file_or_directory)||fs::exists(s);}
+std::string environmentSlot(){
+ char value[64]{};SetLastError(ERROR_SUCCESS);
+ const auto count=GetEnvironmentVariableA("OPENPUZZLE_EXECUTION_SLOT",value,sizeof(value));
+ if(!count&&GetLastError()==ERROR_ENVVAR_NOT_FOUND)return "primary";
+ if(!count||count>=sizeof(value))throw std::invalid_argument("Execution slot environment is empty or too long");
+ std::string slot(value,count);
+ if(!ExecutionSlot::valid(slot))throw std::invalid_argument("Invalid OPENPUZZLE_EXECUTION_SLOT; no fallback to another slot");return slot;
+}
+// RunSession reads the established process environment. Restore its value on
+// every return or exception; console dispatch is serialized, not thread-safe.
+class SlotGuard {
+ std::wstring previous_;bool existed_=false;
+public:
+ explicit SlotGuard(const std::string& slot){
+  const auto size=GetEnvironmentVariableW(L"OPENPUZZLE_EXECUTION_SLOT",nullptr,0);
+  if(size){previous_.resize(size);auto n=GetEnvironmentVariableW(L"OPENPUZZLE_EXECUTION_SLOT",previous_.data(),size);
+   if(!n||n>=size)throw std::runtime_error("Execution slot environment changed");previous_.resize(n);existed_=true;}
+  const std::wstring wide(slot.begin(),slot.end());if(!SetEnvironmentVariableW(L"OPENPUZZLE_EXECUTION_SLOT",wide.c_str()))throw std::runtime_error("Unable to select execution slot");
+ }
+ ~SlotGuard(){SetEnvironmentVariableW(L"OPENPUZZLE_EXECUTION_SLOT",existed_?previous_.c_str():nullptr);}
+};
+bool status(const std::string& slot,std::ostream& out){
+ const auto runtime=Control::runtimeIdentityStatus(slot);
+ const auto state=client::ExecutionSyncService().inspect(slot);
+ const bool pending=present(WindowsRunSession::pendingClaimPath(slot));
+ out<<"Slot: "<<slot<<"\nRuntime: "<<(runtime==Control::RuntimeIdentityStatus::Running?"running":runtime==Control::RuntimeIdentityStatus::Unavailable?"unknown":"idle")
+  <<"\nAssignment: "<<(state.identityUnavailable?"identity unavailable":state.hasState?state.state.assignmentId:present(Store::path(slot))?"unreadable state preserved":"none")
+  <<"\nPending claim: "<<(pending?"preserved":"none")<<'\n';
+ return runtime==Control::RuntimeIdentityStatus::Unavailable||state.identityUnavailable||pending||(!state.hasState&&present(Store::path(slot)));
+}
+std::set<std::string> slots(const std::string& selected){
+ std::set<std::string> all{selected};for(const auto& slot:Control::executionSlots())if(ExecutionSlot::valid(slot))all.insert(slot);
+ const auto folder=localPaths::dataDirectory()/"pending-claims";
+ if(!windowsFile::safePath(folder))throw std::runtime_error("Pending claim directory is unavailable");
+ std::error_code e;fs::directory_iterator it(folder,e),end;
+ if(e){if(e==std::errc::no_such_file_or_directory)return all;throw std::runtime_error("Pending claim directory cannot be inspected");}
+ for(;it!=end;it.increment(e)){
+  if(e)throw std::runtime_error("Pending claim directory changed during inspection");
+  const auto p=it->path();const auto slot=pathUtf8(p.stem());if(p.extension()==".json"&&ExecutionSlot::valid(slot))all.insert(slot);
+ }if(e)throw std::runtime_error("Pending claim directory inspection failed");return all;
+}
+}
+WindowsCliApplication::WindowsCliApplication(WindowsRunDependencies dependencies):dependencies_(std::move(dependencies)){}
+int WindowsCliApplication::run(const std::vector<std::string>& arguments,std::ostream& out){
+ try{
+  std::vector<std::string> args;std::string selected;bool explicitSlot=false;
+  for(std::size_t i=0;i<arguments.size();++i){const auto& a=arguments[i];if(a.empty()||a.find('\0')!=std::string::npos)throw std::invalid_argument("Empty or NUL console argument");
+   if(a=="--slot"){if(explicitSlot||i+1==arguments.size()||!ExecutionSlot::valid(arguments[i+1]))throw std::invalid_argument("--slot requires one recognized execution slot");selected=arguments[++i];explicitSlot=true;}
+   else args.push_back(a);
+  }
+  const auto command=args.empty()?std::string("help"):args.front();
+  if(command=="help"||command=="--help"||command=="-h"||command=="version"||command=="--version"||command=="-V"){
+   if(args.size()>1||explicitSlot)throw std::invalid_argument("Information command takes no additional arguments");
+   if(command=="version"||command=="--version"||command=="-V")out<<"OpenPuzzle 1.0.46 Windows CLI preview\n";
+   else out<<"OpenPuzzle Windows CLI preview\nhelp | version | paths | doctor --offline | status [--all] [--slot NAME]\nstop | safestop [--slot NAME]\nrun [puzzle] [options] [--slot NAME]\nSearch is not enabled in this preview; engine, hardware and benchmark setup is pending.\nNo automatic start or production request is made by local commands.\n";
+   return 0;
+  }
+  // Validate the entire command before reading paths or changing a slot.
+  if(command=="paths"||command=="stop"||command=="safestop"){if(args.size()!=1)throw std::invalid_argument("Local command takes no extra options");}
+  else if(command=="doctor"){if(args.size()>2||(args.size()==2&&args[1]!="--offline"))throw std::invalid_argument("Doctor supports only --offline");}
+  else if(command=="status"){if(args.size()>2||(args.size()==2&&args[1]!="--all"))throw std::invalid_argument("Status supports only --all");}
+  else (void)RunCommandOptions::parse(args);
+  if(!explicitSlot)selected=environmentSlot();
+  if(command=="paths"){
+   out<<"Configuration: "<<pathUtf8(localPaths::configDirectory())<<"\nLocal data: "<<pathUtf8(localPaths::dataDirectory())
+    <<"\nExecution state: "<<pathUtf8(Store::path(selected))<<"\nPending claim: "<<pathUtf8(WindowsRunSession::pendingClaimPath(selected))<<'\n';return 0;
+  }
+  if(command=="status"){
+   bool uncertain=false;const auto found=args.size()==2?slots(selected):std::set<std::string>{selected};
+   for(const auto& slot:found)uncertain=status(slot,out)||uncertain;
+   return uncertain?2:0;
+  }
+  if(command=="stop"||command=="safestop"){
+   const bool ok=command=="stop"?Control::requestStop(selected):Control::requestSafeStop(selected);
+   out<<"Slot: "<<selected<<'\n'<<(ok?"Cooperative request recorded; completion is not yet confirmed":"No verified runtime accepted the request; state preserved")<<'\n';return ok?0:1;
+  }
+  if(command=="doctor"){
+   out<<"OpenPuzzle Windows Doctor (offline)\nPlatform: Windows x64\n";
+   SYSTEM_INFO system{};GetNativeSystemInfo(&system);MEMORYSTATUSEX memory{};memory.dwLength=sizeof(memory);
+   const auto threads=GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
+   if(system.wProcessorArchitecture!=PROCESSOR_ARCHITECTURE_AMD64||!threads||!GlobalMemoryStatusEx(&memory))throw std::runtime_error("Native x64 CPU/memory information unavailable");
+   out<<"Logical processors: "<<threads<<"\nMemory MiB: "<<memory.ullTotalPhys/1048576<<"\nConfiguration path: "<<ConfigurationManager::configPath()<<'\n';
+   const auto configPath=pathFromUtf8(ConfigurationManager::configPath());
+   if(!windowsFile::safePath(configPath))throw std::runtime_error("Configuration path is unavailable; existing data preserved");
+   if(present(configPath)){
+    if(!ConfigurationManager::loadChecked())throw std::runtime_error("Existing configuration is invalid or unreadable; preserved without replacement");out<<"Configuration: readable\n";
+   }else out<<"Configuration: missing; defaults not written\n";
+   out<<"Local data: "<<pathUtf8(localPaths::dataDirectory())<<"\nServer connection: SKIPPED\nGPU discovery/telemetry: PENDING\nSearch engines/benchmark profiles: PENDING\n";
+   const bool uncertain=status(selected,out);out<<"Status: "<<(uncertain?"BLOCKED (local state preserved)":"LOCAL DIAGNOSTICS PASSED; search provider pending")<<'\n';return uncertain?2:0;
+  }
+  if(!dependencies_.preflight||!dependencies_.capabilities){out<<"Search unavailable in Windows CLI preview; engine, hardware and benchmark setup is pending\n";return 1;}
+  SlotGuard guard(selected);return WindowsRunSession(dependencies_).run(args,out);
+ }catch(const std::exception& error){out<<"Windows CLI refused: "<<error.what()<<'\n';return 1;}
+}
+}

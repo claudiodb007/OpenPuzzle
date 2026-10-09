@@ -502,3 +502,77 @@ Still pending: standalone Windows Application/CLI/UI wiring, native GPU discover
 and telemetry, benchmark/profile provider, Kangaroo typed planning/checkpoint
 recovery, ambiguous-claim reconciliation, production HTTPS acceptance and installer.
 The Linux RunSession/Application behavior and product release 1.0.46 remain unchanged.
+
+## Native Windows local CLI (base 5472e62)
+
+The run-preparation stage is already committed as
+5472e6274f8f89d2fab4475b6fc4867f0cd1a797, with user reports proving
+163 full Linux suites, 11 isolated Linux suites and 19 native MSVC x64 suites.
+This stage adds the first standalone console entry, not a production search client.
+
+The platform build produces openpuzzle.exe through target OpenPuzzleWindowsCli.
+Its wmain converts native wide arguments to UTF-8 with invalid Unicode rejection;
+console output uses UTF-8. It is launched directly without a shell. With no
+arguments it shows help and never starts automatically. Help/version are available
+without LOCALAPPDATA, configuration or a capability provider.
+
+Local commands are help/version, paths, doctor [--offline], status [--all], stop
+and safestop. --slot accepts only existing canonical ExecutionSlot names; duplicate
+or invalid selection is rejected before changes. A malformed environment slot
+is refused rather than silently falling back to primary. Explicit slot selection
+is supported; run dispatch restores the OS environment on success or failure.
+The dispatch API is serialized and must not be called concurrently because the
+established runtime reads the process-wide slot environment.
+
+Status inspects the established identity-bound runtime and synchronization state;
+--all also finds valid pending-claim-only slots. Unavailable identities, unreadable
+state and pending receipts are retained and produce exit code 2. Stop/safestop
+publish cooperative requests only for the selected verified owner; acknowledgment
+of a marker does not claim that the engine has stopped. Local controls never
+force-terminate a PID or change another slot.
+
+Doctor is offline even without --offline. It reports native x64 logical processor
+count, physical memory and local paths, reads existing configuration through the
+private checked loader, and distinguishes missing settings from invalid data.
+It does not write defaults, create client identity, contact a server, execute any
+engine or run a benchmark. Existing file contents remain unchanged; the established
+private loader can harden ACLs on files it reads. Successful local diagnostics
+are explicitly not reported as GPU readiness or production search readiness.
+
+A fresh Windows profile exposed a prior private-reader edge case: Win32 returns
+ERROR_PATH_NOT_FOUND when intermediate directories are absent. After safePath
+checks, this is now classified as missing alongside ERROR_FILE_NOT_FOUND. Access
+denials/reparse points remain unavailable. Thus a nonexistent profile is idle,
+not an uncertain owner. The new native tests cover this before any directories
+or runtime records have been created.
+
+Native CLI validation also reproduced profile creation during status inspection:
+ClientStateStore::load prepared the data directory before checking for a state
+file. Reading now opens and protects only an existing file; directory creation
+stays in save. A missing state cannot create profile directories, including if
+the parent disappears during the read. PortableStorageTests checks this on both
+platforms. The native CLI test retains its no-profile assertion and checks each
+information command separately for clearer failure diagnostics. Existing state
+contents and private file protection are preserved.
+
+WindowsCliApplication can receive the verified WindowsRunDependencies used by
+the preceding stage. The standalone executable deliberately supplies no production
+bindings: run is parsed, then refused by the CLI before identity/network/launch
+if provider support is absent. With a supplied provider it routes through
+WindowsRunSession and its established verification gates. It does
+not turn an executable path or a fixture into a trusted search engine.
+
+WindowsCliApplicationTests launches the actual new executable from a Unicode path
+containing spaces and ampersand, checks wide argument conversion and exit codes,
+uses an isolated LOCALAPPDATA, and exercises fresh profiles, slot restoration,
+wrong-slot controls, invalid configuration and preserved pending/unreadable state.
+Only synthetic local files and supervised local executable processes are used.
+There are now 20 registered native suites and 23 x64 executables: 20 tests, two
+helpers and the CLI preview. All 20 require native Windows 11/MSVC validation;
+cross-compilation alone is not an execution result. Linux test counts stay
+163 full suites and 11 isolated suites; both are required before the single commit.
+
+Still pending: real engine Windows builds/provenance, GPU discovery/telemetry,
+benchmark/profile provider, enabled standalone run, Kangaroo and recovery,
+production HTTPS acceptance, desktop UI and installer. The full Linux application,
+Linux release 1.0.46, installations, live runtimes and release tags are unchanged.

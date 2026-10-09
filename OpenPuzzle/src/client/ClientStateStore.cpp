@@ -369,9 +369,8 @@ ClientStateStore::load(
   std::filesystem::path statePath;
   try {
     statePath = path(executionSlot);
-    WorkspaceSecurity::prepare(
-        statePath.parent_path());
-
+    // Reading an absent state must not initialize a profile. Directory
+    // creation belongs to save(); protection only opens existing files.
     if (std::filesystem::is_regular_file(
             statePath)) {
       WorkspaceSecurity::protectFile(

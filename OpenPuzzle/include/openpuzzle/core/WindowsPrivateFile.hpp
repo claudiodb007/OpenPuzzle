@@ -101,7 +101,7 @@ inline std::optional<std::string> readPrivate(const std::filesystem::path& path,
   Handle input(CreateFileW(path.c_str(), GENERIC_READ | READ_CONTROL | WRITE_DAC,
                           FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                           FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr));
-  if (!input.valid()) { missing = GetLastError() == ERROR_FILE_NOT_FOUND; return std::nullopt; }
+  if (!input.valid()) { const auto error=GetLastError(); missing = error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND; return std::nullopt; }
   if (!security.protect(input.get())) return std::nullopt;
   std::string contents;
   char buffer[4096];

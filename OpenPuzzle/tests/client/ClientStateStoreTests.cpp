@@ -1,4 +1,5 @@
 #include "openpuzzle/client/ClientStateStore.hpp"
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 
 #include <cassert>
 #include <cstdlib>
@@ -147,7 +148,8 @@ int main() {
           1) == 0);
 
   assert(!ClientStateStore::load());
-
+  assert(!std::filesystem::exists(
+      ClientStateStore::path().parent_path()));
 
   /*
    * OpenPuzzle <= 1.0.17 state has no process_start_time.
@@ -157,6 +159,11 @@ int main() {
   {
     const auto statePath =
         ClientStateStore::path();
+
+    // This fixture writes a legacy file directly. A read must not create
+    // storage directories on its behalf.
+    openpuzzle::WorkspaceSecurity::prepare(
+        statePath.parent_path());
 
     {
       std::ofstream output(
