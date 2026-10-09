@@ -161,8 +161,8 @@ The real RunSession and Windows engine binaries still require integration and te
 
 ## Native validation on Windows x64
 
-The delivery ZIP also contains fifteen statically linked x64 fixture/test
-executables under `bin/windows-x64`. To execute the thirteen suites immediately,
+The delivery ZIP also contains eighteen statically linked x64 fixture/test
+executables under `bin/windows-x64`. To execute the sixteen suites immediately,
 without installing a compiler, run from the extracted package root:
 
 ```powershell
@@ -189,7 +189,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\OpenPuzzle\platform\va
 
 ExecutionPolicy Bypass applies only to this process. The script creates a fresh
 report/build directory under `%USERPROFILE%\OpenPuzzle\relatorios\windows-platform`,
-compiles x64 with MSVC and checks that JUnit contains all thirteen registered test names,
+compiles x64 with MSVC and checks that JUnit contains all sixteen registered test names,
 without failures or skipped tests. Send SUMMARY.txt and, if anything fails,
 validation.log and ctest-results.xml. Neither the existing Linux configuration
 nor a production installation is used by these tests.
@@ -329,16 +329,79 @@ windows, proof, retry/acknowledgment, local solutions, DWORD failures, refused p
 before resume, and abrupt supervisor termination. No production endpoint or GPU engine
 is used.
 
-## Validation status of the execution-synchronization stage
+## Approved execution-synchronization baseline
 
-Windows x64 cross-compilation produces fifteen executables and thirteen registered
-suites. The prior eleven suites passed native MSVC execution on the user's Windows 11
-PC. The two added suites still require native execution of this complete new package.
-The main Linux integration gate requires 159/159 tests, including UI, and 7/7 isolated
-platform suites, with exact CTest/JUnit names and no skipped tests before committing.
-The delivery checks and any environment limitations are recorded under verification.
-No new release version, production installation, runtime, tag or remote publication is
-created by this stage.
+Commit d111a7e0a6f81567a79361a7473d14982648dd95 is the exact baseline for
+this stage. The user's reports establish 159/159 native Linux tests, 7/7 isolated
+Linux suites, and 13/13 native MSVC x64 suites on Windows 11. These completed
+components are retained; the new patch does not reapply their changes.
+
+## Shared Windows continuous loop and assignment monitor
+
+The actual ClientRuntime continuous loop and monitor now compile in the isolated
+Windows build. Linux production dependency construction is moved, unchanged, to
+ClientRuntimeProduction.cpp. Linux default constructors and thermal observers are
+retained. Windows explicitly constructs dependencies through WindowsRuntimeSession;
+it cannot silently instantiate Linux hardware/service dependencies.
+
+WindowsRuntimeSession requires a server URL, an idle capability heartbeat and a
+mandatory caller preflight. Its preparation callback supplies already-assigned
+metadata, an absolute executable and typed arguments. No production claim,
+registration, GPU discovery or engine argument planner is added by this adapter.
+Capability entries must explicitly mark the engine/backend installed and available;
+a GPU launch also requires the corresponding inventory entry. These declarations
+are supplied by the caller, not an independent hardware discovery performed here.
+
+The existing runtime loop acquires/releases the identity-bound slot. An initial
+idle heartbeat must be acknowledged before the first preparation callback; later
+iterations retain the existing availability acknowledgement gate. Any pending file,
+including malformed/unreadable state, blocks preparation. The adapter launches via
+startWindowsExecution, retains the owned Job handle, polls completion publication
+and uses the real ExecutionSyncService and HttpRangeClient. It does not adopt or
+terminate another supervisor's engine. Stop and safe-stop markers retain their
+identity contracts; safe stop completes the current assignment and blocks another.
+
+Native waits poll the owned child and stop marker. A one-shot wake shortens the
+monitor's usual 60-second polling interval when completion, initial progress or a
+local result appears. Temporary upload failures keep the normal retry interval
+and preserve state. The shared loops' Linux behavior is unchanged when this optional
+wake dependency is absent. Cancellation keeps final progress and pending state if
+its acknowledgment fails. Console Ctrl-C/Break request cooperative stop; console
+close/shutdown termination is not claimed as graceful cancellation.
+
+The production SolutionExporter now uses the existing Windows private-file and
+atomic-file helpers. Results are read through bounded protected handles, refusing
+hardlinks/reparse paths. Wallets and notices are stored below
+%LOCALAPPDATA%\OpenPuzzle\solutions\Puzzle-N\assignment-id, using Unicode paths and
+protected current-user DACLs. Stable per-file locks serialize publication; existing
+exports are preserved byte for byte. Notices exclude key content. The monitor sends
+only the existing solution signal and IDs; result content remains local. Linux
+export paths, parser contracts and publication behavior are retained. The existing
+WIF parser performs syntax checks, not new cryptographic checksum verification.
+
+PortableSolutionExporterTests checks private exports, bounded input, metadata,
+Unicode paths and preservation; Windows additionally checks protected ACLs and
+hardlink refusal. ClientRuntimeLoopTests exercises the actual common loops with
+controlled dependencies, including safe stop, idle acknowledgement, wake, retry
+intervals, failed stop and unknown identity preservation. WindowsRuntimeSessionTests
+uses owned helper processes and loopback HTTP to exercise the actual adapter and
+loops, preflight/capability refusal, pending-state blocking, natural completion,
+safe stop, failed cancellation acknowledgment, unrelated-process preservation, uncertain-identity refusal and
+local export with a metadata-only report. Fixtures contain synthetic material only.
+
+## Validation gate for this stage
+
+The package contains 18 x64 fixture/test executables and 16 registered Windows
+suites. All 16 still require native Windows 11/MSVC validation for this new delivery.
+The Linux integration script requires 161/161 full tests including UI and 9/9
+isolated suites, matching exact CTest/JUnit names with no skips, before one commit.
+Cross-compilation and Linux delivery results are recorded under verification;
+these do not substitute for native MSVC execution.
+
+The real RunSession orchestration (including registration/claim and engine planning),
+Windows GPU discovery/telemetry, adaptive calibration, full CLI/UI, production HTTPS
+and installer remain pending. This stage does not release a new product version or
+change production installation, runtimes, tags or remote publication.
 
 Bundled Boost 1.83 headers retain their copyright/license notices in
 third-party/BOOST_COPYRIGHT.txt; no Boost binary dependency is introduced.
@@ -350,3 +413,24 @@ HTTP API references:
 - [WinHttpReadData](https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpreaddata)
 - [WinHttpSetTimeouts](https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpsettimeouts)
 - [WinHTTP option flags](https://learn.microsoft.com/en-us/windows/win32/winhttp/option-flags)
+
+## Runtime-session package v2: process test diagnostics
+
+The user Windows/MSVC run for package v1 passed 15/16 suites, including all three
+new runtime-session suites. WindowsProcessRunnerTests failed at its first
+"successful child exit" assertion. That assertion did not report whether launch
+failed, the exit code, the elapsed time or collected output; the root cause is
+therefore not established by that report.
+
+Package v2 changes test/validation code only. Successful fixture launches allow
+15 seconds instead of 3, report started/exit/expected/elapsed/output on failure,
+and are not retried. Real timeout cases retain their one-second deadline and
+six-second upper bound. Cancellation deadlines remain unchanged. The runner suite
+has a 90-second outer bound in CTest and prebuilt validation; other suites keep
+their existing bounds. Temporary executable copies use distinct names and refuse
+to overwrite an existing file. WindowsProcessRunner production code is unchanged.
+
+All 16 suites require a fresh native Windows/MSVC run for v2 before integration.
+This revision does not claim that the reported launch failure is fixed or that
+Windows antivirus caused it; the additional diagnostics establish the next failure
+precisely if the larger normal-start allowance is insufficient.

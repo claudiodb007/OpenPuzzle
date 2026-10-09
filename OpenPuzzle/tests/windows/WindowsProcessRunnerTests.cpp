@@ -11,6 +11,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -31,14 +33,42 @@ int wmain(int argc, wchar_t **argv) {
   require(dynamic_cast<WindowsProcessRunner *>(runner.get()), "factory must use Windows runner");
   std::vector<std::string> lines;
   auto collect = [&](const std::string &line) { lines.push_back(line); };
-  auto result = runner->run(command + "lines", collect, 3);
-  require(result.started && result.exitCode == 0, "successful child exit");
+  // Successful launches are not timeout tests. Allow cold-start overhead and
+  // report the actual failure without retrying or hiding an incorrect exit.
+  constexpr int normalLaunchSeconds = 15;
+  auto runExpected = [&](const std::string &invocation,
+                         const IProcessRunner::LineCallback &onLine,
+                         int expectedExit, const std::string &label) {
+    const auto before = std::chrono::steady_clock::now();
+    std::vector<std::string> output;
+    const auto observed = runner->run(invocation, [&](const std::string &line) {
+      output.push_back(line);
+      if (onLine) onLine(line);
+    }, normalLaunchSeconds);
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - before).count();
+    if (!observed.started || observed.exitCode != expectedExit) {
+      std::ostringstream message;
+      message << label << ": started=" << observed.started
+              << ", exit=" << observed.exitCode << ", expected=" << expectedExit
+              << ", elapsed_ms=" << elapsed
+              << ", limit_seconds=" << normalLaunchSeconds << ", output=[";
+      for (std::size_t i = 0; i < output.size(); ++i) {
+        if (i) message << ", ";
+        message << std::quoted(output[i]);
+      }
+      message << ']';
+      throw std::runtime_error(message.str());
+    }
+    return observed;
+  };
+  auto result = runExpected(command + "lines", collect, 0, "successful child exit");
   require(lines == std::vector<std::string>({"first", "second", "third", "stderr", "tail"}), "CR/LF, stderr and final partial line");
   for (int code : {7, 259}) {
-    result = runner->run(command + "code " + std::to_string(code), {}, 3);
-    require(result.started && result.exitCode == code, "nonzero child exit preserved, including STILL_ACTIVE numeric value");
+    result = runExpected(command + "code " + std::to_string(code), {}, code,
+                         "nonzero child exit preserved, including STILL_ACTIVE numeric value");
   }
-  lines.clear(); result = runner->run(command + "input", collect, 3);
+  lines.clear(); result = runExpected(command + "input", collect, 0, "stdin EOF child exit");
   require(result.exitCode == 0 && lines == std::vector<std::string>({"input-eof"}), "stdin must be EOF");
   result = runner->run("", {}, 1); require(!result.started, "empty command rejected");
   result = runner->run(std::string("echo ok\0extra", 13), {}, 1); require(!result.started, "embedded NUL rejected");
@@ -74,20 +104,27 @@ int wmain(int argc, wchar_t **argv) {
   require(exceptionEnded == WAIT_OBJECT_0, "callback failure must clean descendants");
   SECURITY_ATTRIBUTES security{sizeof(security), nullptr, TRUE};
   HANDLE foreign = CreateEventW(&security, TRUE, FALSE, nullptr); require(foreign, "event fixture");
-  lines.clear(); result = runner->run(command + "handle " + std::to_string(reinterpret_cast<std::uintptr_t>(foreign)), collect, 3);
+  lines.clear();
+  try {
+    result = runExpected(command + "handle " + std::to_string(reinterpret_cast<std::uintptr_t>(foreign)), collect, 0,
+                         "handle inheritance child exit");
+  } catch (...) { CloseHandle(foreign); throw; }
   CloseHandle(foreign);
   require(result.exitCode == 0 && lines == std::vector<std::string>({"not-inherited"}), "unrelated inheritable handle must not leak");
   const auto directory = std::filesystem::temp_directory_path() /
-      (L"OpenPuzzle process espa\u00e7os " + std::to_wstring(GetCurrentProcessId()));
+      (L"OpenPuzzle process espa\u00e7os " + std::to_wstring(GetCurrentProcessId()) + L" " + std::to_wstring(GetTickCount64()));
   std::filesystem::create_directories(directory);
   const auto copied = directory / L"fixture com espa\u00e7os.exe";
-  std::filesystem::copy_file(fixture, copied, std::filesystem::copy_options::overwrite_existing);
-  result = runner->run("\"" + utf8(copied.wstring()) + "\" code 0", {}, 3);
+  std::filesystem::copy_file(fixture, copied, std::filesystem::copy_options::none);
+  try {
+    result = runExpected("\"" + utf8(copied.wstring()) + "\" code 0", {}, 0, "Unicode executable path with spaces");
+  } catch (...) { std::filesystem::remove_all(directory); throw; }
   std::filesystem::remove_all(directory);
   require(result.started && result.exitCode == 0, "Unicode executable path with spaces");
   DWORD initialHandles = 0, finalHandles = 0;
   require(GetProcessHandleCount(GetCurrentProcess(), &initialHandles), "initial handle count");
-  for (int i = 0; i < 20; ++i) require(runner->run(command + "code 0", {}, 3).exitCode == 0, "repeated launches");
+  for (int i = 0; i < 20; ++i)
+    runExpected(command + "code 0", {}, 0, "repeated launch " + std::to_string(i + 1));
   require(GetProcessHandleCount(GetCurrentProcess(), &finalHandles) && finalHandles <= initialHandles + 2, "launch handle leakage");
   std::cout << "WindowsProcessRunnerTests passed\n"; return 0;
  } catch (const std::exception &error) { std::cerr << error.what() << '\n'; return 1; }

@@ -114,6 +114,9 @@ struct ClientRuntimeDependencies {
   std::function<void(
       std::chrono::seconds duration)> sleep;
 
+  // Optional native event polling can shorten a wait without requesting stop.
+  std::function<bool()> wakeRequested;
+
   /* Optional so existing deterministic tests can omit hardware access. */
   /* True when critical protection requested an orderly stop. */
   std::function<bool()> thermalPoll;
@@ -124,11 +127,13 @@ public:
   static constexpr int
       SolutionFoundExitCode = 10;
 
+#ifndef _WIN32
   ClientRuntime();
 
   explicit ClientRuntime(
       std::optional<std::vector<std::string>>
           thermalDeviceScope);
+#endif
 
   explicit ClientRuntime(
       ClientRuntimeDependencies dependencies);
@@ -149,10 +154,12 @@ private:
   bool sleepInterruptibly(
       std::chrono::seconds duration) const;
 
+#ifndef _WIN32
   static ClientRuntimeDependencies
   productionDependencies(
       std::optional<std::vector<std::string>>
           thermalDeviceScope = std::nullopt);
+#endif
 };
 
 } // namespace openpuzzle

@@ -13,9 +13,16 @@
 #include <system_error>
 #include <vector>
 
+#include "openpuzzle/core/LocalPaths.hpp"
+#ifdef _WIN32
+#include "openpuzzle/core/AtomicFile.hpp"
+#include "openpuzzle/core/WindowsPrivateFile.hpp"
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+#else
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -166,6 +173,11 @@ bool hexWithinRange(
 bool ensurePrivateDirectory(
     const fs::path &path,
     std::string &error) {
+#ifdef _WIN32
+  try { WorkspaceSecurity::prepare(path); return true; }
+  catch (...) { error = "Unable to prepare private solution directory"; return false; }
+#else
+
   std::error_code filesystemError;
   const auto status =
       fs::symlink_status(
@@ -205,8 +217,10 @@ bool ensurePrivateDirectory(
   }
 
   return true;
+#endif
 }
 
+#ifndef _WIN32
 bool writeAll(
     int descriptor,
     const std::string &content) {
@@ -238,10 +252,28 @@ bool writeAll(
   return true;
 }
 
+#endif
+
 bool publishProtectedTextFile(
     const fs::path &destination,
     const std::string &content,
     std::string &error) {
+#ifdef _WIN32
+  try {
+    windowsFile::Lock lock(destination.wstring() + L".export.lock");
+    if (!lock.locked()) { error = "Unable to lock solution export"; return false; }
+    bool missing = false;
+    const auto existing = windowsFile::readPrivate(destination, missing, 16384);
+    if (!missing) {
+      if (!existing) { error = "Unsafe or unreadable solution export path"; return false; }
+      return true; // Preserve a previously exported wallet/notice byte for byte.
+    }
+    if (writePrivateFileAtomically(destination, content)) return true;
+    error = "Unable to publish private solution export";
+  } catch (...) { error = "Unable to protect solution export"; }
+  return false;
+#else
+
   std::error_code filesystemError;
   const auto status =
       fs::symlink_status(
@@ -355,11 +387,19 @@ bool publishProtectedTextFile(
   }
 
   return true;
+#endif
 }
 
 std::vector<std::string> readRecord(
     const fs::path &path,
     std::string &error) {
+#ifdef _WIN32
+  bool missing = false;
+  const auto record = windowsFile::readPrivate(path, missing, MaximumResultSize + 1);
+  if (!record || record->empty()) { error = "Engine result is unsafe, unavailable or oversized"; return {}; }
+  std::istringstream input(*record);
+#else
+
   std::error_code filesystemError;
 
   if (!fs::is_regular_file(
@@ -390,6 +430,8 @@ std::vector<std::string> readRecord(
     error = "Unable to open engine solution result";
     return {};
   }
+
+ #endif
 
   std::vector<std::string> lines;
   std::string line;
@@ -466,7 +508,7 @@ void publishSolutionNotice(
   }
 
   result.noticePath =
-      notice.string();
+      pathUtf8(notice);
 }
 
 } // namespace
@@ -488,7 +530,7 @@ SolutionExporter::exportSolution(
   std::string parseError;
   const auto record =
       readRecord(
-          engineResultPath,
+          pathFromUtf8(engineResultPath),
           parseError);
 
   if (record.empty()) {
@@ -572,6 +614,11 @@ SolutionExporter::exportSolution(
     privateKeyLabel = "Private key (WIF):";
   }
 
+#ifdef _WIN32
+  fs::path root;
+  try { root = localPaths::root() / L"solutions"; }
+  catch (...) { result.error = "LOCALAPPDATA is unavailable or invalid"; return result; }
+#else
   const char *home =
       std::getenv("HOME");
 
@@ -584,6 +631,8 @@ SolutionExporter::exportSolution(
   const fs::path root =
       fs::path(home) /
       "OpenPuzzle-Solutions";
+
+#endif
 
   const fs::path puzzleDirectory =
       root /
@@ -613,6 +662,17 @@ SolutionExporter::exportSolution(
       assignmentDirectory /
       "wallet-import.txt";
 
+#ifdef _WIN32
+  std::ostringstream content;
+  content << "OpenPuzzle protected solution\n=============================\nPuzzle: "
+          << state.puzzle << "\nAddress: " << address << "\nFormat: " << result.format
+          << "\n" << privateKeyLabel << "\n" << privateKey << "\n";
+  if (!publishProtectedTextFile(destination, content.str(), result.error)) return result;
+  result.success = true;
+  result.walletPath = pathUtf8(destination);
+  publishSolutionNotice(state, root, result);
+  return result;
+#else
   std::error_code filesystemError;
   const auto destinationStatus =
       fs::symlink_status(
@@ -756,6 +816,7 @@ SolutionExporter::exportSolution(
       root,
       result);
   return result;
+#endif
 }
 
 } // namespace openpuzzle::client

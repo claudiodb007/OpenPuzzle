@@ -127,6 +127,7 @@ if(WIN32)
     set(OPENPUZZLE_RUNTIME_CONTROL_SOURCE src/runtime/WindowsClientRuntimeControl.cpp)
 else()
     set(OPENPUZZLE_RUNTIME_CONTROL_SOURCE src/runtime/ClientRuntimeControl.cpp)
+    set(OPENPUZZLE_RUNTIME_PRODUCTION_SOURCE src/runtime/ClientRuntimeProduction.cpp)
 endif()
 
 add_library(OpenPuzzleCore
@@ -192,6 +193,7 @@ add_library(OpenPuzzleCore
     src/runtime/RunBenchmarkPreparation.cpp
     src/runtime/RuntimeThermalObserver.cpp
     src/runtime/ClientRuntime.cpp
+    ${OPENPUZZLE_RUNTIME_PRODUCTION_SOURCE}
     ${OPENPUZZLE_RUNTIME_CONTROL_SOURCE}
     src/runtime/CudaDeviceSelection.cpp
     src/runtime/OpenclDeviceSelection.cpp
