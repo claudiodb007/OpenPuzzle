@@ -23,6 +23,13 @@ struct ClientExecutionState {
    */
   std::string bootId;
 
+  // Empty retains the legacy Linux identity contract. Windows uses an explicit
+  // discriminator and a generation, never Linux boot IDs or start ticks.
+  std::string processPlatform;
+  std::string processGeneration;
+  int ownerPid = 0;
+  std::uint64_t ownerStartTime = 0;
+
   /*
    * Linux /proc/<pid>/stat field 22 captured for this exact
    * process instance.

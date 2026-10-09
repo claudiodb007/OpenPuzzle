@@ -47,6 +47,9 @@ struct ExecutionSyncResult {
 
   bool hasExitCode = false;
   int exitCode = 0;
+  // Full native DWORD remains available even when the server's signed integer
+  // contract requires mapping a large nonzero Windows value to failure -4.
+  std::optional<std::uint32_t> nativeExitCode;
 
   bool completionUploaded = false;
 
@@ -131,7 +134,7 @@ private:
       const ClientExecutionState& state) const;
 
   static bool readExitCode(
-      const std::string& workspace,
+      const ClientExecutionState& state,
       int& exitCode);
 
   static bool readLatestProgress(

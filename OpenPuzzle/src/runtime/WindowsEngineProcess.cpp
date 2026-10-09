@@ -80,7 +80,8 @@ WindowsEngineProcess::Recovery WindowsEngineProcess::recover(const fs::path& wor
   return out;
 }
 std::unique_ptr<WindowsEngineProcess> WindowsEngineProcess::start(const fs::path& executable,
-    const std::vector<std::string>& arguments,const fs::path& workspace){
+    const std::vector<std::string>& arguments,const fs::path& workspace,
+    const std::function<bool(const WindowsEngineRecord&)>& publishState){
   require(executable.is_absolute()&&fs::is_regular_file(executable),"Windows engine executable must be an existing absolute file");
   require(workspace.is_absolute()&&windowsFile::safePath(workspace),"Windows engine workspace must be an absolute private path");
   auto command=wide(WindowsCommandLine::build(pathUtf8(executable),arguments));
@@ -124,6 +125,9 @@ std::unique_ptr<WindowsEngineProcess> WindowsEngineProcess::start(const fs::path
   // Publish a complete identity while the child is still suspended; fast engines
   // cannot disappear before their generation is recorded.
   require(writePrivateFileAtomically(identityPath(workspace),impl->record.encode()),"Could not publish engine identity; previous marker preserved");
+  // Persist the assignment while the contained child is still suspended.
+  // Publication failure terminates that child without executing its first instruction.
+  if(publishState)require(publishState(impl->record),"Could not persist Windows assignment; engine was not resumed");
   auto result=std::unique_ptr<WindowsEngineProcess>(new WindowsEngineProcess(std::move(impl)));
   if(ResumeThread(thread.get())==static_cast<DWORD>(-1)){
     result->stop(125);throw std::runtime_error("Could not resume contained Windows engine");

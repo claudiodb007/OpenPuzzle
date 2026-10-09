@@ -2270,3 +2270,7 @@ add_test(NAME WindowsEngineFormatTests COMMAND WindowsEngineFormatTests)
 add_executable(HttpRequestPolicyTests client/HttpRequestPolicyTests.cpp)
 target_include_directories(HttpRequestPolicyTests PRIVATE ../include)
 add_test(NAME HttpRequestPolicyTests COMMAND HttpRequestPolicyTests)
+
+add_executable(WindowsExecutionStateTests runtime/WindowsExecutionStateTests.cpp)
+target_link_libraries(WindowsExecutionStateTests PRIVATE OpenPuzzleCore)
+add_test(NAME WindowsExecutionStateTests COMMAND WindowsExecutionStateTests)

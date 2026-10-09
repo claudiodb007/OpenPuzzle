@@ -3,9 +3,17 @@
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
 #include "openpuzzle/engines/EngineParserFactory.hpp"
+#include "openpuzzle/core/LocalPaths.hpp"
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+#ifdef _WIN32
+#include "openpuzzle/runtime/WindowsExecutionState.hpp"
+#include "openpuzzle/core/WindowsPrivateFile.hpp"
+#include "openpuzzle/runtime/WindowsEngineProcess.hpp"
+#else
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/performance/AdaptiveProfileUpdater.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
+#endif
 
 #include <boost/multiprecision/cpp_int.hpp>
 
@@ -18,24 +26,81 @@
 #include <fstream>
 #include <string>
 #include <system_error>
+#ifndef _WIN32
 #include <unistd.h>
+#endif
+#include <limits>
+#include <memory>
 
 namespace openpuzzle::client {
+namespace {
+std::optional<std::uint64_t> defaultStartTime(int pid) {
+#ifdef _WIN32
+  return WindowsProcessIdentity::creationTime(static_cast<std::uint32_t>(pid));
+#else
+  return LinuxProcessIdentity::startTime(pid);
+#endif
+}
+std::string artifacts(const ClientExecutionState& state) {
+#ifdef _WIN32
+  const auto record = windowsExecutionRecord(state);
+  return record ? pathUtf8(WindowsEngineProcess::generationPath(pathFromUtf8(state.workspace), *record)) : std::string{};
+#else
+  return state.workspace;
+#endif
+}
+std::string engineLog(const std::string& legacy) {
+#ifdef _WIN32
+  (void)legacy;
+  return "engine.log";
+#else
+  return legacy;
+#endif
+}
+void nativeExit(const ClientExecutionState& state, ExecutionSyncResult& result) {
+#ifdef _WIN32
+  const auto expected = windowsExecutionRecord(state);
+  const auto recovered = WindowsEngineProcess::recover(pathFromUtf8(state.workspace));
+  if (expected && recovered.record == expected) result.nativeExitCode = recovered.exitCode;
+#else
+  (void)state; (void)result;
+#endif
+}
+}
+
 
 ExecutionSyncService::ExecutionSyncService()
     : ExecutionSyncService(
-          openpuzzle::LinuxProcessIdentity::startTime) {}
+          defaultStartTime) {}
 
 ExecutionSyncService::ExecutionSyncService(
     ProcessStartTimeReader processStartTimeReader)
     : processStartTimeReader_(
           processStartTimeReader
               ? processStartTimeReader
-              : openpuzzle::LinuxProcessIdentity::startTime) {}
+              : defaultStartTime) {}
 
 ExecutionSyncService::ProcessIdentityStatus
 ExecutionSyncService::processIdentityStatus(
     const ClientExecutionState& state) const {
+#ifdef _WIN32
+  const auto expected = windowsExecutionRecord(state);
+  if (!expected) return ProcessIdentityStatus::Unknown;
+  const auto recovered = WindowsEngineProcess::recover(pathFromUtf8(state.workspace));
+  if (recovered.record != expected || recovered.completionUnavailable ||
+      recovered.status == WindowsProcessIdentity::Status::Unavailable)
+    return ProcessIdentityStatus::Unknown;
+  if (recovered.status == WindowsProcessIdentity::Status::Inactive) {
+    if (!recovered.exitCode && WindowsProcessIdentity::status(state.ownerPid, state.ownerStartTime) !=
+        WindowsProcessIdentity::Status::Inactive)
+      return ProcessIdentityStatus::Unknown; // The owner may still be flushing/publishing exit.
+    return ProcessIdentityStatus::Stopped;
+  }
+  const auto actual = processStartTimeReader_(state.pid);
+  if (!actual) return ProcessIdentityStatus::Unknown;
+  return *actual == state.processStartTime ? ProcessIdentityStatus::Running : ProcessIdentityStatus::Stopped;
+#else
+  if (!state.processPlatform.empty()) return ProcessIdentityStatus::Unknown;
   /*
    * OpenPuzzle <= 1.0.16 has no boot_id and OpenPuzzle <= 1.0.17 has no
    * process_start_time.
@@ -86,13 +151,25 @@ ExecutionSyncService::processIdentityStatus(
   return *currentStartTime == state.processStartTime
              ? ProcessIdentityStatus::Running
              : ProcessIdentityStatus::Stopped;
+#endif
 }
 
 bool ExecutionSyncService::readExitCode(
-    const std::string& workspace,
+    const ClientExecutionState& state,
     int& exitCode) {
+#ifdef _WIN32
+  const auto expected = windowsExecutionRecord(state);
+  const auto recovered = WindowsEngineProcess::recover(pathFromUtf8(state.workspace));
+  if (!expected || recovered.record != expected || !recovered.exitCode ||
+      recovered.status != WindowsProcessIdentity::Status::Inactive) return false;
+  const auto code = *recovered.exitCode;
+  exitCode = code <= static_cast<std::uint32_t>((std::numeric_limits<int>::max)())
+      ? static_cast<int>(code) : -4;
+  return true;
+#else
+  const auto& workspace = state.workspace;
   const auto exitPath =
-      std::filesystem::path(workspace) /
+      pathFromUtf8(workspace) /
       "exit.code";
 
   std::ifstream input(
@@ -111,6 +188,7 @@ bool ExecutionSyncService::readExitCode(
   exitCode = value;
 
   return true;
+#endif
 }
 
 bool ExecutionSyncService::readLatestProgress(
@@ -143,8 +221,8 @@ bool ExecutionSyncService::readLatestProgress(
             );
 
   const auto logPath =
-      std::filesystem::path(workspace) /
-      logName;
+      pathFromUtf8(workspace) /
+      engineLog(logName);
 
   std::ifstream input(
       logPath,
@@ -290,8 +368,8 @@ bool ExecutionSyncService::hasCompletionProof(
       engineId == "psckangaroo";
 
   const auto logPath =
-      std::filesystem::path(workspace) /
-      (
+      pathFromUtf8(workspace) /
+      engineLog(
           keyhunt
               ? "keyhunt.log"
               : (
@@ -425,8 +503,8 @@ ExecutionSyncService::speedSamples(
   }
 
   const auto logPath =
-      std::filesystem::path(workspace) /
-      (
+      pathFromUtf8(workspace) /
+      engineLog(
           engineId == "keyhunt"
               ? "keyhunt.log"
               : (
@@ -495,7 +573,7 @@ ExecutionSyncService::solutionFile(
     const std::string& workspace,
     const std::string& engine) {
   const auto root =
-      std::filesystem::path(workspace);
+      pathFromUtf8(workspace);
 
   const auto nonEmptyDirectFile =
       [](const std::filesystem::path& path) {
@@ -523,7 +601,7 @@ ExecutionSyncService::solutionFile(
       root / "found.txt";
 
   if (nonEmptyDirectFile(found)) {
-    return found.string();
+    return pathUtf8(found);
   }
 
   std::string normalizedEngine = engine;
@@ -543,7 +621,7 @@ ExecutionSyncService::solutionFile(
         root / "RESULTS.TXT";
 
     if (nonEmptyDirectFile(nativeResult)) {
-      return nativeResult.string();
+      return pathUtf8(nativeResult);
     }
   }
 
@@ -639,6 +717,14 @@ ExecutionSyncService::inspect(
   result.state = *state;
   const auto processStatus =
       processIdentityStatus(*state);
+#ifdef _WIN32
+  if (processStatus == ProcessIdentityStatus::Unknown) {
+    result.identityUnavailable = true;
+    result.completionError = "Windows execution identity or generation is unavailable; local state was preserved";
+    return result;
+  }
+#endif
+  nativeExit(*state, result);
   result.running =
       processStatus == ProcessIdentityStatus::Running;
   result.identityUnavailable =
@@ -660,7 +746,7 @@ ExecutionSyncService::inspect(
     ExecutionProgress progress;
 
     if (readLatestProgress(
-            state->workspace,
+            artifacts(*state),
             state->engine,
             progress)) {
       result.hasProgress = true;
@@ -672,7 +758,7 @@ ExecutionSyncService::inspect(
 
   int exitCode = 0;
   if (readExitCode(
-          state->workspace,
+          *state,
           exitCode)) {
     result.hasExitCode = true;
     result.exitCode = exitCode;
@@ -697,6 +783,24 @@ ExecutionSyncService::tick(
     const std::string& serverUrl,
     const std::string& executionSlot) const {
   ExecutionSyncResult result;
+#ifdef _WIN32
+  std::unique_ptr<windowsFile::Lock> lock;
+  try {
+    const auto statePath = ClientStateStore::path(executionSlot);
+    WorkspaceSecurity::prepare(statePath.parent_path());
+    lock = std::make_unique<windowsFile::Lock>(statePath.wstring() + L".execution.lock");
+  } catch (const std::exception& error) {
+    result.identityUnavailable = true;
+    result.completionError = std::string("Windows synchronization storage is unavailable; state was preserved: ") + error.what();
+    return result;
+  }
+  if (!lock->locked()) {
+    result.identityUnavailable = true;
+    result.completionError = "Windows assignment synchronization is already in progress";
+    return result;
+  }
+#endif
+
 
   const auto state =
       ClientStateStore::load(
@@ -711,6 +815,14 @@ ExecutionSyncService::tick(
 
   const auto processStatus =
       processIdentityStatus(*state);
+#ifdef _WIN32
+  if (processStatus == ProcessIdentityStatus::Unknown) {
+    result.identityUnavailable = true;
+    result.completionError = "Windows execution identity or generation is unavailable; local state was preserved";
+    return result;
+  }
+#endif
+  nativeExit(*state, result);
   result.running =
       processStatus == ProcessIdentityStatus::Running;
   result.identityUnavailable =
@@ -737,7 +849,7 @@ ExecutionSyncService::tick(
     ExecutionProgress progress;
 
     if (!readLatestProgress(
-            state->workspace,
+            artifacts(*state),
             state->engine,
             progress)) {
       return result;
@@ -794,8 +906,17 @@ ExecutionSyncService::tick(
    * Nunca considerar este caso como conclusão.
    */
   if (!readExitCode(
-          state->workspace,
+          *state,
           exitCode)) {
+#ifdef _WIN32
+    // Revalidate the generation after reading completion: a concurrent marker
+    // replacement or an unavailable record cannot authorize cancellation.
+    if (processIdentityStatus(*state) != ProcessIdentityStatus::Stopped) {
+      result.identityUnavailable = true;
+      result.completionError = "Windows completion identity changed; local state was preserved";
+      return result;
+    }
+#endif
     result.interrupted = true;
 
     // A live OpenPuzzle runtime is not evidence that its engine is alive.
@@ -809,7 +930,7 @@ ExecutionSyncService::tick(
 
   const auto finalProgress =
       latestProgress(
-          state->workspace,
+          artifacts(*state),
           state->engine);
 
   const bool completed =
@@ -822,7 +943,7 @@ ExecutionSyncService::tick(
 
   if (completed) {
     if (!hasCompletionProof(
-            state->workspace,
+            artifacts(*state),
             state->engine)) {
       result.completionStatus =
           AssignmentUploadStatus::PermanentFailure;
@@ -911,6 +1032,9 @@ ExecutionSyncService::tick(
       AssignmentUploadStatus::Uploaded;
 
   if (completed && state->profileManaged) {
+#ifdef _WIN32
+    result.calibrationError = "Adaptive profile calibration is not yet available on Windows";
+#else
     result.calibrationAttempted = true;
 
     const char* home =
@@ -950,6 +1074,7 @@ ExecutionSyncService::tick(
             update.error;
       }
     }
+#endif
   }
 
   result.stateRemoved =

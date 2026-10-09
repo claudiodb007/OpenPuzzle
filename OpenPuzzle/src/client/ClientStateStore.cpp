@@ -262,6 +262,11 @@ bool ClientStateStore::save(
       "boot_id",
       state.bootId);
 
+  writeField(output, "process_platform", state.processPlatform);
+  writeField(output, "process_generation", state.processGeneration);
+  output << "owner_pid=" << state.ownerPid << '\n'
+         << "owner_start_time=" << state.ownerStartTime << '\n';
+
   output
       << "process_start_time="
       << state.processStartTime
@@ -421,6 +426,10 @@ ClientStateStore::load(
   }
 
   ClientExecutionState state;
+  state.processPlatform = valueOf(values, "process_platform");
+  state.processGeneration = valueOf(values, "process_generation");
+  state.ownerPid = parseInteger(values, "owner_pid");
+  state.ownerStartTime = parseUnsigned64(values, "owner_start_time");
 
   state.active =
       valueOf(

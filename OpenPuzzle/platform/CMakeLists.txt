@@ -142,3 +142,35 @@ if(WIN32)
         target_compile_options(HttpRangeClientTests PRIVATE -UNDEBUG)
     endif()
 endif()
+
+add_executable(WindowsExecutionStateTests ../tests/runtime/WindowsExecutionStateTests.cpp)
+target_link_libraries(WindowsExecutionStateTests PRIVATE OpenPuzzleStorage)
+add_test(NAME WindowsExecutionStateTests COMMAND WindowsExecutionStateTests)
+if(MSVC)
+    target_compile_options(WindowsExecutionStateTests PRIVATE /utf-8)
+endif()
+if(WIN32)
+    add_library(OpenPuzzleExecutionSync
+        ../src/client/ExecutionSyncService.cpp
+        ../src/runtime/WindowsExecutionLauncher.cpp
+        ../src/engines/EngineParserFactory.cpp
+        ../src/adapters/bitcrack/BitCrackOutputParser.cpp
+        ../src/adapters/bitcrack/BitCrackProgressParser.cpp
+        ../src/adapters/keyhunt/KeyHuntProgressParser.cpp
+        ../src/adapters/kangaroo/KangarooProgressParser.cpp)
+    target_link_libraries(OpenPuzzleExecutionSync PUBLIC OpenPuzzleHttpClient OpenPuzzleEngineProcess OpenPuzzleRuntimeControl)
+    if(OPENPUZZLE_PLATFORM_BOOST_INCLUDE_DIR)
+        target_include_directories(OpenPuzzleExecutionSync PRIVATE "${OPENPUZZLE_PLATFORM_BOOST_INCLUDE_DIR}")
+    endif()
+    target_compile_definitions(OpenPuzzleExecutionSync PRIVATE _WIN32_WINNT=0x0601)
+    add_executable(WindowsExecutionSyncTests ../tests/windows/WindowsExecutionSyncTests.cpp)
+    target_link_libraries(WindowsExecutionSyncTests PRIVATE OpenPuzzleExecutionSync ws2_32)
+    add_test(NAME WindowsExecutionSyncTests COMMAND WindowsExecutionSyncTests $<TARGET_FILE:WindowsEngineFixture>)
+    set_tests_properties(WindowsExecutionSyncTests PROPERTIES TIMEOUT 45)
+    if(MSVC)
+        target_compile_options(OpenPuzzleExecutionSync PRIVATE /utf-8)
+        target_compile_options(WindowsExecutionSyncTests PRIVATE /utf-8)
+    elseif(MINGW)
+        target_link_options(WindowsExecutionSyncTests PRIVATE -municode)
+    endif()
+endif()

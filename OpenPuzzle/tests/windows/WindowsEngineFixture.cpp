@@ -11,6 +11,18 @@ std::string hex(const std::string& text){const char* digits="0123456789abcdef";s
 int wmain(int argc,wchar_t** argv){try{
  if(argc<2)return 2;
  const std::wstring mode=argv[1];
+ if(mode==L"execution"&&argc==5){
+   std::cout<<"GPU fixture 12.50 MKey/s (8 total)"<<std::endl;
+   if(!writePrivateFileAtomically(fs::path(argv[3]),"ready"))return 11;
+   const auto end=GetTickCount64()+15000;
+   while(!fs::exists(argv[2])&&GetTickCount64()<end)Sleep(10);
+   if(!fs::exists(argv[2]))return 12;
+   const std::wstring finish=argv[4];
+   if(finish==L"proof")std::cout<<"Reached end of keyspace"<<std::endl;
+   if(finish==L"keyhunt")std::cout<<"End"<<std::endl;
+   if(finish==L"large")ExitProcess(0x80000000UL);
+   return finish==L"failed"?7:0;
+ }
  if(mode==L"echo"){
    for(int i=2;i<argc;++i)std::cout<<i-2<<':'<<hex(pathUtf8(fs::path(argv[i])))<<std::endl;
    std::cerr<<"stderr"<<std::endl;

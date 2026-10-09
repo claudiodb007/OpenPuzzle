@@ -2,6 +2,7 @@
 #include "openpuzzle/runtime/WindowsEngineRecord.hpp"
 #include "openpuzzle/runtime/WindowsProcessIdentity.hpp"
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -18,7 +19,8 @@ public:
     bool completionUnavailable=false;
   };
   static std::unique_ptr<WindowsEngineProcess> start(const std::filesystem::path& executable,
-      const std::vector<std::string>& arguments,const std::filesystem::path& workspace);
+      const std::vector<std::string>& arguments,const std::filesystem::path& workspace,
+      const std::function<bool(const WindowsEngineRecord&)>& publishState = {});
   static Recovery recover(const std::filesystem::path& workspace);
   const WindowsEngineRecord& identity()const;
   std::filesystem::path logPath()const;

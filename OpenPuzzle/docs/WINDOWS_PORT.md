@@ -1,4 +1,4 @@
-# Windows x64 port: processes, storage, runtime, engines and HTTP client
+# Windows x64 port: assignment state and execution synchronization
 
 Source base: Linux release 1.0.46, commit
 `129ada590c4e7591f24251aa4c7fc89e7bfb21db`.
@@ -15,9 +15,12 @@ four isolated Linux suites and six native MSVC Windows suites approved in the
 user reports. The engine-lifecycle stage was committed as
 `8740366d1b91710e28962a7d2cd2366bfa7a18f2`, with 157 native Linux tests,
 five isolated Linux suites and eight native MSVC Windows suites approved.
-This HTTP-client stage builds on that exact commit.
+The HTTP-client stage was committed as
+`213ec3119586847f00bb8bd20eedbd99b5e342d2`, with 158 native Linux tests,
+six isolated Linux suites and eleven native MSVC Windows suites approved.
+The Windows execution-synchronization stage builds on that exact commit.
 It is not a complete Windows client or installer. The isolated target now
-registers eleven Windows suites. Linux continues to select PosixProcessRunner;
+registers thirteen Windows suites. Linux continues to select PosixProcessRunner;
 its release version stays 1.0.46.
 
 ## Existing shell process runner
@@ -37,7 +40,7 @@ its release version stays 1.0.46.
   terminate using the same opened handle. Refuse an unreadable or mismatched
   identity. Windows FILETIME and Linux start ticks are different identity
   formats. The runtime slot marker now uses an explicit Windows discriminator;
-  the separate persisted engine-state/recovery schema is still pending.
+  the assignment state now carries the explicit Windows identity described below.
 
 The fixtures exercise silent and continuous output, closed output, descendant
 cleanup, callback exceptions, Unicode executable paths with spaces, unrelated
@@ -65,8 +68,8 @@ they do not call the coordination API or run a search engine.
   contenders open the same file without deletion sharing. Only a missing identity
   creates a UUID; unreadable/invalid identities fail and retain their bytes.
 - The Windows client state storage does not invent a Linux boot identifier.
-  The engine-state/recovery schema remains pending; runtime slot markers use
-  the Windows-specific format described below.
+  The assignment state now carries an explicit Windows identity; runtime slot markers
+  use the separate ownership format described below.
 
 PortableStorageTests checks private access, Unicode paths/data, binary bytes,
 concurrent atomic writers, sharing failures, invalid settings/identity retention,
@@ -128,8 +131,8 @@ a replacement. Only selected standard handles are inherited, and stdin receives 
 
 Each new generation has its own private `engine.log` and identity-bound `exit.windows`.
 The workspace marker `engine.windows.identity` uses `windows-engine-filetime-v1`;
-it is separate from the runtime slot marker and the legacy ClientExecutionState
-schema. Exit parsing accepts the full unsigned DWORD range, including 259 as a
+it is separate from the runtime slot marker and the runtime owner record in ClientExecutionState. The assignment state now
+references this engine generation explicitly. Exit parsing accepts the full unsigned DWORD range, including 259 as a
 completed exit code. Malformed or foreign completion records do not become success.
 Log flush and completion publication are checked; failed publication retains existing
 bytes and can be retried. Previous generation logs/results are preserved.
@@ -158,8 +161,8 @@ The real RunSession and Windows engine binaries still require integration and te
 
 ## Native validation on Windows x64
 
-The delivery ZIP also contains thirteen statically linked x64 fixture/test
-executables under `bin/windows-x64`. To execute the eleven suites immediately,
+The delivery ZIP also contains fifteen statically linked x64 fixture/test
+executables under `bin/windows-x64`. To execute the thirteen suites immediately,
 without installing a compiler, run from the extracted package root:
 
 ```powershell
@@ -186,7 +189,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\OpenPuzzle\platform\va
 
 ExecutionPolicy Bypass applies only to this process. The script creates a fresh
 report/build directory under `%USERPROFILE%\OpenPuzzle\relatorios\windows-platform`,
-compiles x64 with MSVC and checks that JUnit contains all eleven registered test names,
+compiles x64 with MSVC and checks that JUnit contains all thirteen registered test names,
 without failures or skipped tests. Send SUMMARY.txt and, if anything fails,
 validation.log and ctest-results.xml. Neither the existing Linux configuration
 nor a production installation is used by these tests.
@@ -204,7 +207,8 @@ ctest --test-dir .\build-windows -C Release --output-on-failure
 1. Connect the process abstraction to RunSession, background launch, runtime
    engine launch, ExecutionStopper and checkpoint recovery. The isolated Windows
    slot and engine APIs now exist. Connect their polling and generation records
-   to the real assignment loop and existing ClientExecutionState/recovery schema. Replace `/proc`,
+   to the real assignment loop. Windows assignment state and ExecutionSyncService are
+   now connected through startWindowsExecution; RunSession is still pending. Replace `/proc`,
    fork and signal operations and retain unknown-identity handling. Adapt
    command construction and detached/background process ownership separately.
 2. Connect DoctorService and remaining HTTP helpers to the native transport;
@@ -272,22 +276,69 @@ self-signed certificate. Trusted HTTPS and proxy integration remain to be valida
 before the full client uses a production server. No production API or GPU engine
 is used by these fixtures.
 
-## Validation status of the HTTP-client stage
+## Windows assignment state and synchronization
 
-Windows x64 cross-compilation produces thirteen executables and eleven registered
-suites. This stage adds HttpRequestPolicyTests, HttpRangeClientTests and
-WindowsHttpTransportTests to the eight previously validated Windows suites.
-Native execution and MSVC compilation of this eleven-suite package remain pending
-until validate-windows.ps1 runs in the VM.
+`startWindowsExecution` launches a single already-assigned job using the existing
+ClientExecutionState and ClientStateStore. The caller must own the runtime slot.
+A private per-slot publication lock protects both launch and synchronization.
+An existing state file, including an invalid/unreadable one, refuses a new launch;
+a pending network acknowledgment cannot be overwritten. Metadata is checked before
+creating a child. The engine remains suspended until its generation identity and
+assignment state have both been published. Failed state publication terminates the
+owned suspended child before any engine instruction runs.
 
-The delivery environment verifies the complete Linux CLI/UI compilation, six
-HTTP/client-related suites and six isolated platform suites. It registers 158 main
-Linux tests. ExecutionSyncServiceTests also ran locally, but its self-process recovery
-fixture failed identically when relinked with the unchanged baseline HttpRangeClient;
-that environment result is preserved with the baseline comparison under verification.
-It is not counted as a regression pass. Full native regression is the integration
-gate: integrate-linux.sh requires 158/158 Linux tests and 6/6 isolated tests, exact
-CTest/JUnit names and zero skipped tests before creating one grouped commit.
+Windows state stores process_platform (`windows-engine-filetime-v1`), process
+creation FILETIME, process_generation, and the owning supervisor's PID/FILETIME.
+The Linux boot ID is empty. Legacy Linux files still load with empty Windows fields;
+foreign or incomplete identities cannot authorize Windows progress or completion.
+This is single-file publication with an owned suspended child, not a transaction
+across all workspace files or a power-loss durability guarantee.
+
+The actual existing ExecutionSyncService now compiles on Windows. It reads only
+engine.log and exit.windows from the exact persisted generation. Root legacy logs
+and exit.code cannot authorize completion of a new Windows engine. A missing,
+unreadable or changed identity/generation preserves the assignment without a request.
+When an engine has exited but its supervisor is still flushing/publishing completion,
+the service retains uncertainty. If both engine and supervisor are proven inactive
+and no exit was published, recovery sends interruption (`cancelled`, -3), never
+completed coverage.
+
+Completion still requires both a successful native exit and deterministic engine
+proof. BitCrack's end-of-keyspace marker and KeyHunt's exact End record retain their
+existing contracts. Kangaroo's probabilistic exit is not complete-range proof.
+Successful completion sends the exact inclusive assigned-range count, not the last
+periodic sample. Temporary upload failures retain pending state for retry. Acknowledgment
+or the existing assignment-rejection contract permits state removal.
+
+The full unsigned Windows exit code remains in the generation record and nativeExitCode.
+Values above signed INT_MAX map to the existing API's signed failure sentinel -4;
+they never wrap into success. found.txt/results are inspected as paths only: a solution
+preserves assignment state and is not read or transmitted by this service. A workspace
+with an existing solution refuses a new managed launch.
+
+Optional adaptive profile calibration remains unavailable on Windows and reports that
+limitation explicitly; SQLite/profile calibration is not silently substituted. The real
+RunSession loop, assignment acquisition, GPU engines, full CLI/UI and installer are
+still pending. This API does not automatically claim work or launch a next assignment.
+
+WindowsExecutionStateTests checks explicit identities, legacy compatibility and Unicode
+state round trips on both platforms. WindowsExecutionSyncTests uses the real service,
+private temporary workspaces, owned helper processes and loopback HTTP. It checks pending
+state protection, exact-generation progress, unavailable identities, owner publication
+windows, proof, retry/acknowledgment, local solutions, DWORD failures, refused publication
+before resume, and abrupt supervisor termination. No production endpoint or GPU engine
+is used.
+
+## Validation status of the execution-synchronization stage
+
+Windows x64 cross-compilation produces fifteen executables and thirteen registered
+suites. The prior eleven suites passed native MSVC execution on the user's Windows 11
+PC. The two added suites still require native execution of this complete new package.
+The main Linux integration gate requires 159/159 tests, including UI, and 7/7 isolated
+platform suites, with exact CTest/JUnit names and no skipped tests before committing.
+The delivery checks and any environment limitations are recorded under verification.
+No new release version, production installation, runtime, tag or remote publication is
+created by this stage.
 
 Bundled Boost 1.83 headers retain their copyright/license notices in
 third-party/BOOST_COPYRIGHT.txt; no Boost binary dependency is introduced.
