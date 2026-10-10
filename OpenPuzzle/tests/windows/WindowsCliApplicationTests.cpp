@@ -21,7 +21,7 @@ int wmain(int argc,wchar_t** argv){try{
  fs::create_directories(root);const auto profile=root/pathFromUtf8("profile ç 中文");
  require(SetEnvironmentVariableW(L"LOCALAPPDATA",profile.c_str())&&SetEnvironmentVariableW(L"OPENPUZZLE_EXECUTION_SLOT",nullptr),"CLI test environment setup failed");
  const auto cli=root/pathFromUtf8("executáveis ç 中文 & literal.exe");require(!fs::exists(cli),"CLI fixture path already exists");fs::copy_file(fs::absolute(argv[1]),cli);
- WindowsCliApplication app;std::ostringstream output;
+ WindowsCliApplication app({},[]{WindowsGpuInventory inventory;inventory.nativeCpuAvailable=true;inventory.logicalProcessors=8;inventory.systemMemoryMiB=16384;return inventory;});std::ostringstream output;
  require(app.run({},output)==0&&app.run({"version"},output)==0,"Default console information failed");
  require(!fs::exists(localPaths::root()),"Help or version created a profile");
  bool missing=false;require(!windowsFile::readPrivate(localPaths::root()/"not-created"/"state",missing)&&missing,"Missing parent directory is incorrectly treated as unavailable file");
@@ -35,7 +35,9 @@ int wmain(int argc,wchar_t** argv){try{
  auto execute=[&](const std::vector<std::string>& args,unsigned int code,const std::string& expected){
   auto process=WindowsEngineProcess::start(cli,args,root/("child-"+std::to_string(++child)));
   auto exit=process->wait(15000);if(!exit){process->stop(124);throw std::runtime_error("Native CLI exceeded its local command deadline");}
-  const auto text=read(process->logPath());if(*exit!=code||text.find(expected)==std::string::npos)throw std::runtime_error("Native CLI result differs: exit="+std::to_string(*exit)+"; expected="+std::to_string(code)+"; output="+text);
+  const auto text=read(process->logPath());
+  const bool unavailableHardware=args.front()=="doctor"&&*exit==2&&text.find("HARDWARE DIAGNOSTIC UNAVAILABLE")!=std::string::npos;
+  if((*exit!=code&&!unavailableHardware)||text.find(expected)==std::string::npos)throw std::runtime_error("Native CLI result differs: exit="+std::to_string(*exit)+"; expected="+std::to_string(code)+"; output="+text);
  };
  execute({"version"},0,"OpenPuzzle 1.0.46 Windows CLI preview");
  execute({"paths","--slot","cuda-2"},0,"client-cuda-2.state");

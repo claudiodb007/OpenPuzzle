@@ -12,12 +12,12 @@ try {
     if (-not $BinaryDirectory) { $BinaryDirectory = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'bin\windows-x64' }
     if (-not $ReportRoot) { $ReportRoot = Join-Path $env:USERPROFILE 'OpenPuzzle\relatorios\windows-platform' }
     $manifest = Get-Content -LiteralPath (Join-Path $BinaryDirectory 'BUILD_MANIFEST.json') -Raw | ConvertFrom-Json
-    if ($manifest.source_base -ne '5472e6274f8f89d2fab4475b6fc4867f0cd1a797' -or $manifest.architecture -ne 'x86_64') {
+    if ($manifest.source_base -ne 'c6224dc51483862482c0561b662c4e6d86bdae32' -or $manifest.architecture -ne 'x86_64') {
         throw 'Unexpected binary build identity.'
     }
-    $expected = @('HttpRangeClientTests.exe','HttpRequestPolicyTests.exe','PortableStorageTests.exe','WindowsEngineFixture.exe','WindowsEngineFormatTests.exe','WindowsEngineLifecycleTests.exe','WindowsHttpTransportTests.exe','WindowsProcessFixture.exe','WindowsProcessIdentityTests.exe','WindowsProcessRunnerTests.exe','WindowsRuntimeControlTests.exe','WindowsRuntimeRecordTests.exe','WindowsStorageIdentityTests.exe','WindowsExecutionStateTests.exe','WindowsExecutionSyncTests.exe','ClientRuntimeLoopTests.exe','PortableSolutionExporterTests.exe','WindowsRuntimeSessionTests.exe','RunCommandOptionsTests.exe','RunAssignmentPlanTests.exe','WindowsRunSessionTests.exe','WindowsCliApplicationTests.exe','openpuzzle.exe')
+    $expected = @('HttpRangeClientTests.exe','HttpRequestPolicyTests.exe','PortableStorageTests.exe','WindowsEngineFixture.exe','WindowsEngineFormatTests.exe','WindowsEngineLifecycleTests.exe','WindowsHttpTransportTests.exe','WindowsProcessFixture.exe','WindowsProcessIdentityTests.exe','WindowsProcessRunnerTests.exe','WindowsRuntimeControlTests.exe','WindowsRuntimeRecordTests.exe','WindowsStorageIdentityTests.exe','WindowsExecutionStateTests.exe','WindowsExecutionSyncTests.exe','ClientRuntimeLoopTests.exe','PortableSolutionExporterTests.exe','WindowsRuntimeSessionTests.exe','RunCommandOptionsTests.exe','RunAssignmentPlanTests.exe','WindowsRunSessionTests.exe','WindowsCliApplicationTests.exe','openpuzzle.exe','WindowsGpuDiscoveryTests.exe')
     $fileNames = @($manifest.files | ForEach-Object { $_.name } | Sort-Object)
-    if ($fileNames.Count -ne 23 -or @(Compare-Object $expected $fileNames).Count -ne 0) { throw 'Unexpected binary manifest files.' }
+    if ($fileNames.Count -ne 24 -or @(Compare-Object $expected $fileNames).Count -ne 0) { throw 'Unexpected binary manifest files.' }
     foreach ($file in $manifest.files) {
         $path = Join-Path $BinaryDirectory $file.name
         if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $file.sha256) { throw "Binary checksum mismatch: $($file.name)" }
@@ -28,14 +28,14 @@ try {
     $utf8 = New-Object System.Text.UTF8Encoding($false)
     $document = New-Object System.Xml.XmlDocument
     $suite = $document.CreateElement('testsuite')
-    $suite.SetAttribute('name','WindowsLocalCliFoundation')
-    $suite.SetAttribute('tests','20')
+    $suite.SetAttribute('name','WindowsHardwareDiscovery')
+    $suite.SetAttribute('tests','21')
     $null = $document.AppendChild($suite)
     $failed = 0
     $cli = (Resolve-Path -LiteralPath (Join-Path $BinaryDirectory 'openpuzzle.exe')).Path
     $fixture = (Resolve-Path -LiteralPath (Join-Path $BinaryDirectory 'WindowsProcessFixture.exe')).Path
     $engineFixture = (Resolve-Path -LiteralPath (Join-Path $BinaryDirectory 'WindowsEngineFixture.exe')).Path
-    foreach ($name in @('WindowsProcessRunnerTests','WindowsProcessIdentityTests','PortableStorageTests','WindowsStorageIdentityTests','WindowsRuntimeRecordTests','WindowsRuntimeControlTests','WindowsEngineFormatTests','WindowsEngineLifecycleTests','HttpRangeClientTests','HttpRequestPolicyTests','WindowsHttpTransportTests','WindowsExecutionStateTests','WindowsExecutionSyncTests','ClientRuntimeLoopTests','PortableSolutionExporterTests','WindowsRuntimeSessionTests','RunCommandOptionsTests','RunAssignmentPlanTests','WindowsRunSessionTests','WindowsCliApplicationTests')) {
+    foreach ($name in @('WindowsProcessRunnerTests','WindowsProcessIdentityTests','PortableStorageTests','WindowsStorageIdentityTests','WindowsRuntimeRecordTests','WindowsRuntimeControlTests','WindowsEngineFormatTests','WindowsEngineLifecycleTests','HttpRangeClientTests','HttpRequestPolicyTests','WindowsHttpTransportTests','WindowsExecutionStateTests','WindowsExecutionSyncTests','ClientRuntimeLoopTests','PortableSolutionExporterTests','WindowsRuntimeSessionTests','RunCommandOptionsTests','RunAssignmentPlanTests','WindowsRunSessionTests','WindowsCliApplicationTests', 'WindowsGpuDiscoveryTests')) {
         Write-Host "===== $name ====="
         $start = New-Object System.Diagnostics.ProcessStartInfo
         $start.FileName = (Resolve-Path -LiteralPath (Join-Path $BinaryDirectory ($name + '.exe'))).Path
@@ -84,19 +84,26 @@ try {
     $suite.SetAttribute('failures',[string]$failed)
     $document.Save((Join-Path $report 'test-results.xml'))
     Copy-Item -LiteralPath (Join-Path $BinaryDirectory 'BUILD_MANIFEST.json') -Destination $report
-    if ($failed -ne 0) { throw "$failed Windows test suite(s) failed. Send test-results.xml and the twenty logs." }
+    if ($failed -ne 0) { throw "$failed Windows test suite(s) failed. Send test-results.xml and the twenty-one logs." }
+    Write-Host '===== LOCAL CPU AND GPU INVENTORY ====='
+    $inventory = & $cli devices | Out-String
+    $inventoryExit = $LASTEXITCODE
+    [System.IO.File]::WriteAllText((Join-Path $report 'hardware-inventory.txt'),$inventory,$utf8)
+    Write-Host $inventory
+    if ($inventoryExit -notin @(0,2)) { throw "Hardware inventory command failed ($inventoryExit)." }
     $summary = @(
-        'Windows local CLI foundation: native execution validation passed',
+        'Windows CPU and GPU discovery foundation: native execution validation passed',
         "Linux source base: $($manifest.source_base)",
         "Port patch SHA-256: $($manifest.patch_sha256)",
         "Compiler: $($manifest.compiler) (cross-build)",
         'Architecture: x64',
-        'Native Windows executable tests: 20/20 passed',
+        'Native Windows executable tests: 21/21 passed',
+        "Real hardware diagnostic exit: $inventoryExit (0: enumeration completed; 2: hardware query unavailable)",
         'MSVC build validation: pending; use validate-windows.ps1',
         ('Windows CLI executable: ' + $cli),
-        'Windows CLI preview: local commands available; standalone GPU search and UI pending',
+        'Windows CLI preview: CPU/KeyHunt and GPU/CUDA/OpenCL diagnostics available; search engines and UI pending',
         'Full Windows application: not yet ported',
-        'Only local processes and a loopback HTTP fixture were used; no production assignments requested.',
+        'Only local processes, read-only driver enumeration and a loopback HTTP fixture were used; no production assignments requested.',
         "Report: $report"
     ) -join "`n"
     [System.IO.File]::WriteAllText((Join-Path $report 'SUMMARY.txt'),$summary,$utf8)

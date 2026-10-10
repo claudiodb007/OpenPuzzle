@@ -576,3 +576,66 @@ Still pending: real engine Windows builds/provenance, GPU discovery/telemetry,
 benchmark/profile provider, enabled standalone run, Kangaroo and recovery,
 production HTTPS acceptance, desktop UI and installer. The full Linux application,
 Linux release 1.0.46, installations, live runtimes and release tags are unchanged.
+
+## Native CPU and CUDA/OpenCL discovery (base c6224dc)
+
+The local CLI stage is already committed as
+c6224dc51483862482c0561b662c4e6d86bdae32. User reports prove 163 full Linux
+suites, 11 isolated Linux suites and 20 native Windows/MSVC x64 suites.
+This stage retains those components and adds read-only hardware discovery.
+
+`openpuzzle devices` reports native x64 CPU logical processors and physical
+memory, the CPU/KeyHunt engine requirement, and independent CUDA and OpenCL
+inventories. It works without LOCALAPPDATA or an execution slot. Extra options,
+including --slot, are rejected before driver queries. It creates no profile or
+client identity and sends no network request. Doctor also includes this inventory.
+KeyHunt remains the CPU engine in RunCommandOptions/WindowsRunSession; CPU
+assignments and direct argument routing already have regression fixtures.
+The Windows KeyHunt executable, provenance, self-test and benchmark are still
+required before the standalone client can search. An OpenCL CPU device is not
+treated as a GPU or as proof that KeyHunt is available.
+
+CUDA uses the x64 CUDA Driver API from the absolute Windows system nvcuda.dll:
+initialization, driver version, device count, name, memory and multiprocessors.
+No CUDA Toolkit, nvidia-smi, context, kernel or search process is required.
+OpenCL uses the absolute Windows system OpenCL.dll to enumerate all platforms
+and devices, then filters CL_DEVICE_TYPE_GPU. Native platform and device
+positions are retained even when an earlier device is a CPU. A separate flattened
+inventory index is diagnostic only; it is not asserted to match BitCrack's index.
+Memory sizes use the documented 64-bit ABI. Strings, counts, returned sizes,
+duplicate handles and driver failures are validated; partial failing backend
+inventories are discarded. Loading uses LOAD_LIBRARY_SEARCH_SYSTEM32 with no
+current-directory, application-directory or PATH fallback.
+
+Missing driver libraries, no devices and query errors are distinct. Missing CUDA
+is expected on an AMD-only PC and does not block the independent CPU/OpenCL
+inventory. CUDA errors do not hide OpenCL devices, or vice versa. Exit 0 means
+enumeration completed (possibly without a GPU); exit 2 means at least one native
+hardware query was unavailable. Neither exit proves an engine, kernel, benchmark
+or production search is ready. CL_DEVICE_AVAILABLE/COMPILER_AVAILABLE are driver
+properties, not substitute engine tests. Existing runtime/configuration uncertainty
+continues to be preserved by doctor. Its local CLI fixture injects a deterministic
+inventory; the real executable separately accepts and identifies hardware-query
+failure so regression results do not depend on a physical GPU.
+
+WindowsGpuDiscoveryTests covers AMD and future NVIDIA inventories, mixed CPU/GPU
+platforms, more than 4 GiB of memory, unavailable devices, API failures, malformed
+driver output, bounded allocations, absolute system paths and profile-free CLI
+dispatch. The package registers 21 native Windows suites and contains 24 x64
+executables (21 tests, two helpers and the CLI). The validators also capture
+`hardware-inventory.txt` from the real PC after the fixture tests, recording its
+separate diagnostic exit code. A fixture pass is not physical GPU acceptance.
+Linux counts stay 163 full and 11 isolated suites. New native Windows/MSVC
+execution is pending until the user runs this package.
+
+Remaining work includes native KeyHunt CPU and BitCrack CUDA/OpenCL engine builds,
+verified device mapping, kernel tests, benchmark/profile providers, GPU telemetry,
+enabled standalone run, UI and packaging. AMD RX 5700 XT is the current test PC;
+NVIDIA acceptance will use the user's later NVIDIA PC. No GPU model is hardcoded
+in production discovery, and no product version, release tag or install changes.
+
+Primary API references:
+- https://docs.nvidia.com/cuda/cuda-driver-api/cuda_driver_api/group__CUDA__DEVICE.html
+- https://registry.khronos.org/OpenCL/specs/unified/refpages/man/html/clGetDeviceIDs.html
+- https://registry.khronos.org/OpenCL/specs/unified/refpages/man/html/clGetDeviceInfo.html
+- https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryexa

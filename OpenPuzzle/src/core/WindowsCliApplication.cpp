@@ -55,7 +55,8 @@ std::set<std::string> slots(const std::string& selected){
  }if(e)throw std::runtime_error("Pending claim directory inspection failed");return all;
 }
 }
-WindowsCliApplication::WindowsCliApplication(WindowsRunDependencies dependencies):dependencies_(std::move(dependencies)){}
+WindowsCliApplication::WindowsCliApplication(WindowsRunDependencies dependencies,std::function<WindowsGpuInventory()> discovery)
+ :dependencies_(std::move(dependencies)),discovery_(std::move(discovery)){}
 int WindowsCliApplication::run(const std::vector<std::string>& arguments,std::ostream& out){
  try{
   std::vector<std::string> args;std::string selected;bool explicitSlot=false;
@@ -67,8 +68,14 @@ int WindowsCliApplication::run(const std::vector<std::string>& arguments,std::os
   if(command=="help"||command=="--help"||command=="-h"||command=="version"||command=="--version"||command=="-V"){
    if(args.size()>1||explicitSlot)throw std::invalid_argument("Information command takes no additional arguments");
    if(command=="version"||command=="--version"||command=="-V")out<<"OpenPuzzle 1.0.46 Windows CLI preview\n";
-   else out<<"OpenPuzzle Windows CLI preview\nhelp | version | paths | doctor --offline | status [--all] [--slot NAME]\nstop | safestop [--slot NAME]\nrun [puzzle] [options] [--slot NAME]\nSearch is not enabled in this preview; engine, hardware and benchmark setup is pending.\nNo automatic start or production request is made by local commands.\n";
+   else out<<"OpenPuzzle Windows CLI preview\nhelp | version | devices | paths | doctor --offline | status [--all] [--slot NAME]\nstop | safestop [--slot NAME]\nrun [puzzle] [options] [--slot NAME]\nCPU: KeyHunt | GPU: BitCrack CUDA/OpenCL\nSearch is not enabled in this preview; engine executables and benchmark setup are pending.\nNo automatic start or production request is made by local commands.\n";
    return 0;
+  }
+  if(command=="devices"){
+   if(args.size()!=1||explicitSlot)throw std::invalid_argument("Devices takes no options or execution slot");
+   if(!discovery_)throw std::runtime_error("Hardware discovery provider is missing");
+   const auto inventory=discovery_();out<<formatWindowsGpuInventory(inventory);
+   return windowsGpuDiscoveryHasError(inventory)?2:0;
   }
   // Validate the entire command before reading paths or changing a slot.
   if(command=="paths"||command=="stop"||command=="safestop"){if(args.size()!=1)throw std::invalid_argument("Local command takes no extra options");}
@@ -100,8 +107,11 @@ int WindowsCliApplication::run(const std::vector<std::string>& arguments,std::os
    if(present(configPath)){
     if(!ConfigurationManager::loadChecked())throw std::runtime_error("Existing configuration is invalid or unreadable; preserved without replacement");out<<"Configuration: readable\n";
    }else out<<"Configuration: missing; defaults not written\n";
-   out<<"Local data: "<<pathUtf8(localPaths::dataDirectory())<<"\nServer connection: SKIPPED\nGPU discovery/telemetry: PENDING\nSearch engines/benchmark profiles: PENDING\n";
-   const bool uncertain=status(selected,out);out<<"Status: "<<(uncertain?"BLOCKED (local state preserved)":"LOCAL DIAGNOSTICS PASSED; search provider pending")<<'\n';return uncertain?2:0;
+   out<<"Local data: "<<pathUtf8(localPaths::dataDirectory())<<"\nServer connection: SKIPPED\nGPU telemetry: PENDING\n";
+   if(!discovery_)throw std::runtime_error("Hardware discovery provider is missing");
+   const auto inventory=discovery_();out<<formatWindowsGpuInventory(inventory);
+   const bool uncertain=status(selected,out),hardwareError=windowsGpuDiscoveryHasError(inventory);
+   out<<"Status: "<<(uncertain?"BLOCKED (local state preserved)":hardwareError?"HARDWARE DIAGNOSTIC UNAVAILABLE; search provider pending":"LOCAL DIAGNOSTICS PASSED; search provider pending")<<'\n';return uncertain||hardwareError?2:0;
   }
   if(!dependencies_.preflight||!dependencies_.capabilities){out<<"Search unavailable in Windows CLI preview; engine, hardware and benchmark setup is pending\n";return 1;}
   SlotGuard guard(selected);return WindowsRunSession(dependencies_).run(args,out);
