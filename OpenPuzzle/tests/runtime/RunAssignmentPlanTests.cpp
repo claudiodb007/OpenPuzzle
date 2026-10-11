@@ -20,7 +20,11 @@ int main(){try{
  o=RunCommandOptions::parse({"run","--engine","keyhunt","--threads","4"});a.start="F";a.end="F";
  const auto cpu=RunAssignmentPlan::build(o,a,"fixture-client",work);
  require(cpu.state.blocks==0&&cpu.state.points==0&&cpu.state.threads==4&&cpu.targetFileContent==target+"\n","CPU plan lost target/thread metadata");
- require(std::find(cpu.arguments.begin(),cpu.arguments.end(),"F:F")!=cpu.arguments.end(),"One-key interval changed");
+#ifdef _WIN32
+ require(std::find(cpu.arguments.begin(),cpu.arguments.end(),"F:10")!=cpu.arguments.end(),"Windows KeyHunt lost the inclusive last key");
+#else
+ require(std::find(cpu.arguments.begin(),cpu.arguments.end(),"F:F")!=cpu.arguments.end(),"Legacy Linux one-key interval changed");
+#endif
  require(WindowsCommandLine::build("C:\\engine with spaces\\keyhunt.exe",cpu.arguments).find("&&")==std::string::npos,"Native arguments contain shell preparation");
  auto reject=[&](auto bad,auto options,const PuzzleExecutionMetadata* meta=nullptr){bool failed=false;try{RunAssignmentPlan::build(options,bad,"fixture-client",work,meta);}catch(const std::exception&){failed=true;}require(failed,"Unsafe assignment plan accepted");};
  auto bad=a;bad.assignmentId="../../outside";reject(bad,o);bad=a;bad.assignmentId="CON";

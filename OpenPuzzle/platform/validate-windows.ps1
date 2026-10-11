@@ -1,8 +1,8 @@
-param([string]$ReportRoot = '')
+﻿param([string]$ReportRoot = '')
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $project = Split-Path -Parent $PSScriptRoot
-$baseCommit = 'c6224dc51483862482c0561b662c4e6d86bdae32'
+$baseCommit = '5526521cce2158651d191cab138aea5725e37f78'
 $transcribing = $false
 $report = $null
 function Invoke-Native {
@@ -105,11 +105,11 @@ try {
     $generators = @($capabilities.generators | Where-Object { $_.name -match "^Visual Studio $major " })
     if ($generators.Count -ne 1) { throw 'CMake does not support this installed Visual Studio version. Update CMake or select a supported C++ toolchain.' }
     $generator = $generators[0].name
-    Write-Host '===== WINDOWS CPU AND GPU DISCOVERY ====='
+    Write-Host '===== WINDOWS CLIENT ENGINE BINDING ====='
     Write-Host "Linux source base: $baseCommit"
     Write-Host "Generator: $generator | Architecture: x64"
     $boost = Join-Path (Split-Path -Parent $project) 'third-party\include'
-    if (-not (Test-Path -LiteralPath (Join-Path $boost 'boost\property_tree\json_parser.hpp'))) { throw 'Bundled Boost headers are missing; extract the complete hardware discovery ZIP.' }
+    if (-not (Test-Path -LiteralPath (Join-Path $boost 'boost\property_tree\json_parser.hpp'))) { throw 'Bundled Boost headers are missing; extract the complete client engine binding ZIP.' }
     $build = Join-Path $report 'build'
     Invoke-Native -Tool $cmake -ToolArguments @('-S', $project, '-B', $build, '-G', $generator, '-A', 'x64', "-DCMAKE_GENERATOR_INSTANCE=$($installation.installationPath)", '-DOPENPUZZLE_BUILD_PLATFORM_TESTS_ONLY=ON', "-DOPENPUZZLE_PLATFORM_BOOST_INCLUDE_DIR=$boost")
     Invoke-Native -Tool $cmake -ToolArguments @('--build', $build, '--config', 'Release', '--parallel', '4')
@@ -117,18 +117,18 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'CTest registration failed.' }
     Write-Utf8 -Path (Join-Path $report 'registered-tests.json') -Text $registrationJson
     $registration = $registrationJson | ConvertFrom-Json
-    $expected = @('HttpRangeClientTests', 'HttpRequestPolicyTests', 'WindowsHttpTransportTests', 'PortableStorageTests', 'WindowsEngineFormatTests', 'WindowsEngineLifecycleTests', 'WindowsProcessIdentityTests', 'WindowsProcessRunnerTests', 'WindowsRuntimeControlTests', 'WindowsRuntimeRecordTests', 'WindowsStorageIdentityTests', 'WindowsExecutionStateTests', 'WindowsExecutionSyncTests', 'ClientRuntimeLoopTests', 'PortableSolutionExporterTests', 'WindowsRuntimeSessionTests', 'RunCommandOptionsTests', 'RunAssignmentPlanTests', 'WindowsRunSessionTests', 'WindowsCliApplicationTests', 'WindowsGpuDiscoveryTests')
+    $expected = @('HttpRangeClientTests', 'HttpRequestPolicyTests', 'WindowsHttpTransportTests', 'PortableStorageTests', 'WindowsEngineFormatTests', 'WindowsEngineLifecycleTests', 'WindowsProcessIdentityTests', 'WindowsProcessRunnerTests', 'WindowsRuntimeControlTests', 'WindowsRuntimeRecordTests', 'WindowsStorageIdentityTests', 'WindowsExecutionStateTests', 'WindowsExecutionSyncTests', 'ClientRuntimeLoopTests', 'PortableSolutionExporterTests', 'WindowsRuntimeSessionTests', 'RunCommandOptionsTests', 'RunAssignmentPlanTests', 'WindowsRunSessionTests', 'WindowsCliApplicationTests', 'WindowsGpuDiscoveryTests', 'WindowsEngineRangeTests', 'WindowsEngineBindingTests', 'WindowsKeyHuntProtocolTests')
     $registered = @($registration.tests | ForEach-Object { $_.name } | Sort-Object)
-    if ($registered.Count -ne 21 -or @(Compare-Object $expected $registered).Count -ne 0) {
-        throw 'CTest must register exactly the twenty-one Windows platform and hardware suites.'
+    if ($registered.Count -ne 24 -or @(Compare-Object $expected $registered).Count -ne 0) {
+        throw 'CTest must register exactly the twenty-four Windows platform and hardware suites.'
     }
     $junit = Join-Path $report 'ctest-results.xml'
     Invoke-Native -Tool $ctest -ToolArguments @('--test-dir', $build, '-C', 'Release', '--output-on-failure', '--no-tests=error', '--output-junit', $junit)
     [xml]$result = Get-Content -LiteralPath $junit -Raw
     $cases = @($result.SelectNodes('//testcase'))
     $names = @($cases | ForEach-Object { $_.GetAttribute('name') } | Sort-Object)
-    if ($cases.Count -ne 21 -or @(Compare-Object $expected $names).Count -ne 0) {
-        throw 'JUnit does not prove execution of all twenty-one registered Windows suites.'
+    if ($cases.Count -ne 24 -or @(Compare-Object $expected $names).Count -ne 0) {
+        throw 'JUnit does not prove execution of all twenty-four registered Windows suites.'
     }
     foreach ($case in $cases) {
         if (@($case.SelectNodes('failure|error|skipped')).Count -ne 0 -or $case.GetAttribute('status') -notin @('', 'run', 'pass', 'passed')) {
@@ -148,14 +148,14 @@ try {
     Write-Host $inventory
     if ($inventoryExit -notin @(0,2)) { throw "Hardware inventory command failed ($inventoryExit)." }
     $summary = @(
-        'Windows CPU and GPU discovery foundation: native validation passed',
+        'Windows client engine binding: native fixture validation passed',
         "Linux source base: $baseCommit",
         "Generator: $generator",
         'Architecture: x64',
-        'Native Windows tests: 21/21 passed',
+        'Native Windows tests: 24/24 passed',
         "Real hardware diagnostic exit: $inventoryExit (0: enumeration completed; 2: hardware query unavailable)",
         ('Windows CLI executable: ' + (Join-Path $build 'platform\Release\openpuzzle.exe')),
-        'Windows CLI preview: CPU/KeyHunt and GPU/CUDA/OpenCL diagnostics available; search engines and UI pending',
+        'Windows CLI preview: native local CPU/CUDA/OpenCL selftest and benchmark commands available; assignment launch and UI pending',
         'Full Windows application: not yet ported',
         'Only local processes, read-only driver enumeration and a loopback HTTP fixture were used; no production assignments requested.',
         "Report: $report"

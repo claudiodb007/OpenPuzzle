@@ -19,7 +19,9 @@ int wmain(int argc,wchar_t** argv){try{
    if(!fs::exists(argv[2]))return 12;
    const std::wstring finish=argv[4];
    if(finish==L"proof")std::cout<<"Reached end of keyspace"<<std::endl;
-   if(finish==L"keyhunt")std::cout<<"End"<<std::endl;
+   if(finish==L"keyhunt")std::cout<<"End\nOPENPUZZLE_RANGE_DONE keys_checked=16"<<std::endl;
+   if(finish==L"keyhunt-short")std::cout<<"End\nOPENPUZZLE_RANGE_DONE keys_checked=8"<<std::endl;
+   if(finish==L"keyhunt-bare")std::cout<<"End"<<std::endl;
    if(finish==L"large")ExitProcess(0x80000000UL);
    return finish==L"failed"?7:0;
  }
@@ -29,7 +31,7 @@ int wmain(int argc,wchar_t** argv){try{
    if(!writePrivateFileAtomically(fs::current_path()/"fixture-arguments.txt",received))return 13;
    std::cout<<"GPU fixture 12.50 MKey/s (8 total)"<<std::endl;
    Sleep(100);
-   if(mode==L"-m")std::cout<<"End"<<std::endl;
+   if(mode==L"-m")std::cout<<"End\nOPENPUZZLE_RANGE_DONE keys_checked=16"<<std::endl;
    else std::cout<<"Reached end of keyspace"<<std::endl;
    return 0;
  }

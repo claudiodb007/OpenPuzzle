@@ -37,17 +37,17 @@ KeyHuntProgressParser::parseLine(
        * private scalars, so the public counter is divided
        * by two.
        */
-      candidateTotal /= 2;
+      if(protocol_==CountProtocol::PrivateScalars &&
+          candidateTotal>cpp_int("18446744073709551615"))return std::nullopt;
+      if(protocol_==CountProtocol::LegacyCompressedHashes)candidateTotal /= 2;
       progress.keysChecked =
           candidateTotal.str();
 
       const double candidateKeysPerSecond =
           std::stod(match[2].str());
 
-      progress.speedMKeys =
-          candidateKeysPerSecond /
-          2.0 /
-          1000000.0;
+      progress.speedMKeys = candidateKeysPerSecond / 1000000.0;
+      if(protocol_==CountProtocol::LegacyCompressedHashes)progress.speedMKeys /= 2.0;
     } catch (...) {
       return std::nullopt;
     }
@@ -55,7 +55,18 @@ KeyHuntProgressParser::parseLine(
     return progress;
   }
 
-  if (std::regex_match(
+  if(protocol_==CountProtocol::PrivateScalars) {
+  // Protocol 1 proves the exact scalar count. A bare End is not this proof.
+  static const std::regex completed(R"(^OPENPUZZLE_RANGE_DONE keys_checked=([0-9]+)$)");
+  if(std::regex_match(line,match,completed)) {
+    try {
+      const boost::multiprecision::cpp_int count(match[1].str());
+      if(count<0||count>boost::multiprecision::cpp_int("18446744073709551615"))return std::nullopt;
+      ExecutionProgress progress;progress.finished=true;progress.keysChecked=count.str();
+      progress.message="OPENPUZZLE_RANGE_DONE";return progress;
+    }catch(...){return std::nullopt;}
+  }
+  } else if (std::regex_match(
           line,
           finishedPattern)) {
     ExecutionProgress progress;

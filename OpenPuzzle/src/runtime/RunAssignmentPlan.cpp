@@ -1,4 +1,5 @@
 #include "openpuzzle/runtime/RunAssignmentPlan.hpp"
+#include "openpuzzle/runtime/WindowsEngineRange.hpp"
 #include "openpuzzle/core/LocalPaths.hpp"
 #include <algorithm>
 #include <regex>
@@ -45,7 +46,13 @@ RunAssignmentPlan RunAssignmentPlan::build(const RunCommandOptions& o,const clie
  s.target=a.target;s.start=start;s.end=end;s.engine=o.engine=="bitcrack"?"BitCrack":"KeyHunt";s.backend=o.backend;s.device=o.device;
  s.blocks=o.backend=="cpu"?0:o.blocks;s.threads=o.threads;s.points=o.backend=="cpu"?0:o.points;s.workspace=pathUtf8(workspace);
  if(o.engine=="bitcrack")plan.arguments={a.target,"--keyspace",start+":"+end,"--out",pathUtf8(workspace/"found.txt"),"-d",std::to_string(o.device),"-b",std::to_string(o.blocks),"-t",std::to_string(o.threads),"-p",std::to_string(o.points)};
- else {plan.arguments={"-m","address","-f",pathUtf8(workspace/"targets.txt"),"-r",start+":"+end,"-l","compress","-n","1024","-q","-s","1","-t",std::to_string(o.threads)};plan.targetFileContent=a.target+"\n";}
+ else {
+#ifdef _WIN32
+ const auto cpuEnd=WindowsEngineRange::keyhuntExclusiveEnd(start,end);
+#else
+ const auto& cpuEnd=end;
+#endif
+ plan.arguments={"-m","address","-f",pathUtf8(workspace/"targets.txt"),"-r",start+":"+cpuEnd,"-l","compress","-n","1024","-q","-s","1","-t",std::to_string(o.threads)};plan.targetFileContent=a.target+"\n";}
  return plan;
 }
 }

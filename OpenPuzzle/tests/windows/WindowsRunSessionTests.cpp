@@ -50,7 +50,7 @@ int wmain(int argc,wchar_t** argv){try{
  }
  for(const bool cpu:{false,true}){
   int claims=0,complete=0;RunServer server([&](const auto& request){
-    if(endpoint(request,"/api/range/claim")){++claims;require(request.find("\"puzzle\":0")!=std::string::npos&&request.find("\"target_duration_minutes\":5")!=std::string::npos,"Automatic puzzle/duration claim changed");return assigned(cpu?"cpu-once":"gpu-once");}
+    if(endpoint(request,"/api/range/claim")){++claims;require(request.find("\"puzzle\":0")!=std::string::npos&&request.find("\"target_duration_minutes\":5")!=std::string::npos,"Automatic puzzle/duration claim changed");return assigned(cpu?"cpu-once":"gpu-once",cpu?"1":"0",cpu?"10":"F");}
     if(endpoint(request,"/api/range/complete")){++complete;require(request.find("\"status\":\"completed\"")!=std::string::npos&&request.find("\"keys_checked\":\"16\"")!=std::string::npos,"Completion did not preserve full inclusive coverage");}
     else require(endpoint(request,"/api/client/register")||endpoint(request,"/api/client/heartbeat")||endpoint(request,"/api/range/progress"),"Unexpected native command endpoint");return std::string("{}");
   });

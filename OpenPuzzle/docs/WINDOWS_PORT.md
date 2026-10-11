@@ -639,3 +639,12 @@ Primary API references:
 - https://registry.khronos.org/OpenCL/specs/unified/refpages/man/html/clGetDeviceIDs.html
 - https://registry.khronos.org/OpenCL/specs/unified/refpages/man/html/clGetDeviceInfo.html
 - https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryexa
+
+## Native client engine binding
+
+The standalone Windows KeyHunt, OpenCL and CUDA engines passed native MSVC
+synthetic searches and local benchmarks on the user RTX 3080 system.
+The next client binding stage adds explicit local `selftest` and `benchmark`
+commands, exact inclusive-to-exclusive CPU range conversion and scalar counter
+parsing. See [WINDOWS_ENGINE_BINDING.md](WINDOWS_ENGINE_BINDING.md). Production
+assignment/solution/recovery integration and UI remain pending.

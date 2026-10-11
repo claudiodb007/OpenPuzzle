@@ -106,7 +106,8 @@ public:
 
   static bool hasCompletionProof(
       const std::string& workspace,
-      const std::string& engine = {});
+      const std::string& engine = {},
+      const std::string& expectedKeys = {});
 
   static std::optional<std::string>
   assignedKeyCount(

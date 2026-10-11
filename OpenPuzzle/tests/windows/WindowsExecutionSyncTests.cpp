@@ -86,7 +86,16 @@ int wmain(int argc,wchar_t** argv) {
       auto state=assignment(root,"fixture-keyhunt");state.engine="KeyHunt";
       auto engine=startWindowsExecution(fixture,{"execution",pathUtf8(root/"keyhunt-gate"),pathUtf8(root/"keyhunt-ready"),"keyhunt"},state);
       waitFile(root/"keyhunt-ready");publish(root/"keyhunt-gate");require(engine->wait(2000)==0,"KeyHunt fixture failed");
-      {Server server;auto result=sync.tick(server.url(),"cuda-5");require(result.completionUploaded&&result.stateRemoved,"Exact KeyHunt End proof was not accepted");require(server.body().find("\"keys_checked\":\"16\"")!=std::string::npos,"KeyHunt exact coverage missing");}
+      {Server server;auto result=sync.tick(server.url(),"cuda-5");require(result.completionUploaded&&result.stateRemoved,"Exact Windows KeyHunt scalar-count proof was not accepted");require(server.body().find("\"keys_checked\":\"16\"")!=std::string::npos,"KeyHunt exact coverage missing");}
+    }
+    for(const auto finish:{"keyhunt-short","keyhunt-bare"}) {
+      auto state=assignment(root,std::string("fixture-")+finish);state.engine="KeyHunt";
+      const auto gate=root/(std::string(finish)+"-gate"),ready=root/(std::string(finish)+"-ready");
+      auto engine=startWindowsExecution(fixture,{"execution",pathUtf8(gate),pathUtf8(ready),finish},state);
+      waitFile(ready);publish(gate);require(engine->wait(2000)==0,"Invalid KeyHunt proof fixture failed");
+      auto result=sync.tick("file:///unused","cuda-5");
+      require(result.completionStatus==client::AssignmentUploadStatus::PermanentFailure&&!result.completionUploaded&&Store::load("cuda-5"),"Bare End or incomplete Windows scalar count acknowledged the whole range");
+      require(Store::remove("cuda-5"),"Incomplete KeyHunt proof state cleanup failed");
     }
     {
       auto state=assignment(root,"fixture-kangaroo");state.engine="Kangaroo";

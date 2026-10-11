@@ -2291,3 +2291,11 @@ foreach(name RunCommandOptionsTests RunAssignmentPlanTests)
     target_link_libraries(${name} PRIVATE OpenPuzzleCore)
     add_test(NAME ${name} COMMAND ${name})
 endforeach()
+
+add_executable(WindowsEngineRangeTests runtime/WindowsEngineRangeTests.cpp)
+target_include_directories(WindowsEngineRangeTests PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_test(NAME WindowsEngineRangeTests COMMAND WindowsEngineRangeTests)
+
+add_executable(WindowsKeyHuntProtocolTests windows/WindowsKeyHuntProtocolTests.cpp)
+target_link_libraries(WindowsKeyHuntProtocolTests PRIVATE OpenPuzzleCore)
+add_test(NAME WindowsKeyHuntProtocolTests COMMAND WindowsKeyHuntProtocolTests)

@@ -329,15 +329,16 @@ ExecutionSyncService::latestProgress(
 
 bool ExecutionSyncService::hasCompletionProof(
     const std::string& workspace,
-    const std::string& engine) {
+    const std::string& engine,
+    const std::string& expectedKeys) {
   if (engine.empty()) {
     return
         hasCompletionProof(
             workspace,
-            "BitCrack") ||
+            "BitCrack", expectedKeys) ||
         hasCompletionProof(
             workspace,
-            "KeyHunt");
+            "KeyHunt", expectedKeys);
   }
 
   /*
@@ -388,7 +389,7 @@ bool ExecutionSyncService::hasCompletionProof(
   }
 
   const auto provesCompletion =
-      [keyhunt, kangaroo](const std::string& record) {
+      [keyhunt, kangaroo, &expectedKeys](const std::string& record) {
         if (kangaroo) {
           /*
            * Pollard Kangaroo is probabilistic. A clean process exit or a
@@ -399,7 +400,13 @@ bool ExecutionSyncService::hasCompletionProof(
         }
 
         if (keyhunt) {
+#ifdef _WIN32
+          const auto parsed=EngineParserFactory::create("keyhunt")->parseLine(record);
+          return parsed&&parsed->finished&&!parsed->keysChecked.empty()&&
+              (expectedKeys.empty()||parsed->keysChecked==expectedKeys);
+#else
           return record == "End";
+#endif
         }
 
         return
@@ -944,7 +951,8 @@ ExecutionSyncService::tick(
   if (completed) {
     if (!hasCompletionProof(
             artifacts(*state),
-            state->engine)) {
+            state->engine,
+            assignedKeyCount(state->start,state->end).value_or(""))) {
       result.completionStatus =
           AssignmentUploadStatus::PermanentFailure;
 

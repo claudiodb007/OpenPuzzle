@@ -9,6 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(OPENPUZZLE_BUILD_PLATFORM_TESTS_ONLY
        "Build isolated process, storage and control tests without engines or GPU discovery" OFF)
 if(OPENPUZZLE_BUILD_PLATFORM_TESTS_ONLY)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     enable_testing()
     add_subdirectory(platform)
     return()
