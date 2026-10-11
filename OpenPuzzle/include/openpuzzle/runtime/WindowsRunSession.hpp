@@ -26,6 +26,7 @@ class WindowsRunSession {
 public:
   explicit WindowsRunSession(WindowsRunDependencies dependencies);
   int run(const std::vector<std::string>& arguments,std::ostream& output);
+  int runPrepared(RunCommandOptions options,std::ostream& output);
   static std::filesystem::path pendingClaimPath(const std::string& slot);
 private:
   WindowsRunDependencies dependencies_;

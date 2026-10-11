@@ -662,3 +662,16 @@ numeric arguments before opening or creating the local database. Regression
 coverage uses temporary homes and invalid requests, without searches or real
 assignment requests. This change does not introduce a general parser for string
 options or alter engine-specific maximum launch sizes.
+
+### Windows measured engine runs and recovery
+
+Windows `run` requires an explicit sustained benchmark profile and server. The
+provider binds backend/device/launch parameters and planning speed to the exact
+executable fingerprint and native inventory. Preflight performs enumeration
+without a search or client identity; changed parameters/binaries are refused.
+
+`recover` reconciles the persisted receipt and stopped execution generation,
+using the same stable identity and server. It cannot restart or claim another
+range. Network/identity/storage ambiguity preserves local files. Solutions from
+KeyHunt's native result file are exported privately and retained for review;
+failed export blocks the Windows review notification. See WINDOWS_NATIVE_RUN.md.

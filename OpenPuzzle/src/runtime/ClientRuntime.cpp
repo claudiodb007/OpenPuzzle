@@ -405,7 +405,12 @@ int ClientRuntime::run(
               << "Search engine....... stopped\n";
         }
 
-        exportDetectedSolution(finalSync);
+        const bool exported = exportDetectedSolution(finalSync);
+#ifdef _WIN32
+        if (!exported) return 1;
+#else
+        (void)exported;
+#endif
         reportDetectedSolution();
 
       return SolutionFoundExitCode;
@@ -554,7 +559,12 @@ int ClientRuntime::run(
         }
       }
 
-      exportDetectedSolution(result);
+      const bool exported = exportDetectedSolution(result);
+#ifdef _WIN32
+      if (!exported) return 1;
+#else
+      (void)exported;
+#endif
       reportDetectedSolution();
 
       return SolutionFoundExitCode;

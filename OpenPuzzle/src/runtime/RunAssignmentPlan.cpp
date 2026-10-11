@@ -53,6 +53,9 @@ RunAssignmentPlan RunAssignmentPlan::build(const RunCommandOptions& o,const clie
  const auto& cpuEnd=end;
 #endif
  plan.arguments={"-m","address","-f",pathUtf8(workspace/"targets.txt"),"-r",start+":"+cpuEnd,"-l","compress","-n","1024","-q","-s","1","-t",std::to_string(o.threads)};plan.targetFileContent=a.target+"\n";}
+#ifdef _WIN32
+ if(o.engine=="bitcrack")plan.arguments.push_back("-c");
+#endif
  return plan;
 }
 }

@@ -648,3 +648,11 @@ The next client binding stage adds explicit local `selftest` and `benchmark`
 commands, exact inclusive-to-exclusive CPU range conversion and scalar counter
 parsing. See [WINDOWS_ENGINE_BINDING.md](WINDOWS_ENGINE_BINDING.md). Production
 assignment/solution/recovery integration and UI remain pending.
+
+## Measured run and recovery stage
+
+The client engine binding base `2df6989` now has an explicit measured-profile
+provider and recovery command. See [WINDOWS_NATIVE_RUN.md](WINDOWS_NATIVE_RUN.md)
+for exact scope, source/benchmark verification, protected KeyHunt exports,
+conservative receipt handling and the loopback-only real-engine validation.
+This stage does not establish production operation or a Windows UI/installer.

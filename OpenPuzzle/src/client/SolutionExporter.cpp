@@ -17,6 +17,7 @@
 #ifdef _WIN32
 #include "openpuzzle/core/AtomicFile.hpp"
 #include "openpuzzle/core/WindowsPrivateFile.hpp"
+#include "openpuzzle/engines/KeyHuntSolutionRecord.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #else
 #include <fcntl.h>
@@ -550,6 +551,14 @@ SolutionExporter::exportSolution(
       engine == "kangaroo" ||
       engine == "psckangaroo";
 
+#ifdef _WIN32
+  if (engine == "keyhunt") {
+    try { privateKey = keyHuntSolutionKey(record,state.target,state.start,state.end); }
+    catch(const std::exception& error) { result.error=error.what();return result; }
+    address=state.target;result.format="hexadecimal (compressed public key)";
+    privateKeyLabel="Private key (hex):";
+  } else
+#endif
   if (kangaroo &&
       record.size() == 1 &&
       valueAfter(

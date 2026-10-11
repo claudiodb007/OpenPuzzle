@@ -2,7 +2,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $project = Split-Path -Parent $PSScriptRoot
-$baseCommit = '5526521cce2158651d191cab138aea5725e37f78'
+$baseCommit = '2df6989adc46a7d1ce494228b762752bb7da093d'
 $transcribing = $false
 $report = $null
 function Invoke-Native {
@@ -67,7 +67,7 @@ try {
     if ([Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT -or -not [Environment]::Is64BitOperatingSystem) {
         throw 'Run this script on native Windows x64, not WSL.'
     }
-    if (-not $ReportRoot) { $ReportRoot = Join-Path $env:USERPROFILE 'OpenPuzzle\relatorios\windows-platform' }
+    if (-not $ReportRoot) { $ReportRoot = Join-Path $env:USERPROFILE 'op' }
     $null = New-Item -ItemType Directory -Force -Path $ReportRoot
     $report = Join-Path $ReportRoot ('platform-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0,8))
     $null = New-Item -ItemType Directory -Path $report
@@ -105,7 +105,7 @@ try {
     $generators = @($capabilities.generators | Where-Object { $_.name -match "^Visual Studio $major " })
     if ($generators.Count -ne 1) { throw 'CMake does not support this installed Visual Studio version. Update CMake or select a supported C++ toolchain.' }
     $generator = $generators[0].name
-    Write-Host '===== WINDOWS CLIENT ENGINE BINDING ====='
+    Write-Host '===== WINDOWS NATIVE RUN AND RECOVERY ====='
     Write-Host "Linux source base: $baseCommit"
     Write-Host "Generator: $generator | Architecture: x64"
     $boost = Join-Path (Split-Path -Parent $project) 'third-party\include'
@@ -117,18 +117,18 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'CTest registration failed.' }
     Write-Utf8 -Path (Join-Path $report 'registered-tests.json') -Text $registrationJson
     $registration = $registrationJson | ConvertFrom-Json
-    $expected = @('HttpRangeClientTests', 'HttpRequestPolicyTests', 'WindowsHttpTransportTests', 'PortableStorageTests', 'WindowsEngineFormatTests', 'WindowsEngineLifecycleTests', 'WindowsProcessIdentityTests', 'WindowsProcessRunnerTests', 'WindowsRuntimeControlTests', 'WindowsRuntimeRecordTests', 'WindowsStorageIdentityTests', 'WindowsExecutionStateTests', 'WindowsExecutionSyncTests', 'ClientRuntimeLoopTests', 'PortableSolutionExporterTests', 'WindowsRuntimeSessionTests', 'RunCommandOptionsTests', 'RunAssignmentPlanTests', 'WindowsRunSessionTests', 'WindowsCliApplicationTests', 'WindowsGpuDiscoveryTests', 'WindowsEngineRangeTests', 'WindowsEngineBindingTests', 'WindowsKeyHuntProtocolTests')
+    $expected = @('HttpRangeClientTests', 'HttpRequestPolicyTests', 'WindowsHttpTransportTests', 'PortableStorageTests', 'WindowsEngineFormatTests', 'WindowsEngineLifecycleTests', 'WindowsProcessIdentityTests', 'WindowsProcessRunnerTests', 'WindowsRuntimeControlTests', 'WindowsRuntimeRecordTests', 'WindowsStorageIdentityTests', 'WindowsExecutionStateTests', 'WindowsExecutionSyncTests', 'ClientRuntimeLoopTests', 'PortableSolutionExporterTests', 'WindowsRuntimeSessionTests', 'RunCommandOptionsTests', 'RunAssignmentPlanTests', 'WindowsRunSessionTests', 'WindowsCliApplicationTests', 'WindowsGpuDiscoveryTests', 'WindowsEngineRangeTests', 'WindowsEngineBindingTests', 'WindowsKeyHuntProtocolTests', 'WindowsRunProfileTests', 'KeyHuntSolutionRecordTests', 'WindowsNativeAssignmentTests', 'WindowsAssignmentRecoveryTests')
     $registered = @($registration.tests | ForEach-Object { $_.name } | Sort-Object)
-    if ($registered.Count -ne 24 -or @(Compare-Object $expected $registered).Count -ne 0) {
-        throw 'CTest must register exactly the twenty-four Windows platform and hardware suites.'
+    if ($registered.Count -ne 28 -or @(Compare-Object $expected $registered).Count -ne 0) {
+        throw 'CTest must register exactly the twenty-eight Windows platform and hardware suites.'
     }
     $junit = Join-Path $report 'ctest-results.xml'
     Invoke-Native -Tool $ctest -ToolArguments @('--test-dir', $build, '-C', 'Release', '--output-on-failure', '--no-tests=error', '--output-junit', $junit)
     [xml]$result = Get-Content -LiteralPath $junit -Raw
     $cases = @($result.SelectNodes('//testcase'))
     $names = @($cases | ForEach-Object { $_.GetAttribute('name') } | Sort-Object)
-    if ($cases.Count -ne 24 -or @(Compare-Object $expected $names).Count -ne 0) {
-        throw 'JUnit does not prove execution of all twenty-four registered Windows suites.'
+    if ($cases.Count -ne 28 -or @(Compare-Object $expected $names).Count -ne 0) {
+        throw 'JUnit does not prove execution of all twenty-eight registered Windows suites.'
     }
     foreach ($case in $cases) {
         if (@($case.SelectNodes('failure|error|skipped')).Count -ne 0 -or $case.GetAttribute('status') -notin @('', 'run', 'pass', 'passed')) {
@@ -148,14 +148,14 @@ try {
     Write-Host $inventory
     if ($inventoryExit -notin @(0,2)) { throw "Hardware inventory command failed ($inventoryExit)." }
     $summary = @(
-        'Windows client engine binding: native fixture validation passed',
+        'Windows native run and recovery: native fixture validation passed',
         "Linux source base: $baseCommit",
         "Generator: $generator",
         'Architecture: x64',
-        'Native Windows tests: 24/24 passed',
+        'Native Windows tests: 28/28 passed',
         "Real hardware diagnostic exit: $inventoryExit (0: enumeration completed; 2: hardware query unavailable)",
         ('Windows CLI executable: ' + (Join-Path $build 'platform\Release\openpuzzle.exe')),
-        'Windows CLI preview: native local CPU/CUDA/OpenCL selftest and benchmark commands available; assignment launch and UI pending',
+        'Windows CLI preview: measured-profile run and explicit recovery commands available; real engine assignment tests and UI pending',
         'Full Windows application: not yet ported',
         'Only local processes, read-only driver enumeration and a loopback HTTP fixture were used; no production assignments requested.',
         "Report: $report"

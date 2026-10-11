@@ -35,8 +35,11 @@ fs::path WindowsRunSession::pendingClaimPath(const std::string& slot){
  return localPaths::dataDirectory()/"pending-claims"/pathFromUtf8(slot+".json");
 }
 int WindowsRunSession::run(const std::vector<std::string>& arguments,std::ostream& output) {
+ try { return runPrepared(RunCommandOptions::parse(arguments),output); }
+ catch(const std::exception& error){output<<"Windows run refused: "<<error.what()<<'\n';return 1;}
+}
+int WindowsRunSession::runPrepared(RunCommandOptions options,std::ostream& output) {
  try {
-  auto options=RunCommandOptions::parse(arguments);
   if(options.command=="help") {output<<"Windows run controls: run [puzzle] [--once|--dry-run|--preflight-only] [--engine bitcrack|keyhunt] [--backend cuda|opencl|cpu] [--device N] [--threads N] [--duration-minutes 1..360] [--server URL]\nstatus | stop | safestop | version\n";return 0;}
   if(options.command=="version"){output<<"OpenPuzzle Windows run foundation (Linux source release 1.0.46)\n";return 0;}
   const auto slot=Store::executionSlot();const auto pending=pendingClaimPath(slot);
@@ -73,7 +76,7 @@ int WindowsRunSession::run(const std::vector<std::string>& arguments,std::ostrea
   if(options.backend!="cpu"&&std::find(chosen->devices.begin(),chosen->devices.end(),options.device)==chosen->devices.end())throw std::invalid_argument("Requested device is absent from the verified inventory");
   if(!dependencies_.preflight(options,*chosen))throw std::runtime_error("Windows engine/hardware/profile preflight refused this run");
   output<<"Engine: "<<options.engine<<"\nBackend: "<<options.backend<<"\nDevice: "<<options.device<<"\nTarget duration: "<<options.durationMinutes<<" minutes\n";
-  if(options.dryRun||options.preflightOnly){output<<"Local preflight only; no identity, registration, heartbeat, claim or engine launch\n";return 0;}
+  if(options.dryRun||options.preflightOnly){output<<"Local preflight only; no client identity, registration, heartbeat, claim or search launch\n";return 0;}
   const auto server=options.server.empty()?dependencies_.serverUrl:options.server;
   if(!client::HttpRequestPolicy::endpoint(server))throw std::invalid_argument("Invalid coordination URL");
   const auto clientId=client::ClientIdentity::loadOrCreate();if(clientId.empty())throw std::runtime_error("Stable Windows client identity unavailable");
@@ -104,6 +107,7 @@ int WindowsRunSession::run(const std::vector<std::string>& arguments,std::ostrea
     if(!writePrivateFileAtomically(pending,receipt(assignment,clientId,server,options)))throw std::runtime_error("Unable to persist claimed assignment; launch refused");
     const auto workspace=localPaths::dataDirectory()/"assignments"/pathFromUtf8(assignment.assignmentId);
     const auto plan=RunAssignmentPlan::build(options,assignment,clientId,workspace,metadata?&*metadata:nullptr);
+    if(!dependencies_.preflight(options,*chosen))throw std::runtime_error("Engine/profile changed after claim; receipt preserved and launch refused");
     if(present(workspace))throw std::runtime_error("Assignment workspace already exists; previous contents preserved");
     WorkspaceSecurity::prepare(workspace);
     if(!plan.targetFileContent.empty()&&!writePrivateFileAtomically(workspace/"targets.txt",plan.targetFileContent))throw std::runtime_error("Unable to publish private engine targets");

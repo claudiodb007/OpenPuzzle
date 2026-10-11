@@ -20,6 +20,8 @@ public:
   void describe(std::ostream& output) const;
   static std::filesystem::path defaultFolder();
   static std::string executableSha256(const std::filesystem::path& executable);
+  static std::string inspectDevice(const std::filesystem::path& executable,
+      const std::string& backend,int device,int threads);
 private:
   std::filesystem::path folder_;
 };

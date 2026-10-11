@@ -3,10 +3,11 @@
 #include <vector>
 namespace openpuzzle {
 struct RunCommandOptions {
-  std::string command="run", server, engine, backend;
+  std::string command="run", server, engine, backend, profile;
   int puzzle=0,device=0,blocks=256,threads=256,points=256,durationMinutes=60;
   bool once=false,dryRun=false,preflightOnly=false;
   bool gpuOptionsSpecified=false,threadsSpecified=false;
+  bool deviceSpecified=false,blocksSpecified=false,pointsSpecified=false;
   static RunCommandOptions parse(const std::vector<std::string>& arguments);
 };
 }

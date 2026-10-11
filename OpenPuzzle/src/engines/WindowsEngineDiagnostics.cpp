@@ -154,6 +154,12 @@ void WindowsEngineDiagnostics::describe(std::ostream& out)const{
  for(const auto backend:{"cpu","cuda","opencl"}){const auto path=folder_/filename(backend);std::error_code error;
   out<<backend<<": "<<(windowsFile::safePath(path)&&fs::is_regular_file(path,error)&&!error?"PRESENT (self-test required)":"MISSING")<<'\n';}
 }
+std::string WindowsEngineDiagnostics::inspectDevice(const fs::path& exe,const std::string& backend,int device,int threads){
+ WindowsEngineCheckOptions o;o.backend=backend;o.device=device;o.threads=threads;
+ static std::atomic<unsigned long long> next{0};
+ const auto work=localPaths::dataDirectory()/"engine-preflight"/pathFromUtf8(std::to_string(GetCurrentProcessId())+'-'+std::to_string(GetTickCount64())+'-'+std::to_string(next++));
+ WorkspaceSecurity::prepare(work);return deviceIdentity(exe,o,work);
+}
 int WindowsEngineDiagnostics::run(const std::vector<std::string>& arguments,std::ostream& out)const {
  fs::path report;
  try{const auto o=WindowsEngineCheckOptions::parse(arguments);const auto exe=folder_/filename(o.backend);

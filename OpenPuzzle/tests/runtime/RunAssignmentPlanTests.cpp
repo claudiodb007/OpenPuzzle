@@ -15,7 +15,11 @@ int main(){try{
  PuzzleExecutionMetadata m;m.puzzle=71;m.address=target;m.keyspace="0:FF";
  const auto p=RunAssignmentPlan::build(o,a,"fixture-client",work,&m);
  require(p.state.start=="A"&&p.state.end=="F"&&p.state.assignmentId==a.assignmentId&&p.state.device==2,"Exact assignment metadata changed");
- require(p.arguments==std::vector<std::string>{target,"--keyspace","A:F","--out",pathUtf8(work/"found.txt"),"-d","2","-b","256","-t","256","-p","256"},"Direct BitCrack argument contract changed");
+ auto expected=std::vector<std::string>{target,"--keyspace","A:F","--out",pathUtf8(work/"found.txt"),"-d","2","-b","256","-t","256","-p","256"};
+#ifdef _WIN32
+ expected.push_back("-c");
+#endif
+ require(p.arguments==expected,"Direct BitCrack argument contract changed");
  require(p.targetFileContent.empty()&&!std::filesystem::exists(work),"Planning had filesystem side effects");
  o=RunCommandOptions::parse({"run","--engine","keyhunt","--threads","4"});a.start="F";a.end="F";
  const auto cpu=RunAssignmentPlan::build(o,a,"fixture-client",work);

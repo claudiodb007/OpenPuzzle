@@ -44,7 +44,7 @@ int wmain(int argc,wchar_t** argv){try{
  execute({"doctor","--offline"},0,"Server connection: SKIPPED");
  execute({"status","--all"},0,"Runtime: idle");
  execute({"run","--once","--device","0x"},1,"refused");
- execute({"run","--once","--slot","cuda-2"},1,"Search unavailable in Windows CLI preview");
+ execute({"run","--once","--slot","cuda-2"},1,"Run requires --profile");
  execute({"run",pathUtf8(fs::path(L"未知 ç & command"))},1,"refused");
  require(!fs::exists(localPaths::root()),"Native console startup registered, wrote identity or created local profile");
  for(const auto& bad:std::vector<std::vector<std::string>>{{"doctor","--online"},{"doctor","--offline","--offline"},{"version","extra"},{"paths","extra"},{"status","--unknown"},{"status","--slot","../outside"},{"stop","--slot","cuda-01"},{"run","--slot","cuda-1","--slot","cuda-2"},{""}})

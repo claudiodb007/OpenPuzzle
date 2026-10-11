@@ -20,7 +20,7 @@ int wmain(int argc,wchar_t** argv){
   }
   std::wstring range;fs::path targets,result=fs::current_path()/(cpu?"KEYFOUNDKEYFOUND.txt":"found.txt");
   for(int i=1;i<argc-1;++i){const std::wstring option=argv[i];if(option==L"-r"||option==L"--keyspace")range=argv[i+1];
-   if((option==L"-f"&&cpu)||option==L"-i")targets=argv[i+1];if(option==L"-o")result=argv[i+1];}
+   if((option==L"-f"&&cpu)||option==L"-i")targets=argv[i+1];if(option==L"-o"||option==L"--out")result=argv[i+1];}
   if(mode=="search-failure")return 9;
   if(range.starts_with(L"10000000:")){
    if(mode=="early-exit"){std::cout<<"[+] Total 1 keys in 1 seconds: ~1 Mkeys/s (1000000 keys/s)"<<std::endl;return 0;}
@@ -29,10 +29,11 @@ int wmain(int argc,wchar_t** argv){
    return 0;
   }
   std::ifstream input(targets);std::string target;std::getline(input,target);
+  if(target.empty()&&!cpu&&argc>1)target=openpuzzle::pathUtf8(fs::path(argv[1]));
   const bool key2=range==L"2:3"||range==L"2:2";const bool key1=range==L"1:2"||range==L"1:1";
   if((key1&&target=="1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH")||(key2&&target=="1cMh228HTCiwS8ZsaakH8A8wze1JR5ZsP")||mode=="overshoot"){
-   std::ofstream found(result);if(cpu)found<<"Private Key: "<<(key2?"2":"1")<<"\naddress: "<<target<<'\n';
-   else found<<"OPENPUZZLE_SOLUTION_V1\naddress="<<target<<"\ncompression=compressed\nprivate_key_wif="<<(mode=="wrong-wif"?"invalid":key2?"KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU74NMTptX4":"KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU73sVHnoWn")<<'\n';
+   std::ofstream found(result);if(cpu)found<<"Private Key: "<<(key2?"2":"1")<<"\npubkey: 0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798\nAddress "<<target<<"\nrmd160 751e76e8199196d454941c45d1b3a323f1433bd6"<<'\n';
+   else found<<"OPENPUZZLE_SOLUTION_V1\naddress="<<target<<"\nprivate_key_wif="<<(mode=="wrong-wif"?"invalid":key2?"KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU74NMTptX4":"KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU73sVHnoWn")<<"\ncompression=compressed\n";
   }
   std::cout<<(cpu?"OPENPUZZLE_RANGE_DONE keys_checked=1":"Reached end of keyspace")<<std::endl;return 0;
  }catch(...){return 10;}

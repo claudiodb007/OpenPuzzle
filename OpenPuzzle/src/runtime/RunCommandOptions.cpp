@@ -34,7 +34,7 @@ RunCommandOptions RunCommandOptions::parse(const std::vector<std::string>& input
     if(name=="--dry-run"){out.dryRun=true;continue;}
     if(name=="--preflight-only"){out.preflightOnly=true;continue;}
     const bool number=name=="--puzzle"||name=="--device"||name=="--blocks"||name=="--threads"||name=="--points"||name=="--duration-minutes";
-    if(!number&&name!="--engine"&&name!="--backend"&&name!="--server")throw std::invalid_argument("Unsupported Windows run option: "+name);
+    if(!number&&name!="--engine"&&name!="--backend"&&name!="--server"&&name!="--profile")throw std::invalid_argument("Unsupported Windows run option: "+name);
     if(i+1==args.size()||args[i+1].empty()||args[i+1].find('\0')!=std::string::npos)throw std::invalid_argument("Missing or invalid value for "+name);
     const auto value=args[++i];
     if(number) {
@@ -45,12 +45,16 @@ RunCommandOptions RunCommandOptions::parse(const std::vector<std::string>& input
         if(name=="--blocks")out.blocks=n;if(name=="--threads")out.threads=n;if(name=="--points")out.points=n;
         if(name=="--duration-minutes"){if(n>360)throw std::invalid_argument("Duration must be 1..360 minutes");out.durationMinutes=n;}
       }
-    }else if(name=="--server"){if(!client::HttpRequestPolicy::endpoint(value))throw std::invalid_argument("Invalid coordination URL");out.server=value;}
+    }else if(name=="--profile"){out.profile=value;}
+    else if(name=="--server"){if(!client::HttpRequestPolicy::endpoint(value))throw std::invalid_argument("Invalid coordination URL");out.server=value;}
     else if(name=="--engine"){out.engine=canonical(value);if(out.engine!="bitcrack"&&out.engine!="keyhunt"&&out.engine!="kangaroo")throw std::invalid_argument("Unsupported search engine");}
     else {out.backend=canonical(value);if(out.backend!="cuda"&&out.backend!="opencl"&&out.backend!="cpu")throw std::invalid_argument("Unsupported backend");}
   }
   out.gpuOptionsSpecified=seen.count("--device")||seen.count("--blocks")||seen.count("--points");
   out.threadsSpecified=seen.count("--threads")!=0;
+  out.deviceSpecified=seen.count("--device")!=0;
+  out.blocksSpecified=seen.count("--blocks")!=0;
+  out.pointsSpecified=seen.count("--points")!=0;
   if(out.engine=="keyhunt"){if(!out.backend.empty()&&out.backend!="cpu")throw std::invalid_argument("KeyHunt requires CPU");out.backend="cpu";}
   if(out.backend=="cpu"){if(!out.engine.empty()&&out.engine!="keyhunt")throw std::invalid_argument("CPU requires KeyHunt");out.engine="keyhunt";}
   if(out.engine=="kangaroo"&&!out.backend.empty()&&out.backend!="cuda")throw std::invalid_argument("Kangaroo requires CUDA");

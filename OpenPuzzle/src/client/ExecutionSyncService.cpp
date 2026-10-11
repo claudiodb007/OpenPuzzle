@@ -632,6 +632,12 @@ ExecutionSyncService::solutionFile(
     }
   }
 
+#ifdef _WIN32
+  if (normalizedEngine == "keyhunt") {
+    const auto nativeResult = root / "KEYFOUNDKEYFOUND.txt";
+    if (nonEmptyDirectFile(nativeResult)) return pathUtf8(nativeResult);
+  }
+#endif
   return std::nullopt;
 }
 

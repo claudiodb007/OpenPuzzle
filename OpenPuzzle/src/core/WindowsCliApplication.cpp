@@ -1,8 +1,11 @@
 #include "openpuzzle/core/WindowsCliApplication.hpp"
 #include "openpuzzle/engines/WindowsEngineDiagnostics.hpp"
+#include "openpuzzle/runtime/WindowsRunProvider.hpp"
+#include "openpuzzle/runtime/WindowsAssignmentRecovery.hpp"
 #include "openpuzzle/core/LocalPaths.hpp"
 #include "openpuzzle/core/WindowsPrivateFile.hpp"
 #include "openpuzzle/config/ConfigurationManager.hpp"
+#include "openpuzzle/client/HttpRequestPolicy.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/ExecutionSlot.hpp"
@@ -69,7 +72,7 @@ int WindowsCliApplication::run(const std::vector<std::string>& arguments,std::os
   if(command=="help"||command=="--help"||command=="-h"||command=="version"||command=="--version"||command=="-V"){
    if(args.size()>1||explicitSlot)throw std::invalid_argument("Information command takes no additional arguments");
    if(command=="version"||command=="--version"||command=="-V")out<<"OpenPuzzle 1.0.46 Windows CLI preview\n";
-   else out<<"OpenPuzzle Windows CLI preview\nhelp | version | devices | paths | doctor --offline | status [--all] [--slot NAME]\nstop | safestop [--slot NAME]\nrun [puzzle] [options] [--slot NAME]\nselftest --backend cpu|cuda|opencl [--device N]\nbenchmark --backend cpu|cuda|opencl [--real] [--seconds 10..60] [--threads N]\nCPU: KeyHunt | GPU: BitCrack CUDA/OpenCL\nAssignment search is not enabled in this preview; assignment solution/recovery integration is pending.\nNo automatic start or production request is made by local commands.\n";
+   else out<<"OpenPuzzle Windows CLI preview\nhelp | version | devices | paths | doctor --offline | status [--all] [--slot NAME]\nstop | safestop [--slot NAME]\nrun [puzzle] [options] [--slot NAME]\nselftest --backend cpu|cuda|opencl [--device N]\nbenchmark --backend cpu|cuda|opencl [--real] [--seconds 10..60] [--threads N]\nCPU: KeyHunt | GPU: BitCrack CUDA/OpenCL\nRun requires --profile result.json and --server URL. recover [--server URL] [--slot NAME] reconciles preserved work without claiming again.\nNo automatic start or production request is made by local commands.\n";
    return 0;
   }
   if(command=="selftest"||command=="benchmark"){
@@ -81,6 +84,12 @@ int WindowsCliApplication::run(const std::vector<std::string>& arguments,std::os
    if(!discovery_)throw std::runtime_error("Hardware discovery provider is missing");
    const auto inventory=discovery_();out<<formatWindowsGpuInventory(inventory);
    return windowsGpuDiscoveryHasError(inventory)?2:0;
+  }
+  if(command=="recover"){
+   std::string server;
+   if(args.size()!=1){if(args.size()!=3||args[1]!="--server"||!client::HttpRequestPolicy::endpoint(args[2]))throw std::invalid_argument("Recover accepts only an optional --server URL");server=args[2];}
+   if(!explicitSlot)selected=environmentSlot();SlotGuard guard(selected);
+   return recoverWindowsAssignment(selected,server,out);
   }
   // Validate the entire command before reading paths or changing a slot.
   if(command=="paths"||command=="stop"||command=="safestop"){if(args.size()!=1)throw std::invalid_argument("Local command takes no extra options");}
@@ -119,8 +128,12 @@ int WindowsCliApplication::run(const std::vector<std::string>& arguments,std::os
    const bool uncertain=status(selected,out),hardwareError=windowsGpuDiscoveryHasError(inventory);
    out<<"Status: "<<(uncertain?"BLOCKED (local state preserved)":hardwareError?"HARDWARE DIAGNOSTIC UNAVAILABLE; search provider pending":"LOCAL DIAGNOSTICS PASSED; search provider pending")<<'\n';return uncertain||hardwareError?2:0;
   }
-  if(!dependencies_.preflight||!dependencies_.capabilities){out<<"Search unavailable in Windows CLI preview; engine, hardware and benchmark setup is pending\n";return 1;}
-  SlotGuard guard(selected);return WindowsRunSession(dependencies_).run(args,out);
+  SlotGuard guard(selected);
+  if(!dependencies_.preflight||!dependencies_.capabilities){
+   auto prepared=prepareWindowsRun(RunCommandOptions::parse(args),engineFolder_);
+   return WindowsRunSession(std::move(prepared.dependencies)).runPrepared(std::move(prepared.options),out);
+  }
+  return WindowsRunSession(dependencies_).run(args,out);
  }catch(const std::exception& error){out<<"Windows CLI refused: "<<error.what()<<'\n';return 1;}
 }
 }
