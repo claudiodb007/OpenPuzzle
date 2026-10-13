@@ -1,4 +1,5 @@
 #include "openpuzzle/hardware/WindowsGpuDiscovery.hpp"
+#include "openpuzzle/hardware/WindowsTelemetryModel.hpp"
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -107,6 +108,7 @@ WindowsGpuBackend WindowsGpuDiscovery::queryCuda(const WindowsCudaDiscoveryApi& 
       if(memory<1048576||units<=0)throw std::runtime_error("CUDA device memory or multiprocessor count is invalid");
       info.vendor="NVIDIA";info.driverVersion="CUDA API "+std::to_string(version/1000)+'.'+std::to_string((version%1000)/10);
       info.memoryMiB=memory/1048576;info.computeUnits=static_cast<unsigned int>(units);info.available=true;
+      if(api.devicePciBusId){std::array<char,32> bus;bus.fill(1);if(api.devicePciBusId(bus.data(),static_cast<int>(bus.size()),device)==0){const auto end=std::find(bus.begin(),bus.end(),0);if(end!=bus.end())info.pciBusId=canonicalGpuPciBusId(std::string(bus.begin(),end));}}
       result.devices.push_back(std::move(info));
     }
     int finalCount=-1;check(api.deviceCount(&finalCount),"CUDA final device count");
@@ -166,7 +168,7 @@ WindowsGpuInventory WindowsGpuDiscovery::inspect() {
     a.init=m.function<decltype(a.init)>("cuInit");a.driverVersion=m.function<decltype(a.driverVersion)>("cuDriverGetVersion");
     a.deviceCount=m.function<decltype(a.deviceCount)>("cuDeviceGetCount");a.deviceGet=m.function<decltype(a.deviceGet)>("cuDeviceGet");
     a.deviceName=m.function<decltype(a.deviceName)>("cuDeviceGetName");a.deviceMemory=m.function<decltype(a.deviceMemory)>("cuDeviceTotalMem_v2");
-    a.deviceAttribute=m.function<decltype(a.deviceAttribute)>("cuDeviceGetAttribute");return queryCuda(a);
+    a.deviceAttribute=m.function<decltype(a.deviceAttribute)>("cuDeviceGetAttribute");a.devicePciBusId=m.function<decltype(a.devicePciBusId)>("cuDeviceGetPCIBusId");return queryCuda(a);
   });
   result.opencl=load(L"OpenCL.dll",[](const Module& m){
     WindowsOpenClDiscoveryApi a;a.platforms=m.function<decltype(a.platforms)>("clGetPlatformIDs");

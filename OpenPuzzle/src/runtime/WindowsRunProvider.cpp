@@ -4,6 +4,8 @@
 #include "openpuzzle/core/WindowsPrivateFile.hpp"
 #include "openpuzzle/core/LocalPaths.hpp"
 #include "openpuzzle/services/PuzzleMetadataCatalog.hpp"
+#include "openpuzzle/hardware/WindowsGpuTelemetry.hpp"
+#include "openpuzzle/config/ConfigurationManager.hpp"
 namespace openpuzzle {
 namespace fs=std::filesystem;
 WindowsPreparedRun prepareWindowsRun(RunCommandOptions options,const fs::path& engineFolder) {
@@ -19,6 +21,9 @@ WindowsPreparedRun prepareWindowsRun(RunCommandOptions options,const fs::path& e
  SYSTEM_INFO system{};GetNativeSystemInfo(&system);const auto count=GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
  if(system.wProcessorArchitecture!=PROCESSOR_ARCHITECTURE_AMD64||!count||count>INT_MAX)throw std::runtime_error("Native CPU inventory is unavailable");
  WindowsRunDependencies d;d.serverUrl=options.server;
+ const auto config=ConfigurationManager::loadChecked();if(!config)throw std::runtime_error("Thermal configuration is invalid or unreadable; preserved");
+ d.thermal.policy=config->gpu.thermal;d.thermal.reader=WindowsGpuTelemetry::inspect;
+ if(profile.backend!="cpu")d.thermal.deviceName=profile.deviceIdentity.substr(0,profile.deviceIdentity.find(';'));
  d.engines={{options.engine,profile.backend,exe,profile.backend=="cpu"?std::vector<int>{}:std::vector<int>{profile.device},profile.speed,true}};
  d.preflight=[profile,exe](const RunCommandOptions& o,const WindowsRunEngine& e){try{
    const auto bound=profile.apply(o);

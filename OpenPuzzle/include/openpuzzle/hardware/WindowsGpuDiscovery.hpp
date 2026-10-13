@@ -19,6 +19,7 @@ struct WindowsGpuDevice {
   unsigned int computeUnits = 0;
   bool available = false;
   bool compilerAvailable = false; // OpenCL online compiler; not a kernel test.
+  std::string pciBusId; // Optional CUDA PCI proof; never inferred from ordinals.
 };
 
 struct WindowsGpuBackend {
@@ -45,6 +46,7 @@ struct WindowsCudaDiscoveryApi {
   int (WINAPI *deviceName)(char*, int, int) = nullptr;
   int (WINAPI *deviceMemory)(std::size_t*, int) = nullptr;
   int (WINAPI *deviceAttribute)(int*, int, int) = nullptr;
+  int (WINAPI *devicePciBusId)(char*, int, int) = nullptr;
 };
 
 struct WindowsOpenClDiscoveryApi {

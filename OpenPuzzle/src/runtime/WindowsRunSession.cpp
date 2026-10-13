@@ -85,9 +85,10 @@ int WindowsRunSession::runPrepared(RunCommandOptions options,std::ostream& outpu
   if(caps.clientId!=clientId||!caps.valid()||canonical(caps.platform)!="windows"||caps.status!="idle"||!available||
       (options.backend!="cpu"&&!std::any_of(caps.gpus.begin(),caps.gpus.end(),[&](const auto& g){return g.valid()&&canonical(g.backend)==options.backend;})))throw std::invalid_argument("Binding differs from verified Windows heartbeat capabilities");
   if(options.backend=="cpu"&&options.threads>caps.cpu.threads)throw std::invalid_argument("Requested CPU threads exceed verified inventory");
-  WindowsRuntimeSession runtime(server,caps,[&]{return !present(pending)&&!present(Store::path(slot))&&dependencies_.preflight(options,*chosen);});
+  WindowsRuntimeSession runtime(server,caps,[&]{return !present(pending)&&!present(Store::path(slot))&&dependencies_.preflight(options,*chosen);},dependencies_.thermal);
   bool registered=false;
   return runtime.runContinuous([&](WindowsRuntimeSession& owner){
+    if(!owner.thermalReady())return ClientIterationResult(2);
     // Runtime ownership serializes requests; a separate lock also protects receipts.
     WorkspaceSecurity::prepare(pending.parent_path());windowsFile::Lock lock(pending.wstring()+L".lock");
     if(!lock.locked()||present(pending))throw std::runtime_error("Pending claim publication is occupied; existing data preserved");

@@ -656,3 +656,13 @@ provider and recovery command. See [WINDOWS_NATIVE_RUN.md](WINDOWS_NATIVE_RUN.md
 for exact scope, source/benchmark verification, protected KeyHunt exports,
 conservative receipt handling and the loopback-only real-engine validation.
 This stage does not establish production operation or a Windows UI/installer.
+
+
+## Windows NVIDIA telemetry and thermal controls
+
+The Windows CLI exposes read-only `telemetry` and explicit `thermal` policy
+commands. Run sessions include current optional NVML readings in heartbeat
+payloads. Critical enforcement requires a unique selected GPU and uses the
+owned orderly cancellation path. Protection is disabled by default; missing
+or ambiguous sensors block only explicitly protected GPU runs. See
+[WINDOWS_TELEMETRY.md](WINDOWS_TELEMETRY.md) for controls, scope and validation.

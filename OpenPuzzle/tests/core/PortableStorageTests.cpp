@@ -89,6 +89,14 @@ int main() {
             "Absent client state unexpectedly loaded");
     require(!fs::exists(config) && !fs::exists(data),
             "Reading absent client state created storage directories");
+#ifdef _WIN32
+    const auto missingConfig = ConfigurationManager::loadChecked();
+    require(missingConfig && missingConfig->gpu.device == 0 &&
+            !missingConfig->gpu.thermal.enabled,
+            "Missing configuration did not return defaults");
+    require(!fs::exists(localPaths::root()),
+            "Reading absent configuration created a Windows profile");
+#endif
     WorkspaceSecurity::prepare(config);expectPrivate(config);
     const auto file=config/pathFromUtf8("ficheiro ç 中文.txt");
     const std::string bytes = std::string("quotes \\\nç 中文") + '\0' + "binary";

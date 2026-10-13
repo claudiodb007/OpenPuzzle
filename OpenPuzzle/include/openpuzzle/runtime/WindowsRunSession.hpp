@@ -18,6 +18,7 @@ struct WindowsRunDependencies {
   std::function<client::ClientHeartbeat(const std::string&)> capabilities;
   std::function<bool(const RunCommandOptions&,const WindowsRunEngine&)> preflight;
   std::function<std::optional<PuzzleExecutionMetadata>(int)> metadata;
+  WindowsRuntimeThermalSettings thermal;
 };
 // Native command orchestration over the validated runtime. Verified bindings and
 // hardware/profile preflight are supplied by the platform provider. This is not

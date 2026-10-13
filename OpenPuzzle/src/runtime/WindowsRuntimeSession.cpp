@@ -13,6 +13,7 @@
 #include <cctype>
 #include <stdexcept>
 #include <thread>
+#include <iostream>
 namespace openpuzzle {
 using Store=client::ClientStateStore;
 using Control=ClientRuntimeControl;
@@ -27,8 +28,8 @@ ClientIterationResult failure(const char* message) {
 }
 }
 WindowsRuntimeSession::WindowsRuntimeSession(std::string serverUrl,client::ClientHeartbeat capabilities,
-    std::function<bool()> preflight):serverUrl_(std::move(serverUrl)),slot_(Store::executionSlot()),
-    capabilities_(std::move(capabilities)),preflight_(std::move(preflight)) {
+    std::function<bool()> preflight,WindowsRuntimeThermalSettings thermal):serverUrl_(std::move(serverUrl)),slot_(Store::executionSlot()),
+    capabilities_(std::move(capabilities)),preflight_(std::move(preflight)),thermal_(std::move(thermal)) {
   // Validate before slot acquisition, child creation or network calls.
   if (!preflight_ || !capabilities_.valid() || canonical(capabilities_.platform)!="windows" ||
       capabilities_.status!="idle" || !capabilities_.activeEngine.empty() || !capabilities_.activeBackend.empty() ||
@@ -41,7 +42,15 @@ bool WindowsRuntimeSession::hasState()const {
   return (error && error!=std::errc::no_such_file_or_directory) || std::filesystem::exists(status);
 }
 bool WindowsRuntimeSession::stopped()const {
-  return SignalHandler::stopRequested() || Control::stopRequested(slot_);
+  return thermalStop_ || SignalHandler::stopRequested() || Control::stopRequested(slot_);
+}
+bool WindowsRuntimeSession::pollThermal(){
+  thermal_.sample();const auto now=thermal_.status();
+  if(lastThermal_!=now&&(now==WindowsThermalStatus::Warning||now==WindowsThermalStatus::Critical||now==WindowsThermalStatus::Unavailable)){
+    std::cerr<<"Windows GPU thermal status: "<<(now==WindowsThermalStatus::Warning?"WARNING":now==WindowsThermalStatus::Critical?"CRITICAL":"UNAVAILABLE OR AMBIGUOUS")<<'\n';
+  }lastThermal_=now;
+  if(thermal_.mustStop())thermalStop_=true;
+  return thermalStop_;
 }
 void WindowsRuntimeSession::poll() {
   if (engine_ && !completed_ && engine_->wait(0).has_value()) {completed_=true;wakePending_=true;}
@@ -75,6 +84,7 @@ ClientRuntimeDependencies WindowsRuntimeSession::dependencies() {
       result.heartbeat.activeBackend=inspected.state.backend;
       result.heartbeat.activeBackends={inspected.state.backend};
     }
+    thermal_.sample();thermal_.report().heartbeat(result.heartbeat);
     client::HttpRangeClient http(url);result.success=http.heartbeat(result.heartbeat);result.error=http.lastError();return result;
   };
   d.stopExecution=[this](const std::string& workspace){return stopOwned(workspace);};
@@ -113,6 +123,7 @@ ClientRuntimeDependencies WindowsRuntimeSession::dependencies() {
   d.acquireRuntime=[this]{return Store::executionSlot()==slot_ && Control::acquire();};
   d.releaseRuntime=[this]{closeOwned();(void)Control::release();};
   d.stopRequested=[this]{return stopped();};
+  d.thermalPoll=[this]{return pollThermal();};
   d.safeStopRequested=[this]{return Control::safeStopRequested(slot_);};
   d.clearSafeStop=[this]{return Control::clearSafeStop(slot_);};
   d.prepareSignals=[] {SignalHandler::reset();SignalHandler::install();};
@@ -138,7 +149,7 @@ int WindowsRuntimeSession::runContinuous(
     const std::function<ClientIterationResult()>& initialize) {
   if(!prepare || !preflight_())return 1;
   ClientRuntime runtime(dependencies());bool initialHeartbeat=true;
-  return runtime.runContinuous(serverUrl_,[&]{
+  const auto code=runtime.runContinuous(serverUrl_,[&]{
     if(hasState())return failure("Pending or unreadable assignment preserved; synchronize it before requesting work");
     if(initialHeartbeat){
       if(initialize){const auto initialized=initialize();
@@ -158,9 +169,11 @@ int WindowsRuntimeSession::runContinuous(
     }
     return result;
   });
+  return thermalStop_&&code==0?2:code;
 }
 ClientIterationResult WindowsRuntimeSession::execute(const std::filesystem::path& executable,
     const std::vector<std::string>& arguments,client::ClientExecutionState state) {
+  if(pollThermal())return failure("Thermal protection refused engine launch; claimed assignment preserved");
   if(Store::executionSlot()!=slot_ || engine_ || stopped() || Control::safeStopRequested(slot_) ||
       state.clientId!=capabilities_.clientId || hasState())return failure("Windows assignment launch blocked; existing state preserved");
   const auto backend=canonical(state.backend),name=canonical(state.engine);

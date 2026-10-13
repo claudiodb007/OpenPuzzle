@@ -67,6 +67,10 @@ int main(){try{
  cuda={};auto c=WindowsGpuDiscovery::queryCuda(cudaApi());
  require(c.state==GpuDiscoveryState::Available&&c.devices.size()==2&&c.devices[1].nativeDeviceIndex==1&&c.devices[0].memoryMiB==12288,"CUDA x64 memory or device ordering wrong");
  require(c.devices[0].driverVersion=="CUDA API 12.5","CUDA driver version wrong");
+ cuda={};auto pciApi=cudaApi();pciApi.devicePciBusId=[](char* out,int,int index)->int{std::strcpy(out,index?"0000:09:00.0":"0000:08:00.0");return 0;};
+ c=WindowsGpuDiscovery::queryCuda(pciApi);require(c.devices[1].pciBusId=="00000000:09:00.0","CUDA physical identity missing");
+ cuda={};pciApi.devicePciBusId=[](char*,int,int)->int{return 999;};
+ c=WindowsGpuDiscovery::queryCuda(pciApi);require(c.state==GpuDiscoveryState::Available&&c.devices[0].pciBusId.empty(),"Optional PCI failure broke enumeration");
  cuda={};cuda.initialized=100;require(WindowsGpuDiscovery::queryCuda(cudaApi()).state==GpuDiscoveryState::Empty,"CUDA no-device response treated as failure");
  cuda={};cuda.count=0;require(WindowsGpuDiscovery::queryCuda(cudaApi()).state==GpuDiscoveryState::Empty,"Empty CUDA inventory not accepted");
  auto missing=cudaApi();missing.deviceMemory=nullptr;require(WindowsGpuDiscovery::queryCuda(missing).state==GpuDiscoveryState::Error,"Incomplete CUDA exports accepted");

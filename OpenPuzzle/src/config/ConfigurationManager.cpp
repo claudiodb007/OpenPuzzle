@@ -147,7 +147,12 @@ std::optional<Configuration> ConfigurationManager::loadChecked() {
   boost::property_tree::ptree document;
   try {
     const fs::path path = pathFromUtf8(configPath());
+#ifndef _WIN32
     WorkspaceSecurity::prepare(path.parent_path());
+#endif
+    // Windows reads already validate the path and opened file. Missing
+    // settings must return defaults without creating a profile; save()
+    // prepares the private directory before publishing settings.
     bool missing = false;
     const auto text = readFile(pathUtf8(path), missing);
     if (missing) {

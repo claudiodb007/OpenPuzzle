@@ -9,6 +9,9 @@
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/runtime/ExecutionSlot.hpp"
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+#include <charconv>
+#include <cmath>
 #include <algorithm>
 #include <set>
 #include <stdexcept>
@@ -16,6 +19,29 @@ namespace openpuzzle {
 namespace fs=std::filesystem;
 namespace {
 using Control=ClientRuntimeControl;using Store=client::ClientStateStore;
+int thermalCommand(const std::vector<std::string>& args,std::ostream& out){
+ std::optional<bool> enabled,stop;std::optional<double> warning,critical;std::set<std::string> seen;
+ for(std::size_t i=1;i<args.size();++i){const auto& a=args[i];if(!seen.insert(a).second)throw std::invalid_argument("Duplicate thermal option");
+  if(a=="--enable"||a=="--disable"){if(enabled)throw std::invalid_argument("Conflicting thermal modes");enabled=a=="--enable";}
+  else if(a=="--stop-on-critical"||a=="--no-stop-on-critical"){if(stop)throw std::invalid_argument("Conflicting thermal stop modes");stop=a=="--stop-on-critical";}
+  else if(a=="--warning"||a=="--critical"){
+   if(++i==args.size())throw std::invalid_argument("Thermal threshold requires a number");const auto& text=args[i];double value=0;const auto r=std::from_chars(text.data(),text.data()+text.size(),value);
+   if(r.ec!=std::errc{}||r.ptr!=text.data()+text.size()||!std::isfinite(value))throw std::invalid_argument("Invalid thermal threshold");
+   (a=="--warning"?warning:critical)=value;
+  }else throw std::invalid_argument("Unknown thermal option");
+ }
+ auto config=ConfigurationManager::loadChecked();if(!config)throw std::runtime_error("Configuration is unreadable; preserved");
+ const auto apply=[&](Configuration& c){auto& p=c.gpu.thermal;if(enabled)p.enabled=*enabled;if(stop)p.stopOnCritical=*stop;if(warning)p.warningC=*warning;if(critical)p.criticalC=*critical;if(!GpuThermalPolicy::valid(p))throw std::invalid_argument("Thermal thresholds must satisfy 30 <= warning <= 110 and warning < critical <= 120");};
+ apply(*config);
+ if(args.size()>1){
+  const auto path=pathFromUtf8(ConfigurationManager::configPath());WorkspaceSecurity::prepare(path.parent_path());
+  windowsFile::Lock lock(path.wstring()+L".thermal.lock");if(!lock.locked())throw std::runtime_error("Thermal configuration lock unavailable");
+  config=ConfigurationManager::loadChecked();if(!config)throw std::runtime_error("Configuration changed or became unreadable; preserved");apply(*config);
+  if(!ConfigurationManager::save(*config))throw std::runtime_error("Thermal configuration write failed; previous configuration preserved");
+ }
+ const auto& p=config->gpu.thermal;out<<"Thermal mode: "<<(p.enabled?"enabled":"disabled")<<"\nWarning C: "<<p.warningC<<"\nCritical C: "<<p.criticalC<<"\nStop on critical: "<<(p.stopOnCritical?"yes":"no")<<"\nScope: uniquely identified selected GPU; CPU is not thermally gated\n";
+ if(args.size()>1)out<<"Saved for subsequent runs; no current runtime changed\n";return 0;
+}
 bool present(const fs::path& path){std::error_code e;auto s=fs::symlink_status(path,e);return (e&&e!=std::errc::no_such_file_or_directory)||fs::exists(s);}
 std::string environmentSlot(){
  char value[64]{};SetLastError(ERROR_SUCCESS);
@@ -59,8 +85,8 @@ std::set<std::string> slots(const std::string& selected){
  }if(e)throw std::runtime_error("Pending claim directory inspection failed");return all;
 }
 }
-WindowsCliApplication::WindowsCliApplication(WindowsRunDependencies dependencies,std::function<WindowsGpuInventory()> discovery,std::filesystem::path engineFolder)
- :dependencies_(std::move(dependencies)),engineFolder_(std::move(engineFolder)),discovery_(std::move(discovery)){}
+WindowsCliApplication::WindowsCliApplication(WindowsRunDependencies dependencies,std::function<WindowsGpuInventory()> discovery,std::filesystem::path engineFolder,WindowsRuntimeThermalSettings::Reader telemetry)
+ :dependencies_(std::move(dependencies)),engineFolder_(std::move(engineFolder)),discovery_(std::move(discovery)),telemetry_(std::move(telemetry)){}
 int WindowsCliApplication::run(const std::vector<std::string>& arguments,std::ostream& out){
  try{
   std::vector<std::string> args;std::string selected;bool explicitSlot=false;
@@ -72,12 +98,21 @@ int WindowsCliApplication::run(const std::vector<std::string>& arguments,std::os
   if(command=="help"||command=="--help"||command=="-h"||command=="version"||command=="--version"||command=="-V"){
    if(args.size()>1||explicitSlot)throw std::invalid_argument("Information command takes no additional arguments");
    if(command=="version"||command=="--version"||command=="-V")out<<"OpenPuzzle 1.0.46 Windows CLI preview\n";
-   else out<<"OpenPuzzle Windows CLI preview\nhelp | version | devices | paths | doctor --offline | status [--all] [--slot NAME]\nstop | safestop [--slot NAME]\nrun [puzzle] [options] [--slot NAME]\nselftest --backend cpu|cuda|opencl [--device N]\nbenchmark --backend cpu|cuda|opencl [--real] [--seconds 10..60] [--threads N]\nCPU: KeyHunt | GPU: BitCrack CUDA/OpenCL\nRun requires --profile result.json and --server URL. recover [--server URL] [--slot NAME] reconciles preserved work without claiming again.\nNo automatic start or production request is made by local commands.\n";
+   else out<<"OpenPuzzle Windows CLI preview\nhelp | version | devices | paths | doctor --offline | status [--all] [--slot NAME]\nstop | safestop [--slot NAME]\ntelemetry | thermal [--enable|--disable] [--warning C] [--critical C] [--stop-on-critical|--no-stop-on-critical]\nrun [puzzle] [options] [--slot NAME]\nselftest --backend cpu|cuda|opencl [--device N]\nbenchmark --backend cpu|cuda|opencl [--real] [--seconds 10..60] [--threads N]\nCPU: KeyHunt | GPU: BitCrack CUDA/OpenCL\nRun requires --profile result.json and --server URL. recover [--server URL] [--slot NAME] reconciles preserved work without claiming again.\nNo automatic start or production request is made by local commands.\n";
    return 0;
   }
   if(command=="selftest"||command=="benchmark"){
    if(explicitSlot)throw std::invalid_argument("Engine diagnostics do not use execution slots");
    return WindowsEngineDiagnostics(engineFolder_).run(args,out);
+  }
+  if(command=="thermal"){
+   if(explicitSlot)throw std::invalid_argument("Thermal configuration applies to subsequent GPU runs, not an execution slot");return thermalCommand(args,out);
+  }
+  if(command=="telemetry"){
+   if(args.size()!=1||explicitSlot)throw std::invalid_argument("Telemetry takes no additional options");
+   const auto config=ConfigurationManager::loadChecked();if(!config)throw std::runtime_error("Configuration is unreadable; preserved");
+   const auto report=telemetry_?telemetry_():WindowsTelemetryReport{};out<<formatWindowsTelemetry(report,config->gpu.thermal);
+   return report.complete&&std::any_of(report.readings.begin(),report.readings.end(),[](const auto& r){return r.values.valid();})?0:2;
   }
   if(command=="devices"){
    if(args.size()!=1||explicitSlot)throw std::invalid_argument("Devices takes no options or execution slot");
@@ -121,12 +156,13 @@ int WindowsCliApplication::run(const std::vector<std::string>& arguments,std::os
    if(present(configPath)){
     if(!ConfigurationManager::loadChecked())throw std::runtime_error("Existing configuration is invalid or unreadable; preserved without replacement");out<<"Configuration: readable\n";
    }else out<<"Configuration: missing; defaults not written\n";
-   out<<"Local data: "<<pathUtf8(localPaths::dataDirectory())<<"\nServer connection: SKIPPED\nGPU telemetry: PENDING\n";
+   const auto config=ConfigurationManager::loadChecked();if(!config)throw std::runtime_error("Configuration became unreadable; preserved");
+   out<<"Local data: "<<pathUtf8(localPaths::dataDirectory())<<"\nServer connection: SKIPPED\n"<<formatWindowsTelemetry(telemetry_?telemetry_():WindowsTelemetryReport{},config->gpu.thermal);
    if(!discovery_)throw std::runtime_error("Hardware discovery provider is missing");
    const auto inventory=discovery_();out<<formatWindowsGpuInventory(inventory);
    WindowsEngineDiagnostics(engineFolder_).describe(out);
    const bool uncertain=status(selected,out),hardwareError=windowsGpuDiscoveryHasError(inventory);
-   out<<"Status: "<<(uncertain?"BLOCKED (local state preserved)":hardwareError?"HARDWARE DIAGNOSTIC UNAVAILABLE; search provider pending":"LOCAL DIAGNOSTICS PASSED; search provider pending")<<'\n';return uncertain||hardwareError?2:0;
+   out<<"Status: "<<(uncertain?"BLOCKED (local state preserved)":hardwareError?"HARDWARE DIAGNOSTIC UNAVAILABLE":"LOCAL DIAGNOSTICS PASSED; launch requires a measured profile")<<'\n';return uncertain||hardwareError?2:0;
   }
   SlotGuard guard(selected);
   if(!dependencies_.preflight||!dependencies_.capabilities){

@@ -2305,3 +2305,7 @@ foreach(name WindowsRunProfileTests KeyHuntSolutionRecordTests)
     target_link_libraries(${name} PRIVATE OpenPuzzleCore)
     add_test(NAME ${name} COMMAND ${name})
 endforeach()
+
+add_executable(WindowsTelemetryModelTests hardware/WindowsTelemetryModelTests.cpp)
+target_link_libraries(WindowsTelemetryModelTests PRIVATE OpenPuzzleCore)
+add_test(NAME WindowsTelemetryModelTests COMMAND WindowsTelemetryModelTests)

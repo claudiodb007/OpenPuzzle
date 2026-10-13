@@ -2,6 +2,7 @@
 #ifdef _WIN32
 #include "openpuzzle/runtime/WindowsRunSession.hpp"
 #include "openpuzzle/hardware/WindowsGpuDiscovery.hpp"
+#include "openpuzzle/hardware/WindowsGpuTelemetry.hpp"
 #include <functional>
 #include <ostream>
 namespace openpuzzle {
@@ -11,12 +12,13 @@ class WindowsCliApplication {
 public:
   explicit WindowsCliApplication(WindowsRunDependencies dependencies={},
     std::function<WindowsGpuInventory()> discovery=WindowsGpuDiscovery::inspect,
-    std::filesystem::path engineFolder={});
+    std::filesystem::path engineFolder={},WindowsRuntimeThermalSettings::Reader telemetry=WindowsGpuTelemetry::inspect);
   int run(const std::vector<std::string>& arguments,std::ostream& output);
 private:
   WindowsRunDependencies dependencies_;
   std::filesystem::path engineFolder_;
   std::function<WindowsGpuInventory()> discovery_;
+  WindowsRuntimeThermalSettings::Reader telemetry_;
 };
 }
 #endif
