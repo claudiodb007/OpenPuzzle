@@ -1,5 +1,13 @@
 # Windows x64 port: assignment state and execution synchronization
 
+Latest validated stage: NVIDIA telemetry/thermal controls, commit
+`b3a5da702f3d186dd6b890de1567ab3186fa53d8`, with 168 Linux tests, 16 portable
+suites and 32 native MSVC Windows suites passed in user reports. Real RTX 3080
+readings and all three engines' bounded assignments were validated.
+The next physical profile binding stage is documented in `WINDOWS_GPU_BINDING.md`;
+its native validation requires 34 suites and real driver association. The older
+stage descriptions below are historical, not the latest suite counts.
+
 Source base: Linux release 1.0.46, commit
 `129ada590c4e7591f24251aa4c7fc89e7bfb21db`.
 

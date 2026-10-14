@@ -6,6 +6,7 @@
 #include "openpuzzle/services/PuzzleMetadataCatalog.hpp"
 #include "openpuzzle/hardware/WindowsGpuTelemetry.hpp"
 #include "openpuzzle/config/ConfigurationManager.hpp"
+#include "openpuzzle/runtime/WindowsProfileGpuBinding.hpp"
 namespace openpuzzle {
 namespace fs=std::filesystem;
 WindowsPreparedRun prepareWindowsRun(RunCommandOptions options,const fs::path& engineFolder) {
@@ -24,12 +25,21 @@ WindowsPreparedRun prepareWindowsRun(RunCommandOptions options,const fs::path& e
  const auto config=ConfigurationManager::loadChecked();if(!config)throw std::runtime_error("Thermal configuration is invalid or unreadable; preserved");
  d.thermal.policy=config->gpu.thermal;d.thermal.reader=WindowsGpuTelemetry::inspect;
  if(profile.backend!="cpu")d.thermal.deviceName=profile.deviceIdentity.substr(0,profile.deviceIdentity.find(';'));
+ std::optional<WindowsPhysicalGpuBinding> physical;
+ if(profile.backend!="cpu"&&(!profile.gpuUuid.empty()||!profile.pciBusId.empty()||
+    (d.thermal.policy.enabled&&d.thermal.policy.stopOnCritical))){
+  physical=inspectWindowsProfileGpuBinding(profile,exe);
+  d.thermal.deviceName=physical->name;d.thermal.devicePciBusId=physical->pciBusId;d.thermal.deviceUuid=physical->uuid;
+ }
  d.engines={{options.engine,profile.backend,exe,profile.backend=="cpu"?std::vector<int>{}:std::vector<int>{profile.device},profile.speed,true}};
- d.preflight=[profile,exe](const RunCommandOptions& o,const WindowsRunEngine& e){try{
+ d.preflight=[profile,exe,physical](const RunCommandOptions& o,const WindowsRunEngine& e){try{
    const auto bound=profile.apply(o);
    if(e.executable!=exe||e.speedMKeys!=profile.speed||e.backend!=profile.backend||!e.verified||
       WindowsEngineDiagnostics::executableSha256(exe)!=profile.sha256)return false;
-   return WindowsEngineDiagnostics::inspectDevice(exe,profile.backend,bound.device,bound.threads)==profile.deviceIdentity;
+   if(WindowsEngineDiagnostics::inspectDevice(exe,profile.backend,bound.device,bound.threads)!=profile.deviceIdentity)return false;
+   if(physical){const auto current=inspectWindowsProfileGpuBinding(profile,exe);
+    if(current.name!=physical->name||current.uuid!=physical->uuid||current.pciBusId!=physical->pciBusId)return false;}
+   return true;
   }catch(...){return false;}};
  d.capabilities=[profile,count](const std::string& id){client::ClientHeartbeat h;
    h.clientId=id;h.version="1.0.46";h.platform="windows";h.cpu={"Windows native x64",static_cast<int>(count),static_cast<int>(count)};

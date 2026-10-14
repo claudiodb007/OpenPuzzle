@@ -1,6 +1,7 @@
 #pragma once
 #include "openpuzzle/runtime/RunCommandOptions.hpp"
 #include "openpuzzle/core/CliInteger.hpp"
+#include "openpuzzle/hardware/WindowsTelemetryModel.hpp"
 #include <boost/property_tree/json_parser.hpp>
 #include <charconv>
 #include <cmath>
@@ -11,6 +12,7 @@ struct WindowsRunProfile {
  std::string backend,sha256,deviceIdentity;
  int device=0,threads=0,blocks=0,points=0;
  double speed=0;
+ std::string pciBusId,gpuUuid;
  static WindowsRunProfile parse(const std::string& json) {
   if(json.empty()||json.size()>16384)throw std::invalid_argument("Invalid benchmark profile size");
   boost::property_tree::ptree p;std::istringstream input(json);boost::property_tree::read_json(input,p);
@@ -25,6 +27,14 @@ struct WindowsRunProfile {
   if(result.sha256.size()!=64||result.sha256.find_first_not_of("0123456789abcdef")!=std::string::npos)throw std::invalid_argument("Invalid engine fingerprint");
   result.deviceIdentity=p.get<std::string>("device_identity");
   if(result.deviceIdentity.empty()||result.deviceIdentity.size()>1024||result.deviceIdentity.find('\0')!=std::string::npos)throw std::invalid_argument("Missing verified device identity");
+  if(const auto pci=p.get_optional<std::string>("pci_bus_id")){
+   result.pciBusId=canonicalGpuPciBusId(*pci);
+   if(result.pciBusId.empty()||result.backend=="cpu")throw std::invalid_argument("Invalid GPU profile PCI identity");
+  }
+  if(const auto uuid=p.get_optional<std::string>("gpu_uuid")){
+   result.gpuUuid=canonicalGpuUuid(*uuid);
+   if(result.gpuUuid.empty()||result.backend=="cpu")throw std::invalid_argument("Invalid GPU profile UUID");
+  }
   result.device=integer("device",0,255);result.threads=integer("threads",1,result.backend=="cpu"?256:1024);
   result.blocks=integer("blocks",1,65535);result.points=integer("points",1,65536);
   if(result.backend=="cpu"?result.device!=0:result.threads<32||result.threads%32!=0)throw std::invalid_argument("Invalid profile device/threads");

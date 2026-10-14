@@ -1,5 +1,8 @@
 #pragma once
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <cstddef>
 #include <cstdint>
@@ -20,6 +23,7 @@ struct WindowsGpuDevice {
   bool available = false;
   bool compilerAvailable = false; // OpenCL online compiler; not a kernel test.
   std::string pciBusId; // Optional CUDA PCI proof; never inferred from ordinals.
+  std::string uuid;
 };
 
 struct WindowsGpuBackend {
@@ -47,6 +51,7 @@ struct WindowsCudaDiscoveryApi {
   int (WINAPI *deviceMemory)(std::size_t*, int) = nullptr;
   int (WINAPI *deviceAttribute)(int*, int, int) = nullptr;
   int (WINAPI *devicePciBusId)(char*, int, int) = nullptr;
+  int (WINAPI *deviceUuid)(void*, int) = nullptr; // CUuuid: exactly 16 bytes.
 };
 
 struct WindowsOpenClDiscoveryApi {

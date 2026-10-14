@@ -2,6 +2,7 @@
 #include "openpuzzle/engines/WindowsEngineDiagnostics.hpp"
 #include "openpuzzle/runtime/WindowsRunProvider.hpp"
 #include "openpuzzle/runtime/WindowsAssignmentRecovery.hpp"
+#include "openpuzzle/runtime/WindowsProfileGpuBinding.hpp"
 #include "openpuzzle/core/LocalPaths.hpp"
 #include "openpuzzle/core/WindowsPrivateFile.hpp"
 #include "openpuzzle/config/ConfigurationManager.hpp"
@@ -98,12 +99,16 @@ int WindowsCliApplication::run(const std::vector<std::string>& arguments,std::os
   if(command=="help"||command=="--help"||command=="-h"||command=="version"||command=="--version"||command=="-V"){
    if(args.size()>1||explicitSlot)throw std::invalid_argument("Information command takes no additional arguments");
    if(command=="version"||command=="--version"||command=="-V")out<<"OpenPuzzle 1.0.46 Windows CLI preview\n";
-   else out<<"OpenPuzzle Windows CLI preview\nhelp | version | devices | paths | doctor --offline | status [--all] [--slot NAME]\nstop | safestop [--slot NAME]\ntelemetry | thermal [--enable|--disable] [--warning C] [--critical C] [--stop-on-critical|--no-stop-on-critical]\nrun [puzzle] [options] [--slot NAME]\nselftest --backend cpu|cuda|opencl [--device N]\nbenchmark --backend cpu|cuda|opencl [--real] [--seconds 10..60] [--threads N]\nCPU: KeyHunt | GPU: BitCrack CUDA/OpenCL\nRun requires --profile result.json and --server URL. recover [--server URL] [--slot NAME] reconciles preserved work without claiming again.\nNo automatic start or production request is made by local commands.\n";
+   else out<<"OpenPuzzle Windows CLI preview\nhelp | version | devices | paths | doctor --offline | status [--all] [--slot NAME]\nstop | safestop [--slot NAME]\nbind-profile --profile FILE --output NEW_FILE\ntelemetry | thermal [--enable|--disable] [--warning C] [--critical C] [--stop-on-critical|--no-stop-on-critical]\nrun [puzzle] [options] [--slot NAME]\nselftest --backend cpu|cuda|opencl [--device N]\nbenchmark --backend cpu|cuda|opencl [--real] [--seconds 10..60] [--threads N]\nCPU: KeyHunt | GPU: BitCrack CUDA/OpenCL\nRun requires --profile result.json and --server URL. recover [--server URL] [--slot NAME] reconciles preserved work without claiming again.\nNo automatic start or production request is made by local commands.\n";
    return 0;
   }
   if(command=="selftest"||command=="benchmark"){
    if(explicitSlot)throw std::invalid_argument("Engine diagnostics do not use execution slots");
    return WindowsEngineDiagnostics(engineFolder_).run(args,out);
+  }
+  if(command=="bind-profile"){
+   if(explicitSlot)throw std::invalid_argument("Profile binding does not use execution slots");
+   return bindWindowsGpuProfile(args,engineFolder_,discovery_,telemetry_,out);
   }
   if(command=="thermal"){
    if(explicitSlot)throw std::invalid_argument("Thermal configuration applies to subsequent GPU runs, not an execution slot");return thermalCommand(args,out);

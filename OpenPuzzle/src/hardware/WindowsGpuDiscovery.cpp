@@ -16,6 +16,12 @@ constexpr std::uint64_t clAll=0xFFFFFFFFULL, clGpu=4;
 constexpr unsigned int clType=0x1000, clUnits=0x1002, clMemory=0x101F,
   clAvailable=0x1027, clCompiler=0x1028, clName=0x102B,
   clVendor=0x102C, clDriver=0x102D;
+constexpr unsigned int clExtensions=0x1030,clUuid=0x106A,clPci=0x410F;
+// cl_khr_device_uuid and cl_khr_pci_bus_info use their documented x64 ABI.
+bool extension(const std::string& extensions,const std::string& name){
+ std::istringstream words(extensions);std::string token;while(words>>token)if(token==name)return true;return false;
+}
+void openClIdentity(const WindowsOpenClDiscoveryApi& api,void* device,WindowsGpuDevice& info);
 WindowsGpuBackend failure(const std::string& message) {
   return {GpuDiscoveryState::Error,message,{}};
 }
@@ -42,6 +48,24 @@ std::string text(const WindowsOpenClDiscoveryApi& api,void* device,unsigned int 
   std::string value(bytes.data(),size-1);
   if(!validText(value))throw std::runtime_error("OpenCL string is invalid UTF-8 or contains controls");
   return value;
+}
+void openClIdentity(const WindowsOpenClDiscoveryApi& api,void* device,WindowsGpuDevice& info) {
+ // Empty or unsupported optional extensions must not break normal inventory.
+ std::size_t size=0;if(api.info(device,clExtensions,0,nullptr,&size)!=0||size<1||size>maxString)return;
+ std::vector<char> bytes(size,1);std::size_t actual=0;
+ if(api.info(device,clExtensions,size,bytes.data(),&actual)!=0||actual!=size||bytes.back()!=0||
+    std::find(bytes.begin(),bytes.end()-1,0)!=bytes.end()-1)return;
+ const std::string extensions(bytes.data(),size-1);
+ if(extension(extensions,"cl_khr_device_uuid")){
+  std::array<unsigned char,16> uuid{};actual=0;
+  if(api.info(device,clUuid,uuid.size(),uuid.data(),&actual)==0&&actual==uuid.size())info.uuid=gpuUuidFromBytes(uuid);
+ }
+ if(extension(extensions,"cl_khr_pci_bus_info")){
+  std::array<unsigned int,4> pci{};actual=0;
+  if(api.info(device,clPci,sizeof(pci),pci.data(),&actual)==0&&actual==sizeof(pci)){
+   std::ostringstream value;value<<std::hex<<pci[0]<<':'<<pci[1]<<':'<<pci[2]<<'.'<<pci[3];info.pciBusId=canonicalGpuPciBusId(value.str());
+  }
+ }
 }
 class Module {
   HMODULE handle_=nullptr;
@@ -109,6 +133,7 @@ WindowsGpuBackend WindowsGpuDiscovery::queryCuda(const WindowsCudaDiscoveryApi& 
       info.vendor="NVIDIA";info.driverVersion="CUDA API "+std::to_string(version/1000)+'.'+std::to_string((version%1000)/10);
       info.memoryMiB=memory/1048576;info.computeUnits=static_cast<unsigned int>(units);info.available=true;
       if(api.devicePciBusId){std::array<char,32> bus;bus.fill(1);if(api.devicePciBusId(bus.data(),static_cast<int>(bus.size()),device)==0){const auto end=std::find(bus.begin(),bus.end(),0);if(end!=bus.end())info.pciBusId=canonicalGpuPciBusId(std::string(bus.begin(),end));}}
+      if(api.deviceUuid){std::array<unsigned char,16> uuid{};if(api.deviceUuid(uuid.data(),device)==0)info.uuid=gpuUuidFromBytes(uuid);}
       result.devices.push_back(std::move(info));
     }
     int finalCount=-1;check(api.deviceCount(&finalCount),"CUDA final device count");
@@ -148,6 +173,7 @@ WindowsGpuBackend WindowsGpuDiscovery::queryOpenCl(const WindowsOpenClDiscoveryA
         const auto available=scalar<unsigned int>(api,device,clAvailable),compiler=scalar<unsigned int>(api,device,clCompiler);
         if(memory<1048576||!info.computeUnits||available>1||compiler>1)throw std::runtime_error("OpenCL device capability is invalid");
         info.memoryMiB=memory/1048576;info.available=available!=0;info.compilerAvailable=compiler!=0;
+        openClIdentity(api,device,info);
         result.devices.push_back(std::move(info));
       }
     }
@@ -168,7 +194,8 @@ WindowsGpuInventory WindowsGpuDiscovery::inspect() {
     a.init=m.function<decltype(a.init)>("cuInit");a.driverVersion=m.function<decltype(a.driverVersion)>("cuDriverGetVersion");
     a.deviceCount=m.function<decltype(a.deviceCount)>("cuDeviceGetCount");a.deviceGet=m.function<decltype(a.deviceGet)>("cuDeviceGet");
     a.deviceName=m.function<decltype(a.deviceName)>("cuDeviceGetName");a.deviceMemory=m.function<decltype(a.deviceMemory)>("cuDeviceTotalMem_v2");
-    a.deviceAttribute=m.function<decltype(a.deviceAttribute)>("cuDeviceGetAttribute");a.devicePciBusId=m.function<decltype(a.devicePciBusId)>("cuDeviceGetPCIBusId");return queryCuda(a);
+    a.deviceAttribute=m.function<decltype(a.deviceAttribute)>("cuDeviceGetAttribute");a.devicePciBusId=m.function<decltype(a.devicePciBusId)>("cuDeviceGetPCIBusId");
+    a.deviceUuid=m.function<decltype(a.deviceUuid)>("cuDeviceGetUuid_v2");if(!a.deviceUuid)a.deviceUuid=m.function<decltype(a.deviceUuid)>("cuDeviceGetUuid");return queryCuda(a);
   });
   result.opencl=load(L"OpenCL.dll",[](const Module& m){
     WindowsOpenClDiscoveryApi a;a.platforms=m.function<decltype(a.platforms)>("clGetPlatformIDs");
@@ -187,6 +214,7 @@ std::string formatWindowsGpuInventory(const WindowsGpuInventory& inventory) {
       <<"\nMemory MiB: "<<d.memoryMiB<<"\n"<<(d.platformIndex<0?"Multiprocessors: ":"Compute units: ")<<d.computeUnits
       <<"\nNative device index: "<<d.nativeDeviceIndex<<"\nDevice available: "<<(d.available?"yes":"no")<<'\n';
       if(d.platformIndex>=0)out<<"OpenCL platform: "<<d.platformIndex<<"\nOpenCL compiler: "<<(d.compilerAvailable?"yes":"no")<<'\n';}
+    for(const auto& d:backend.devices)out<<"Physical device "<<d.inventoryIndex<<": UUID "<<(d.uuid.empty()?"unavailable":d.uuid)<<"; PCI "<<(d.pciBusId.empty()?"unavailable":d.pciBusId)<<'\n';
   };show("CUDA",inventory.cuda);show("OpenCL",inventory.opencl);
   out<<"GPU engine: BitCrack; Windows executables, kernel tests and benchmarks PENDING\n"
     <<"Search engines and benchmark profiles: PENDING\nInventory indexes require engine verification before launch.\n";return out.str();

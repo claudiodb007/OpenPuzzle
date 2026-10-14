@@ -8,7 +8,27 @@
 #include <functional>
 #include <stdexcept>
 #include <vector>
+#include <array>
+#include <algorithm>
+#include <cctype>
 namespace openpuzzle {
+inline std::string canonicalGpuUuid(std::string value) {
+ if(value.starts_with("GPU-"))value.erase(0,4);
+ if(value.size()!=36)return {};
+ bool nonzero=false;
+ for(std::size_t i=0;i<value.size();++i){
+  if(i==8||i==13||i==18||i==23){if(value[i]!='-')return {};continue;}
+  const auto c=static_cast<unsigned char>(value[i]);
+  if(!((c>='0'&&c<='9')||(c>='a'&&c<='f')||(c>='A'&&c<='F')))return {};
+  value[i]=static_cast<char>(std::tolower(c));nonzero=nonzero||value[i]!='0';
+ }
+ return nonzero?value:std::string{};
+}
+inline std::string gpuUuidFromBytes(const std::array<unsigned char,16>& bytes) {
+ std::ostringstream out;out<<std::hex<<std::setfill('0');
+ for(std::size_t i=0;i<bytes.size();++i){if(i==4||i==6||i==8||i==10)out<<'-';out<<std::setw(2)<<static_cast<unsigned>(bytes[i]);}
+ return canonicalGpuUuid(out.str());
+}
 inline std::string canonicalGpuPciBusId(const std::string& value){
  const auto first=value.find(':'),second=value.find(':',first==std::string::npos?0:first+1),dot=value.find('.',second==std::string::npos?0:second+1);
  if(first==std::string::npos||second==std::string::npos||dot==std::string::npos||first<1||first>8||second-first<2||second-first>3||dot-second<2||dot-second>3||value.size()-dot!=2)return {};
@@ -20,6 +40,7 @@ inline std::string canonicalGpuPciBusId(const std::string& value){
 struct WindowsTelemetryReading {
  std::string name;
  client::ClientGpuTelemetry values;
+ std::string uuid; // Native device UUID; separate from backend/ordinal IDs.
 };
 struct WindowsTelemetryReport {
  bool complete=false;
@@ -47,6 +68,7 @@ struct WindowsRuntimeThermalSettings {
  std::string deviceName;
  Reader reader;
  std::chrono::milliseconds interval{5000};
+ std::string devicePciBusId,deviceUuid;
 };
 class WindowsThermalMonitor {
  WindowsRuntimeThermalSettings settings_;
@@ -61,16 +83,24 @@ public:
   if(next_&&now<*next_)return;
   next_=now+settings_.interval;
   try{report_=settings_.reader?settings_.reader():WindowsTelemetryReport{};}catch(...){report_={};}
-  if(settings_.deviceName.empty()||!settings_.policy.enabled){state_=WindowsThermalStatus::Disabled;return;}
+  if(!hasSelection()||!settings_.policy.enabled){state_=WindowsThermalStatus::Disabled;return;}
+  const auto uuid=canonicalGpuUuid(settings_.deviceUuid),bus=canonicalGpuPciBusId(settings_.devicePciBusId);
+  if((!settings_.deviceUuid.empty()&&uuid.empty())||(!settings_.devicePciBusId.empty()&&bus.empty())){state_=WindowsThermalStatus::Unavailable;return;}
   const WindowsTelemetryReading* selected=nullptr;unsigned matches=0;
-  if(report_.complete)for(const auto& r:report_.readings)if(r.name==settings_.deviceName){selected=&r;++matches;}
+  if(report_.complete)for(const auto& r:report_.readings){
+   const bool identity=!uuid.empty()?canonicalGpuUuid(r.uuid)==uuid:!bus.empty()?canonicalGpuPciBusId(r.values.pciBusId)==bus:r.name==settings_.deviceName;
+   if(identity){selected=&r;++matches;}
+  }
+  if(matches==1&&((!settings_.deviceName.empty()&&selected->name!=settings_.deviceName)||
+    (!bus.empty()&&canonicalGpuPciBusId(selected->values.pciBusId)!=bus))){state_=WindowsThermalStatus::Unavailable;return;}
   if(matches!=1||!selected->values.valid()||!selected->values.temperatureC){state_=WindowsThermalStatus::Unavailable;return;}
   const auto t=*selected->values.temperatureC;
   if(t>=settings_.policy.criticalC)state_=WindowsThermalStatus::Critical;
   else if(t>=settings_.policy.warningC || (state_==WindowsThermalStatus::Warning&&t>=settings_.policy.warningC-2))state_=WindowsThermalStatus::Warning;
   else state_=WindowsThermalStatus::Normal;
  }
- bool mustStop()const {return settings_.policy.enabled&&settings_.policy.stopOnCritical&&!settings_.deviceName.empty()&&
+ bool hasSelection()const{return !settings_.deviceName.empty()||!settings_.devicePciBusId.empty()||!settings_.deviceUuid.empty();}
+ bool mustStop()const {return settings_.policy.enabled&&settings_.policy.stopOnCritical&&hasSelection()&&
   (state_==WindowsThermalStatus::Critical||state_==WindowsThermalStatus::Unavailable);}
  WindowsThermalStatus status()const{return state_;}
  const WindowsTelemetryReport& report()const{return report_;}

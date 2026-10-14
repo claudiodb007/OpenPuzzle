@@ -1,6 +1,7 @@
 #include "openpuzzle/hardware/WindowsGpuDiscovery.hpp"
 #include "openpuzzle/core/WindowsCliApplication.hpp"
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
@@ -27,6 +28,7 @@ struct ClFixture {
  unsigned int platformCount=2,deviceCount=2;
  bool changedPlatforms=false,changedDevices=false,duplicatePlatforms=false,nullDevice=false,duplicateDevice=false;
  bool badScalar=false,badString=false,invalidUtf8=false,missingTerminator=false,unavailable=false,cpuOnly=false;
+ std::string extensions;bool badUuidSize=false;
 } cl;
 void* handle(std::uintptr_t n){return reinterpret_cast<void*>(n);}
 int WINAPI clPlatforms(unsigned int n,void** values,unsigned int* count){
@@ -47,7 +49,10 @@ int WINAPI clInfo(void* device,unsigned int field,std::size_t size,void* out,std
  if(field==0x1002)return put<unsigned int>(40,size,out,actual);
  if(field==0x101F)return put<std::uint64_t>(8ULL*1024*1024*1024,size,out,actual);
  if(field==0x1027||field==0x1028)return put<unsigned int>(cl.unavailable?0:1,size,out,actual);
+ if(field==0x106A){std::array<unsigned char,16> value{};value[0]=static_cast<unsigned char>(id);*actual=cl.badUuidSize?15:16;if(size<16)return -30;std::memcpy(out,value.data(),16);return 0;}
+ if(field==0x410F){const std::array<unsigned int,4> value{0,static_cast<unsigned>(id),0,0};*actual=sizeof(value);if(size<sizeof(value))return -30;std::memcpy(out,value.data(),sizeof(value));return 0;}
  std::string s=field==0x102B?(id==11?"AMD Radeon RX 5700 XT":"NVIDIA future GPU"):field==0x102C?(id==11?"AMD":"NVIDIA"):"driver fixture";
+ if(field==0x1030)s=cl.extensions;
  if(cl.invalidUtf8)s=std::string(1,static_cast<char>(0xFF));
  *actual=cl.badString?4097:s.size()+1;
  if(out){if(size<s.size()+1)return -30;std::memcpy(out,s.c_str(),s.size()+1);if(cl.missingTerminator)static_cast<char*>(out)[s.size()]='x';}return 0;
@@ -69,6 +74,8 @@ int main(){try{
  require(c.devices[0].driverVersion=="CUDA API 12.5","CUDA driver version wrong");
  cuda={};auto pciApi=cudaApi();pciApi.devicePciBusId=[](char* out,int,int index)->int{std::strcpy(out,index?"0000:09:00.0":"0000:08:00.0");return 0;};
  c=WindowsGpuDiscovery::queryCuda(pciApi);require(c.devices[1].pciBusId=="00000000:09:00.0","CUDA physical identity missing");
+ cuda={};pciApi.deviceUuid=[](void* out,int index)->int{std::array<unsigned char,16> uuid{};uuid[0]=static_cast<unsigned char>(index+1);std::memcpy(out,uuid.data(),16);return 0;};
+ c=WindowsGpuDiscovery::queryCuda(pciApi);require(c.devices[0].uuid=="01000000-0000-0000-0000-000000000000"&&c.devices[1].uuid!=c.devices[0].uuid,"CUDA UUID missing");
  cuda={};pciApi.devicePciBusId=[](char*,int,int)->int{return 999;};
  c=WindowsGpuDiscovery::queryCuda(pciApi);require(c.state==GpuDiscoveryState::Available&&c.devices[0].pciBusId.empty(),"Optional PCI failure broke enumeration");
  cuda={};cuda.initialized=100;require(WindowsGpuDiscovery::queryCuda(cudaApi()).state==GpuDiscoveryState::Empty,"CUDA no-device response treated as failure");
@@ -87,6 +94,10 @@ int main(){try{
  require(o.state==GpuDiscoveryState::Available&&o.devices.size()==3,"CPU filtering or multi-platform OpenCL enumeration wrong");
  require(o.devices[0].name=="AMD Radeon RX 5700 XT"&&o.devices[0].nativeDeviceIndex==1&&o.devices[0].platformIndex==0,"OpenCL native indexes shifted by CPU filtering");
  require(o.devices[1].platformIndex==1&&o.devices[1].nativeDeviceIndex==0&&o.devices[2].inventoryIndex==2&&o.devices[0].memoryMiB==8192,"Multi-vendor indexes or x64 memory wrong");
+ cl={};cl.extensions="cl_khr_device_uuid cl_khr_pci_bus_info";o=WindowsGpuDiscovery::queryOpenCl(clApi());
+ require(o.devices[0].uuid=="0b000000-0000-0000-0000-000000000000"&&o.devices[0].pciBusId=="00000000:0B:00.0","OpenCL physical extensions were not queried");
+ cl={};cl.extensions="not_cl_khr_device_uuid";o=WindowsGpuDiscovery::queryOpenCl(clApi());require(o.devices[0].uuid.empty(),"Extension substring treated as support");
+ cl={};cl.extensions="cl_khr_device_uuid";cl.badUuidSize=true;o=WindowsGpuDiscovery::queryOpenCl(clApi());require(o.state==GpuDiscoveryState::Available&&o.devices[0].uuid.empty(),"Invalid optional UUID broke normal discovery");
  cl={};cl.unavailable=true;o=WindowsGpuDiscovery::queryOpenCl(clApi());require(o.devices.size()==3&&!o.devices[0].available&&!o.devices[0].compilerAvailable,"Unavailable OpenCL GPU was reported as usable");
  cl={};cl.cpuOnly=true;require(WindowsGpuDiscovery::queryOpenCl(clApi()).state==GpuDiscoveryState::Empty,"OpenCL CPU mistaken for GPU or KeyHunt readiness");
  cl={};cl.platformStatus=-1001;require(WindowsGpuDiscovery::queryOpenCl(clApi()).state==GpuDiscoveryState::Empty,"No OpenCL platforms treated as failure");

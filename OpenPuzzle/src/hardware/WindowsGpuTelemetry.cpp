@@ -38,7 +38,7 @@ WindowsTelemetryReport WindowsGpuTelemetry::query(const WindowsNvmlApi& a){
   if(!a.init||!a.shutdown||!a.count||!a.handle||!a.name||!a.pci)throw std::runtime_error("NVML identity exports unavailable");
   check(a.init(),"NVML initialization");struct Guard{const WindowsNvmlApi& a;~Guard(){(void)a.shutdown();}}guard{a};
   unsigned count=0;check(a.count(&count),"NVML count");if(count>256)throw std::runtime_error("NVML count exceeds limit");
-  std::set<void*> handles;std::set<std::string> buses;
+  std::set<void*> handles;std::set<std::string> buses,uuids;
   for(unsigned i=0;i<count;++i){
    void* h=nullptr;check(a.handle(i,&h),"NVML handle");if(!h||!handles.insert(h).second)throw std::runtime_error("Duplicate NVML handle");
    char name[96];std::fill(std::begin(name),std::end(name),1);check(a.name(h,name,sizeof(name)),"NVML name");
@@ -47,6 +47,9 @@ WindowsTelemetryReport WindowsGpuTelemetry::query(const WindowsNvmlApi& a){
    if(bus.empty()||bus.substr(0,bus.size()-1)!=numeric.substr(0,numeric.size()-1))throw std::runtime_error("Inconsistent NVML PCI identity");
    if(!buses.insert(bus).second)throw std::runtime_error("Duplicate PCI identity");
    WindowsTelemetryReading r;r.name=text(name);r.values.vendor="NVIDIA";r.values.device=static_cast<int>(i);r.values.deviceId="nvidia-"+std::to_string(i);r.values.pciBusId=bus;r.values.temperatureLabel="GPU";
+   if(a.uuid){char value[96];std::fill(std::begin(value),std::end(value),1);
+    if(a.uuid(h,value,sizeof(value))==0){r.uuid=canonicalGpuUuid(text(value));
+     if(r.uuid.empty()||!uuids.insert(r.uuid).second)throw std::runtime_error("Invalid or duplicate NVML UUID");}}
    unsigned value=0;
    if(a.temperature&&a.temperature(h,0,&value)==0&&value<=200)r.values.temperatureC=static_cast<double>(value);
    if(a.power&&a.power(h,&value)==0&&value<=10000000)r.values.powerDrawW=value/1000.0;
@@ -66,6 +69,7 @@ WindowsTelemetryReport WindowsGpuTelemetry::inspect(){
   a.count=module.function<decltype(a.count)>("nvmlDeviceGetCount_v2");a.handle=module.function<decltype(a.handle)>("nvmlDeviceGetHandleByIndex_v2");
   a.name=module.function<decltype(a.name)>("nvmlDeviceGetName");a.pci=module.function<decltype(a.pci)>("nvmlDeviceGetPciInfo_v3");
   a.temperature=module.function<decltype(a.temperature)>("nvmlDeviceGetTemperature");a.power=module.function<decltype(a.power)>("nvmlDeviceGetPowerUsage");a.limit=module.function<decltype(a.limit)>("nvmlDeviceGetPowerManagementLimit");
+  a.uuid=module.function<decltype(a.uuid)>("nvmlDeviceGetUUID");
   auto report=query(a);
   // CUDA ordinals are resolved by physical PCI identity, not NVML enumeration.
   const auto inventory=WindowsGpuDiscovery::inspect();
@@ -79,6 +83,7 @@ WindowsTelemetryReport WindowsGpuTelemetry::inspect(){
 std::string formatWindowsTelemetry(const WindowsTelemetryReport& r,const GpuThermalPolicyConfiguration& p){
  std::ostringstream s;s<<"GPU telemetry: "<<(r.complete?"AVAILABLE":"UNAVAILABLE")<<"\nTelemetry detail: "<<r.detail<<'\n';
  for(const auto& d:r.readings){const auto& v=d.values;s<<"Device: "<<d.name<<" ("<<v.deviceId<<", "<<v.pciBusId<<")\n";
+  s<<"GPU UUID: "<<(d.uuid.empty()?"unavailable":d.uuid)<<'\n';
   s<<"Temperature C: ";if(v.temperatureC)s<<*v.temperatureC;else s<<"unavailable";s<<"\nPower W: ";if(v.powerDrawW)s<<*v.powerDrawW;else s<<"unavailable";s<<"\nPower limit W: ";if(v.powerLimitW)s<<*v.powerLimitW;else s<<"unavailable";
   s<<"\nThermal state: "<<GpuThermalPolicy::stateName(GpuThermalPolicy::evaluate(p,v.temperatureC))<<'\n';
  }return s.str();

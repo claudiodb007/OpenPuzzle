@@ -6,7 +6,7 @@
 #include "openpuzzle/core/LocalPaths.hpp"
 #include <iostream>
 using namespace openpuzzle;namespace fs=std::filesystem;
-WindowsTelemetryReport readings(double t){client::ClientGpuTelemetry v;v.vendor="NVIDIA";v.deviceId="cuda-0";v.device=0;v.pciBusId="00000000:08:00.0";v.temperatureC=t;v.powerDrawW=123;v.powerLimitW=290;return {true,"fixture",{{"fixture GPU",v}}};}
+WindowsTelemetryReport readings(double t){client::ClientGpuTelemetry v;v.vendor="NVIDIA";v.deviceId="cuda-0";v.device=0;v.pciBusId="00000000:08:00.0";v.temperatureC=t;v.powerDrawW=123;v.powerLimitW=290;return {true,"fixture",{{"fixture GPU",v,"12345678-1234-5678-9abc-123456789abc"}}};}
 client::ClientHeartbeat capabilities(){client::ClientHeartbeat h;h.clientId="fixture-client";h.platform="windows";h.version="1.0.46";h.cpu={"fixture CPU",1,1};h.gpus={{"cuda","fixture GPU",1}};h.engines={{"BitCrack","cuda",true,true}};return h;}
 bool endpoint(const std::string& r,const char* p){return r.starts_with(std::string("POST ")+p+' ');}
 int wmain(int argc,wchar_t** argv){try{
@@ -21,7 +21,8 @@ int wmain(int argc,wchar_t** argv){try{
   WindowsRuntimeSession ambiguous("http://127.0.0.1:1",capabilities(),[]{return true;},settings);
   require(ambiguous.runContinuous([&](auto&){++requested;return ClientIterationResult{};},true)==2&&requested==0,"Ambiguous device allowed protected startup");}
  std::atomic_bool hot=false;int cancelled=0,prepared=0,heartbeats=0;
- settings.reader=[&]{return readings(hot?90:65);};
+ settings.deviceUuid="12345678-1234-5678-9abc-123456789abc";settings.devicePciBusId="00000000:08:00.0";
+ settings.reader=[&]{auto r=readings(hot?90:65);auto other=r.readings.front();other.uuid="22345678-1234-5678-9abc-123456789abc";other.values.device=1;other.values.deviceId="cuda-1";other.values.pciBusId="00000000:09:00.0";other.values.temperatureC=95;r.readings.insert(r.readings.begin(),other);return r;};
  auto foreign=WindowsEngineProcess::start(engine,{"sleep"},root/"foreign");const auto foreignId=foreign->identity();
  RunServer server([&](const auto& r){
   if(endpoint(r,"/api/client/heartbeat")){++heartbeats;require(r.find("\"temperature_c\":")!=std::string::npos&&r.find("\"power_limit_w\":290")!=std::string::npos,"Heartbeat did not publish thermal readings");if(heartbeats==1)require(r.find("\"temperature_c\":65")!=std::string::npos,"Initial heartbeat did not include current temperature");}

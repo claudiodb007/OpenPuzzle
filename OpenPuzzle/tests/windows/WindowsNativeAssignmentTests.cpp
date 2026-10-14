@@ -7,6 +7,7 @@
 #include "openpuzzle/core/AtomicFile.hpp"
 #include "openpuzzle/core/LocalPaths.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+#include "openpuzzle/config/ConfigurationManager.hpp"
 #include <boost/property_tree/json_parser.hpp>
 #include <fstream>
 #include <iostream>
@@ -14,10 +15,11 @@ using namespace openpuzzle;namespace fs=std::filesystem;
 std::string read(const fs::path& p){std::ifstream f(p);return {std::istreambuf_iterator<char>(f),{}};}
 bool endpoint(const std::string& r,const char* p){return r.starts_with(std::string("POST ")+p+' ');}
 int wmain(int argc,wchar_t** argv){try{
- require(argc==2||argc==3,"Supply a fixture executable or real engine directory plus validated diagnostics directory");Winsock sockets;
- const bool real=argc==3;const auto root=fs::temp_directory_path()/pathFromUtf8("op-native-run-"+std::to_string(GetCurrentProcessId())+'-'+std::to_string(GetTickCount64()));
+ require(argc==2||argc==3||(argc==4&&std::wstring(argv[3])==L"--thermal"),"Supply a fixture executable or real engine/profile directories and optional --thermal");Winsock sockets;
+ const bool real=argc>=3;const auto root=fs::temp_directory_path()/pathFromUtf8("op-native-run-"+std::to_string(GetCurrentProcessId())+'-'+std::to_string(GetTickCount64()));
  require(!fs::exists(root),"Fixture directory already exists");fs::create_directory(root);
  require(SetEnvironmentVariableW(L"LOCALAPPDATA",root.c_str())&&SetEnvironmentVariableA("OPENPUZZLE_EXECUTION_SLOT","primary"),"Run environment failed");
+ if(argc==4){Configuration config;config.gpu.thermal={true,true,75,85};require(ConfigurationManager::save(config),"Isolated thermal configuration failed");std::cout<<"Physical thermal protection enabled only in the synthetic fixture profile\n";}
  const auto folder=real?fs::absolute(argv[1]):root/"engines";if(!real){fs::create_directory(folder);for(const auto n:{"keyhunt.exe","cuBitCrack.exe","clBitCrack.exe"})fs::copy_file(fs::absolute(argv[1]),folder/n);}
  const std::string target="1cMh228HTCiwS8ZsaakH8A8wze1JR5ZsP";
  std::ostringstream output;

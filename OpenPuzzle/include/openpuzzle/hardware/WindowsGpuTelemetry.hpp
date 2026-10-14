@@ -1,6 +1,9 @@
 #pragma once
 #include "openpuzzle/hardware/WindowsTelemetryModel.hpp"
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 namespace openpuzzle {
 // Read-only NVML ABI, documented at docs.nvidia.com/deploy/nvml-api.
@@ -19,6 +22,7 @@ struct WindowsNvmlApi {
  int (*temperature)(void*,unsigned int,unsigned int*)=nullptr;
  int (*power)(void*,unsigned int*)=nullptr;
  int (*limit)(void*,unsigned int*)=nullptr;
+ int (*uuid)(void*,char*,unsigned int)=nullptr;
 };
 class WindowsGpuTelemetry {
 public:

@@ -14,6 +14,10 @@ int main(){try{
  WindowsNvmlApi a{init,shutdown,count,handle,name,pci,temp,power,limit};auto r=WindowsGpuTelemetry::query(a);
  require(r.complete&&r.readings.size()==1&&shutdowns==1&&r.readings[0].values.temperatureC==62&&r.readings[0].values.powerDrawW==123.456&&r.readings[0].values.powerLimitW==290);
  require(r.readings[0].values.pciBusId=="00000000:08:00.0"&&formatWindowsTelemetry(r).find("62")!=std::string::npos);
+ a.uuid=[](void*,char* value,unsigned)->int{std::strcpy(value,"GPU-12345678-1234-5678-9abc-123456789abc");return 0;};
+ r=WindowsGpuTelemetry::query(a);require(r.complete&&r.readings[0].uuid=="12345678-1234-5678-9abc-123456789abc");
+ a.uuid=[](void*,char* value,unsigned)->int{std::strcpy(value,"invalid");return 0;};r=WindowsGpuTelemetry::query(a);require(!r.complete&&r.readings.empty());
+ a.uuid=nullptr;
  unsupported=true;r=WindowsGpuTelemetry::query(a);require(r.complete&&!r.readings[0].values.temperatureC&&!r.readings[0].values.powerDrawW&&r.readings[0].values.powerLimitW==290);unsupported=false;
  temperature=(std::numeric_limits<unsigned>::max)();r=WindowsGpuTelemetry::query(a);require(r.complete&&!r.readings[0].values.temperatureC);temperature=62;
  const auto previous=shutdowns;failInit=true;r=WindowsGpuTelemetry::query(a);require(!r.complete&&r.readings.empty()&&shutdowns==previous);failInit=false;

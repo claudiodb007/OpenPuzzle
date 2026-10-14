@@ -21,10 +21,10 @@ client session, not by a background service started by this package.
 CUDA indexes are resolved using a normalized PCI bus address, not the NVML
 enumeration order. If no unique CUDA match exists, a NVIDIA telemetry ID and
 the physical PCI address are retained. OpenCL indexes are not assumed to match
-CUDA or NVML indexes. Thermal enforcement requires exactly one NVML GPU with
-the name in the selected, previously measured engine profile. Identical GPU
-names are deliberately ambiguous at this stage; stable multi-GPU profile
-binding is still pending.
+CUDA or NVML indexes. The subsequent physical binding stage resolves the
+measured engine mapping to driver UUID/PCI and the matching NVML sensor.
+Identical names are separated by physical identity. See `WINDOWS_GPU_BINDING.md`
+for copied profiles, revalidation and native proof still required for that stage.
 
 ## Commands
 
@@ -75,5 +75,5 @@ Primary API references:
 - https://docs.nvidia.com/deploy/nvml-api/structnvmlPciInfo__t.html
 - https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__DEVICE.html
 
-GUI, installer, AMD telemetry, stable identical-GPU profile binding and a
-controlled production validation remain pending.
+GUI, installer, AMD telemetry and controlled production validation remain
+pending. Physical profile binding now has its separate validation stage.
