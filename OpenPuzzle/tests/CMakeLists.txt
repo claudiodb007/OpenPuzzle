@@ -121,7 +121,7 @@ if(TARGET OpenPuzzleUi)
         COMMAND UiThermalHistoryTests
     )
 
-    add_executable(GpuControlPanelTests ui/GpuControlPanelTests.cpp ../src/ui/GpuControlPanel.cpp ../src/ui/UiLanguage.cpp)
+    add_executable(GpuControlPanelTests ui/GpuControlPanelTests.cpp ../src/ui/GpuControlPanel.cpp ../src/ui/UiLanguage.cpp ../src/ui/UiTheme.cpp)
     target_include_directories(GpuControlPanelTests PRIVATE ../include ../src/ui)
     target_link_libraries(GpuControlPanelTests PRIVATE Qt6::Widgets)
     add_test(NAME GpuControlPanelTests COMMAND GpuControlPanelTests)

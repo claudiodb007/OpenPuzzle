@@ -1,4 +1,7 @@
 #include "GpuControlPanel.hpp"
+#include "UiTheme.hpp"
+#include <QAbstractButton>
+#include <QImage>
 #include <QApplication>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -24,7 +27,28 @@ int main(int argc,char** argv){QApplication app(argc,argv);try{
  gpu->setCurrentIndex(1);require(power->value()==-10&&power->suffix()==" %"&&power->minimum()==-50,"AMD percent units/range incorrect");
  for(unsigned i=0;i<4;++i){panel.setLanguage(static_cast<UiLanguage>(i));require(power->value()==-10&&gpu->currentIndex()==1,"Language switch changed selected GPU/settings");}
  panel.setLanguage(UiLanguage::Portuguese);QPushButton* apply=nullptr;for(auto* button:panel.findChildren<QPushButton*>())if(button->text()=="Aplicar"){apply=button;break;}require(apply&&apply->isEnabled(),"Translated Apply unavailable");
- QTimer::singleShot(0,[]{for(auto* widget:QApplication::topLevelWidgets())if(auto* dialog=qobject_cast<QMessageBox*>(widget))dialog->done(QMessageBox::No);});apply->click();
+ for(const auto theme:{UiTheme::Light,UiTheme::Dark}){
+  panel.setStyleSheet(themeStyleSheet(theme));
+  const QColor expectedPanel(theme==UiTheme::Dark?"#10151d":"#ffffff");
+  const QColor expectedButton(theme==UiTheme::Dark?"#222a36":"#e9edf5");
+  const QColor expectedText(theme==UiTheme::Dark?"#f5f1e7":"#182235");
+  bool shown=false,opaque=false,readable=false;
+  QTimer::singleShot(0,[&]{for(auto* widget:QApplication::topLevelWidgets())if(auto* dialog=qobject_cast<QMessageBox*>(widget)){
+   shown=true;
+   QImage image(dialog->size(),QImage::Format_ARGB32_Premultiplied);image.fill(Qt::transparent);dialog->render(&image);
+   const auto pixel=image.pixelColor(image.width()/2,2);
+   opaque=pixel==expectedPanel&&pixel.alpha()==255;
+   if(auto* no=dialog->button(QMessageBox::No)){
+    const auto button=no->grab().toImage();
+    readable=button.pixelColor(5,button.height()/2)==expectedButton&&no->palette().color(QPalette::ButtonText)==expectedText;
+   }
+   if(!qEnvironmentVariableIsEmpty("OPENPUZZLE_DIALOG_CAPTURE_DIR"))image.save(qEnvironmentVariable("OPENPUZZLE_DIALOG_CAPTURE_DIR")+"/gpu-confirm-"+themeCode(theme)+".png");
+   dialog->done(QMessageBox::No);
+  }});apply->click();
+  require(shown,"GPU confirmation did not open");
+  require(opaque,"GPU confirmation background is transparent or has the wrong theme colour");
+  require(readable,"GPU confirmation buttons do not have readable themed surfaces/text");
+ }
  QFile log(trace);require(log.open(QIODevice::ReadOnly),"Fixture trace unavailable");require(log.readAll()=="gpu-control list\n","Inspection or cancelled confirmation called a setter");require(!panel.applying(),"Cancelled change left UI busy");
- std::cout<<"GpuControlPanelTests passed: async inspection, physical GPU selection, watts/percent, four languages and cancellation without writes\n";return 0;
+ std::cout<<"GpuControlPanelTests passed: async inspection, physical GPU selection, watts/percent, four languages, opaque light/dark confirmations and cancellation without writes\n";return 0;
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

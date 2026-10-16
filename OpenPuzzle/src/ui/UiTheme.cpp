@@ -40,6 +40,20 @@ QString themeStyleSheet(UiTheme theme) {
       color: %2;
       font-size: 15px;
     }
+    QDialog, QMessageBox {
+      background: %8;
+      color: %2;
+    }
+    QMessageBox QPushButton {
+      background: %5;
+      color: %2;
+      border: 1px solid %3;
+      min-width: 80px;
+    }
+    QMessageBox QPushButton:hover,
+    QMessageBox QPushButton:focus {
+      border-color: %11;
+    }
     QWidget#PageBackground,
     QWidget#PageContent,
     QWidget#PageViewport,
