@@ -6,6 +6,7 @@
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
+#include "openpuzzle/runtime/WindowsExecutionLauncher.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -16,7 +17,7 @@ void require(bool ok,const char* message){if(!ok)throw std::runtime_error(messag
 std::string read(const fs::path& p){std::ifstream input(p);std::ostringstream out;out<<input.rdbuf();return out.str();}
 bool publish(const fs::path& p,const std::string& contents){WorkspaceSecurity::prepare(p.parent_path());return writePrivateFileAtomically(p,contents);}
 int wmain(int argc,wchar_t** argv){try{
- require(argc==2,"Native CLI executable path required");
+ require(argc==3,"Native CLI and engine fixture paths required");
  const auto root=fs::temp_directory_path()/pathFromUtf8("OpenPuzzle-cli ç 中文-"+std::to_string(GetCurrentProcessId())+'-'+std::to_string(GetTickCount64()));
  fs::create_directories(root);const auto profile=root/pathFromUtf8("profile ç 中文");
  require(SetEnvironmentVariableW(L"LOCALAPPDATA",profile.c_str())&&SetEnvironmentVariableW(L"OPENPUZZLE_EXECUTION_SLOT",nullptr),"CLI test environment setup failed");
@@ -64,6 +65,22 @@ int wmain(int argc,wchar_t** argv){try{
  require(app.run({"stop","--slot","primary"},output)==0&&Control::stopRequested("primary"),"Local stop did not reach verified owner");
  require(Control::clearStop("primary")&&app.run({"safestop"},output)==0&&Control::safeStopRequested("primary"),"Local safe stop did not reach verified owner");
  require(Control::release(),"Local runtime release failed");
+ {
+  require(Control::acquire(),"Speed fixture owner acquisition failed");client::ClientExecutionState state;
+  state.active=true;state.assignmentId="speed-fixture";state.clientId="fixture-client";state.puzzle=20;state.rangeId=1;state.engine="BitCrack";state.backend="cuda";state.start="0";state.end="F";state.workspace=pathUtf8(root/"speed-workspace");
+  const auto gate=root/"speed-gate",ready=root/"speed-ready";
+  auto engine=startWindowsExecution(fs::absolute(argv[2]),{"execution",pathUtf8(gate),pathUtf8(ready),"proof"},state);
+  const auto deadline=GetTickCount64()+4000;while(!fs::exists(ready)&&GetTickCount64()<deadline)Sleep(10);require(fs::exists(ready),"Speed fixture not ready");
+  require(publish(pathFromUtf8(state.workspace)/"bitcrack.log","999.0 MKey/s (999 total)\nPRIVATE-FIXTURE-MATERIAL"),"Legacy speed fixture failed");
+  const auto before=read(Store::path("primary"));std::ostringstream measured;
+  require(app.run({"status","--slot","primary"},measured)==0&&measured.str().find("Speed MKey/s: 12.5")!=std::string::npos&&measured.str().find("Keys checked: 8")!=std::string::npos,"CLI status omitted verified generation speed");
+  require(measured.str().find("999.0")==std::string::npos&&measured.str().find("PRIVATE-FIXTURE")==std::string::npos&&read(Store::path("primary"))==before,"Speed inspection leaked legacy data or changed state");
+  execute({"status","--slot","primary"},0,"Speed MKey/s: 12.5");std::ostringstream other;
+  require(app.run({"status","--slot","cuda-6"},other)==0&&other.str().find("Speed MKey/s: unavailable")!=std::string::npos,"Speed leaked into another execution slot");
+  require(publish(gate,"done"),"Speed fixture gate failed");require(engine->wait(4000)==0,"Speed fixture completion failed");std::ostringstream stopped;
+  require(app.run({"status","--slot","primary"},stopped)==0&&stopped.str().find("Speed MKey/s: unavailable")!=std::string::npos,"Stopped process retained a live speed");
+  require(Store::remove("primary")&&Control::release(),"Speed fixture cleanup failed");
+ }
  const auto config=pathFromUtf8(ConfigurationManager::configPath());
  require(publish(config,"not-json; preserved"),"Configuration fixture publication failed");
  require(app.run({"doctor","--offline"},output)==1&&read(config)=="not-json; preserved","Doctor replaced invalid configuration");

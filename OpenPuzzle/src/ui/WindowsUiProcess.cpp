@@ -1,6 +1,8 @@
 #include "openpuzzle/ui/WindowsUiProcess.hpp"
 #include "openpuzzle/core/WindowsCommandLine.hpp"
 #include "openpuzzle/core/LocalPaths.hpp"
+#include "openpuzzle/hardware/GpuControl.hpp"
+#include <shellapi.h>
 #include <array>
 #include <algorithm>
 #include <stdexcept>
@@ -39,17 +41,26 @@ void WindowsUiProcess::start(const std::filesystem::path& cli,const std::vector<
  CloseHandle(info.hThread);process_=info.hProcess;pipe_=read.take();runtime_=runtime;
  deadline_=runtime?0:GetTickCount64()+timeoutMs;
 }
+void WindowsUiProcess::startGpuControlElevated(HWND owner,const std::filesystem::path& helper,const std::vector<std::string>& args){
+ if(busy()||!helper.is_absolute()||helper.filename()!=L"openpuzzle-gpu-control.exe"||args.empty()||args.front()!="apply")throw std::invalid_argument("Invalid GPU helper request");
+ // Parse the same whitelist before asking UAC; this callback performs no write.
+ std::ostringstream ignored;gpuControlCommand(args,ignored,[]{return std::vector<GpuControlDevice>{};},[](const auto&){});
+ std::wstring parameters;for(const auto& arg:args){if(!parameters.empty())parameters+=L' ';parameters+=pathFromUtf8(WindowsCommandLine::quote(arg)).wstring();}
+ SHELLEXECUTEINFOW info{};info.cbSize=sizeof info;info.fMask=SEE_MASK_NOCLOSEPROCESS|SEE_MASK_FLAG_NO_UI;info.hwnd=owner;info.lpVerb=L"runas";info.lpFile=helper.c_str();info.lpParameters=parameters.c_str();info.nShow=SW_HIDE;
+ if(!ShellExecuteExW(&info)||!info.hProcess)throw std::runtime_error("GPU administrator request failed or was cancelled: "+std::to_string(GetLastError()));
+ process_=info.hProcess;pipe_=nullptr;runtime_=true;deadline_=0;
+}
 UiProcessUpdate WindowsUiProcess::poll(){
  UiProcessUpdate result;if(!busy())return result;
  std::array<char,4096> buffer{};DWORD available=0;
- while(result.output.size()<65536&&PeekNamedPipe(pipe_,nullptr,0,nullptr,&available,nullptr)&&available){
+ while(pipe_&&result.output.size()<65536&&PeekNamedPipe(pipe_,nullptr,0,nullptr,&available,nullptr)&&available){
   DWORD count=0;const auto wanted=(std::min)(available,static_cast<DWORD>(buffer.size()));
   if(!ReadFile(pipe_,buffer.data(),wanted,&count,nullptr)||!count)break;result.output.append(buffer.data(),count);
  }
  const auto wait=WaitForSingleObject(process_,0);
  if(wait==WAIT_OBJECT_0){
   // Drain a large final output across subsequent ticks, preserving the tail.
-  if(PeekNamedPipe(pipe_,nullptr,0,nullptr,&available,nullptr)&&available)return result;
+  if(pipe_&&PeekNamedPipe(pipe_,nullptr,0,nullptr,&available,nullptr)&&available)return result;
   DWORD code=1;GetExitCodeProcess(process_,&code);result.exitCode=static_cast<int>(code);result.finished=true;release();
  }else if(!runtime_&&GetTickCount64()>=deadline_){
   TerminateProcess(process_,124);result.timedOut=true;result.finished=true;result.exitCode=124;release();

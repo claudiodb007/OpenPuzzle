@@ -44,6 +44,13 @@ int main(int argc,char** argv){try{
  s.server="https://server.test/#bad";reject();s.server="http://127.0.0.1:1";s.duration=361;reject();s.duration=60;s.profile.reset();reject();
  s.profile=p;s.slot="cuda-3";s.profilePath=std::string("bad\0path",8);reject();
  auto status=WindowsUiStatus::parse(0,"Slot: cuda-3\r\nRuntime: idle\r\nAssignment: none\r\nPending claim: none\r\n","cuda-3");check(status.canStart());
+ const auto live=WindowsUiStatus::parse(0,"Slot: cuda-3\nRuntime: running\nAssignment: job\nPending claim: none\nSpeed MKey/s: 1379.58\nKeys checked: 1720000000000\n","cuda-3");
+ check(live.running&&live.progress.speedMKeys==1379.58&&live.progress.display()=="1379.58 MKey/s"&&live.progress.keysChecked=="1720000000000");
+ check(!WindowsUiStatus::parse(0,"Slot: opencl-3\nRuntime: running\nAssignment: job\nPending claim: none\nSpeed MKey/s: 55\nKeys checked: 3\n","cuda-3").progress.speedMKeys);
+ check(!WindowsUiStatus::parse(0,"Slot: cuda-3\nRuntime: idle\nAssignment: job\nPending claim: none\nSpeed MKey/s: 55\nKeys checked: 3\n","cuda-3").progress.speedMKeys);
+ for(const auto& invalid:{"nan","inf","-1","0","12.5 junk","1e99"})check(!WindowsUiProgress::parse(invalid,"123").speedMKeys);
+ check(!WindowsUiProgress::parse("12.5","private key material").speedMKeys);
+ check(WindowsUiProgress{}.display()=="—"&&WindowsUiProgress{}.protocol()=="Speed MKey/s: unavailable\nKeys checked: unavailable\n");
  check(!WindowsUiStatus::parse(0,"Slot: other\nRuntime: idle\nAssignment: none\nPending claim: none\n","cuda-3").known);
  check(!WindowsUiStatus::parse(0,"Slot: cuda-3\nRuntime: unknown\nAssignment: none\nPending claim: none\n","cuda-3").canStart());
  check(!WindowsUiStatus::parse(1,"Slot: cuda-3\nRuntime: idle\nAssignment: none\nPending claim: none\n","cuda-3").known);

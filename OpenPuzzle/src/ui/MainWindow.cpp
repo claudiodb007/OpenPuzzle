@@ -1,4 +1,6 @@
 #include "MainWindow.hpp"
+#include "GpuControlPanel.hpp"
+#include <QCloseEvent>
 
 #include "ThermalSettings.hpp"
 #include "openpuzzle/ui/RunCommandBuilder.hpp"
@@ -321,6 +323,14 @@ MainWindow::MainWindow(QWidget* parent)
   refreshStatus();
 }
 
+void MainWindow::closeEvent(QCloseEvent* event) {
+  if(gpuControls_ && gpuControls_->applying()){
+    QMessageBox::information(this,t("gpu_controls"),t("gpu_write_busy"));
+    event->ignore();return;
+  }
+  QMainWindow::closeEvent(event);
+}
+
 MainWindow::~MainWindow() {
   refreshTimer_->stop();
   statusTimeout_->stop();
@@ -632,6 +642,8 @@ void MainWindow::buildInterface() {
   thermalActions->addWidget(saveThermal_);
   thermalLayout->addLayout(thermalActions);
   page->addWidget(thermalCard);
+  gpuControls_ = new GpuControlPanel(cliExecutable());
+  page->addWidget(gpuControls_);
 
   auto* toolsCard = new QFrame;
   toolsCard->setObjectName("Card");
@@ -981,6 +993,7 @@ void MainWindow::saveThermalSettings() {
 }
 
 void MainWindow::applyLanguage() {
+  if(gpuControls_) gpuControls_->setLanguage(currentLanguage_);
   subtitle_->setText(t("subtitle"));
   currentStateTitle_->setText(t("current_state"));
   newExecutionTitle_->setText(t("new_execution"));

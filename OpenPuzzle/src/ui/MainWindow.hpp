@@ -24,6 +24,7 @@ class QTimer;
 class QWidget;
 
 namespace openpuzzle::ui {
+class GpuControlPanel;
 
 class MainWindow final : public QMainWindow {
   Q_OBJECT
@@ -33,6 +34,8 @@ public:
   ~MainWindow() override;
 
 private:
+  void closeEvent(QCloseEvent* event) override;
+  GpuControlPanel* gpuControls_ = nullptr;
   void buildInterface();
   void applyLanguage();
   void applyTheme();

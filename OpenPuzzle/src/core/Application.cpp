@@ -20,6 +20,7 @@
 #include "openpuzzle/core/commands/ThermalCommand.hpp"
 #include "openpuzzle/core/commands/WorkerRunCommand.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
+#include "openpuzzle/hardware/GpuControl.hpp"
 #include "openpuzzle/performance/AutoTuner.hpp"
 #include "openpuzzle/performance/BenchmarkRunner.hpp"
 #include "openpuzzle/performance/GpuProfileManager.hpp"
@@ -112,6 +113,7 @@ static void printApplicationHelp() {
       << "  openpuzzle safestop\n"
       << "  openpuzzle doctor [--offline]\n"
       << "  openpuzzle thermal [--enable|--disable] [thresholds]\n"
+      << "  openpuzzle gpu-control list | apply [physical GPU and one power/fan option]\n"
       << "  openpuzzle audit [--limit N] [--puzzle N] [--event NAME]\n"
       << "  openpuzzle engine install psckangaroo [--force]\n"
       << "\n"
@@ -335,6 +337,7 @@ int Application::run(int argc, char **argv) {
       DoctorService service;
       return service.execute(r);
     }
+    if (cmd == "gpu-control") return gpuControlCommand(r,std::cout);
     if (cmd == "thermal")
       return ThermalCommand().run(r);
     if (cmd == "engine" && !r.empty() && r.front() == "install")

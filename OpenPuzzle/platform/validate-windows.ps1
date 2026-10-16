@@ -1,8 +1,8 @@
-﻿param([string]$ReportRoot = '')
+﻿param([string]$ReportRoot = '', [string]$AdlxIncludeDir = '')
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $project = Split-Path -Parent $PSScriptRoot
-$baseCommit = '3eb164164aede1991ad258b8e7306191684197a6'
+$baseCommit = 'b046d0c9fbc2cd02d695707b974ce07140f161ca'
 $transcribing = $false
 $report = $null
 function Invoke-Native {
@@ -111,24 +111,24 @@ try {
     $boost = Join-Path (Split-Path -Parent $project) 'third-party\include'
     if (-not (Test-Path -LiteralPath (Join-Path $boost 'boost\property_tree\json_parser.hpp'))) { throw 'Bundled Boost headers are missing; extract the complete Windows telemetry ZIP.' }
     $build = Join-Path $report 'build'
-    Invoke-Native -Tool $cmake -ToolArguments @('-S', $project, '-B', $build, '-G', $generator, '-A', 'x64', "-DCMAKE_GENERATOR_INSTANCE=$($installation.installationPath)", '-DOPENPUZZLE_BUILD_PLATFORM_TESTS_ONLY=ON', "-DOPENPUZZLE_PLATFORM_BOOST_INCLUDE_DIR=$boost", "-DOPENPUZZLE_NATIVE_UI_LOGO=$(Join-Path (Split-Path -Parent $project) 'native-ui-assets\openpuzzle-logo-header.png')")
+    Invoke-Native -Tool $cmake -ToolArguments @('-S', $project, '-B', $build, '-G', $generator, '-A', 'x64', "-DCMAKE_GENERATOR_INSTANCE=$($installation.installationPath)", '-DOPENPUZZLE_BUILD_PLATFORM_TESTS_ONLY=ON', "-DOPENPUZZLE_PLATFORM_BOOST_INCLUDE_DIR=$boost", "-DOPENPUZZLE_NATIVE_UI_LOGO=$(Join-Path (Split-Path -Parent $project) 'native-ui-assets\openpuzzle-logo-header.png')", "-DOPENPUZZLE_ADLX_INCLUDE_DIR=$AdlxIncludeDir")
     Invoke-Native -Tool $cmake -ToolArguments @('--build', $build, '--config', 'Release', '--parallel', '4')
     $registrationJson = & $ctest --test-dir $build -C Release --show-only=json-v1 | Out-String
     if ($LASTEXITCODE -ne 0) { throw 'CTest registration failed.' }
     Write-Utf8 -Path (Join-Path $report 'registered-tests.json') -Text $registrationJson
     $registration = $registrationJson | ConvertFrom-Json
-    $expected = @('HttpRangeClientTests', 'HttpRequestPolicyTests', 'WindowsHttpTransportTests', 'PortableStorageTests', 'WindowsEngineFormatTests', 'WindowsEngineLifecycleTests', 'WindowsProcessIdentityTests', 'WindowsProcessRunnerTests', 'WindowsRuntimeControlTests', 'WindowsRuntimeRecordTests', 'WindowsStorageIdentityTests', 'WindowsExecutionStateTests', 'WindowsExecutionSyncTests', 'ClientRuntimeLoopTests', 'PortableSolutionExporterTests', 'WindowsRuntimeSessionTests', 'RunCommandOptionsTests', 'RunAssignmentPlanTests', 'WindowsRunSessionTests', 'WindowsCliApplicationTests', 'WindowsGpuDiscoveryTests', 'WindowsEngineRangeTests', 'WindowsEngineBindingTests', 'WindowsKeyHuntProtocolTests', 'WindowsRunProfileTests', 'KeyHuntSolutionRecordTests', 'WindowsNativeAssignmentTests', 'WindowsAssignmentRecoveryTests', 'WindowsTelemetryModelTests', 'WindowsGpuTelemetryTests', 'WindowsThermalCliTests', 'WindowsThermalRuntimeTests', 'WindowsGpuProfileBindingTests', 'WindowsProfileBindingCliTests', 'WindowsUiModelTests', 'WindowsUiProcessTests', 'WindowsUiWindowTests', 'WindowsUiServerTests', 'WindowsUiLanguageTests')
+    $expected = @('HttpRangeClientTests', 'HttpRequestPolicyTests', 'WindowsHttpTransportTests', 'PortableStorageTests', 'WindowsEngineFormatTests', 'WindowsEngineLifecycleTests', 'WindowsProcessIdentityTests', 'WindowsProcessRunnerTests', 'WindowsRuntimeControlTests', 'WindowsRuntimeRecordTests', 'WindowsStorageIdentityTests', 'WindowsExecutionStateTests', 'WindowsExecutionSyncTests', 'ClientRuntimeLoopTests', 'PortableSolutionExporterTests', 'WindowsRuntimeSessionTests', 'RunCommandOptionsTests', 'RunAssignmentPlanTests', 'WindowsRunSessionTests', 'WindowsCliApplicationTests', 'WindowsGpuDiscoveryTests', 'WindowsEngineRangeTests', 'WindowsEngineBindingTests', 'WindowsKeyHuntProtocolTests', 'WindowsRunProfileTests', 'KeyHuntSolutionRecordTests', 'WindowsNativeAssignmentTests', 'WindowsAssignmentRecoveryTests', 'WindowsTelemetryModelTests', 'WindowsGpuTelemetryTests', 'WindowsThermalCliTests', 'WindowsThermalRuntimeTests', 'WindowsGpuProfileBindingTests', 'WindowsProfileBindingCliTests', 'WindowsUiModelTests', 'WindowsUiProcessTests', 'WindowsUiWindowTests', 'WindowsUiServerTests', 'WindowsUiLanguageTests', 'GpuControlTests', 'NvmlGpuControlTests')
     $registered = @($registration.tests | ForEach-Object { $_.name } | Sort-Object)
-    if ($registered.Count -ne 39 -or @(Compare-Object $expected $registered).Count -ne 0) {
-        throw 'CTest must register exactly the thirty-eight Windows platform and hardware suites.'
+    if ($registered.Count -ne 41 -or @(Compare-Object $expected $registered).Count -ne 0) {
+        throw 'CTest must register exactly the forty-one Windows platform and hardware suites.'
     }
     $junit = Join-Path $report 'ctest-results.xml'
     Invoke-Native -Tool $ctest -ToolArguments @('--test-dir', $build, '-C', 'Release', '--output-on-failure', '--no-tests=error', '--output-junit', $junit)
     [xml]$result = Get-Content -LiteralPath $junit -Raw
     $cases = @($result.SelectNodes('//testcase'))
     $names = @($cases | ForEach-Object { $_.GetAttribute('name') } | Sort-Object)
-    if ($cases.Count -ne 39 -or @(Compare-Object $expected $names).Count -ne 0) {
-        throw 'JUnit does not prove execution of all thirty-eight registered Windows suites.'
+    if ($cases.Count -ne 41 -or @(Compare-Object $expected $names).Count -ne 0) {
+        throw 'JUnit does not prove execution of all forty-one registered Windows suites.'
     }
     foreach ($case in $cases) {
         if (@($case.SelectNodes('failure|error|skipped')).Count -ne 0 -or $case.GetAttribute('status') -notin @('', 'run', 'pass', 'passed')) {
@@ -148,15 +148,17 @@ try {
     Write-Host $inventory
     if ($inventoryExit -notin @(0,2)) { throw "Hardware inventory command failed ($inventoryExit)." }
     $summary = @(
-        'Windows UI benchmark and scrolling: native fixture validation passed',
+        'Windows GPU controls: native fixture validation passed',
         "Linux source base: $baseCommit",
         "Generator: $generator",
         'Architecture: x64',
-        'Native Windows tests: 39/39 passed',
+        'Native Windows tests: 41/41 passed',
         "Real hardware diagnostic exit: $inventoryExit (0: enumeration completed; 2: hardware query unavailable)",
         ('Windows CLI executable: ' + (Join-Path $build 'platform\Release\openpuzzle.exe')),
         ('Windows UI executable: ' + (Join-Path $build 'platform\Release\openpuzzle-ui.exe')),
-        'Native Windows panel: four languages, Benchmark, Safe Stop and buffered scrolling; visual review pending',
+        'Native Windows panel: physical GPU power/fan controls, four languages and cooperative controls; hardware writes and visual review pending',
+        ("AMD Windows ADLX SDK configured: " + [bool]$AdlxIncludeDir),
+        'Real GPU control writes: not performed; validation is read-only',
         'Full Windows application: not yet ported',
         'Only local processes, read-only driver enumeration and a loopback HTTP fixture were used; no production assignments requested.',
         "Report: $report"

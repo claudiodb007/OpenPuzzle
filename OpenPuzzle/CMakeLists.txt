@@ -15,6 +15,8 @@ if(OPENPUZZLE_BUILD_PLATFORM_TESTS_ONLY)
     return()
 endif()
 
+enable_testing()
+add_subdirectory(gpu-control)
 find_package(SQLite3 REQUIRED)
 
 set(
@@ -268,6 +270,7 @@ target_include_directories(OpenPuzzleCore
 )
 
 target_link_libraries(OpenPuzzleCore
+    PUBLIC OpenPuzzleGpuControl
     PUBLIC
         SQLite::SQLite3
 )
@@ -425,6 +428,8 @@ if(OPENPUZZLE_BUILD_UI)
             src/ui/main.cpp
             src/ui/MainWindow.cpp
             src/ui/MainWindow.hpp
+            src/ui/GpuControlPanel.cpp
+            src/ui/GpuControlPanel.hpp
             src/ui/ThermalAlerts.cpp
             src/ui/ThermalAlerts.hpp
             src/ui/ThermalHistory.cpp

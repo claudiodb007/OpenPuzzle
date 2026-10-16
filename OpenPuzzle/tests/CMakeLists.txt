@@ -121,10 +121,17 @@ if(TARGET OpenPuzzleUi)
         COMMAND UiThermalHistoryTests
     )
 
+    add_executable(GpuControlPanelTests ui/GpuControlPanelTests.cpp ../src/ui/GpuControlPanel.cpp ../src/ui/UiLanguage.cpp)
+    target_include_directories(GpuControlPanelTests PRIVATE ../include ../src/ui)
+    target_link_libraries(GpuControlPanelTests PRIVATE Qt6::Widgets)
+    add_test(NAME GpuControlPanelTests COMMAND GpuControlPanelTests)
+    set_tests_properties(GpuControlPanelTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 20)
     add_executable(UiControlTests
         ui/UiControlTests.cpp
         ../src/ui/MainWindow.cpp
         ../src/ui/MainWindow.hpp
+        ../src/ui/GpuControlPanel.cpp
+        ../src/ui/GpuControlPanel.hpp
         ../src/ui/ThermalAlerts.cpp
         ../src/ui/ThermalAlerts.hpp
         ../src/ui/ThermalHistory.cpp
@@ -169,6 +176,8 @@ if(TARGET OpenPuzzleUi)
         ui/UiStatusFailureTests.cpp
         ../src/ui/MainWindow.cpp
         ../src/ui/MainWindow.hpp
+        ../src/ui/GpuControlPanel.cpp
+        ../src/ui/GpuControlPanel.hpp
         ../src/ui/ThermalAlerts.cpp
         ../src/ui/ThermalAlerts.hpp
         ../src/ui/ThermalHistory.cpp
@@ -213,6 +222,8 @@ if(TARGET OpenPuzzleUi)
         ui/UiCommandBusyTests.cpp
         ../src/ui/MainWindow.cpp
         ../src/ui/MainWindow.hpp
+        ../src/ui/GpuControlPanel.cpp
+        ../src/ui/GpuControlPanel.hpp
         ../src/ui/ThermalAlerts.cpp
         ../src/ui/ThermalAlerts.hpp
         ../src/ui/ThermalHistory.cpp
@@ -257,6 +268,8 @@ if(TARGET OpenPuzzleUi)
         ui/UiLaunchStatusTests.cpp
         ../src/ui/MainWindow.cpp
         ../src/ui/MainWindow.hpp
+        ../src/ui/GpuControlPanel.cpp
+        ../src/ui/GpuControlPanel.hpp
         ../src/ui/ThermalAlerts.cpp
         ../src/ui/ThermalAlerts.hpp
         ../src/ui/ThermalHistory.cpp
@@ -301,6 +314,8 @@ if(TARGET OpenPuzzleUi)
         ui/UiConfirmationTests.cpp
         ../src/ui/MainWindow.cpp
         ../src/ui/MainWindow.hpp
+        ../src/ui/GpuControlPanel.cpp
+        ../src/ui/GpuControlPanel.hpp
         ../src/ui/ThermalAlerts.cpp
         ../src/ui/ThermalAlerts.hpp
         ../src/ui/ThermalHistory.cpp

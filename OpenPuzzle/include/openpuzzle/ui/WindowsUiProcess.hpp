@@ -27,6 +27,8 @@ public:
  bool runtime()const{return busy()&&runtime_;}
  bool cancelOwnedCommand();
  void start(const std::filesystem::path& cli,const std::vector<std::string>& args,bool runtime=false,DWORD timeoutMs=30000);
+ // UAC for the dedicated, narrow GPU helper; never terminates a driver write.
+ void startGpuControlElevated(HWND owner,const std::filesystem::path& helper,const std::vector<std::string>& args);
  UiProcessUpdate poll();
 };
 }

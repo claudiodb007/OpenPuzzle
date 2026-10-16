@@ -3,6 +3,7 @@
 #include "openpuzzle/runtime/ExecutionSlot.hpp"
 #include "openpuzzle/client/HttpRequestPolicy.hpp"
 #include "openpuzzle/ui/WindowsUiServer.hpp"
+#include "openpuzzle/ui/WindowsUiProgress.hpp"
 #include <optional>
 #include <map>
 namespace openpuzzle::ui {
@@ -16,6 +17,7 @@ struct WindowsUiSelection {
 };
 struct WindowsUiStatus {
  bool known=false,running=false,preserved=false;
+ WindowsUiProgress progress;
  static WindowsUiStatus parse(int code,const std::string& output,const std::string& slot) {
   std::map<std::string,std::string> values;std::istringstream input(output);std::string line;
   while(std::getline(input,line)){
@@ -27,7 +29,9 @@ struct WindowsUiStatus {
   const auto runtime=values["Runtime"];if(runtime!="idle"&&runtime!="running")return {};
   if(values["Assignment"].empty()||(values["Pending claim"]!="none"&&values["Pending claim"]!="preserved"))return {};
   // Code 2 is preserved/uncertain state, even if the runtime itself is known.
-  return {true,runtime=="running",code!=0||values["Assignment"]!="none"||values["Pending claim"]!="none"};
+  WindowsUiStatus result{true,runtime=="running",code!=0||values["Assignment"]!="none"||values["Pending claim"]!="none"};
+  if(result.running&&values["Assignment"]!="none"&&values["Assignment"]!="identity unavailable")result.progress=WindowsUiProgress::parse(values["Speed MKey/s"],values["Keys checked"]);
+  return result;
  }
  bool canStart()const{return known&&!running&&!preserved;}
 };
