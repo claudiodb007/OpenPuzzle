@@ -6,8 +6,20 @@
 using namespace openpuzzle;using namespace openpuzzle::ui;
 void check(bool b){if(!b)throw std::runtime_error("Windows UI model contract failed");}
 int main(int argc,char** argv){try{
+ check(std::string(windowsUiServer)=="https://claudiodb.com");
  WindowsUiSelection s;s.server="http://127.0.0.1:1";s.profilePath="C:\\Perfis com espaços & dados\\result.json";
- WindowsRunProfile p;p.backend="cuda";p.device=3;p.gpuUuid="1f78bee1-b3b1-e9d5-78a7-00cdaa490619";s.profile=p;s.slot="cuda-3";
+ WindowsRunProfile p;p.backend="cuda";p.device=3;p.threads=256;p.blocks=256;p.points=1024;p.gpuUuid="1f78bee1-b3b1-e9d5-78a7-00cdaa490619";s.profile=p;s.slot="cuda-3";
+ for(const auto& backend:{"cpu","cuda","opencl"}){
+  auto measured=p;measured.backend=backend;measured.device=measured.backend=="cpu"?0:3;measured.threads=measured.backend=="cpu"?1:256;s.profile=measured;
+  const auto preview=windowsUiCommand(UiAction::BenchmarkPreview,s),real=windowsUiCommand(UiAction::Benchmark,s);
+  check(preview[0]=="benchmark"&&preview[2]==backend&&real.back()=="--real"&&real.size()==preview.size()+1);
+  for(const auto& flag:{"--slot","--profile","--server","--real"})check(std::find(preview.begin(),preview.end(),flag)==preview.end());
+  check((std::find(preview.begin(),preview.end(),"--blocks")!=preview.end())==(measured.backend!="cpu"));
+ }
+ s.profile=p;
+ check(windowsUiBenchmarkReport("Report: C:\\Private\\run-1\r\nLocal validation: PASSED\r\n")=="C:\\Private\\run-1");
+ for(const auto& bad:{"no report", "Report: one\nReport: two\n"}){bool rejected=false;try{windowsUiBenchmarkReport(bad);}catch(...){rejected=true;}check(rejected);}
+ auto fixed=windowsUiStartCommand(s);const auto serverFlag=std::find(fixed.begin(),fixed.end(),"--server");check(serverFlag!=fixed.end()&&*(serverFlag+1)==windowsUiServer);
  auto args=windowsUiCommand(UiAction::Start,s);std::vector<std::string> runArgs;
  for(std::size_t i=0;i<args.size();++i){if(args[i]=="--slot"){++i;continue;}runArgs.push_back(args[i]);}
  auto parsed=RunCommandOptions::parse(runArgs);check(parsed.profile==s.profilePath&&parsed.server==s.server&&parsed.puzzle==71&&!parsed.dryRun&&!parsed.once);

@@ -2,10 +2,11 @@
 #include "openpuzzle/engines/WindowsRunProfile.hpp"
 #include "openpuzzle/runtime/ExecutionSlot.hpp"
 #include "openpuzzle/client/HttpRequestPolicy.hpp"
+#include "openpuzzle/ui/WindowsUiServer.hpp"
 #include <optional>
 #include <map>
 namespace openpuzzle::ui {
-enum class UiAction { Preflight, Start, Stop, SafeStop, Recover, Status, Telemetry, ThermalRead, ThermalSave };
+enum class UiAction { Preflight, Start, Stop, SafeStop, Recover, Status, Telemetry, ThermalRead, ThermalSave, Benchmark, BenchmarkPreview, BenchmarkBind, BenchmarkPreflight };
 struct WindowsUiSelection {
  std::string profilePath,server,slot="primary";
  int puzzle=71,duration=60;
@@ -40,6 +41,14 @@ inline double windowsUiThermalThreshold(std::string value){
  return result;
 }
 inline std::vector<std::string> windowsUiCommand(UiAction action,const WindowsUiSelection& s) {
+ if(action==UiAction::Benchmark||action==UiAction::BenchmarkPreview){
+  if(!s.profile)throw std::invalid_argument("Seleciona um perfil medido válido");const auto& p=*s.profile;
+  if((p.backend!="cpu"&&p.backend!="cuda"&&p.backend!="opencl")||p.device<0||p.device>255||p.threads<1||p.threads>(p.backend=="cpu"?256:1024)||
+     (p.backend=="cpu"?p.device!=0:p.threads<32||p.threads%32!=0||p.blocks<1||p.blocks>65535||p.points<1||p.points>65536))throw std::invalid_argument("Invalid benchmark parameters");
+  std::vector<std::string> args{"benchmark","--backend",p.backend,"--device",std::to_string(p.device),"--threads",std::to_string(p.threads),"--seconds","30"};
+  if(p.backend!="cpu")args.insert(args.end(),{"--blocks",std::to_string(p.blocks),"--points",std::to_string(p.points)});
+  if(action==UiAction::Benchmark)args.push_back("--real");return args;
+ }
  if(action==UiAction::Telemetry)return {"telemetry"};
  if(action==UiAction::ThermalRead)return {"thermal"};
  if(action==UiAction::ThermalSave){
@@ -68,5 +77,18 @@ inline std::vector<std::string> windowsUiCommand(UiAction action,const WindowsUi
   "--duration-minutes",std::to_string(s.duration),"--slot",s.slot});
  if(s.once)args.push_back("--once");if(action==UiAction::Preflight)args.push_back("--dry-run");
  return args;
+}
+inline std::string windowsUiBenchmarkReport(const std::string& output){
+ std::istringstream input(output);std::string line,result;bool found=false;while(std::getline(input,line)){if(!line.empty()&&line.back()=='\r')line.pop_back();
+  if(line.rfind("Report: ",0)==0){if(found)throw std::runtime_error("Ambiguous benchmark report");found=true;result=line.substr(8);}}
+ if(result.empty()||result.find('\0')!=std::string::npos)throw std::runtime_error("Missing benchmark report");return result;
+}
+}
+
+namespace openpuzzle::ui {
+// The production panel cannot override its coordinator. Generic command building
+// remains available to isolated loopback fixtures and the technical CLI.
+inline std::vector<std::string> windowsUiStartCommand(WindowsUiSelection selection){
+ selection.server=windowsUiServer;return windowsUiCommand(UiAction::Start,selection);
 }
 }

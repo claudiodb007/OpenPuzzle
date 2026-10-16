@@ -1,6 +1,6 @@
 # Native Windows panel
 
-Source base: `3e28a2a8913b345f6639f42b0755cfeb2cb528b5`.
+Automatic-server source base: `3eb164164aede1991ad258b8e7306191684197a6`.
 
 The native Win32 panel is a first Windows interface over the validated console
 client. It builds in the isolated MSVC platform target with the existing Windows
@@ -13,7 +13,7 @@ also accepts a profile selected through a file dialog. GPU profiles require a
 physical UUID or PCI binding. The displayed engine/device parameters come from
 the measured profile; the panel cannot override them or launch Kangaroo.
 
-The panel supports an explicit server URL, positive puzzle number, duration,
+The panel automatically uses the mandatory official coordinator, plus a positive puzzle number, duration,
 one-assignment mode, local preflight, start, cooperative stop, finish-current
 assignment, recovery, read-only NVML telemetry and subsequent-run thermal policy.
 CPU uses the primary slot; CUDA and OpenCL use their corresponding device slots.
@@ -43,19 +43,20 @@ stop it. Recovery is explicit and reconciles prior work without claiming again.
 Start and recovery require an explicit UI confirmation.
 
 The portable launcher uses report-local `ui-local-data` for settings and identity,
-preserving the installed profile. The server field is initially blank. Thermal
+preserving the installed profile. The panel has no server field or server settings. It forces the official
+`https://claudiodb.com` coordinator and ignores environment/legacy UI overrides. Thermal
 settings are saved only by the explicit button, through the tested CLI command,
 and apply to subsequent runs. No drivers, power limits or fans are changed.
 
-The UI is not yet the complete Windows application: Persistent preferences,
+The UI is not yet the complete Windows application: Other persistent preferences,
 charts/history, autostart integration, Kangaroo, an installer and production
 validation remain pending. Multiple identical GPUs are covered by fixtures;
 real multi-GPU Windows hardware remains a separate validation requirement.
 
 ## Validation
 
-The package validator requires the successful physical binding report and runs
-37 registered Windows suites with JUnit equality/no-skips checks. New coverage:
+The package validator requires the successful Windows settings v2 report and runs
+38 registered Windows suites with JUnit equality/no-skips checks. New coverage:
 portable profile/slot/state/thermal command model; native argv streaming and
 timeout/control isolation; hidden native window creation, read-only fixture
 commands and close blocking during a synthetic runtime. It preserves engine and
@@ -66,9 +67,22 @@ identity/claim. Original Linux Puzzle 71 metadata is included byte-identically. 
 
 Windows visual review is separate: open `portable/Start-OpenPuzzleUi.ps1` from the
 new report, check profile selection, UUID/PCI, sensor readings, resizing and local
-preflight with the server field empty. Do not click Start for that local review.
+preflight without any server configuration. Do not click Start for that local review.
 Native MSVC execution and visual review must be reported separately from Linux
 portable execution. The Linux integration script checks 170 complete Linux tests
-and 18 portable tests before creating the isolated UI commit.
+and 18 portable tests before creating the isolated automatic-server commit.
 
 Process API reference: https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw
+
+## Shared language selection
+
+The native panel now offers the same four languages as Linux, backed by a shared
+UTF-8 catalog. See WINDOWS_UI_LANGUAGE.md. Explicit language choices persist in
+the Windows user profile; no server setting is exposed. The current combined
+validation requires 39 native suites and 19 portable suites.
+
+## Benchmark and scrolling
+
+See WINDOWS_UI_POLISH.md for the explicit 30-second measured-profile benchmark,
+Linux Safe Stop labels and buffered, batched scrolling. Real visual smoothness
+remains a manual check; fixture success does not establish the visual result.

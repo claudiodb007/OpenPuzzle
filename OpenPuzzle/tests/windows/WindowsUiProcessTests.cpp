@@ -16,8 +16,9 @@ int wmain(int argc,wchar_t** argv){try{
  output.clear();p.start(fixture,{"fail"});result=finish(p,output);check(result.exitCode==9&&output.find("fixture-error")!=std::string::npos);
  output.clear();p.start(fixture,{"flood"});result=finish(p,output);check(result.exitCode==0&&output.find("TAIL")!=std::string::npos&&output.size()>300000);
  output.clear();p.start(fixture,{"slow"},false,100);result=finish(p,output);check(result.timedOut&&result.exitCode==124&&!p.busy());
+ output.clear();p.start(fixture,{"slow"});check(p.cancelOwnedCommand());result=finish(p,output);check(result.exitCode==1223&&!p.busy());
  output.clear();p.start(fixture,{"fixture-run"},true,1);WindowsUiProcess control;control.start(fixture,{"stop","--slot","primary"});std::string reply;
- result=finish(control,reply);check(result.exitCode==0&&p.runtime());result=finish(p,output);check(result.exitCode==0&&!result.timedOut&&output.find("runtime-finished")!=std::string::npos);
+ result=finish(control,reply);check(result.exitCode==0&&p.runtime()&&!p.cancelOwnedCommand());result=finish(p,output);check(result.exitCode==0&&!result.timedOut&&output.find("runtime-finished")!=std::string::npos);
  wchar_t current[128]{};const auto currentSize=GetEnvironmentVariableW(L"OPENPUZZLE_EXECUTION_SLOT",current,128);
  check(currentSize==previousSize&&std::wstring(current,currentSize)==std::wstring(previous,previousSize));
  std::cout<<"WindowsUiProcessTests passed: literal argv, streamed output, independent control, bounded commands and unbounded runtime\n";return 0;

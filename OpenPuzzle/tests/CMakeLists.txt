@@ -51,6 +51,7 @@ if(TARGET OpenPuzzleUi)
     target_include_directories(UiPreferencesTests
         PRIVATE
             ../src/ui
+            ../include
     )
 
     target_link_libraries(UiPreferencesTests
@@ -2315,3 +2316,6 @@ add_test(NAME WindowsGpuProfileBindingTests COMMAND WindowsGpuProfileBindingTest
 add_executable(WindowsUiModelTests ui/WindowsUiModelTests.cpp)
 target_link_libraries(WindowsUiModelTests PRIVATE OpenPuzzleCore)
 add_test(NAME WindowsUiModelTests COMMAND WindowsUiModelTests "${CMAKE_CURRENT_SOURCE_DIR}/../resources/puzzles/71.json")
+add_executable(WindowsUiLanguageTests ui/WindowsUiLanguageTests.cpp)
+target_link_libraries(WindowsUiLanguageTests PRIVATE OpenPuzzleCore)
+add_test(NAME WindowsUiLanguageTests COMMAND WindowsUiLanguageTests)

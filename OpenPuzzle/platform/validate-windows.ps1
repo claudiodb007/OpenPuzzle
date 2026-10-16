@@ -2,7 +2,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $project = Split-Path -Parent $PSScriptRoot
-$baseCommit = '3e28a2a8913b345f6639f42b0755cfeb2cb528b5'
+$baseCommit = '3eb164164aede1991ad258b8e7306191684197a6'
 $transcribing = $false
 $report = $null
 function Invoke-Native {
@@ -117,18 +117,18 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'CTest registration failed.' }
     Write-Utf8 -Path (Join-Path $report 'registered-tests.json') -Text $registrationJson
     $registration = $registrationJson | ConvertFrom-Json
-    $expected = @('HttpRangeClientTests', 'HttpRequestPolicyTests', 'WindowsHttpTransportTests', 'PortableStorageTests', 'WindowsEngineFormatTests', 'WindowsEngineLifecycleTests', 'WindowsProcessIdentityTests', 'WindowsProcessRunnerTests', 'WindowsRuntimeControlTests', 'WindowsRuntimeRecordTests', 'WindowsStorageIdentityTests', 'WindowsExecutionStateTests', 'WindowsExecutionSyncTests', 'ClientRuntimeLoopTests', 'PortableSolutionExporterTests', 'WindowsRuntimeSessionTests', 'RunCommandOptionsTests', 'RunAssignmentPlanTests', 'WindowsRunSessionTests', 'WindowsCliApplicationTests', 'WindowsGpuDiscoveryTests', 'WindowsEngineRangeTests', 'WindowsEngineBindingTests', 'WindowsKeyHuntProtocolTests', 'WindowsRunProfileTests', 'KeyHuntSolutionRecordTests', 'WindowsNativeAssignmentTests', 'WindowsAssignmentRecoveryTests', 'WindowsTelemetryModelTests', 'WindowsGpuTelemetryTests', 'WindowsThermalCliTests', 'WindowsThermalRuntimeTests', 'WindowsGpuProfileBindingTests', 'WindowsProfileBindingCliTests', 'WindowsUiModelTests', 'WindowsUiProcessTests', 'WindowsUiWindowTests')
+    $expected = @('HttpRangeClientTests', 'HttpRequestPolicyTests', 'WindowsHttpTransportTests', 'PortableStorageTests', 'WindowsEngineFormatTests', 'WindowsEngineLifecycleTests', 'WindowsProcessIdentityTests', 'WindowsProcessRunnerTests', 'WindowsRuntimeControlTests', 'WindowsRuntimeRecordTests', 'WindowsStorageIdentityTests', 'WindowsExecutionStateTests', 'WindowsExecutionSyncTests', 'ClientRuntimeLoopTests', 'PortableSolutionExporterTests', 'WindowsRuntimeSessionTests', 'RunCommandOptionsTests', 'RunAssignmentPlanTests', 'WindowsRunSessionTests', 'WindowsCliApplicationTests', 'WindowsGpuDiscoveryTests', 'WindowsEngineRangeTests', 'WindowsEngineBindingTests', 'WindowsKeyHuntProtocolTests', 'WindowsRunProfileTests', 'KeyHuntSolutionRecordTests', 'WindowsNativeAssignmentTests', 'WindowsAssignmentRecoveryTests', 'WindowsTelemetryModelTests', 'WindowsGpuTelemetryTests', 'WindowsThermalCliTests', 'WindowsThermalRuntimeTests', 'WindowsGpuProfileBindingTests', 'WindowsProfileBindingCliTests', 'WindowsUiModelTests', 'WindowsUiProcessTests', 'WindowsUiWindowTests', 'WindowsUiServerTests', 'WindowsUiLanguageTests')
     $registered = @($registration.tests | ForEach-Object { $_.name } | Sort-Object)
-    if ($registered.Count -ne 37 -or @(Compare-Object $expected $registered).Count -ne 0) {
-        throw 'CTest must register exactly the thirty-seven Windows platform and hardware suites.'
+    if ($registered.Count -ne 39 -or @(Compare-Object $expected $registered).Count -ne 0) {
+        throw 'CTest must register exactly the thirty-eight Windows platform and hardware suites.'
     }
     $junit = Join-Path $report 'ctest-results.xml'
     Invoke-Native -Tool $ctest -ToolArguments @('--test-dir', $build, '-C', 'Release', '--output-on-failure', '--no-tests=error', '--output-junit', $junit)
     [xml]$result = Get-Content -LiteralPath $junit -Raw
     $cases = @($result.SelectNodes('//testcase'))
     $names = @($cases | ForEach-Object { $_.GetAttribute('name') } | Sort-Object)
-    if ($cases.Count -ne 37 -or @(Compare-Object $expected $names).Count -ne 0) {
-        throw 'JUnit does not prove execution of all thirty-seven registered Windows suites.'
+    if ($cases.Count -ne 39 -or @(Compare-Object $expected $names).Count -ne 0) {
+        throw 'JUnit does not prove execution of all thirty-eight registered Windows suites.'
     }
     foreach ($case in $cases) {
         if (@($case.SelectNodes('failure|error|skipped')).Count -ne 0 -or $case.GetAttribute('status') -notin @('', 'run', 'pass', 'passed')) {
@@ -148,15 +148,15 @@ try {
     Write-Host $inventory
     if ($inventoryExit -notin @(0,2)) { throw "Hardware inventory command failed ($inventoryExit)." }
     $summary = @(
-        'Windows native UI: native fixture validation passed',
+        'Windows UI benchmark and scrolling: native fixture validation passed',
         "Linux source base: $baseCommit",
         "Generator: $generator",
         'Architecture: x64',
-        'Native Windows tests: 37/37 passed',
+        'Native Windows tests: 39/39 passed',
         "Real hardware diagnostic exit: $inventoryExit (0: enumeration completed; 2: hardware query unavailable)",
         ('Windows CLI executable: ' + (Join-Path $build 'platform\Release\openpuzzle.exe')),
         ('Windows UI executable: ' + (Join-Path $build 'platform\Release\openpuzzle-ui.exe')),
-        'Native Windows panel: profiles, telemetry, thermal settings and cooperative controls; real visual review pending',
+        'Native Windows panel: four languages, Benchmark, Safe Stop and buffered scrolling; visual review pending',
         'Full Windows application: not yet ported',
         'Only local processes, read-only driver enumeration and a loopback HTTP fixture were used; no production assignments requested.',
         "Report: $report"

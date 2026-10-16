@@ -20,6 +20,7 @@ struct Attributes {
 }
 void WindowsUiProcess::release(){if(pipe_)CloseHandle(pipe_);if(process_)CloseHandle(process_);pipe_=process_=nullptr;}
 WindowsUiProcess::~WindowsUiProcess(){if(busy()&&!runtime_)TerminateProcess(process_,125);release();}
+bool WindowsUiProcess::cancelOwnedCommand(){return busy()&&!runtime_&&TerminateProcess(process_,1223)!=0;}
 void WindowsUiProcess::start(const std::filesystem::path& cli,const std::vector<std::string>& args,bool runtime,DWORD timeoutMs){
  if(busy()||!cli.is_absolute()||(!runtime&&!timeoutMs))throw std::invalid_argument("Processo ocupado ou caminho inválido");
  auto command=pathFromUtf8(WindowsCommandLine::build(pathUtf8(cli),args)).wstring();

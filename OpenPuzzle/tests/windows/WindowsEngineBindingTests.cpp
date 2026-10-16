@@ -5,6 +5,7 @@
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/core/AtomicFile.hpp"
+#include "openpuzzle/ui/WindowsUiModel.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -28,6 +29,13 @@ int wmain(int argc,wchar_t** argv){try{
   check(app.run(args,out)==1,"Malformed local engine arguments accepted");
  check(!fs::exists(localPaths::root()),"Invalid engine commands created a profile");
  check(app.run({"benchmark","--backend","cpu"},out)==0&&!fs::exists(localPaths::root()),"Benchmark preview started a motor or wrote data");
+ for(const auto& backend:{"cpu","cuda","opencl"}){
+  ui::WindowsUiSelection selection;WindowsRunProfile p;p.backend=backend;p.device=0;p.threads=p.backend=="cpu"?1:256;p.blocks=256;p.points=1024;selection.profile=p;
+  const auto preview=ui::windowsUiCommand(ui::UiAction::BenchmarkPreview,selection);
+  check(app.run(preview,out)==0&&!fs::exists(localPaths::root()),"UI benchmark preview launched an engine or wrote state");
+  const auto real=WindowsEngineCheckOptions::parse(ui::windowsUiCommand(ui::UiAction::Benchmark,selection));
+  check(real.real&&real.backend==backend&&real.device==0&&real.threads==p.threads&&real.seconds==30,"UI benchmark parameters did not reach the native diagnostic parser");
+ }
  const auto fingerprint=WindowsEngineDiagnostics::executableSha256(engines/"keyhunt.exe");check(fingerprint.size()==64&&fingerprint==WindowsEngineDiagnostics::executableSha256(engines/"clBitCrack.exe"),"Executable hash is inconsistent");
  for(const auto backend:{"cpu","cuda","opencl"})check(app.run({"selftest","--backend",backend},out)==0,"Valid native engine binding failed");
  const auto data=localPaths::dataDirectory()/"engine-diagnostics";std::size_t good=0;
