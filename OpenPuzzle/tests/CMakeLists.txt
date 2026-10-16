@@ -2334,3 +2334,16 @@ add_test(NAME WindowsUiModelTests COMMAND WindowsUiModelTests "${CMAKE_CURRENT_S
 add_executable(WindowsUiLanguageTests ui/WindowsUiLanguageTests.cpp)
 target_link_libraries(WindowsUiLanguageTests PRIVATE OpenPuzzleCore)
 add_test(NAME WindowsUiLanguageTests COMMAND WindowsUiLanguageTests)
+
+# Inspect installed and archived GPU controls without accessing a GPU or /usr.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_test(
+        NAME GpuControlPackagingTests
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/scripts/GpuControlPackagingTests.py
+            --source ${CMAKE_SOURCE_DIR}
+            --cmake ${CMAKE_COMMAND}
+            --cpack ${CMAKE_CPACK_COMMAND}
+    )
+    set_tests_properties(GpuControlPackagingTests PROPERTIES TIMEOUT 120)
+endif()

@@ -502,6 +502,7 @@ add_test(
 
 # OpenPuzzle client installation and packaging
 include(GNUInstallDirs)
+include(gpu-control/Install.cmake)
 
 set(
     CMAKE_INSTALL_DEFAULT_DIRECTORY_PERMISSIONS

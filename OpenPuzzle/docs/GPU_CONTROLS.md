@@ -128,3 +128,23 @@ The portable launcher accepts `-DataReport` pointing at an existing validated
 client data without copying state, starting an engine, acquiring a new runtime
 owner or stopping the running search. Choose the CUDA measured profile to view
 that slot. Keep the original runtime/engine files available while it runs.
+
+## Linux packages
+
+Normal Linux CMake installs and the DEB/TGZ packages include the dedicated
+helper (`usr/libexec/openpuzzle-gpu-control`), the restricted polkit action
+(`usr/share/polkit-1/actions/org.openpuzzle.gpu-control.policy`) and this guide.
+CPack uses the `/usr` prefix to match the desktop entry, service and polkit
+paths. Package staging and archive creation do not execute the helper, change
+GPU settings, activate a service or start a search.
+
+Installing the DEB as administrator installs the root-owned helper and policy.
+Each Apply still asks for administrator authentication. A graphical polkit
+agent and `/usr/bin/pkexec` must be available in the desktop session. There is
+no password-free rule, setuid program, background tuning service or automatic
+reapplication of settings.
+
+Extracting the TGZ alone does not authorize writes. Portable users can continue
+to install the dedicated helper explicitly with the included script, supplying
+the extracted helper path. Existing GPU settings and client data are separate
+from these installed program files and are not package contents.
