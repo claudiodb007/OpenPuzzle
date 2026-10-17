@@ -2,12 +2,24 @@
 
 ## Current release
 
-OpenPuzzle 1.0.20 adds puzzle-aware routing for linear and Pollard Kangaroo workloads and resilient metadata-only solution alerts.
+OpenPuzzle 1.0.47 adds desktop GPU power and fan controls for Linux NVIDIA and AMD
+boards, a dedicated authenticated helper, and readable confirmation dialogs.
+GPU selection uses physical identity. Settings change only after an explicit
+Apply; opening the application does not reapply tuning.
 
-Puzzle 71 keeps its existing BitCrack CUDA/OpenCL and KeyHunt CPU path. Puzzles 140, 145, 150, 155 and 160 use verified public-key metadata and require an explicitly installed external PSCKangaroo executor. Private keys remain local, and temporary alert failures retry automatically.
+This release distributes Linux DEB and TGZ packages. A separate
+[Windows 11 x64 test prerelease](https://github.com/claudiodb007/OpenPuzzle/releases/tag/windows-test-20261017-1)
+is available with a per-user installer, four languages and NVIDIA GPU controls.
+Windows remains experimental; AMD Windows hardware validation and an MSI/Setup.exe
+installer remain pending. The Windows test binaries retain their tested identity.
 
-The public repository contains the client only. The coordination service and website infrastructure are not included.
-See [OpenPuzzle 1.0.20 release notes](docs/RELEASE_1.0.20.md) and the [client runtime guide](docs/CLIENT_RUNTIME.md).
+Puzzle 71 retains BitCrack CUDA/OpenCL and KeyHunt CPU. Supported public-key
+puzzles retain the explicitly installed external PSCKangaroo executor.
+Private keys stay local. The public repository contains the client only.
+
+See [OpenPuzzle 1.0.47 release notes](docs/RELEASE_1.0.47.md),
+[GPU controls](docs/GPU_CONTROLS.md) and the
+[client runtime guide](docs/CLIENT_RUNTIME.md).
 
 ## Open-source orchestration platform for cryptographic keyspace exploration
 
