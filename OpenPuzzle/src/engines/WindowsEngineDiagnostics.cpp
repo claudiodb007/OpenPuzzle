@@ -9,6 +9,8 @@
 #include "openpuzzle/core/WindowsPrivateFile.hpp"
 #include "openpuzzle/core/JsonString.hpp"
 #include <wincrypt.h>
+#include "openpuzzle/performance/WindowsAutoBenchmark.hpp"
+#include "openpuzzle/engines/WindowsGpuProfileBinding.hpp"
 #include <boost/property_tree/json_parser.hpp>
 #include <algorithm>
 #include <array>
@@ -40,6 +42,7 @@ std::string text(const fs::path& file,std::size_t limit=1024*1024){
  require(value.has_value(),"Diagnostic output is missing, oversized or unreadable: "+pathUtf8(file));return *value;
 }
 void write(const fs::path& file,const std::string& value){require(writePrivateFileAtomically(file,value),"Private diagnostic file cannot be published");}
+struct CandidateRejected:std::runtime_error{using std::runtime_error::runtime_error;};
 struct Result {std::uint32_t exit=0;bool timedOut=false;double elapsed=0;std::string log;};
 Result launch(const fs::path& exe,const std::vector<std::string>& args,const fs::path& dir,int seconds){
  auto child=WindowsEngineProcess::start(exe,args,dir);
@@ -97,7 +100,7 @@ void selftest(const fs::path& exe,const WindowsEngineCheckOptions& o,const fs::p
  require(!result.timedOut&&result.exit==0&&!fs::exists(found)&&
   result.log.find(o.backend=="cpu"?"OPENPUZZLE_RANGE_DONE keys_checked=1":"Reached end of keyspace")!=std::string::npos,"Engine searched outside the inclusive one-key interval");
 }
-struct Measurement {double speed=0;int samples=0,lastSecond=0;};
+struct Measurement {double speed=0,average=0,minimum=0,maximum=0;int samples=0,lastSecond=0;};
 Measurement measure(const std::string& log,const std::string& backend){
  const std::regex cpu(R"(Total\s+[0-9]+\s+keys\s+in\s+([0-9]+)\s+seconds.*\(([0-9]+)\s+keys/s\))");
  const std::regex gpu(R"(([0-9]+(?:\.[0-9]+)?)\s+MKey/s.*\[([0-9]+):([0-9]+):([0-9]+)\])");
@@ -109,8 +112,9 @@ Measurement measure(const std::string& log,const std::string& backend){
   require(std::isfinite(speed)&&speed>0&&speed<=1e9&&second>=result.lastSecond,"Invalid or regressing benchmark sample");result.lastSecond=second;
   if(second>=5)samples.push_back(speed);
  }
- require(result.lastSecond>=8&&samples.size()>=3,"Benchmark has insufficient sustained samples after warm-up");
- std::sort(samples.begin(),samples.end());result.samples=static_cast<int>(samples.size());const auto middle=samples.size()/2;
+ if(result.lastSecond<8||samples.size()<3)throw CandidateRejected("Benchmark has insufficient sustained samples after warm-up");
+ for(const auto v:samples)result.average+=v;result.average/=samples.size();
+ std::sort(samples.begin(),samples.end());result.minimum=samples.front();result.maximum=samples.back();result.samples=static_cast<int>(samples.size());const auto middle=samples.size()/2;
  result.speed=samples.size()%2?samples[middle]:(samples[middle-1]+samples[middle])/2.;return result;
 }
 }
@@ -118,6 +122,7 @@ WindowsEngineCheckOptions WindowsEngineCheckOptions::parse(const std::vector<std
  WindowsEngineCheckOptions o;require(!a.empty()&&(a[0]=="selftest"||a[0]=="benchmark"),"Unknown engine diagnostic command");o.command=a[0];
  std::set<std::string> seen;
  for(std::size_t i=1;i<a.size();++i){const auto& flag=a[i];require(seen.insert(flag).second,"Duplicate engine option: "+flag);
+  if(flag=="--auto"){require(o.command=="benchmark","--auto belongs to benchmark");o.automatic=true;continue;}
   if(flag=="--real"){require(o.command=="benchmark","--real belongs to benchmark");o.real=true;continue;}
   require(i+1<a.size(),"Missing engine option value: "+flag);const auto value=a[++i];
   if(flag=="--backend"){require(value=="cpu"||value=="cuda"||value=="opencl","Select cpu, cuda or opencl");o.backend=value;}
@@ -133,11 +138,12 @@ WindowsEngineCheckOptions WindowsEngineCheckOptions::parse(const std::vector<std
   if(!o.threadsSpecified)o.threads=static_cast<int>((std::min)(256UL,GetActiveProcessorCount(ALL_PROCESSOR_GROUPS)));
   require(o.threads>=1&&o.threads<=256,"CPU threads must be 1..256");}
  else {if(!o.threadsSpecified)o.threads=256;require(o.threads>=32&&o.threads%32==0,"GPU threads must be a multiple of 32 in 32..1024");}
+ require(!o.automatic||(o.backend!="cpu"&&!o.threadsSpecified&&!o.gpuParametersSpecified&&o.seconds<=30),"GPU --auto cannot be combined with fixed parameters; use 10..30 seconds per candidate");
  require(o.command!="selftest"||(!o.gpuParametersSpecified&&!o.threadsSpecified),"Self-test uses fixed one-key launch parameters");return o;
 }
 fs::path WindowsEngineDiagnostics::defaultFolder(){std::vector<wchar_t> name(32768);const auto n=GetModuleFileNameW(nullptr,name.data(),static_cast<DWORD>(name.size()));
  require(n>0&&n<name.size(),"Application directory unavailable");return fs::path(std::wstring(name.data(),n)).parent_path()/"engines";}
-WindowsEngineDiagnostics::WindowsEngineDiagnostics(fs::path folder):folder_(folder.empty()?defaultFolder():std::move(folder)){}
+WindowsEngineDiagnostics::WindowsEngineDiagnostics(fs::path folder,std::function<WindowsGpuInventory()> discovery):folder_(folder.empty()?defaultFolder():std::move(folder)),discovery_(std::move(discovery)){}
 std::string WindowsEngineDiagnostics::executableSha256(const fs::path& file){
  require(windowsFile::safePath(file),"Unsafe engine executable path");windowsFile::Handle input(CreateFileW(file.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr));
  BY_HANDLE_FILE_INFORMATION info{};require(input.valid()&&GetFileInformationByHandle(input.get(),&info)&&!(info.dwFileAttributes&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT)),"Engine executable is unavailable");
@@ -162,11 +168,12 @@ std::string WindowsEngineDiagnostics::inspectDevice(const fs::path& exe,const st
 }
 int WindowsEngineDiagnostics::run(const std::vector<std::string>& arguments,std::ostream& out)const {
  fs::path report;
- try{const auto o=WindowsEngineCheckOptions::parse(arguments);const auto exe=folder_/filename(o.backend);
+ try{auto o=WindowsEngineCheckOptions::parse(arguments);const auto exe=folder_/filename(o.backend);
   const auto fingerprint=executableSha256(exe);
   out<<"Backend: "<<o.backend<<"\nExecutable: "<<pathUtf8(exe)<<"\nDevice: "<<o.device<<"\n";
-  if(o.command=="benchmark"){out<<"Threads: "<<o.threads<<"\nDuration: "<<o.seconds<<" seconds\n";
-    if(o.backend!="cpu")out<<"Blocks: "<<o.blocks<<"\nPoints: "<<o.points<<"\n";
+  if(o.command=="benchmark"){if(o.automatic)out<<"Automatic GPU tuning: shared Linux matrix, stability selection, 60-second finalist and 3% planning margin\nDuration per candidate: "<<o.seconds<<" seconds; allow several minutes\n";
+    else out<<"Threads: "<<o.threads<<"\nDuration: "<<o.seconds<<" seconds\n";
+    if(o.backend!="cpu"&&!o.automatic)out<<"Blocks: "<<o.blocks<<"\nPoints: "<<o.points<<"\n";
     if(!o.real){out<<"Use --real to run the local synthetic benchmark\n";return 0;}}
   for(const auto& slot:ClientRuntimeControl::executionSlots())require(ClientRuntimeControl::runtimeIdentityStatus(slot)==ClientRuntimeControl::RuntimeIdentityStatus::Inactive,"Stop existing or uncertain runtimes before engine diagnostics");
   static std::atomic<unsigned long long> sequence{0};
@@ -175,17 +182,54 @@ int WindowsEngineDiagnostics::run(const std::vector<std::string>& arguments,std:
   out<<"Report: "<<pathUtf8(report)<<'\n';
   const auto device=deviceIdentity(exe,o,report);out<<"Engine device: "<<device<<'\n';
   selftest(exe,o,report);out<<"Synthetic self-test: PASSED (keys 1, 2 and outside-range rejection)\n";
-  std::optional<Measurement> measured;
-  if(o.command=="benchmark"){
-    const auto work=subdirectory(report,"benchmark");write(work/"targets.txt",std::string(address1)+"\n");
-    const auto result=launch(exe,searchArguments(o,work,"10000000","FFFFFFFFFFFFFFFF",true),work,o.seconds);
-    require((result.timedOut&&result.exit==124)||(!result.timedOut&&result.exit==0),"Benchmark engine failed");
-    require(result.elapsed>=9.5&&!fs::exists(work/(o.backend=="cpu"?"KEYFOUNDKEYFOUND.txt":"found.txt")),"Benchmark ended too early or found an out-of-range target");
-    measured=measure(result.log,o.backend);out<<std::fixed<<std::setprecision(3)<<"Median speed: "<<measured->speed<<" MKey/s\nSamples after warm-up: "<<measured->samples<<'\n';
-  }
+  std::optional<Measurement> measured;std::optional<WindowsAutoBenchmarkResult> tuned;
+  auto benchmark=[&](const WindowsEngineCheckOptions& request,const fs::path& work){
+    write(work/"targets.txt",std::string(address1)+"\n");
+    const auto result=launch(exe,searchArguments(request,work,"10000000","FFFFFFFFFFFFFFFF",true),work,request.seconds);
+    require(!fs::exists(work/(request.backend=="cpu"?"KEYFOUNDKEYFOUND.txt":"found.txt")),"Benchmark found an out-of-range target; automatic run aborted");
+    if(!((result.timedOut&&result.exit==124)||(!result.timedOut&&result.exit==0)))throw CandidateRejected("Benchmark engine rejected launch parameters");
+    if(result.elapsed<request.seconds-0.5)throw CandidateRejected("Benchmark ended too early");
+    return measure(result.log,request.backend);
+  };
+  if(o.command=="benchmark"&&o.automatic){
+    require(static_cast<bool>(discovery_),"GPU capability provider missing");
+    auto capabilities=[&](){
+      const auto inventory=discovery_();const auto& backend=o.backend=="cuda"?inventory.cuda:inventory.opencl;
+      require(backend.state==GpuDiscoveryState::Available,"GPU capabilities unavailable; automatic benchmark refused");
+      const auto identity=WindowsEngineGpuIdentity::parse(device);std::optional<WindowsGpuDevice> selected;unsigned matches=0;
+      for(const auto& d:backend.devices)if(d.nativeDeviceIndex==identity.native&&(o.backend=="cuda"?0:d.platformIndex)==identity.platform){selected=d;++matches;}
+      require(matches==1&&selected->available&&selected->name==identity.name&&selected->memoryMiB==identity.memoryBytes/1048576&&
+        selected->computeUnits>0&&selected->computeUnits<=4096&&selected->memoryMiB>=256&&selected->memoryMiB<=1048576,
+        "Engine GPU mapping does not uniquely match driver capabilities");
+      return *selected;
+    };
+    const auto gpu=capabilities();unsigned index=0;
+    out<<"Compute units: "<<gpu.computeUnits<<"\nMemory MiB: "<<gpu.memoryMiB<<'\n'<<std::flush;
+    tuned=runWindowsAutoBenchmark(static_cast<int>(gpu.computeUnits),static_cast<int>(gpu.memoryMiB),o.backend=="cuda",o.seconds,
+      [&](const BenchmarkConfiguration& cfg,int seconds,bool finalist)->std::optional<BenchmarkResult>{
+        for(const auto& slot:ClientRuntimeControl::executionSlots())require(ClientRuntimeControl::runtimeIdentityStatus(slot)==ClientRuntimeControl::RuntimeIdentityStatus::Inactive,"Runtime appeared during automatic benchmark; no profile published");
+        require(executableSha256(exe)==fingerprint,"Engine changed during automatic benchmark");
+        auto request=o;request.blocks=cfg.blocks;request.threads=cfg.threads;request.points=cfg.points;request.seconds=seconds;
+        const auto name=finalist?std::string("finalist"):"candidate-"+std::to_string(++index);
+        out<<(finalist?"Validating finalist: ":"Candidate: ")<<index<<" b="<<cfg.blocks<<" t="<<cfg.threads<<" p="<<cfg.points<<" seconds="<<seconds<<'\n'<<std::flush;
+        const auto work=subdirectory(report,name);
+        try{const auto m=benchmark(request,work);BenchmarkResult result;result.configuration=cfg;result.success=true;
+          result.speedMKeys=result.averageSpeed=m.average;result.minimumSpeed=m.minimum;result.maximumSpeed=m.maximum;result.samples=m.samples;
+          out<<"Average: "<<m.average<<" MKey/s; minimum: "<<m.minimum<<"; maximum: "<<m.maximum<<'\n'<<std::flush;return result;
+        }catch(const CandidateRejected& e){out<<"Candidate refused: "<<e.what()<<'\n'<<std::flush;return {};}
+      });
+    const auto confirmed=capabilities();
+    require(confirmed.computeUnits==gpu.computeUnits&&confirmed.memoryMiB==gpu.memoryMiB&&confirmed.uuid==gpu.uuid&&confirmed.pciBusId==gpu.pciBusId&&
+      deviceIdentity(exe,o,subdirectory(report,"final-identity"))==device,"GPU changed during automatic benchmark; result not published");
+    o.blocks=tuned->validated.configuration.blocks;o.threads=tuned->validated.configuration.threads;o.points=tuned->validated.configuration.points;o.seconds=60;
+    Measurement m;m.speed=tuned->planningSpeed;m.average=tuned->validated.averageSpeed;m.minimum=tuned->validated.minimumSpeed;m.maximum=tuned->validated.maximumSpeed;m.samples=tuned->validated.samples;measured=m;
+    out<<"Validated configuration: b="<<o.blocks<<" t="<<o.threads<<" p="<<o.points<<"\nPlanning speed: "<<m.speed<<" MKey/s\n";
+  }else if(o.command=="benchmark")measured=benchmark(o,subdirectory(report,"benchmark"));
+  if(measured)out<<std::fixed<<std::setprecision(3)<<(tuned?"Planning speed: ":"Median speed: ")<<measured->speed<<" MKey/s\nSamples after warm-up: "<<measured->samples<<'\n';
   require(executableSha256(exe)==fingerprint,"Engine changed during validation; result not published");
   std::ostringstream value;value<<"{\"version\":1,\"backend\":"<<jsonString(o.backend)<<",\"engine_sha256\":"<<jsonString(fingerprint)<<",\"device\":"<<o.device<<",\"device_identity\":"<<jsonString(device)<<",\"selftest_passed\":true,\"threads\":"<<o.threads<<",\"blocks\":"<<o.blocks<<",\"points\":"<<o.points;
   if(measured)value<<std::setprecision(17)<<",\"speed_mkeys\":"<<measured->speed<<",\"samples\":"<<measured->samples<<",\"duration_seconds\":"<<o.seconds;
+  if(tuned)value<<",\"autotuned\":true,\"finalist_validated\":true,\"candidates_tested\":"<<tuned->candidatesTested<<",\"measured_average_mkeys\":"<<tuned->validated.averageSpeed;
   value<<"}\n";write(report/"result.json",value.str());
   out<<"Engine SHA-256: "<<fingerprint<<"\nLocal validation: PASSED\nNo assignment requested\n";return 0;
  }catch(const std::exception& e){out<<"Engine diagnostics refused: "<<e.what()<<'\n';if(!report.empty())out<<"Report preserved: "<<pathUtf8(report)<<'\n';return 1;}

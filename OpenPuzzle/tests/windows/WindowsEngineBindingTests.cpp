@@ -21,7 +21,10 @@ int wmain(int argc,wchar_t** argv){try{
  for(const auto name:{"keyhunt.exe","clBitCrack.exe","cuBitCrack.exe"})fs::copy_file(fs::absolute(argv[1]),engines/name);
  WindowsCliApplication app({},[]{WindowsGpuInventory i;i.nativeCpuAvailable=true;i.logicalProcessors=8;return i;},engines);std::ostringstream out;
  for(const auto& args:std::vector<std::vector<std::string>>{
-  {"selftest"},{"selftest","--backend","other"},{"selftest","--backend","cpu","--device","1"},
+  {"selftest"},{"selftest","--backend","other"},
+  {"benchmark","--backend","cpu","--auto"},{"selftest","--backend","cuda","--auto"},
+  {"benchmark","--backend","cuda","--auto","--threads","256"},{"benchmark","--backend","cuda","--auto","--points","512"},
+  {"benchmark","--backend","cuda","--auto","--seconds","60"},{"benchmark","--backend","cuda","--auto","--auto"},{"selftest","--backend","cpu","--device","1"},
   {"selftest","--backend","cuda","--device","0x"},{"selftest","--backend","cpu","--backend","cpu"},
   {"benchmark","--backend","cpu","--threads","0"},{"benchmark","--backend","cpu","--blocks","1"},
   {"benchmark","--backend","cuda","--threads","33"},{"benchmark","--backend","cuda","--seconds","1"},
@@ -34,13 +37,18 @@ int wmain(int argc,wchar_t** argv){try{
   const auto preview=ui::windowsUiCommand(ui::UiAction::BenchmarkPreview,selection);
   check(app.run(preview,out)==0&&!fs::exists(localPaths::root()),"UI benchmark preview launched an engine or wrote state");
   const auto real=WindowsEngineCheckOptions::parse(ui::windowsUiCommand(ui::UiAction::Benchmark,selection));
-  check(real.real&&real.backend==backend&&real.device==0&&real.threads==p.threads&&real.seconds==30,"UI benchmark parameters did not reach the native diagnostic parser");
+  check(real.real&&real.backend==backend&&real.device==0&&real.threads==p.threads&&real.seconds==30&&real.automatic==(p.backend!="cpu"),"UI benchmark parameters did not reach the native diagnostic parser");
  }
+ // Auto preview is read-only, even when capabilities are unavailable.
+ check(app.run({"benchmark","--backend","cuda","--auto"},out)==0&&!fs::exists(localPaths::root()),"Automatic preview wrote local state");
  const auto fingerprint=WindowsEngineDiagnostics::executableSha256(engines/"keyhunt.exe");check(fingerprint.size()==64&&fingerprint==WindowsEngineDiagnostics::executableSha256(engines/"clBitCrack.exe"),"Executable hash is inconsistent");
  for(const auto backend:{"cpu","cuda","opencl"})check(app.run({"selftest","--backend",backend},out)==0,"Valid native engine binding failed");
  const auto data=localPaths::dataDirectory()/"engine-diagnostics";std::size_t good=0;
  for(const auto& entry:fs::directory_iterator(data))if(fs::exists(entry.path()/"result.json"))++good;
  check(good==3&&!fs::exists(localPaths::configDirectory()/"client.id")&&!fs::exists(localPaths::configDirectory()/"config.json"),"Self-test created identity/configuration or lost its report");
+ // A matching engine index alone cannot authorize auto tuning without a
+ // unique matching native-driver capability record.
+ for(const auto backend:{"cuda","opencl"})check(app.run({"benchmark","--backend",backend,"--auto","--real","--seconds","10"},out)==1,"Missing driver capabilities authorized automatic tuning");
  auto fail=[&](const wchar_t* mode,const char* backend){check(SetEnvironmentVariableW(L"OPENPUZZLE_BINDING_FIXTURE_MODE",mode),"Fixture mode failed");check(app.run({"selftest","--backend",backend},out)==1,"Bad native engine output was accepted");check(SetEnvironmentVariableW(L"OPENPUZZLE_BINDING_FIXTURE_MODE",nullptr),"Fixture reset failed");};
  fail(L"wrong-protocol","cpu");fail(L"bad-json","cuda");fail(L"wrong-wif","opencl");fail(L"overshoot","cpu");fail(L"search-failure","cuda");
  check(app.run({"selftest","--backend","cuda","--device","1"},out)==1,"Unknown engine index was accepted");

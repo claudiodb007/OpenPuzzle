@@ -12,6 +12,7 @@ struct WindowsRunProfile {
  std::string backend,sha256,deviceIdentity;
  int device=0,threads=0,blocks=0,points=0;
  double speed=0;
+ bool autoTuned=false;
  std::string pciBusId,gpuUuid;
  static WindowsRunProfile parse(const std::string& json) {
   if(json.empty()||json.size()>16384)throw std::invalid_argument("Invalid benchmark profile size");
@@ -19,7 +20,7 @@ struct WindowsRunProfile {
   std::set<std::string> fields;
   for(const auto& item:p)if(item.first.empty()||!fields.insert(item.first).second||!item.second.empty())throw std::invalid_argument("Duplicate or structured benchmark field");
   auto integer=[&](const char* key,int lo,int hi){const auto n=cliIntegerArgument({"--value",p.get<std::string>(key)},{"--value"},0);if(n<lo||n>hi)throw std::invalid_argument("Invalid benchmark integer");return n;};
-  (void)integer("version",1,1);(void)integer("samples",3,10000);(void)integer("duration_seconds",10,60);
+  (void)integer("version",1,1);(void)integer("samples",3,10000);const auto duration=integer("duration_seconds",10,60);
   if(p.get<std::string>("selftest_passed")!="true")throw std::invalid_argument("Profile lacks a passed native self-test");
   WindowsRunProfile result;result.backend=p.get<std::string>("backend");
   if(result.backend!="cpu"&&result.backend!="cuda"&&result.backend!="opencl")throw std::invalid_argument("Unknown profile backend");
@@ -34,6 +35,10 @@ struct WindowsRunProfile {
   if(const auto uuid=p.get_optional<std::string>("gpu_uuid")){
    result.gpuUuid=canonicalGpuUuid(*uuid);
    if(result.gpuUuid.empty()||result.backend=="cpu")throw std::invalid_argument("Invalid GPU profile UUID");
+  }
+  if(p.get_optional<std::string>("autotuned")){
+   if(p.get<std::string>("autotuned")!="true"||p.get<std::string>("finalist_validated","")!="true"||result.backend=="cpu"||duration!=60)throw std::invalid_argument("Invalid automatic benchmark validation");
+   (void)integer("candidates_tested",1,64);result.autoTuned=true;
   }
   result.device=integer("device",0,255);result.threads=integer("threads",1,result.backend=="cpu"?256:1024);
   result.blocks=integer("blocks",1,65535);result.points=integer("points",1,65536);

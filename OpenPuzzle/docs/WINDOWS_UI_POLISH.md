@@ -16,7 +16,7 @@ first obtains fresh physical UUID/PCI binding through the existing bind-profile
 CLI, then becomes selectable. The original profile and engine binary remain
 unchanged. GPU binding or measurement failures leave the previous selection
 available; incomplete results are not imported. This button repeats the current
-profile's parameters; automatic parameter tuning is not implemented.
+profile's parameters in this historical preview. The later Windows automatic benchmark path is documented in WINDOWS_AUTO_BENCHMARK.md.
 
 Layout now batches child repositioning with DeferWindowPos and invalidates the
 window once. Parent drawing uses a memory bitmap. Unchanged captions/check marks

@@ -7,12 +7,20 @@
 #include <optional>
 #include <map>
 namespace openpuzzle::ui {
-enum class UiAction { Preflight, Start, Stop, SafeStop, Recover, Status, Telemetry, ThermalRead, ThermalSave, Benchmark, BenchmarkPreview, BenchmarkBind, BenchmarkPreflight };
+enum class UiAction { Preflight, Start, Stop, SafeStop, Recover, Status, Telemetry, ThermalRead, ThermalSave, Benchmark, BenchmarkPreview, BenchmarkBind, BenchmarkPreflight, BenchmarkStatus };
+// Benchmark parameters exist before a successful measurement. They must never
+// masquerade as a measured profile or authorize a search.
+struct WindowsUiBenchmarkParameters {
+ std::string backend="cuda";
+ int device=0,threads=256,blocks=256,points=1024;
+ bool automatic=false;
+};
 struct WindowsUiSelection {
  std::string profilePath,server,slot="primary";
  int puzzle=71,duration=60;
  bool once=false;
  std::optional<WindowsRunProfile> profile;
+ std::optional<WindowsUiBenchmarkParameters> benchmark;
  GpuThermalPolicyConfiguration thermal;
 };
 struct WindowsUiStatus {
@@ -44,13 +52,27 @@ inline double windowsUiThermalThreshold(std::string value){
  if(parsed.ec!=std::errc{}||parsed.ptr!=value.data()+value.size()||!std::isfinite(result))throw std::invalid_argument("Temperatura inválida");
  return result;
 }
+inline WindowsUiBenchmarkParameters windowsUiBenchmarkParameters(const WindowsUiSelection& s){
+ if(s.benchmark)return *s.benchmark;
+ if(!s.profile)throw std::invalid_argument("Choose a benchmark backend");
+ const auto& p=*s.profile;return {p.backend,p.device,p.threads,p.blocks,p.points,p.backend!="cpu"};
+}
+inline bool windowsUiBenchmarkMatches(const WindowsRunProfile& p,const WindowsUiBenchmarkParameters& b){
+ return p.backend==b.backend&&p.device==b.device&&
+  (b.automatic?p.backend!="cpu"&&p.autoTuned:p.threads==b.threads&&(b.backend=="cpu"||(p.blocks==b.blocks&&p.points==b.points)));
+}
+inline std::string windowsUiBenchmarkSlot(const WindowsUiBenchmarkParameters& b){
+ return b.backend=="cpu"?"primary":b.backend=="cuda"?ExecutionSlot::cuda(b.device):ExecutionSlot::opencl(b.device);
+}
 inline std::vector<std::string> windowsUiCommand(UiAction action,const WindowsUiSelection& s) {
  if(action==UiAction::Benchmark||action==UiAction::BenchmarkPreview){
-  if(!s.profile)throw std::invalid_argument("Seleciona um perfil medido válido");const auto& p=*s.profile;
+  const auto p=windowsUiBenchmarkParameters(s);
   if((p.backend!="cpu"&&p.backend!="cuda"&&p.backend!="opencl")||p.device<0||p.device>255||p.threads<1||p.threads>(p.backend=="cpu"?256:1024)||
      (p.backend=="cpu"?p.device!=0:p.threads<32||p.threads%32!=0||p.blocks<1||p.blocks>65535||p.points<1||p.points>65536))throw std::invalid_argument("Invalid benchmark parameters");
+  if(p.automatic&&p.backend=="cpu")throw std::invalid_argument("Automatic tuning requires a GPU backend");
   std::vector<std::string> args{"benchmark","--backend",p.backend,"--device",std::to_string(p.device),"--threads",std::to_string(p.threads),"--seconds","30"};
-  if(p.backend!="cpu")args.insert(args.end(),{"--blocks",std::to_string(p.blocks),"--points",std::to_string(p.points)});
+  if(p.automatic)args={"benchmark","--backend",p.backend,"--device",std::to_string(p.device),"--auto","--seconds","30"};
+  else if(p.backend!="cpu")args.insert(args.end(),{"--blocks",std::to_string(p.blocks),"--points",std::to_string(p.points)});
   if(action==UiAction::Benchmark)args.push_back("--real");return args;
  }
  if(action==UiAction::Telemetry)return {"telemetry"};

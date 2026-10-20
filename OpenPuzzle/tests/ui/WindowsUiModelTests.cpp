@@ -14,8 +14,32 @@ int main(int argc,char** argv){try{
   const auto preview=windowsUiCommand(UiAction::BenchmarkPreview,s),real=windowsUiCommand(UiAction::Benchmark,s);
   check(preview[0]=="benchmark"&&preview[2]==backend&&real.back()=="--real"&&real.size()==preview.size()+1);
   for(const auto& flag:{"--slot","--profile","--server","--real"})check(std::find(preview.begin(),preview.end(),flag)==preview.end());
-  check((std::find(preview.begin(),preview.end(),"--blocks")!=preview.end())==(measured.backend!="cpu"));
+  check(std::find(preview.begin(),preview.end(),"--blocks")==preview.end());
+  check((std::find(preview.begin(),preview.end(),"--auto")!=preview.end())==(measured.backend!="cpu"));
  }
+ // A fresh installation can measure without inventing a valid run profile.
+ WindowsUiSelection fresh;
+ bool noBackend=false;try{windowsUiCommand(UiAction::Benchmark,fresh);}catch(...){noBackend=true;}check(noBackend);
+ for(const auto& backend:{"cpu","cuda","opencl"}){
+  WindowsUiBenchmarkParameters b;b.backend=backend;b.device=b.backend=="cpu"?0:2;b.threads=b.backend=="cpu"?1:256;fresh.benchmark=b;
+  const auto preview=windowsUiCommand(UiAction::BenchmarkPreview,fresh),real=windowsUiCommand(UiAction::Benchmark,fresh);
+  check(preview[0]=="benchmark"&&preview[2]==backend&&real.back()=="--real"&&!fresh.profile);
+  for(const auto& flag:{"--server","--profile","--slot","--real"})check(std::find(preview.begin(),preview.end(),flag)==preview.end());
+  check(windowsUiBenchmarkSlot(b)==(b.backend=="cpu"?"primary":b.backend+"-2"));
+  bool refused=false;try{windowsUiCommand(UiAction::Start,fresh);}catch(...){refused=true;}check(refused);
+  auto result=p;result.backend=b.backend;result.device=b.device;result.threads=b.threads;result.blocks=b.blocks;result.points=b.points;
+  check(windowsUiBenchmarkMatches(result,b));++result.device;check(!windowsUiBenchmarkMatches(result,b));
+ }
+ for(const auto& b:std::vector<WindowsUiBenchmarkParameters>{{"invalid",0,256,256,1024},{"cpu",1,1,256,1024},{"cuda",-1,256,256,1024},{"cuda",256,256,256,1024},{"cuda",0,1,256,1024},{"opencl",0,256,0,1024}}){
+  fresh.benchmark=b;bool refused=false;try{windowsUiCommand(UiAction::Benchmark,fresh);}catch(...){refused=true;}check(refused);
+ }
+ WindowsUiBenchmarkParameters automatic{"cuda",2,256,256,1024,true};fresh.benchmark=automatic;
+ auto tuned=p;tuned.device=2;tuned.threads=128;tuned.blocks=204;tuned.points=512;
+ check(!windowsUiBenchmarkMatches(tuned,automatic));tuned.autoTuned=true;check(windowsUiBenchmarkMatches(tuned,automatic));
+ tuned.device=1;check(!windowsUiBenchmarkMatches(tuned,automatic));
+ const auto autoArgs=windowsUiCommand(UiAction::Benchmark,fresh);
+ check(std::find(autoArgs.begin(),autoArgs.end(),"--auto")!=autoArgs.end());
+ for(const auto flag:{"--threads","--blocks","--points"})check(std::find(autoArgs.begin(),autoArgs.end(),flag)==autoArgs.end());
  s.profile=p;
  check(windowsUiBenchmarkReport("Report: C:\\Private\\run-1\r\nLocal validation: PASSED\r\n")=="C:\\Private\\run-1");
  for(const auto& bad:{"no report", "Report: one\nReport: two\n"}){bool rejected=false;try{windowsUiBenchmarkReport(bad);}catch(...){rejected=true;}check(rejected);}

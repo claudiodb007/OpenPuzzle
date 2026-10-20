@@ -12,12 +12,13 @@ int main(){try{
   for(const auto value:row.text){require(!value.empty(),"Empty translation");require(placeholders(value)==placeholders(row.text[0]),"Translation lost a placeholder");}
  }
  for(unsigned i=0;i<4;++i){const auto language=static_cast<UiLanguage>(i);require(uiLanguageFromCode(uiLanguageCode(language))==language,"Language code did not round-trip");
-  for(const auto key:{"start","language","theme","thermal_safety","recover","close_busy","private_key_action","key_not_displayed"})require(uiText(language,key)!=key,"Missing user-facing translation");
+  for(const auto key:{"start","language","theme","thermal_safety","recover","close_busy","private_key_action","key_not_displayed","benchmark_automatic","benchmark_auto_description","benchmark_auto_question"})require(uiText(language,key)!=key,"Missing user-facing translation");
  }
  require(uiText(UiLanguage::Portuguese,"start")=="Iniciar"&&uiText(UiLanguage::French,"start")=="Démarrer"&&uiText(UiLanguage::Spanish,"start")=="Iniciar","Linux translations changed");
  require(uiLanguageFromCode("invalid")==UiLanguage::English&&uiText(static_cast<UiLanguage>(42),"start")=="Start","Invalid language fallback");
  require(uiFormat(UiLanguage::French,"start_question","71","cuda-0")=="Démarrer le Puzzle 71 dans cuda-0 ?","Confirmation placeholders lost");
  require(uiFormat(UiLanguage::English,"start_question","%2","cuda-0")=="Start Puzzle %2 in cuda-0?","Substitution interpreted an argument");
+ require(uiFormat(UiLanguage::Portuguese,"benchmark_auto_question","GPU TEST","PARAMETERS").find("GPU TEST")!=std::string::npos,"Automatic confirmation lost identity placeholder");
  const std::string raw="Thermal mode: disabled\r\nWarning C: 75\r\nSlot: cuda-0\r\nRuntime: idle\r\nWallet file........ C:\\Users\\Claudio\\Power W: 13.txt\r\n";
  const auto localized=uiDisplayText(UiLanguage::Portuguese,raw);
  require(localized.find("Modo térmico: desativado")!=std::string::npos&&localized.find("Aviso °C: 75")!=std::string::npos,"Thermal output not translated");

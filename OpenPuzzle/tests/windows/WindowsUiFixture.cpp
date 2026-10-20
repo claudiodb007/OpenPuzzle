@@ -3,6 +3,8 @@
 #include <fstream>
 #include "openpuzzle/core/LocalPaths.hpp"
 #include "openpuzzle/core/AtomicFile.hpp"
+#include "openpuzzle/core/WindowsPrivateFile.hpp"
+#include "openpuzzle/engines/WindowsGpuProfileBinding.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #include <iostream>
 #include <string>
@@ -41,9 +43,31 @@ int wmain(int argc,wchar_t** argv){
   bool dry=false;for(int i=2;i<argc;++i)if(std::wstring(argv[i])==L"--dry-run")dry=true;
   if(!dry)return 8;std::cout<<"benchmark-profile-preflight-fixture\n";return 0;
  }
+ if(command==L"bind-profile"){
+  if(argc!=6||std::wstring(argv[2])!=L"--profile"||std::wstring(argv[4])!=L"--output")return 8;
+  bool missing=false;const auto source=openpuzzle::windowsFile::readPrivate(argv[3],missing,16384);if(!source)return 8;
+  const auto record=openpuzzle::appendWindowsGpuProfileBinding(*source,{"GPU fixture","00000000:08:00.0","1f78bee1-b3b1-e9d5-78a7-00cdaa490619"});
+  if(!openpuzzle::writePrivateFileAtomically(argv[5],record))return 8;std::cout<<"GPU binding fixture finished\n";return 0;
+ }
+ if(command==L"benchmark"&&argc>=4&&std::wstring(argv[3])!=L"cpu"){
+  const std::wstring backend=argv[3];if(backend!=L"cuda"&&backend!=L"opencl")return 8;
+  std::vector<std::wstring> expected{L"benchmark",L"--backend",backend,L"--device",L"0",L"--auto",L"--seconds",L"30"};
+  const bool real=std::wstring(argv[argc-1])==L"--real";if(real)expected.push_back(L"--real");
+  if(argc!=static_cast<int>(expected.size()+1))return 8;for(int i=1;i<argc;++i)if(argv[i]!=expected[i-1])return 8;
+  if(!real){std::cout<<"automatic-preview-fixture\n";return 0;}
+  if(std::filesystem::exists(openpuzzle::localPaths::dataDirectory()/"ui-auto-finalist-fail"))return 9;
+  const auto report=openpuzzle::localPaths::dataDirectory()/"engine-diagnostics"/("auto-"+openpuzzle::pathUtf8(std::filesystem::path(backend))+"-"+std::to_string(GetTickCount64()));openpuzzle::WorkspaceSecurity::prepare(report);
+  std::string record="{\"version\":1,\"backend\":\""+openpuzzle::pathUtf8(std::filesystem::path(backend))+"\",\"engine_sha256\":\""+std::string(64,'a')+"\",\"device\":0,\"device_identity\":\"GPU fixture; platform=0; native=0; memory=10737418240\",\"selftest_passed\":true,\"threads\":128,\"blocks\":204,\"points\":512,\"speed_mkeys\":3.88,\"samples\":12,\"duration_seconds\":60";
+  if(!std::filesystem::exists(openpuzzle::localPaths::dataDirectory()/"ui-auto-unvalidated"))record+=",\"autotuned\":true,\"finalist_validated\":true,\"candidates_tested\":22";
+  record+="}\n";Sleep(300);if(!openpuzzle::writePrivateFileAtomically(report/"result.json",record))return 8;
+  std::cout<<"Report: "<<openpuzzle::pathUtf8(report)<<"\nbenchmark-fixture-finished\n";return 0;
+ }
  if(command==L"benchmark"){
   const std::vector<std::wstring> expected{L"benchmark",L"--backend",L"cpu",L"--device",L"0",L"--threads",L"1",L"--seconds",L"30",L"--real"};
-  if(argc!=static_cast<int>(expected.size()+1))return 8;for(int i=1;i<argc;++i)if(argv[i]!=expected[i-1])return 8;
+  const bool real=argc>1&&std::wstring(argv[argc-1])==L"--real";
+  if(argc!=static_cast<int>(expected.size()+(real?1:0)))return 8;for(int i=1;i<argc;++i)if(argv[i]!=expected[i-1])return 8;
+  if(!real){std::cout<<"first-profile-local-preview-fixture\n";return 0;}
+  if(std::filesystem::exists(openpuzzle::localPaths::dataDirectory()/"ui-benchmark-fail")){std::cerr<<"Expected synthetic benchmark failure\n";return 9;}
   const auto report=openpuzzle::localPaths::dataDirectory()/"engine-diagnostics"/"ui-benchmark-fixture";openpuzzle::WorkspaceSecurity::prepare(report);
   const auto json="{\"version\":1,\"backend\":\"cpu\",\"engine_sha256\":\""+std::string(64,'a')+"\",\"device\":0,\"device_identity\":\"CPU fixture\",\"selftest_passed\":true,\"threads\":1,\"blocks\":256,\"points\":256,\"speed_mkeys\":2.0,\"samples\":3,\"duration_seconds\":30}\n";
   Sleep(300);if(!openpuzzle::writePrivateFileAtomically(report/"result.json",json))return 8;
@@ -51,7 +75,7 @@ int wmain(int argc,wchar_t** argv){
  }
  if(command==L"status"){
   if(std::filesystem::exists(openpuzzle::localPaths::dataDirectory()/"ui-live-speed-fixture")){if(!openpuzzle::writePrivateFileAtomically(openpuzzle::localPaths::dataDirectory()/"ui-speed-observed","observed"))return 8;std::cout<<"Slot: primary\nRuntime: running\nAssignment: fixture-search\nPending claim: none\nSpeed MKey/s: 1379.58\nKeys checked: 1720000000000\n";}
-  else std::cout<<"Slot: primary\nRuntime: idle\nAssignment: none\nPending claim: none\nSpeed MKey/s: unavailable\nKeys checked: unavailable\n";return 0;
+  else {std::string slot="primary";for(int i=2;i+1<argc;++i)if(std::wstring(argv[i])==L"--slot")slot=openpuzzle::pathUtf8(std::filesystem::path(argv[i+1]));std::cout<<"Slot: "<<slot<<"\nRuntime: idle\nAssignment: none\nPending claim: none\nSpeed MKey/s: unavailable\nKeys checked: unavailable\n";}return 0;
  }
  if(command==L"telemetry"){std::cout<<"GPU telemetry: AVAILABLE\nDevice: synthetic\nTemperature C: 31\nPower W: 10\nPower limit W: 300\n";return 0;}
  if(command==L"thermal"){std::cout<<"Thermal mode: enabled\nWarning C: 75\nCritical C: 85\nStop on critical: yes\n";return 0;}

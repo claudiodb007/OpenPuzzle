@@ -7,6 +7,10 @@ int main(){try{
  check(bound.threadsSpecified&&bound.threads==256&&bound.backend=="cuda"&&p.speed==1332.55);
  auto reject=[&](const auto& value){bool failed=false;try{openpuzzle::WindowsRunProfile::parse(value);}catch(...){failed=true;}check(failed);};
  for(const auto& speed:{"0","-1","1e999","null","\"1junk\""})reject(make("cuda",speed));
+ auto autoRecord=make();autoRecord.replace(autoRecord.find("\"duration_seconds\":30"),21,"\"duration_seconds\":60");autoRecord.insert(autoRecord.size()-1,",\"autotuned\":true,\"finalist_validated\":true,\"candidates_tested\":22");
+ check(openpuzzle::WindowsRunProfile::parse(autoRecord).autoTuned&&!p.autoTuned);
+ auto shortAuto=autoRecord;shortAuto.replace(shortAuto.find("\"duration_seconds\":60"),21,"\"duration_seconds\":30");reject(shortAuto);
+ auto badAuto=autoRecord;badAuto.replace(badAuto.find("\"finalist_validated\":true"),25,"\"finalist_validated\":false");reject(badAuto);
  auto s=make();s.insert(1,"\"backend\":\"cpu\",");reject(s);
  s=make();s.replace(s.find("true"),4,"false");reject(s);
  s=make();s.replace(s.find("\"samples\":12"),12,"\"samples\":1");reject(s);
