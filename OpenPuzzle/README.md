@@ -1,13 +1,23 @@
 # OpenPuzzle
 
-## Current release
+## Current release candidate
 
-OpenPuzzle 1.0.20 adds puzzle-aware routing for linear and Pollard Kangaroo workloads and resilient metadata-only solution alerts.
+OpenPuzzle 1.0.48 adds automatic CUDA/OpenCL measurement to the Linux desktop
+Benchmark button, with confirmation, live progress, cooperative cancellation
+and measured-profile saving. GPU power/fan controls from 1.0.47 are retained.
 
-Puzzle 71 keeps its existing BitCrack CUDA/OpenCL and KeyHunt CPU path. Puzzles 140, 145, 150, 155 and 160 use verified public-key metadata and require an explicitly installed external PSCKangaroo executor. Private keys remain local, and temporary alert failures retry automatically.
+The source also includes Windows first-profile creation and automatic tuning,
+validated in a separate MSVC preview and manually on Windows 10 and 11.
+Windows remains experimental. Its graphical installer and test package carry
+their own versions; unchanged test binaries are not relabelled as Linux 1.0.48.
+AMD Windows hardware validation remains pending.
 
-The public repository contains the client only. The coordination service and website infrastructure are not included.
-See [OpenPuzzle 1.0.20 release notes](docs/RELEASE_1.0.20.md) and the [client runtime guide](docs/CLIENT_RUNTIME.md).
+See [1.0.48 release notes](docs/RELEASE_1.0.48.md),
+[Linux desktop benchmark](docs/LINUX_UI_BENCHMARK.md),
+[Windows automatic benchmark](docs/WINDOWS_AUTO_BENCHMARK.md),
+[GPU controls](docs/GPU_CONTROLS.md) and [runtime guide](docs/CLIENT_RUNTIME.md).
+Private keys remain local. Public archives contain no personal profiles,
+client configuration or solution files. Benchmarking never starts automatically.
 
 ## Open-source orchestration platform for cryptographic keyspace exploration
 

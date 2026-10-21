@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.0.48 — Automatic desktop GPU benchmarks
+
+- Run automatic CUDA/OpenCL tuning from the Linux desktop after confirmation,
+  with live output, cooperative cancellation and preservation of prior profiles.
+- Create and reopen the first measured profile from the Windows panel; choose
+  GPU parameters automatically using the shared candidate and stability rules.
+- Preserve the 1.0.47 GPU controls, helper permissions and packaging.
+- Require 178 Linux and 24 portable suites for this versioned candidate. Windows
+  43-suite preview and manual Windows 10/11 results are recorded separately.
+
+## 1.0.47 — GPU power and fan controls on the desktop
+
+- Add a physical-GPU control card to the Linux desktop, with NVIDIA NVML and
+  AMD amdgpu power limits, driver automatic fans and fixed manual fan targets.
+- Verify vendor, PCI address and NVIDIA UUID before each explicit change;
+  validate supported ranges, read back settings and report rollback failures.
+- Package a dedicated root-owned helper and restricted polkit action. Each Apply
+  requests authentication; opening the panel does not change driver settings.
+- Make Qt confirmation backgrounds opaque and buttons readable in both themes.
+- Include the native Windows development panel, four shared languages,
+  mandatory coordinator, benchmark, Safe Stop, buffered scrolling, live search
+  speed and NVIDIA controls in the source. Windows remains experimental; this
+  release distributes Linux packages only.
+- Validate 176 Linux suites, package contents and permissions, plus manual
+  NVIDIA/AMD Linux controls and NVIDIA Windows controls. Re-run the complete
+  Linux suite on the versioned release source before generating release assets.
+
 ## 1.0.46 — Validate integer options before changing client controls
 
 - Share complete decimal integer parsing across CLI controls. Reject missing or
