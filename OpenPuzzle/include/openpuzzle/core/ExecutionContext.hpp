@@ -21,6 +21,8 @@ struct ExecutionContext {
   bool echoOutput = true;
 
   std::function<void(const ExecutionResult &)> onProgress;
+  // Optional cooperative cancellation for the owning foreground command.
+  std::function<bool()> stopRequested;
 };
 
 } // namespace openpuzzle

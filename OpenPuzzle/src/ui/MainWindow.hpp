@@ -8,6 +8,7 @@
 
 #include <QMainWindow>
 #include <QStringList>
+#include <QStringDecoder>
 
 class QComboBox;
 class QCheckBox;
@@ -72,6 +73,8 @@ private:
       const QString& titleKey,
       const QStringList& arguments);
   void runSelfTest();
+  void runBenchmark();
+  void cancelBenchmark();
   void confirmStop();
   void confirmKangarooInstall();
   void releaseCommand(QProcess* process);
@@ -136,6 +139,9 @@ private:
   QProcess* commandProcess_ = nullptr;
   QTimer* refreshTimer_ = nullptr;
   QTimer* statusTimeout_ = nullptr;
+  bool benchmarkRunning_ = false;
+  bool benchmarkCancelRequested_ = false;
+  QStringDecoder benchmarkDecoder_{QStringDecoder::Utf8};
   bool active_ = false;
   bool identityUnavailable_ = false;
   bool statusAvailable_ = false;

@@ -6,6 +6,10 @@
 #include "openpuzzle/ui/RunCommandBuilder.hpp"
 
 #include <QByteArray>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QTextCursor>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
@@ -324,6 +328,11 @@ MainWindow::MainWindow(QWidget* parent)
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
+  if (benchmarkRunning_) {
+    QMessageBox::information(this, t("benchmark"), t("linux_benchmark_close"));
+    event->ignore();
+    return;
+  }
   if(gpuControls_ && gpuControls_->applying()){
     QMessageBox::information(this,t("gpu_controls"),t("gpu_write_busy"));
     event->ignore();return;
@@ -781,7 +790,7 @@ void MainWindow::buildInterface() {
       &QPushButton::clicked,
       this,
       [this]() {
-        runCommand("benchmark", {"benchmark"});
+        runBenchmark();
       });
   connect(
       selfTest_,
@@ -1087,10 +1096,12 @@ void MainWindow::updateActionAvailability() {
   start_->setEnabled(idle);
   safeStop_->setEnabled(
       ready && occupied && !kangarooActive_);
-  stop_->setEnabled(ready && occupied);
+  stop_->setEnabled((benchmarkRunning_ && !benchmarkCancelRequested_) || (ready && occupied));
+  stop_->setText(t(benchmarkRunning_ ? "linux_benchmark_cancel" : "stop_now"));
+  if (gpuControls_) gpuControls_->setEnabled(!benchmarkRunning_);
   refresh_->setEnabled(!busy);
 
-  benchmark_->setEnabled(idle);
+  benchmark_->setEnabled(idle && !(gpuControls_ && gpuControls_->applying()));
   selfTest_->setEnabled(idle);
   installKangaroo_->setEnabled(idle);
   doctor_->setEnabled(ready);
@@ -1999,6 +2010,115 @@ void MainWindow::runCommand(
   process->start(executable, arguments);
 }
 
+void MainWindow::runBenchmark() {
+  if (!benchmark_->isEnabled() || commandProcess_ || launchPending_ ||
+      (gpuControls_ && gpuControls_->applying())) return;
+
+  QDialog dialog(this);
+  dialog.setObjectName("linuxBenchmarkDialog");
+  dialog.setWindowTitle(t("linux_benchmark_title"));
+  auto* layout = new QFormLayout(&dialog);
+  auto* backend = new QComboBox(&dialog);
+  backend->setObjectName("benchmarkBackend");
+  backend->addItem("CUDA", "cuda");
+  backend->addItem("OpenCL", "opencl");
+  backend->setCurrentIndex(selectedRunMode() == RunMode::BitCrackOpencl ? 1 : 0);
+  auto* device = new QSpinBox(&dialog);
+  device->setObjectName("benchmarkDevice");
+  device->setRange(0, 31);
+  device->setValue(device_->value());
+  auto* rusticl = new QCheckBox(t("linux_benchmark_rusticl"), &dialog);
+  rusticl->setObjectName("benchmarkRusticl");
+  rusticl->setChecked(rusticlRadeonsi_->isChecked());
+  auto* hint = new QLabel(t("linux_benchmark_confirm"), &dialog);
+  hint->setWordWrap(true);
+  hint->setMinimumWidth(430);
+  layout->addRow(hint);
+  layout->addRow(t("backend"), backend);
+  layout->addRow(t("linux_benchmark_device"), device);
+  layout->addRow(rusticl);
+  auto updateBackend = [backend, rusticl] { rusticl->setVisible(backend->currentData() == "opencl"); };
+  connect(backend, qOverload<int>(&QComboBox::currentIndexChanged), &dialog, [this, backend, device, updateBackend](int) {
+    if (selectedRunMode() == RunMode::BitCrackCudaOpencl)
+      device->setValue(backend->currentData() == "opencl" ? openclDevice_->value() : device_->value());
+    updateBackend();
+  });
+  updateBackend();
+  auto* buttons = new QDialogButtonBox(&dialog);
+  auto* measure = buttons->addButton(t("linux_benchmark_measure"), QDialogButtonBox::AcceptRole);
+  measure->setObjectName("benchmarkConfirm");
+  measure->setAutoDefault(false);
+  auto* cancel = buttons->addButton(t("cancel"), QDialogButtonBox::RejectRole);
+  cancel->setDefault(true);
+  layout->addRow(buttons);
+  connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+  connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+  if (dialog.exec() != QDialog::Accepted) return;
+  // Status may have changed while the modal confirmation was open.
+  if (!benchmark_->isEnabled() || commandProcess_ || launchPending_ ||
+      (gpuControls_ && gpuControls_->applying())) return;
+  const auto executable = cliExecutable();
+  if (executable.isEmpty()) { showOutput(t("error"), t("cli_missing")); return; }
+  QStringList arguments{"benchmark", "--backend", backend->currentData().toString(),
+                        "--gpu", QString::number(device->value()), "--auto", "--real", "--require-idle"};
+  if (backend->currentData() == "opencl" && rusticl->isChecked())
+    arguments << "--rusticl-enable" << "radeonsi";
+
+  auto* process = new QProcess(this);
+  process->setObjectName("ownedBenchmarkProcess");
+  commandProcess_ = process;
+  benchmarkRunning_ = true;
+  benchmarkCancelRequested_ = false;
+  benchmarkDecoder_ = QStringDecoder(QStringDecoder::Utf8);
+  showOutput(t("benchmark"), t("benchmark_running") + "\n");
+  output_->document()->setMaximumBlockCount(4000);
+  updateActionAvailability();
+  process->setProcessChannelMode(QProcess::MergedChannels);
+  process->setStandardInputFile(QProcess::nullDevice());
+  const auto append = [this, process] {
+    const QString text = benchmarkDecoder_(process->readAll());
+    output_->moveCursor(QTextCursor::End);
+    output_->insertPlainText(text);
+  };
+  connect(process, &QProcess::readyReadStandardOutput, this, append);
+  connect(process, &QProcess::finished, this,
+          [this, process, append](int code, QProcess::ExitStatus status) {
+    append();
+    const auto key = status == QProcess::NormalExit && code == 0
+        ? "linux_benchmark_saved"
+        : (status == QProcess::NormalExit && code == 130
+              ? "linux_benchmark_cancelled" : "linux_benchmark_failed");
+    output_->appendPlainText("\n" + t(key));
+    benchmarkRunning_ = false;
+    benchmarkCancelRequested_ = false;
+    releaseCommand(process);
+    process->deleteLater();
+    QTimer::singleShot(0, this, &MainWindow::refreshStatus);
+  });
+  connect(process, &QProcess::errorOccurred, this, [this, process](QProcess::ProcessError error) {
+    if (error != QProcess::FailedToStart) return;
+    output_->appendPlainText(t("linux_benchmark_failed") + "\n" + process->errorString());
+    benchmarkRunning_ = false;
+    benchmarkCancelRequested_ = false;
+    releaseCommand(process);
+    process->deleteLater();
+  });
+  connect(process, &QProcess::started, this, [this, process] {
+    if (benchmarkCancelRequested_) process->terminate();
+  });
+  process->start(executable, arguments);
+}
+
+void MainWindow::cancelBenchmark() {
+  if (!benchmarkRunning_ || !commandProcess_ || benchmarkCancelRequested_) return;
+  benchmarkCancelRequested_ = true;
+  output_->appendPlainText("\n" + t("benchmark_cancelled"));
+  // SIGTERM is handled cooperatively by BenchmarkCommand; its process runner
+  // stops the owned engine group and the CLI refuses to publish partial data.
+  if (commandProcess_->state() == QProcess::Running) commandProcess_->terminate();
+  updateActionAvailability();
+}
+
 void MainWindow::runSelfTest() {
   QString backend;
   int device = device_->value();
@@ -2040,6 +2160,7 @@ void MainWindow::runSelfTest() {
 }
 
 void MainWindow::confirmStop() {
+  if (benchmarkRunning_) { cancelBenchmark(); return; }
   if (QMessageBox::question(
           this,
           t("stop_title"),

@@ -8,6 +8,8 @@
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDir>
+#include <QDialog>
+#include <QTimer>
 #include <QDoubleSpinBox>
 #include <QElapsedTimer>
 #include <QEvent>
@@ -483,10 +485,17 @@ int main(int argc, char* argv[]) {
   assert(thermalStopOnCritical->isEnabled());
   assert(saveThermal->isEnabled());
 
-  clickAndExpect(
-      control<QPushButton>(window, "benchmark"),
-      logPath,
-      "benchmark");
+  auto* benchmarkButton = control<QPushButton>(window, "benchmark");
+  assert(benchmarkButton && waitUntil([&] { return benchmarkButton->isEnabled(); }));
+  QTimer::singleShot(0, [&window] {
+    auto* dialog = window.findChild<QDialog*>("linuxBenchmarkDialog");
+    assert(dialog != nullptr);
+    dialog->findChild<QPushButton*>("benchmarkConfirm")->click();
+  });
+  benchmarkButton->click();
+  assert(waitUntil([&] {
+    return logContents(logPath).contains("benchmark --backend cuda --gpu 0 --auto --real --require-idle");
+  }));
 
   auto* messagesOutput =
       control<QPlainTextEdit>(window, "messagesOutput");

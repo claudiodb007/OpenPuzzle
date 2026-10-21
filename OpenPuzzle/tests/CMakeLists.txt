@@ -172,6 +172,52 @@ if(TARGET OpenPuzzleUi)
         COMMAND UiControlTests
     )
 
+    add_executable(UiBenchmarkTests
+        ui/UiBenchmarkTests.cpp
+        ../src/ui/MainWindow.cpp
+        ../src/ui/MainWindow.hpp
+        ../src/ui/GpuControlPanel.cpp
+        ../src/ui/GpuControlPanel.hpp
+        ../src/ui/ThermalAlerts.cpp
+        ../src/ui/ThermalAlerts.hpp
+        ../src/ui/ThermalHistory.cpp
+        ../src/ui/ThermalHistory.hpp
+        ../src/ui/RunCommandBuilder.cpp
+        ../src/ui/UiLanguage.cpp
+        ../src/ui/UiLanguage.hpp
+        ../src/ui/UiTheme.cpp
+        ../src/ui/UiTheme.hpp
+        ../resources/openpuzzle-ui.qrc
+    )
+
+    set_target_properties(UiBenchmarkTests
+        PROPERTIES
+            AUTOMOC ON
+            AUTORCC ON
+    )
+
+    target_include_directories(UiBenchmarkTests
+        PRIVATE
+            ../include
+            ../src/ui
+    )
+
+    target_link_libraries(UiBenchmarkTests
+        PRIVATE
+            OpenPuzzleUiSettings
+            Qt6::Widgets
+    )
+
+    target_compile_definitions(UiBenchmarkTests
+        PRIVATE
+            OPENPUZZLE_VERSION="${PROJECT_VERSION}"
+    )
+
+    add_test(
+        NAME UiBenchmarkTests
+        COMMAND UiBenchmarkTests
+    )
+
     add_executable(UiStatusFailureTests
         ui/UiStatusFailureTests.cpp
         ../src/ui/MainWindow.cpp
@@ -2346,4 +2392,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             --cpack ${CMAKE_CPACK_COMMAND}
     )
     set_tests_properties(GpuControlPackagingTests PROPERTIES TIMEOUT 120)
+endif()
+
+if(UNIX AND NOT APPLE)
+    add_test(NAME LinuxBenchmarkCliTests
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/scripts/LinuxBenchmarkCliTests.py
+            $<TARGET_FILE:OpenPuzzle>)
+    set_tests_properties(LinuxBenchmarkCliTests PROPERTIES TIMEOUT 90)
 endif()

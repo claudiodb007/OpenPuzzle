@@ -1,4 +1,11 @@
 #include "openpuzzle/core/CliInteger.hpp"
+#include "openpuzzle/core/SignalHandler.hpp"
+#include "openpuzzle/runtime/ClientRuntimeControl.hpp"
+#include "openpuzzle/client/ExecutionSyncService.hpp"
+#include <sys/file.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include "openpuzzle/core/commands/BenchmarkCommand.hpp"
 
 #include "openpuzzle/config/ConfigurationManager.hpp"
@@ -79,7 +86,55 @@ static std::string normalizeBackend(
   return backend;
 }
 
+namespace {
+// One local synthetic workspace must not be shared by simultaneous benchmarks.
+class BenchmarkLock {
+  int fd_ = -1;
+public:
+  explicit BenchmarkLock(const fs::path& workspace) {
+    fd_ = ::open((workspace / "benchmark.lock").c_str(),
+                 O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0600);
+    struct stat metadata{};
+    if (fd_ < 0 || fstat(fd_, &metadata) != 0 || !S_ISREG(metadata.st_mode) ||
+        metadata.st_uid != geteuid() || (metadata.st_mode & 0077) != 0 ||
+        flock(fd_, LOCK_EX | LOCK_NB) != 0) {
+      if (fd_ >= 0) ::close(fd_);
+      throw std::runtime_error("Another benchmark owns the workspace, or its lock is unsafe.");
+    }
+  }
+  ~BenchmarkLock() { if (fd_ >= 0) ::close(fd_); }
+  BenchmarkLock(const BenchmarkLock&) = delete;
+  BenchmarkLock& operator=(const BenchmarkLock&) = delete;
+};
+void requireBenchmarkIdle() {
+  client::ExecutionSyncService sync;
+  for (const auto& slot : ClientRuntimeControl::executionSlots()) {
+    const auto execution = sync.inspect(slot);
+    if ((execution.hasState && (execution.running || execution.identityUnavailable)) ||
+        ClientRuntimeControl::runtimeIdentityStatus(slot) !=
+            ClientRuntimeControl::RuntimeIdentityStatus::Inactive) {
+      throw std::runtime_error("Benchmark refused: stop active searches and resolve unavailable process identity first.");
+    }
+  }
+}
+int cancelledBenchmark() {
+  std::cout << "Benchmark cancelled. Previous GPU profile preserved.\n";
+  return 130;
+}
+struct FlushBenchmarkOutput {
+  std::ios_base::fmtflags flags = std::cout.flags();
+  FlushBenchmarkOutput() { std::cout << std::unitbuf; }
+  ~FlushBenchmarkOutput() { std::cout.flags(flags); }
+};
+} // namespace
+
 int BenchmarkCommand::run(const std::vector<std::string> &args) const {
+  SignalHandler::install();
+  FlushBenchmarkOutput flushOutput;
+  const auto requireIdle = [&] {
+    if (hasArg(args, "--require-idle")) requireBenchmarkIdle();
+  };
+
   // Validate every numeric option before any context or Rusticl mutation.
   try {
     (void) cliIntegerArgument(args, {"--gpu", "--d"}, 0);
@@ -188,6 +243,9 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
         "launch parameters must be positive",
         "use positive --blocks, --threads and --points values");
   }
+
+  if (SignalHandler::stopRequested()) return cancelledBenchmark();
+  if (real) requireIdle();
 
   CommandContext context;
 
@@ -322,6 +380,8 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
    * This file belongs only to the synthetic target
    * above and can never contain a real puzzle key.
    */
+  BenchmarkLock benchmarkLock(workspace);
+  if (SignalHandler::stopRequested()) return cancelledBenchmark();
   fs::remove(output);
   fs::remove(
       workspace /
@@ -350,6 +410,7 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
    * is performance data only.
    */
   ctx.echoOutput = false;
+  ctx.stopRequested = [] { return SignalHandler::stopRequested(); };
 
   BenchmarkRunner runner;
 
@@ -373,6 +434,8 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
 
     for (const auto &candidate :
          candidates) {
+      if (SignalHandler::stopRequested()) return cancelledBenchmark();
+      requireIdle();
       const auto &configuration =
           candidate.configuration;
 
@@ -413,6 +476,7 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
               seconds,
               samples);
 
+      if (SignalHandler::stopRequested()) return cancelledBenchmark();
       results.push_back(item);
 
       std::cout
@@ -493,6 +557,8 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
             best.configuration.points,
             output);
 
+    if (SignalHandler::stopRequested()) return cancelledBenchmark();
+    requireIdle();
     const auto validated =
         runner.run(
             best.configuration,
@@ -500,6 +566,7 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
             validationSeconds,
             validationSamples);
 
+    if (SignalHandler::stopRequested()) return cancelledBenchmark();
     if (!validated.success) {
       std::cerr
           << "Final validation.. failed\n"
@@ -565,6 +632,8 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
 
     GpuProfileManager profileManager(db);
 
+    if (SignalHandler::stopRequested()) return cancelledBenchmark();
+    requireIdle();
     const bool saved =
         profileManager.save(profile);
 
@@ -582,6 +651,7 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
   }
 
   auto result = runner.run(cfg, ctx, seconds, samples);
+  if (SignalHandler::stopRequested()) return cancelledBenchmark();
 
   std::cout << "\nBenchmark result\n\n";
   std::cout << "Blocks........... " << result.configuration.blocks << "\n";

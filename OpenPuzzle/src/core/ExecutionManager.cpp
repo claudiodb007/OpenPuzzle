@@ -60,6 +60,7 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
   ExecutionResult result;
   result.exitCode = -1;
   result.keysChecked = "0";
+  if (context.stopRequested && context.stopRequested()) return result;
 
   std::ofstream stdoutLog;
   ExecutionPersistence persistence;
@@ -134,8 +135,9 @@ ExecutionResult ExecutionManager::run(const ExecutionContext &context,
       },
       maxSeconds,
       [&]() {
-        return maxSamples > 0 &&
-               static_cast<int>(result.speedSamples.size()) >= maxSamples;
+        return (context.stopRequested && context.stopRequested()) ||
+               (maxSamples > 0 &&
+                static_cast<int>(result.speedSamples.size()) >= maxSamples);
       });
 
   result.exitCode = processResult.exitCode;

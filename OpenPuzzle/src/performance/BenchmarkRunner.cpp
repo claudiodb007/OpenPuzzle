@@ -17,7 +17,8 @@ BenchmarkRunner::run(const BenchmarkConfiguration &configuration,
   auto executionResult = manager.run(context, maxSeconds, maxSamples);
 
   result.success =
-      executionResult.success || executionResult.averageSpeed > 0.0;
+      !(context.stopRequested && context.stopRequested()) &&
+      (executionResult.success || executionResult.averageSpeed > 0.0);
 
   if (!executionResult.speedSamples.empty()) {
     /*
