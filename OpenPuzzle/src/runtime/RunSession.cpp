@@ -2356,6 +2356,21 @@ void RunSession::validateConcurrentGpuSelection(
 
 int RunSession::run(
     const std::vector<std::string> &args) const {
+  // Reject the experimental engine before recovery, runtime acquisition or network work.
+  if (!args.empty() && (args.front() == "run" || args.front() == "claim")) {
+    for (std::size_t i = 0; i + 1 < args.size(); ++i) {
+      if (args[i] != "--engine") continue;
+      auto engine = args[i + 1];
+      std::transform(engine.begin(), engine.end(), engine.begin(),
+                     [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+      if (engine == "vanity" || engine == "vanity-preview") {
+        std::cerr << "Vanity is experimental: production assignments are not enabled.\n"
+                  << "Use openpuzzle vanity-preview help for local profile and validation commands.\n"
+                  << "No assignment requested.\n";
+        return 1;
+      }
+    }
+  }
   if (!args.empty() && (args.front() == "run" || args.front() == "claim")) {
     try {
       validateRunIntegerArguments(args);

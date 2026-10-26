@@ -1,3 +1,6 @@
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+#include "VanityPanel.hpp"
+#endif
 #include "MainWindow.hpp"
 #include "GpuControlPanel.hpp"
 #include <QCloseEvent>
@@ -694,6 +697,18 @@ void MainWindow::buildInterface() {
   toolGrid->addWidget(updates_, 1, 0);
   toolGrid->addWidget(audit_, 1, 1);
   toolGrid->addWidget(installKangaroo_, 1, 2);
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  vanityPreview_ = new QPushButton("Vanity / CUDA — Preview");
+  vanityPreview_->setObjectName("ToolButton");
+  vanityPreview_->setProperty("controlId", "vanityPreview");
+  toolGrid->addWidget(vanityPreview_, 2, 0, 1, 3);
+  connect(vanityPreview_, &QPushButton::clicked, this, [this] {
+    if (!benchmark_->isEnabled()) return;
+    VanityPanel panel(cliExecutable(), currentLanguage_, this);
+    panel.exec();
+    refreshStatus();
+  });
+#endif
   toolsLayout->addLayout(toolGrid);
   page->addWidget(toolsCard);
 
@@ -1102,6 +1117,7 @@ void MainWindow::updateActionAvailability() {
   refresh_->setEnabled(!busy);
 
   benchmark_->setEnabled(idle && !(gpuControls_ && gpuControls_->applying()));
+  if (vanityPreview_) vanityPreview_->setEnabled(benchmark_->isEnabled());
   selfTest_->setEnabled(idle);
   installKangaroo_->setEnabled(idle);
   doctor_->setEnabled(ready);

@@ -1,0 +1,32 @@
+{
+  "base_commit": "2ad96af0667678dea07679ca9be8806b5ba37df8",
+  "files": {
+    "OpenPuzzle/CMakeLists.txt": "a796086a5e118d4c5e6a55a4a4217881334dd6318a9e6c31339e8a0385ea8e2f",
+    "OpenPuzzle/docs/VANITY_CLI_PREVIEW.md": "20cf8ed09da1d3314032a563a26706de19a356c304ab0d8d0417c21dd06d14dc",
+    "OpenPuzzle/docs/VANITY_HTTP_PREVIEW.md": "e1317ceebd47bb52523cc11f1558f97d6ee5aca46b1ca5c21b2df9127b50b78b",
+    "OpenPuzzle/experimental/vanity-preview/CMakeLists.txt": "ec9c000a8653ca4287e7bf0753548053fbe4c752198dd044a4fc62729d7dd1db",
+    "OpenPuzzle/experimental/vanity-preview/HttpAssignmentMain.cpp": "f67d83f68b73764c2a1a689479573efd19af653918cb41f46f9baeee4406bc9a",
+    "OpenPuzzle/experimental/vanity-preview/LocalAssignmentMain.cpp": "2df14d36ddbe302d7a428e68b7e71bd04a49845c030b2cdbedec1379520fedc0",
+    "OpenPuzzle/experimental/vanity-preview/LoopbackHttp.hpp": "8490e8c503151ed584195eabc086cd2442207fa3bbe8863037db3d6e7d20c26b",
+    "OpenPuzzle/experimental/vanity-preview/VanityCommand.cpp": "169533f2a2f558ad0201e052e35e26bfe01a3ff88536813f888bbc70bd4d3b83",
+    "OpenPuzzle/experimental/vanity-preview/VanityCommand.hpp": "63c9c201a0e9e55c4964dbcbc7eb2d97ffca7b61613e19a71434042ea577be3a",
+    "OpenPuzzle/experimental/vanity-preview/VanityPreviewEngine.cpp": "9b2639642ecb771840046e19e1e18d375cf350b1e8841fcdf9822c5b52a5b1bb",
+    "OpenPuzzle/experimental/vanity-preview/VanityPreviewEngine.hpp": "bec57bd77cecb5d77233f29445e1648191278541f352196671b7beea0d54c750",
+    "OpenPuzzle/experimental/vanity-preview/VanityRangePreviewMain.cpp": "273229f6f26a272d263acd0da19046ef41e82e2a9e0cf46d847b7d8cbcedabb3",
+    "OpenPuzzle/experimental/vanity-preview/tests/CliTests.py": "522f600d63a8ef70c3cc745cca77b6d81f688df3cc379d5a4ff5b53816fca461",
+    "OpenPuzzle/experimental/vanity-preview/tests/ClientTests.py": "b47170e166b746081ac355e51ead0473eb66f321fc3a68208d90850c9d8f8bcf",
+    "OpenPuzzle/experimental/vanity-preview/tests/CommandDriver.cpp": "8d3c15c8a7bc623d4e3ff5c5b839c618cc6a87afcce5390a0a092b6ba6bf022c",
+    "OpenPuzzle/experimental/vanity-preview/tests/FakeEngine.py": "8503804b7b0b44c36e2932ecd7388665cc3c6bcbb940aeab8f8cf1a6e3aec76e",
+    "OpenPuzzle/experimental/vanity-preview/tests/FakeTargetEngine.py": "f0a87c4d0dd9d320b2ad34a74b60b16069f41de9e4f884bdde791b63f68c3d12",
+    "OpenPuzzle/experimental/vanity-preview/tests/HttpTests.py": "8f926ddddc4d415507cf4a2e8352d6b4153adaea512389e7e8723123dce15122",
+    "OpenPuzzle/experimental/vanity-preview/tests/ModelTests.cpp": "4f725e58981251c2fa8d5a7acfa11a1a10d026dc446a8adde7d83dfe8933c607",
+    "OpenPuzzle/experimental/vanity-preview/tests/ProtocolTests.cpp": "d4ed8ec48a6971053c533947b4496738afce701646d6d6a05b6789ce0b28bb9a",
+    "OpenPuzzle/experimental/vanity-preview/tests/support/CliScenarioDriver.py": "efd3e7fa37c00caf3120bba0a8affebd7d08123b4b0d0facd693057432b93dd2",
+    "OpenPuzzle/experimental/vanity-preview/tests/support/LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "OpenPuzzle/experimental/vanity-preview/tests/support/LocalScenarios.py": "469ad354d0ddafa78533f7a8a76dc8e5efb2369b690eba41f7663a1cf36eac78",
+    "OpenPuzzle/experimental/vanity-preview/tests/support/Support.py": "b1d87f0b53e96d1f334acf59fa6718a30ffd3bb9c24d8dfc53d5cd6e1d0e8cf1",
+    "OpenPuzzle/include/openpuzzle/runtime/VanityRangeProtocol.hpp": "ba4bee173bf6e3a8c52536f6e5d879d9fdb269a79b678d6ae630aa0d983c8e9f",
+    "OpenPuzzle/src/core/Application.cpp": "3eca308dc87e13fa251c19357db537e3db3eb22e4844b9ecb527b9a0d1b12f1f",
+    "OpenPuzzle/src/runtime/RunSession.cpp": "8e73e21d424235adef8dd52ca4f80e5585e6b3a1138db7c708582e675e8e706b"
+  }
+}

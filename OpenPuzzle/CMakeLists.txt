@@ -391,6 +391,11 @@ target_link_libraries(OpenPuzzle
 
 add_dependencies(OpenPuzzle OpenPuzzleBundledEngines)
 
+option(OPENPUZZLE_ENABLE_VANITY_PREVIEW "Enable local experimental Vanity CLI/profile validation (no production assignments)" OFF)
+if(OPENPUZZLE_ENABLE_VANITY_PREVIEW)
+    add_subdirectory(experimental/vanity-preview)
+endif()
+
 option(
     OPENPUZZLE_BUILD_UI
     "Build the optional Qt 6 desktop interface"
@@ -471,6 +476,10 @@ if(OPENPUZZLE_BUILD_UI)
                 -Wall -Wextra -Wpedantic
         )
 
+        if(OPENPUZZLE_ENABLE_VANITY_PREVIEW)
+            target_sources(OpenPuzzleUi PRIVATE src/ui/VanityPanel.cpp)
+            target_compile_definitions(OpenPuzzleUi PRIVATE OPENPUZZLE_ENABLE_VANITY_PREVIEW=1)
+        endif()
         message(STATUS "OpenPuzzle desktop UI: enabled")
     else()
         message(STATUS

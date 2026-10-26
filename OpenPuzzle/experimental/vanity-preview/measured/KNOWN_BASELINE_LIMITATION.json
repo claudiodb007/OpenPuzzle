@@ -1,0 +1,22 @@
+{
+  "status": "confirmed user observation; unresolved baseline issue",
+  "engine": "OpenPuzzle BitCrack CUDA",
+  "source": "user-provided read-only diagnostic output",
+  "report": "performance-o968vw38",
+  "stage": "correct-0-0-bitcrack",
+  "requested_count": 16777223,
+  "bitcrack_parameters": [
+    1,
+    32,
+    128
+  ],
+  "expected": 12,
+  "found": 14,
+  "expected_missing": 0,
+  "extra_offsets_from_inclusive_end": [
+    1,
+    2
+  ],
+  "installed_binary_modified": false,
+  "response": "Restrict the separate performance comparison to common aligned lengths, retain strict outside guards, and track general range delimitation as unresolved. Do not reinterpret the failing test as passed."
+}

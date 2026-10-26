@@ -1,5 +1,8 @@
 #include "openpuzzle/core/CliInteger.hpp"
 #include "openpuzzle/core/Application.hpp"
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+#include "VanityCommand.hpp"
+#endif
 #include "openpuzzle/config/ConfigurationManager.hpp"
 
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
@@ -116,6 +119,9 @@ static void printApplicationHelp() {
       << "  openpuzzle gpu-control list | apply [physical GPU and one power/fan option]\n"
       << "  openpuzzle audit [--limit N] [--puzzle N] [--event NAME]\n"
       << "  openpuzzle engine install psckangaroo [--force]\n"
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+      << "  openpuzzle vanity-preview help   Experimental local validation\n"
+#endif
       << "\n"
       << "Global options:\n"
       << "  -h, --help       Show this help\n"
@@ -225,6 +231,14 @@ int Application::run(int argc, char **argv) {
 
   std::vector<std::string> r(args.begin() + 1, args.end());
   try {
+    if (cmd == "vanity-preview") {
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+      return runVanityCommand(r);
+#else
+      std::cerr << "Vanity preview is not enabled in this build.\n";
+      return 2;
+#endif
+    }
     if (cmd == "init")
       return cmdInit();
     if (cmd == "import-puzzle-json")

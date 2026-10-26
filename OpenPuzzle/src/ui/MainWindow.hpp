@@ -124,6 +124,7 @@ private:
   QPushButton* stop_ = nullptr;
   QPushButton* refresh_ = nullptr;
   QPushButton* benchmark_ = nullptr;
+  QPushButton* vanityPreview_ = nullptr;
   QPushButton* selfTest_ = nullptr;
   QPushButton* doctor_ = nullptr;
   QPushButton* updates_ = nullptr;
