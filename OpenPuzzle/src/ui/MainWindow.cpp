@@ -331,6 +331,9 @@ MainWindow::MainWindow(QWidget* parent)
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  if(vanityBusy()){QMessageBox::information(this,"Vanity / CUDA",vanity_->caption(13));event->ignore();return;}
+#endif
   if (benchmarkRunning_) {
     QMessageBox::information(this, t("benchmark"), t("linux_benchmark_close"));
     event->ignore();
@@ -363,7 +366,11 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::buildInterface() {
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  setWindowTitle("OpenPuzzle — Vanity preview 0.10.1");
+#else
   setWindowTitle("OpenPuzzle");
+#endif
   setMinimumSize(820, 620);
   resize(1120, 860);
 
@@ -417,6 +424,7 @@ void MainWindow::buildInterface() {
   themeName->setProperty("translationKey", "theme");
 
   language_ = new QComboBox;
+  language_->setProperty("controlId","language");
   language_->addItem("English", "en");
   language_->addItem("Português", "pt");
   language_->addItem("Français", "fr");
@@ -529,6 +537,9 @@ void MainWindow::buildInterface() {
   mode_->addItem(QString(), static_cast<int>(RunMode::BitCrackCudaOpencl));
   mode_->addItem(QString(), static_cast<int>(RunMode::KeyHuntCpu));
   mode_->addItem(QString(), static_cast<int>(RunMode::KangarooCuda));
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  mode_->addItem("Vanity / CUDA",100);
+#endif
 
   device_ = new QSpinBox;
   device_->setProperty("controlId", "cudaDevice");
@@ -575,6 +586,10 @@ void MainWindow::buildInterface() {
   form->addWidget(rusticlRadeonsi_, 3, 1, 1, 3);
   runLayout->addLayout(form);
   runLayout->addWidget(autoStart_);
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  vanity_=new VanityPanel(cliExecutable(),currentLanguage_,runCard,true);
+  vanity_->setVisible(false);
+#endif
 
   auto* actions = new QHBoxLayout;
   start_ = new QPushButton;
@@ -587,10 +602,17 @@ void MainWindow::buildInterface() {
   stop_->setProperty("controlId", "stop");
   stop_->setObjectName("DangerButton");
   actions->addWidget(start_);
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  resumeVanity_=new QPushButton;resumeVanity_->setProperty("controlId","resumeVanity");resumeVanity_->setObjectName("SecondaryButton");actions->addWidget(resumeVanity_);
+  connect(resumeVanity_,&QPushButton::clicked,this,[this]{if(vanitySelected())vanity_->requestResume();});
+#endif
   actions->addStretch();
   actions->addWidget(safeStop_);
   actions->addWidget(stop_);
   runLayout->addLayout(actions);
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  runLayout->addWidget(vanity_);
+#endif
   page->addWidget(runCard);
 
   auto* thermalCard = new QFrame;
@@ -697,18 +719,7 @@ void MainWindow::buildInterface() {
   toolGrid->addWidget(updates_, 1, 0);
   toolGrid->addWidget(audit_, 1, 1);
   toolGrid->addWidget(installKangaroo_, 1, 2);
-#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
-  vanityPreview_ = new QPushButton("Vanity / CUDA — Preview");
-  vanityPreview_->setObjectName("ToolButton");
-  vanityPreview_->setProperty("controlId", "vanityPreview");
-  toolGrid->addWidget(vanityPreview_, 2, 0, 1, 3);
-  connect(vanityPreview_, &QPushButton::clicked, this, [this] {
-    if (!benchmark_->isEnabled()) return;
-    VanityPanel panel(cliExecutable(), currentLanguage_, this);
-    panel.exec();
-    refreshStatus();
-  });
-#endif
+
   toolsLayout->addLayout(toolGrid);
   page->addWidget(toolsCard);
 
@@ -793,6 +804,9 @@ void MainWindow::buildInterface() {
       &QPushButton::clicked,
       this,
       [this]() {
+        #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+        if(vanitySelected()){vanity_->requestSafeStop();return;}
+#endif
         runCommand("safe_stop", {"safestop"});
       });
   connect(
@@ -847,6 +861,7 @@ void MainWindow::buildInterface() {
             "run/mode",
             mode_->currentData().toInt());
         updateSelectionRules();
+        updateActionAvailability();updateStatusSummary();updateStatusBadge();
       });
   connect(
       puzzle_,
@@ -946,10 +961,27 @@ void MainWindow::buildInterface() {
         applyTheme();
       });
 
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  vanity_->stateChanged=[this]{updateActionAvailability();updateStatusSummary();updateStatusBadge();};
+#endif
   updateSelectionRules();
   updateActionAvailability();
 }
 
+bool MainWindow::vanitySelected() const {
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+ return mode_&&mode_->currentData().toInt()==100;
+#else
+ return false;
+#endif
+}
+bool MainWindow::vanityBusy() const {
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+ return vanity_&&vanity_->busy();
+#else
+ return false;
+#endif
+}
 QString MainWindow::t(const QString& key) const {
   return translated(currentLanguage_, key);
 }
@@ -977,7 +1009,7 @@ void MainWindow::loadThermalSettings() {
 }
 
 void MainWindow::updateThermalControlState() {
-  const bool editable = statusAvailable_ &&
+  const bool editable = !vanitySelected() && !vanityBusy() && statusAvailable_ &&
       !active_ && !identityUnavailable_ && !launchPending_ && !commandProcess_;
   const bool policyEnabled =
       editable && thermalEnabled_->isChecked();
@@ -1018,6 +1050,9 @@ void MainWindow::saveThermalSettings() {
 
 void MainWindow::applyLanguage() {
   if(gpuControls_) gpuControls_->setLanguage(currentLanguage_);
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  vanity_->setLanguage(currentLanguage_);resumeVanity_->setText(vanity_->caption(22));
+#endif
   subtitle_->setText(t("subtitle"));
   currentStateTitle_->setText(t("current_state"));
   newExecutionTitle_->setText(t("new_execution"));
@@ -1103,45 +1138,46 @@ void MainWindow::applyTheme() {
 }
 
 void MainWindow::updateActionAvailability() {
-  const bool busy = launchPending_ || commandProcess_;
+  const bool busy = launchPending_ || commandProcess_ || vanityBusy();
   const bool ready = !busy && cliAvailable_;
   const bool occupied = active_ || identityUnavailable_;
   const bool idle = statusAvailable_ && !occupied && !solutionFound_ && ready;
-
-  start_->setEnabled(idle);
-  safeStop_->setEnabled(
-      ready && occupied && !kangarooActive_);
-  stop_->setEnabled((benchmarkRunning_ && !benchmarkCancelRequested_) || (ready && occupied));
-  stop_->setText(t(benchmarkRunning_ ? "linux_benchmark_cancel" : "stop_now"));
-  if (gpuControls_) gpuControls_->setEnabled(!benchmarkRunning_);
+  const bool local = vanitySelected();
+  bool canStart=idle, canBenchmark=idle && !(gpuControls_ && gpuControls_->applying());
+  bool canSafe=ready && occupied && !kangarooActive_;
+  bool canStop=(benchmarkRunning_ && !benchmarkCancelRequested_) || (ready && occupied);
+  QString startText=t("start"),stopText=t(benchmarkRunning_ ? "linux_benchmark_cancel" : "stop_now");
+  QString safeHint=kangarooActive_ ? t("kangaroo_stop_hint") : t("safe_stop_hint");
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  const bool hostAllowed=statusAvailable_&&!occupied&&!solutionFound_&&cliAvailable_&&!launchPending_&&!commandProcess_&&!(gpuControls_&&gpuControls_->applying());
+  vanity_->setHostAllowed(hostAllowed);
+  resumeVanity_->setVisible(local);resumeVanity_->setEnabled(local&&vanity_->canResume());
+  if(local){
+    canStart=vanity_->canRun();canBenchmark=vanity_->canBenchmark();
+    canSafe=vanity_->canSafeStop();canStop=vanity_->canStop();
+    startText=vanity_->caption(4);stopText=vanity_->caption(7);safeHint=vanity_->caption(15);
+  }
+#endif
+  // Apply the final state once. A transient disable during a mouse press makes
+  // QAbstractButton discard the click when the user releases the mouse.
+  start_->setEnabled(canStart);start_->setText(startText);
+  safeStop_->setEnabled(canSafe);safeStop_->setToolTip(safeHint);
+  stop_->setEnabled(canStop);stop_->setText(stopText);
+  benchmark_->setEnabled(canBenchmark);
+  if (gpuControls_) gpuControls_->setEnabled(!benchmarkRunning_ && !vanityBusy());
   refresh_->setEnabled(!busy);
-
-  benchmark_->setEnabled(idle && !(gpuControls_ && gpuControls_->applying()));
-  if (vanityPreview_) vanityPreview_->setEnabled(benchmark_->isEnabled());
-  selfTest_->setEnabled(idle);
+  selfTest_->setEnabled(idle && !local);
   installKangaroo_->setEnabled(idle);
-  doctor_->setEnabled(ready);
-  updates_->setEnabled(ready);
-  audit_->setEnabled(ready);
-
+  doctor_->setEnabled(ready);updates_->setEnabled(ready);audit_->setEnabled(ready);
   mode_->setEnabled(idle);
-  puzzle_->setEnabled(idle);
-  kangarooPuzzle_->setEnabled(idle);
-  device_->setEnabled(idle);
-  openclDevice_->setEnabled(idle);
-  cpuThreads_->setEnabled(idle);
-  rusticlRadeonsi_->setEnabled(idle);
+  puzzle_->setEnabled(idle && !local);kangarooPuzzle_->setEnabled(idle);
+  device_->setEnabled(idle && !local);openclDevice_->setEnabled(idle);
+  cpuThreads_->setEnabled(idle);rusticlRadeonsi_->setEnabled(idle);
+  autoStart_->setEnabled(idle && !local);
   updateThermalControlState();
-
-  const QString busyHint =
-      !statusAvailable_
-          ? t("status_unavailable_hint")
-          : (identityUnavailable_
-                 ? t("identity_unavailable_message")
-                 : (active_ ? t("busy_active") : QString()));
-  benchmark_->setToolTip(busyHint);
-  selfTest_->setToolTip(busyHint);
-  installKangaroo_->setToolTip(busyHint);
+  const QString busyHint = !statusAvailable_ ? t("status_unavailable_hint")
+      : identityUnavailable_ ? t("identity_unavailable_message") : active_ ? t("busy_active") : QString();
+  benchmark_->setToolTip(busyHint);selfTest_->setToolTip(busyHint);installKangaroo_->setToolTip(busyHint);
 }
 
 void MainWindow::updateSelectionRules() {
@@ -1152,11 +1188,16 @@ void MainWindow::updateSelectionRules() {
   const bool concurrent = mode == RunMode::BitCrackCudaOpencl;
   const bool usesOpencl = openclOnly || concurrent;
 
-  puzzle_->setVisible(!kangaroo);
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  vanity_->setVisible(vanitySelected());
+#endif
+  puzzleName_->setVisible(!vanitySelected());
+  autoStart_->setVisible(!vanitySelected());
+  puzzle_->setVisible(!kangaroo&&!vanitySelected());
   kangarooPuzzle_->setVisible(kangaroo);
 
-  deviceName_->setVisible(!cpu);
-  device_->setVisible(!cpu);
+  deviceName_->setVisible(!cpu&&!vanitySelected());
+  device_->setVisible(!cpu&&!vanitySelected());
   deviceName_->setText(
       openclOnly
           ? t("opencl_device")
@@ -1304,6 +1345,9 @@ void MainWindow::markStatusUnavailable(
 }
 
 void MainWindow::updateStatusSummary() {
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  if(vanitySelected()&&!active_&&!identityUnavailable_&&statusAvailable_){summary_->setText(vanity_->statusText());return;}
+#endif
   if (!statusAvailable_) {
     summary_->setText(statusIssueKey_ == "consulting"
         ? t("consulting")
@@ -1318,13 +1362,17 @@ void MainWindow::updateStatusSummary() {
 }
 
 void MainWindow::updateStatusBadge() {
+  statusBadge_->setToolTip({});
   statusBadge_->setText(
       !statusAvailable_
           ? t(statusIssueKey_ == "consulting" ? "status_pending" : "status_unavailable")
           : (identityUnavailable_
                  ? t("identity_unavailable")
                  : (active_ ? t("running") : t("stopped"))));
-  statusBadge_->setProperty("active", active_);
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  if(vanitySelected()&&!active_&&!identityUnavailable_&&statusAvailable_){statusBadge_->setText("Vanity / CUDA");statusBadge_->setToolTip(vanity_->caption(0));}
+#endif
+  statusBadge_->setProperty("active", active_||vanityBusy());
   statusBadge_->setProperty("identityUnavailable", identityUnavailable_);
   statusBadge_->setProperty("statusUnavailable", !statusAvailable_);
   statusBadge_->style()->unpolish(statusBadge_);
@@ -1510,6 +1558,9 @@ bool MainWindow::writeAutomaticStartUnit(
 }
 
 void MainWindow::configureAutomaticStart(bool enabled) {
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  if(vanitySelected()){return;}
+#endif
   autoStart_->setEnabled(false);
   QString error;
   bool success = true;
@@ -1862,6 +1913,9 @@ void MainWindow::confirmClearThermalHistory() {
 }
 
 void MainWindow::startExecution() {
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  if(vanitySelected()){vanity_->requestRun();return;}
+#endif
   if (launchPending_ || commandProcess_) {
     return;
   }
@@ -2027,6 +2081,9 @@ void MainWindow::runCommand(
 }
 
 void MainWindow::runBenchmark() {
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  if(vanitySelected()){vanity_->requestBenchmark();return;}
+#endif
   if (!benchmark_->isEnabled() || commandProcess_ || launchPending_ ||
       (gpuControls_ && gpuControls_->applying())) return;
 
@@ -2136,6 +2193,9 @@ void MainWindow::cancelBenchmark() {
 }
 
 void MainWindow::runSelfTest() {
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  if(vanitySelected()){return;}
+#endif
   QString backend;
   int device = device_->value();
 
@@ -2176,6 +2236,9 @@ void MainWindow::runSelfTest() {
 }
 
 void MainWindow::confirmStop() {
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  if(vanitySelected()){vanity_->requestStop();return;}
+#endif
   if (benchmarkRunning_) { cancelBenchmark(); return; }
   if (QMessageBox::question(
           this,

@@ -14,8 +14,8 @@ def descendant(pid,parent):
         except (FileNotFoundError,ProcessLookupError):return True
     return False
 class LocalMeasurementServer:
-    def __init__(self,count,address):
-        self.count=count;self.address=address;self.requests=[];self.errors=[];self.claims=0;self.completions=0;self.progress=[];self.client=None;outer=self
+    def __init__(self,count,address,*,port=0,client=None,initial_checked=0):
+        self.count=count;self.address=address;self.requests=[];self.errors=[];self.claims=int(client is not None);self.completions=0;self.progress=[];self.client=client;self.initial_checked=initial_checked;outer=self
         class Handler(BaseHTTPRequestHandler):
             protocol_version='HTTP/1.1'
             def log_message(self,*_):pass
@@ -32,7 +32,7 @@ class LocalMeasurementServer:
                         require(data.get('assignment_id')=='measurement-local' and data.get('client_id')==outer.client,'Wrong local assignment/client')
                         if self.path=='/api/range/progress':
                             require(set(data)=={'assignment_id','client_id','status','speed_mkeys','keys_checked'} and data['status']=='running' and data['speed_mkeys']==0 and outer.claims==1 and outer.completions==0,'Unexpected progress payload')
-                            n=int(data['keys_checked']);require(str(n)==data['keys_checked'] and 0<=n<=count and (not outer.progress or n>outer.progress[-1]),'Invalid/duplicate/regressing progress')
+                            n=int(data['keys_checked']);require(str(n)==data['keys_checked'] and 0<=n<=count and (n==outer.initial_checked if not outer.progress else n>outer.progress[-1]),'Invalid/duplicate/regressing progress')
                             outer.progress.append(n)
                         elif self.path=='/api/range/complete':
                             require(set(data)=={'assignment_id','client_id','exit_code','status','keys_checked'} and data['exit_code']==0 and data['status']=='completed' and data['keys_checked']==str(count),'Wrong completion')
@@ -42,11 +42,11 @@ class LocalMeasurementServer:
                     payload=json.dumps(result,separators=(',',':')).encode();self.send_response(200);self.send_header('Content-Length',str(len(payload)));self.send_header('Connection','close');self.end_headers();self.wfile.write(payload);self.close_connection=True
                 except Exception as e:
                     outer.errors.append(str(e));self.close_connection=True
-        self.server=ThreadingHTTPServer(('127.0.0.1',0),Handler);self.thread=threading.Thread(target=lambda:self.server.serve_forever(poll_interval=.05),daemon=True);self.thread.start();self.url=f'http://127.0.0.1:{self.server.server_port}'
+        self.server=ThreadingHTTPServer(('127.0.0.1',port),Handler);self.thread=threading.Thread(target=lambda:self.server.serve_forever(poll_interval=.05),daemon=True);self.thread.start();self.url=f'http://127.0.0.1:{self.server.server_port}'
     def close(self):self.server.shutdown();self.server.server_close();self.thread.join(timeout=5)
     def verify(self):
         require(not self.errors,'HTTP fixture refused: '+repr(self.errors));require(self.claims==1 and self.completions==1,'Expected exactly one claim and completion')
-        expected=[0]+list(range(GRID*256*1024,self.count,GRID*256*1024))+[self.count]
+        expected=[self.initial_checked]+list(range(self.initial_checked+GRID*256*1024,self.count,GRID*256*1024))+[self.count]
         require(self.progress==expected,'HTTP did not receive every exact checkpoint')
 def command(paths,directory,count,uuid,url):
     options=dict(engine=paths['engine'],engine_sha256=s.sha(paths['engine']),adapter=paths['adapter'],adapter_sha256=s.sha(paths['adapter']),root=directory/'state',controls=directory/'controls',server=url,start=f'{BASE:x}',count=count,grid=GRID,target_kind='p2pkh',target=s.address(s.key_hash(BASE-1)),gpu_uuid=uuid)

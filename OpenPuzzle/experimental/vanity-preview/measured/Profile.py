@@ -139,19 +139,24 @@ def benchmark(store):
         for sig,handler in old.items():signal.signal(sig,handler)
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('action',choices=['measured-import','measured-show','measured-test','measured-benchmark']);parser.add_argument('--store',required=True,type=Path);parser.add_argument('--from',dest='source',type=Path);parser.add_argument('--run-root',type=Path);parser.add_argument('--enable-experimental-vanity-local',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('action',choices=['measured-import','measured-show','measured-test','measured-benchmark','measured-runs','measured-resume']);parser.add_argument('--store',required=True,type=Path);parser.add_argument('--from',dest='source',type=Path);parser.add_argument('--run-root',type=Path);parser.add_argument('--expected-state');parser.add_argument('--enable-experimental-vanity-local',action='store_true');args=parser.parse_args()
     os.umask(0o077)
     parent=os.getppid();e.require(ctypes.CDLL(None).prctl(1,signal.SIGTERM,0,0,0)==0 and os.getppid()==parent and parent!=1,'Preview owner is unavailable')
-    e.require(args.action=='measured-show' or args.enable_experimental_vanity_local,'Explicit local opt-in required')
+    e.require(args.action in ('measured-show','measured-runs') or args.enable_experimental_vanity_local,'Explicit local opt-in required')
     e.require((args.source is not None)==(args.action=='measured-import'),'Unexpected/missing import path')
-    e.require((args.run_root is not None)==(args.action=='measured-test'),'Unexpected/missing run path')
+    e.require((args.run_root is not None)==(args.action in ('measured-test','measured-resume')),'Unexpected/missing run path')
+    e.require((args.expected_state is not None)==(args.action=='measured-resume'),'Unexpected/missing resume confirmation')
     store=private_directory(args.store,True)
     fd=os.open(store/'session.lock',os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW,0o600)
     try:
         fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
         if args.action=='measured-import':emit(import_profile(args.source,store))
         elif args.action=='measured-show':emit(read_selected(store)[0])
-        elif args.action=='measured-test':return local_run(store,args.run_root)
+        elif args.action in ('measured-test','measured-runs','measured-resume'):
+            import Resume as r
+            if args.action=='measured-test':return r.new_test(store,args.run_root)
+            if args.action=='measured-resume':return r.resume(store,args.run_root,args.expected_state)
+            r.list_runs(store)
         else:benchmark(store)
     finally:os.close(fd)
     return 0

@@ -26,6 +26,7 @@ class QWidget;
 
 namespace openpuzzle::ui {
 class GpuControlPanel;
+class VanityPanel;
 
 class MainWindow final : public QMainWindow {
   Q_OBJECT
@@ -124,7 +125,10 @@ private:
   QPushButton* stop_ = nullptr;
   QPushButton* refresh_ = nullptr;
   QPushButton* benchmark_ = nullptr;
-  QPushButton* vanityPreview_ = nullptr;
+  VanityPanel* vanity_ = nullptr;
+  QPushButton* resumeVanity_ = nullptr;
+  bool vanitySelected() const;
+  bool vanityBusy() const;
   QPushButton* selfTest_ = nullptr;
   QPushButton* doctor_ = nullptr;
   QPushButton* updates_ = nullptr;

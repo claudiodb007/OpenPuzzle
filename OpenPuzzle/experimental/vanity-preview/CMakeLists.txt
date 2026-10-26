@@ -36,3 +36,6 @@ target_compile_definitions(OpenPuzzleCore PRIVATE
  OPENPUZZLE_VANITY_MEASURED_SCRIPT="${CMAKE_CURRENT_SOURCE_DIR}/measured/Profile.py")
 add_test(NAME VanityMeasuredProfileTests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/MeasuredProfileTests.py $<TARGET_FILE:OpenPuzzle>)
 set_tests_properties(VanityMeasuredProfileTests PROPERTIES TIMEOUT 180)
+
+add_test(NAME VanityResumeTests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/ResumeTests.py $<TARGET_FILE:OpenPuzzle>)
+set_tests_properties(VanityResumeTests PROPERTIES TIMEOUT 180)

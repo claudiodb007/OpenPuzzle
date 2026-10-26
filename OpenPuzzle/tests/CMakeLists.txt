@@ -180,6 +180,21 @@ if(TARGET OpenPuzzleUi)
         COMMAND UiControlTests
     )
 
+    if(OPENPUZZLE_ENABLE_VANITY_PREVIEW)
+        get_target_property(_vanity_ui_sources UiControlTests SOURCES)
+        list(REMOVE_ITEM _vanity_ui_sources ui/UiControlTests.cpp)
+        add_executable(UiVanityIntegrationTests ui/UiVanityIntegrationTests.cpp
+            ${_vanity_ui_sources} ../src/ui/VanityPanel.cpp)
+        set_target_properties(UiVanityIntegrationTests PROPERTIES AUTOMOC ON AUTORCC ON)
+        target_include_directories(UiVanityIntegrationTests PRIVATE ../include ../src/ui)
+        target_link_libraries(UiVanityIntegrationTests PRIVATE OpenPuzzleUiSettings Qt6::Widgets)
+        target_compile_definitions(UiVanityIntegrationTests PRIVATE
+            OPENPUZZLE_VERSION="${PROJECT_VERSION}" OPENPUZZLE_ENABLE_VANITY_PREVIEW=1)
+        add_test(NAME UiVanityIntegrationTests COMMAND UiVanityIntegrationTests)
+        set_tests_properties(UiVanityIntegrationTests PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 90)
+    endif()
+
     add_executable(UiBenchmarkTests
         ui/UiBenchmarkTests.cpp
         ../src/ui/MainWindow.cpp

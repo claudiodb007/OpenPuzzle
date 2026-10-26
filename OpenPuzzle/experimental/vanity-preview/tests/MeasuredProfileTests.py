@@ -101,7 +101,7 @@ class Tests(unittest.TestCase):
    'if query.startswith("--query-compute-apps"):pass\n'+
    'elif query=="--query-gpu=uuid,name,driver_version":print("'+UUID+', NVIDIA GeForce RTX 4070 SUPER, synthetic-driver")\n'+
    'else:print("'+UUID+',30,20,245,0,1000,1000,50")\n');smi.chmod(0o700)
-  d=self.root/'signal-run';env=dict(os.environ,PATH=str(tools)+os.pathsep+os.environ['PATH'])
+  d=self.store/'run-11111111-2222-3333-4444-555555555555';env=dict(os.environ,PATH=str(tools)+os.pathsep+os.environ['PATH'])
   with (self.root/'signal.log').open('w') as log:
    child=subprocess.Popen([str(CLI),'vanity-preview','measured-test','--store',str(self.store),'--run-root',str(d),'--enable-experimental-vanity-local'],stdout=log,stderr=log,env=env,start_new_session=True)
    try:
