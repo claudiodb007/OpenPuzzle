@@ -260,7 +260,7 @@ class Tests(unittest.TestCase):
         result=subprocess.run(resume,env=env,capture_output=True,text=True,timeout=20)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         meta=e.read_json(self.directory/c.META);seal=e.read_json(self.directory/c.SEAL)
-        self.assertEqual(meta['schema'],'openpuzzle_coordinator_desktop_v2')
+        self.assertEqual(meta['schema'],'openpuzzle_coordinator_desktop_v3')
         self.assertEqual(meta['contract_sha256'],s.sha(contract))
         self.assertEqual((seal['native']['checked'],seal['native']['claims'],seal['native']['completions']),(c.TOTAL,1,1))
 

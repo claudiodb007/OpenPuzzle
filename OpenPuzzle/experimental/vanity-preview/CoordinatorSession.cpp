@@ -58,7 +58,7 @@ void evidence(const fs::path& workspace,const Plan& plan,const Native& checkpoin
  need(checked==checkpoint.checked,"Checkpoint exceeds or differs from native coverage");
  if(checkpoint.status=="complete")need(terminal&&checked==plan.count,"Completion lacks exact native terminal proof");
 }
-bool rejected(const std::string& code){return code=="assignment_not_found"||code=="assignment_client_mismatch"||code=="invalid_assignment_state"||code=="assignment_lease_expired";}
+bool rejected(const std::string& code){return code=="assignment_not_found"||code=="assignment_client_mismatch"||code=="invalid_assignment_state"||code=="assignment_lease_expired"||code=="puzzle_verification_pending"||code=="puzzle_solved";}
 }
 int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume){
  try{
@@ -86,11 +86,25 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
   if(fs::exists(targetFile))need(read(targetFile)==targetText,"Coordinator public target changed");else write(targetFile,targetText);
   need(invoke(shellQuote(engine.string())+" --identity")=="OpenPuzzle-VanityRange 0.2.0 CUDA target protocol 1\n","Wrong target engine identity");
   std::istringstream info(invoke(shellQuote(engine.string())+" --target-info "+shellQuote(targetFile.string())));std::string hash,address,extra;need(bool(info>>hash>>address)&&!(info>>extra)&&address==target&&hash.size()==40,"Public target decode differs");
+  const char* suppliedAttempt=getenv("OPENPUZZLE_VANITY_ATTEMPT");
+  const std::string attemptToken=suppliedAttempt?suppliedAttempt:("native-"+std::to_string(getpid()));
+  need(std::regex_match(attemptToken,std::regex("[A-Za-z0-9-]{1,80}")),"Invalid coordinator attempt identity");
+  int transportStatus=0;
+  std::string transportKind="review",failureKind,failureOperation;
+  auto publishOutcome=[&](const std::string& kind,const std::string& operation,int code){
+   std::ostringstream out;out<<"OPV-RECOVERY-1\n"<<binding<<'\n'<<kind<<' '<<operation<<' '<<transportStatus<<' '<<code<<' '<<state.phase<<' '<<state.offset<<' '<<state.checked<<' '<<state.launches<<' '<<getpid()<<' '<<attemptToken<<'\n';
+   write(root/"coordinator-outcome.txt",out.str());
+  };
+  auto backoff=[&](int attempt){
+   const auto until=std::chrono::steady_clock::now()+std::chrono::milliseconds(attempt==0?100:250);
+   while(!interrupted&&std::chrono::steady_clock::now()<until)std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  };
   client::HttpRangeClient http(server,[&](const std::string& url,const std::string& body){
    try{need(url.starts_with(server+"/api/"),"Transport escaped local endpoint");auto response=local.post(url.substr(server.size()),body);
-    if(response.status>=200&&response.status<300&&url!=server+"/api/range/claim"&&(response.status!=200||response.body!="{\"success\":true}"))return client::HttpPostResult{502,response.body,"Unacknowledged fixture response"};
+    transportStatus=response.status;transportKind=(response.status==408||response.status==429||(response.status>=500&&response.status<=599))?"network":"review";
+    if(response.status>=200&&response.status<300&&url!=server+"/api/range/claim"&&(response.status!=200||response.body!="{\"success\":true}")){transportKind="review";return client::HttpPostResult{502,response.body,"Unacknowledged local response"};}
     return client::HttpPostResult{response.status,response.body,{}};
-   }catch(const std::exception& error){return client::HttpPostResult{0,{},error.what()};}
+   }catch(const std::exception& error){transportStatus=0;transportKind="network";return client::HttpPostResult{0,{},error.what()};}
   });
   auto heartbeat=[&](const std::string& status){client::ClientHeartbeat h;h.clientId=clientId;h.version="vanity-coordinator-0.11.0";h.platform="linux-local-fixture";h.status=status;h.cpu={"Isolated coordinator fixture",1,1};h.engines.push_back({"Vanity","cuda",true,true});if(status=="running"){h.activeEngine="Vanity";h.activeBackend="cuda";h.activeBackends={"cuda"};}return http.heartbeat(h);};
   auto stopped=[&]{return interrupted||fs::exists(controls/"cancel");};
@@ -105,34 +119,45 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
   CoordinatorPlan plan(state.a,puzzle,target,grid,cap);need(plan.start>=scopeStart&&plan.end<=scopeEnd&&state.offset<=state.checked&&state.checked<=plan.total,"Stored assignment differs from scope");
   need(state.offset==plan.total||state.offset%cap==0,"Unaligned completed segment prefix");
   for(uint64_t offset=0;offset<state.offset;){auto segment=plan.segment(offset);auto workspace=root/("segment-"+std::to_string(offset/cap));auto n=checkpoint(workspace/"checkpoint.txt",segment,digest(binding+"\n"+std::to_string(offset)));need(n.status=="complete"&&n.checked==segment.count,"Completed segment checkpoint missing");evidence(workspace,segment,n);offset+=segment.count;}
+  auto failed=[&](const std::string& operation){
+   failureKind=rejected(http.lastErrorCode())?"lease":transportKind;failureOperation=operation;
+   state.phase=failureKind=="lease"?"rejected":"paused";save();return false;
+  };
   auto nextHeartbeat=std::chrono::steady_clock::now()+std::chrono::seconds(30);
   auto progress=[&](uint64_t checked,double rate=0.){
    need(checked>=state.checked&&checked<=plan.total,"Cumulative coordinator progress regressed/overflowed");state.checked=checked;save();
-   if(std::chrono::steady_clock::now()>=nextHeartbeat){if(!heartbeat("running")){state.phase="paused";save();return false;}nextHeartbeat=std::chrono::steady_clock::now()+std::chrono::seconds(30);}
+   if(std::chrono::steady_clock::now()>=nextHeartbeat){if(!heartbeat("running"))return failed("heartbeat");nextHeartbeat=std::chrono::steady_clock::now()+std::chrono::seconds(30);}
    for(int i=0;i<3;++i){if(http.progress(state.a.assignmentId,clientId,rate,std::to_string(checked)))return true;
-    if(rejected(http.lastErrorCode())){state.phase="rejected";save();return false;}
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));}
-   state.phase="paused";save();return false;
+    if(rejected(http.lastErrorCode())||transportKind!="network"||interrupted)break;
+    if(i<2)backoff(i);
+   }
+   return failed("progress");
+  };
+  auto ensureProgress=[&](uint64_t checked,const char* message){
+   if(!progress(checked)){publishOutcome(failureKind,failureOperation,2);throw std::runtime_error(message);}
+  };
+  auto ensureHeartbeat=[&]{
+   if(!heartbeat("running")){failed("heartbeat");publishOutcome(failureKind,failureOperation,2);throw std::runtime_error("Running heartbeat failed");}
   };
   if(state.phase!="pending-complete"&&state.phase!="solution"){
    // Probe the current lease before every launch/relaunch. No new claim on resume.
-   need(progress(state.checked),"Lease/progress probe refused; no next assignment");need(heartbeat("running"),"Running heartbeat failed");
+   ensureProgress(state.checked,"Lease/progress probe refused; no next assignment");ensureHeartbeat();
    if(resume && fs::exists(controls/"cancel")){
     need(!fs::is_symlink(fs::symlink_status(controls/"cancel"))&&fs::is_regular_file(controls/"cancel")&&fs::file_size(controls/"cancel")==0,"Unsafe cancel marker preserved");
     const auto archive=root/("resume-before-"+std::to_string(state.launches)+"-"+std::to_string(getpid())+".txt");need(!fs::exists(archive),"Resume journal already exists");write(archive,read(stateFile));fs::remove(controls/"cancel");
    }
    while(state.offset<plan.total){
-    if(stopped()){state.phase="paused";save();return 130;}
+    if(stopped()){state.phase="paused";save();publishOutcome("paused","control",130);return 130;}
     auto segment=plan.segment(state.offset);auto workspace=root/("segment-"+std::to_string(state.offset/cap));
     if(!fs::exists(workspace))fs::create_directory(workspace);directory(workspace);
     const auto segmentBinding=digest(binding+"\n"+std::to_string(state.offset));auto native=checkpoint(workspace/"checkpoint.txt",segment,segmentBinding);evidence(workspace,segment,native);
     need(native.status!="review"&&native.status!="faulted","Native segment requires review");
     if(native.status=="solution"){state.phase="solution";save();break;}
     if(native.status=="complete"){
-     need(native.checked==segment.count,"Incomplete native terminal");need(progress(state.offset+segment.count),"Recovered segment progress refused");state.offset+=segment.count;save();continue;
+     need(native.checked==segment.count,"Incomplete native terminal");ensureProgress(state.offset+segment.count,"Recovered segment progress refused");state.offset+=segment.count;save();continue;
     }
     need(state.checked<=state.offset+native.checked,"Coordinator acknowledged more than durable checkpoint");
-    need(progress(state.offset+native.checked),"Resume lease probe refused");
+    ensureProgress(state.offset+native.checked,"Resume lease probe refused");
     state.phase="running";++state.launches;save();
     const auto logFile=root/("launch-"+std::to_string(state.launches)+".log");need(!fs::exists(logFile),"Existing launch log preserved");std::ofstream log(logFile);fs::permissions(logFile,fs::perms::owner_read|fs::perms::owner_write);
     AdapterConfig config{adapter.string(),engine.string(),targetFile.string(),segmentBinding,controls.string(),"stop",true};
@@ -145,10 +170,14 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
     },900,[&]{return bad||interrupted;});
     native=checkpoint(workspace/"checkpoint.txt",segment,segmentBinding);evidence(workspace,segment,native);
     if(native.status=="solution"){state.phase="solution";save();break;}
-    if(bad){std::cerr<<error<<'\n';return state.phase=="rejected"?2:3;}
-    if(result.exitCode==130||stopped()){state.checked=state.offset+native.checked;state.phase="paused";save();return 130;}
+    if(bad){
+     // Reconcile only against the adapter's durable, independently checked range.
+     state.checked=state.offset+native.checked;save();int code=state.phase=="rejected"?2:3;
+     publishOutcome(failureKind,failureOperation,code);std::cerr<<error<<'\n';return code;
+    }
+    if(result.exitCode==130||stopped()){state.checked=state.offset+native.checked;state.phase="paused";save();publishOutcome("paused","control",130);return 130;}
     need(result.started&&result.exitCode==0&&native.status=="complete"&&native.checked==segment.count,"Native segment did not complete exactly");
-    need(progress(state.offset+segment.count),"Final segment progress refused");state.offset+=segment.count;save();
+    ensureProgress(state.offset+segment.count,"Final segment progress refused");state.offset+=segment.count;save();
    }
    if(state.phase!="solution"){need(state.offset==plan.total&&state.checked==plan.total,"Incomplete assignment");state.phase="pending-complete";save();}
   }
@@ -172,11 +201,20 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
   d.sync=[&](const auto&){client::ExecutionSyncResult r;r.hasState=true;r.state=execution;
    if(state.phase=="solution"){r.solutionFound=true;r.solutionPath=solution;return r;}
    need(state.phase=="pending-complete"&&state.checked==plan.total,"Completion without exact assignment coverage");
-   bool ok=false;for(int i=0;i<3&&!ok;++i){ok=http.complete(state.a.assignmentId,clientId,0,"completed",std::to_string(plan.total));if(rejected(http.lastErrorCode()))break;}
+   bool ok=false;for(int i=0;i<3&&!ok;++i){
+    ok=http.complete(state.a.assignmentId,clientId,0,"completed",std::to_string(plan.total));
+    // A lost completion reply may already have committed. Do not replay it here.
+    if(!ok&&(transportStatus==0||rejected(http.lastErrorCode())||transportKind!="network"||interrupted))break;
+    if(!ok&&i<2)backoff(i);
+   }
+   if(!ok){failureKind=rejected(http.lastErrorCode())?"lease":transportKind;failureOperation="complete";
+    if(failureKind=="lease"){state.phase="rejected";save();}}
    r.hasExitCode=true;r.exitCode=0;r.completionUploaded=ok;r.stateRemoved=ok;r.completionError=http.lastError();r.completionStatus=ok?client::AssignmentUploadStatus::Uploaded:client::AssignmentUploadStatus::PermanentFailure;
    if(ok){state.phase="done";save();}return r;
   };
   ClientRuntime runtime(d);int code=runtime.run(server,state.a.assignmentId,clientId,root);
+  if(state.phase=="done")publishOutcome("done","complete",code);
+  else if(state.phase=="pending-complete"||state.phase=="rejected")publishOutcome(failureKind,failureOperation,code);
   std::cout<<"OPV_COORD RESULT "<<state.phase<<" checked="<<state.checked<<" launches="<<state.launches<<" next_claim_blocked=1\n";return code;
  }catch(const std::exception& error){std::cerr<<"Vanity coordinator refused: "<<error.what()<<'\n';return 2;}
 }

@@ -70,6 +70,11 @@ class Tests(unittest.TestCase):
         self.post(server, '/api/range/complete', self.assignment(server, keys_checked='100', status='completed', exit_code=0))
         self.assertEqual((server.claims, server.completions, server.errors), (1, 1, []))
         self.assertEqual(len(server.requests), 7)
+        self.assertEqual(len(server.responses), 7)
+        for request, response in zip(server.requests, server.responses):
+            self.assertEqual({key:response[key] for key in ('path','payload')}, request)
+            self.assertEqual(response['status'], 200)
+        self.assertEqual(sum(row['applied']['complete'] for row in server.responses), 1)
 
     def test_another_claim_and_early_completion_refused(self):
         server = self.server()

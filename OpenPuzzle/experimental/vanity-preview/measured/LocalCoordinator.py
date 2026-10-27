@@ -63,7 +63,7 @@ class LocalAssignmentServer:
         self.gpu_uuid = gpu_uuid
         self.resume_only = resume_only
         self.count, self.grid, self.segment, self.target = count, grid, segment, target
-        self.requests, self.errors = [], []
+        self.requests, self.responses, self.errors = [], [], []
         self.claims = self.complete_attempts = self.completions = self.reports = 0
         self.progress = [initial_checked] if resume_only else []
         self.seen = {}
@@ -86,18 +86,18 @@ class LocalAssignmentServer:
                     require(isinstance(body, dict), 'Local JSON object required')
                     with outer._lock:
                         outer.requests.append(dict(path=self.path, payload=body))
+                        before = (outer.claims, len(outer.progress), outer.completions, outer.reports)
                         code, response = outer.handle(self.path, body)
+                        after = (outer.claims, len(outer.progress), outer.completions, outer.reports)
+                        applied = dict(zip(('claim', 'progress', 'complete', 'solution'),
+                                           (b > a for a, b in zip(before, after))))
+                        outer.responses.append(dict(path=self.path, payload=body, status=code,
+                                                    reply=response, applied=applied))
                 except Exception as error:
                     with outer._lock:
                         outer.errors.append(str(error))
                     code, response = 400, dict(error='local_contract_refused')
-                data = json.dumps(response, separators=(',', ':')).encode()
-                self.send_response(code)
-                self.send_header('Content-Length', str(len(data)))
-                self.send_header('Connection', 'close')
-                self.end_headers()
-                self.wfile.write(data)
-                self.close_connection = True
+                outer.respond(self, code, response)
 
         self.server = http.server.ThreadingHTTPServer(('127.0.0.1', port), Handler)
         self.server.daemon_threads = True
@@ -115,6 +115,15 @@ class LocalAssignmentServer:
             self.server.server_close()
             self.thread.join()
             self._closed = True
+
+    def respond(self, handler, code, response):
+        data = json.dumps(response, separators=(',', ':')).encode()
+        handler.send_response(code)
+        handler.send_header('Content-Length', str(len(data)))
+        handler.send_header('Connection', 'close')
+        handler.end_headers()
+        handler.wfile.write(data)
+        handler.close_connection = True
 
     def assignment_identity(self, body):
         require(body.get('client_id') == self.client_id and body.get('assignment_id') == ASSIGNMENT,

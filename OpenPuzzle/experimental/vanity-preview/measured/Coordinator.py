@@ -20,6 +20,7 @@ import Resume as r
 import Evidence as e
 import Support as s
 import LocalCoordinator as local
+import CoordinatorRecovery as recovery
 from LocalCoordinator import LocalAssignmentServer
 
 TOTAL = 2**36
@@ -68,7 +69,7 @@ def coverage(directory,meta):
     state=r.private_file(directory,'native/coordinator-state.txt').read_text().splitlines()
     e.require(len(state)==4 and state[:2]==['OPV-COORD-1',binding],'Native coordinator state differs')
     phase,offset,checked,launches=state[2].split();offset=int(offset);checked=int(checked);launches=int(launches)
-    e.require(phase in ('paused','done') and 0<=offset<=checked<=TOTAL,'Unreviewed/nonresumable native state')
+    e.require(phase in ('paused','done','pending-complete','rejected') and 0<=offset<=checked<=TOTAL,'Unreviewed/nonresumable native state')
     assignment=shlex.split(state[3])
     e.require(assignment==['coordinator-assignment-A','20','37',meta['target'],f'{s.BASE:064x}',f'{s.BASE+TOTAL-1:064x}','linear','cuda',''],'Native assignment metadata changed')
     prefix=0;attempt_count=0
@@ -104,22 +105,11 @@ def coverage(directory,meta):
         e.require(contiguous==done and (cp[7]!='complete' or completed and done==SEGMENT),'Native checkpoint lacks exact coverage')
         prefix+=done
         if done<SEGMENT:break
-    e.require(prefix==checked and attempt_count==launches and (launches>0 or phase=='paused' and checked==offset==0),'Native cumulative counter/launches differ')
-    e.require((phase=='done' and offset==checked==TOTAL) or (phase=='paused' and offset in (0,SEGMENT) and offset<=checked<=offset+SEGMENT),'Native phase and progress differ')
-    calls=e.read_json(directory/'http-requests.json');last=0;claims=completions=registrations=0
-    allowed={'/api/client/register','/api/client/heartbeat','/api/range/claim','/api/range/progress','/api/range/complete'}
-    for call in calls:
-        e.require(set(call)=={'path','payload'} and call['path'] in allowed,'Unexpected local endpoint')
-        body=call['payload'];path=call['path'];e.require(body.get('client_id')==meta['client_id'],'HTTP client differs')
-        if path=='/api/client/register':registrations+=1
-        elif path=='/api/range/claim':
-            claims+=1;e.require(body.get('puzzle')==20 and body.get('backend')=='cuda' and body.get('target_duration_minutes')==60,'Claim metadata differs')
-        elif path=='/api/range/progress':
-            n=int(body.get('keys_checked','-1'));e.require(not completions and body.get('assignment_id')==assignment[0] and last<=n<=checked,'HTTP progress regressed/escaped');last=n
-        elif path=='/api/range/complete':
-            completions+=1;e.require(body.get('assignment_id')==assignment[0] and body.get('status')=='completed' and body.get('exit_code')==0 and int(body.get('keys_checked','-1'))==TOTAL and last==TOTAL,'Invalid native completion')
-    e.require(claims==registrations==1 and completions==(1 if phase=='done' else 0) and last==checked,'Single assignment HTTP history differs')
-    return dict(phase=phase,checked=checked,total=TOTAL,launches=launches,claims=claims,completions=completions)
+    e.require(prefix==checked and attempt_count==launches and (launches>0 or phase in ('paused','rejected') and checked==offset==0),'Native cumulative counter/launches differ')
+    e.require((phase in ('done','pending-complete') and offset==checked==TOTAL) or (phase in ('paused','rejected') and offset in (0,SEGMENT) and offset<=checked<=offset+SEGMENT) or (phase=='rejected' and offset==checked==TOTAL),'Native phase and progress differ')
+    journal=recovery.http_state(directory,meta,checked,phase)
+    return dict(phase=phase,checked=checked,total=TOTAL,launches=launches,claims=1,completions=journal['completions'])
+
 
 
 def inspect(store,directory,cli,expected=None,allow_complete=False):
@@ -128,14 +118,16 @@ def inspect(store,directory,cli,expected=None,allow_complete=False):
     seal_path=r.private_file(directory,SEAL)
     if expected is not None:e.require(s.sha(seal_path)==expected,'Stale coordinator resume confirmation')
     seal=e.read_json(seal_path);meta=e.read_json(r.private_file(directory,META));record,proof,paths=p.read_selected(store)
-    e.require(meta['schema']=='openpuzzle_coordinator_desktop_v2' and meta['profile_binding']==record['binding_sha256'] and meta['gpu_uuid']==record['uuid'],'Coordinator measured profile differs')
+    e.require(seal.get('schema')=='openpuzzle_coordinator_seal_v2','Coordinator seal schema differs')
+    e.require(meta['schema']=='openpuzzle_coordinator_desktop_v3' and meta['profile_binding']==record['binding_sha256'] and meta['gpu_uuid']==record['uuid'],'Coordinator measured profile differs')
     e.require(meta['cli']==str(cli) and meta['cli_sha256']==s.sha(cli),'Coordinator CLI differs')
-    e.require(meta['script_sha256']==s.sha(Path(__file__)) and meta['contract_sha256']==s.sha(Path(local.__file__)),'Coordinator source differs')
+    e.require(meta['script_sha256']==s.sha(Path(__file__)) and meta['contract_sha256']==s.sha(Path(local.__file__)) and meta['recovery_sha256']==s.sha(Path(recovery.__file__)),'Coordinator source differs')
     e.require(meta['grid']==record['grid'] and meta['planning_mkeys']==record['planning_mkeys'],'Coordinator launch profile differs')
     e.require(meta['native_options']['--engine']==str(paths['engine']) and meta['native_options']['--engine-sha256']==s.sha(paths['engine']) and meta['native_options']['--adapter']==str(paths['adapter']) and meta['native_options']['--adapter-sha256']==s.sha(paths['adapter']),'Measured executables differ')
     e.require(seal['files']==pins(directory),'Coordinator evidence changed')
-    current=coverage(directory,meta);e.require(seal['native']==current,'Coordinator seal differs')
-    e.require(allow_complete or current['phase']=='paused','Completed coordinator run cannot resume')
+    current=coverage(directory,meta);e.require(seal['native']==current and seal['recovery']==recovery.outcome(directory,meta,current),'Coordinator seal differs')
+    e.require(allow_complete or current['phase']!='rejected','Lease/assignment rejected; recovery is blocked')
+    e.require(allow_complete or current['phase'] in ('paused','pending-complete'),'Completed coordinator run cannot resume')
     e.require(re.fullmatch(r'http://127\.0\.0\.1:[1-9][0-9]{0,4}',meta['native_options']['--server']) is not None,'Nonlocal coordinator endpoint')
     return seal,meta,record,paths
 
@@ -147,7 +139,7 @@ def list_runs(store,cli):
         row=dict(path=str(directory),available=False)
         try:
             seal,meta,record,paths=inspect(store,directory,cli)
-            row.update(available=True,checked=seal['native']['checked'],total=TOTAL,state_sha256=s.sha(directory/SEAL))
+            row.update(available=True,checked=seal['native']['checked'],total=TOTAL,state_sha256=s.sha(directory/SEAL),recovery=seal['recovery']['kind'],phase=seal['native']['phase'])
         except Exception as error:row['reason']=str(error)
         rows.append(row)
     emit(status='local-runs',runs=rows,production_enabled=False)
@@ -167,7 +159,7 @@ def execute(store,directory,cli,expected=None):
     if not resume:
         directory.mkdir(mode=0o700);(directory/'native').mkdir();(directory/'native/home').mkdir()
     native=directory/'native';port=int(meta['native_options']['--server'].rsplit(':',1)[1]) if resume else 0
-    f=LocalAssignmentServer(native,cli=cli,adapter=paths['adapter'],engine=paths['engine'],target=s.address(s.key_hash(s.BASE-1)),count=TOTAL,grid=record['grid'],segment=SEGMENT,planning=record['planning_mkeys'],gpu_uuid=gpu,port=port,client_id=meta['client_id'] if resume else None,resume_only=resume,initial_checked=initial)
+    f=LocalAssignmentServer(native,cli=cli,adapter=paths['adapter'],engine=paths['engine'],target=s.address(s.key_hash(s.BASE-1)),count=TOTAL,grid=record['grid'],segment=SEGMENT,planning=record['planning_mkeys'],gpu_uuid=gpu,port=port,client_id=meta['client_id'] if resume else None,resume_only=resume,initial_checked=before['recovery']['acknowledged'] if resume else 0)
     process=None;history=None;cancel=False;active=False;finished=False
     handlers={}
     def interrupted(*_):
@@ -186,11 +178,12 @@ def execute(store,directory,cli,expected=None):
         else:
             command=native_command(f,cli)
             options=f.options()
-            meta=dict(schema='openpuzzle_coordinator_desktop_v2',cli=str(cli),cli_sha256=s.sha(cli),profile_binding=record['binding_sha256'],gpu_uuid=gpu,grid=record['grid'],planning_mkeys=record['planning_mkeys'],target=f.target,client_id=f.client_id,native_options=options,argv=command,script_sha256=s.sha(Path(__file__)),contract_sha256=s.sha(Path(local.__file__)))
+            meta=dict(schema='openpuzzle_coordinator_desktop_v3',cli=str(cli),cli_sha256=s.sha(cli),profile_binding=record['binding_sha256'],gpu_uuid=gpu,grid=record['grid'],planning_mkeys=record['planning_mkeys'],target=f.target,client_id=f.client_id,native_options=options,argv=command,script_sha256=s.sha(Path(__file__)),contract_sha256=s.sha(Path(local.__file__)),recovery_sha256=s.sha(Path(recovery.__file__)))
             r.atomic(directory/META,meta)
         r.atomic(directory/ACTIVE,dict(resume=resume,expected=expected,history=str(history) if history else None));active=True
         handlers={sig:signal.signal(sig,interrupted) for sig in (signal.SIGTERM,signal.SIGINT)}
         environment=p.environment(native,gpu);environment['OPENPUZZLE_EXECUTION_SLOT']='cuda-0'
+        owner_token=str(uuid.uuid4());environment['OPENPUZZLE_VANITY_ATTEMPT']=owner_token
         e.require(environment['CUDA_VISIBLE_DEVICES']==gpu==f.gpu_uuid,'Physical GPU binding differs')
         log_path=(history/'process.log') if history else directory/'process.log'
         start=time.monotonic();last=-1;next_sample=0
@@ -209,24 +202,26 @@ def execute(store,directory,cli,expected=None):
                 if checked!=last:
                     emit(status='running',checked=checked,total=TOTAL,resumed_from=initial,speed_mkeys=(checked-initial)/max(elapsed,.001)/1e6,production_enabled=False);last=checked
                 time.sleep(.05)
-        e.require(not f.errors,'Local coordinator HTTP rejected: '+repr(f.errors))
-        e.require(process.returncode in (0,130),'Native RunSession failed; inspect '+str(log_path))
-        e.require(f.claims==(0 if resume else 1),'Unexpected new local claim')
+        f.close()
         calls=(e.read_json(directory/'http-requests.json') if resume else [])+f.requests
         r.atomic(directory/'http-requests.json',calls,replace=resume)
+        responses=(e.read_json(directory/'http-responses.json') if resume else [])+f.responses
+        r.atomic(directory/'http-responses.json',responses,replace=resume)
+        e.require(f.claims==(0 if resume else 1),'Unexpected new local claim')
+        e.require(not f.errors,'Local coordinator HTTP rejected: '+repr(f.errors))
         state=coverage(directory,meta)
-        e.require((process.returncode==0 and state['phase']=='done') or (process.returncode==130 and state['phase']=='paused'),'Unconfirmed native outcome')
+        disposition=recovery.outcome(directory,meta,state,process.returncode,owner_token)
         if resume:e.require(state['checked']>=initial,'Resume progress regressed')
-        seal=dict(schema='openpuzzle_coordinator_seal_v1',native=state,files=pins(directory))
+        seal=dict(schema='openpuzzle_coordinator_seal_v2',native=state,recovery=disposition,files=pins(directory))
         r.atomic(directory/SEAL,seal,replace=resume)
         (directory/ACTIVE).unlink();active=False;finished=True
-        emit(status='completed' if state['phase']=='done' else 'cancelled',checked=state['checked'],total=TOTAL,report=str(directory),next_claim_blocked=True,production_enabled=False)
+        emit(status='completed' if state['phase']=='done' else 'cancelled' if disposition['kind']=='paused' else 'lease-rejected' if disposition['kind']=='lease' else 'recovery-pending',checked=state['checked'],total=TOTAL,report=str(directory),next_claim_blocked=True,production_enabled=False)
         return process.returncode
     finally:
         if process is not None:s.stop_owned(process)
         f.close()
         if history is not None:
-            r.atomic(history/'http-requests.json',f.requests);r.atomic(history/'http-errors.json',f.errors)
+            r.atomic(history/'http-requests.json',f.requests);r.atomic(history/'http-responses.json',f.responses);r.atomic(history/'http-errors.json',f.errors)
         if active and process is None and resume:(directory/ACTIVE).unlink()
         for sig,handler in handlers.items():signal.signal(sig,handler)
 
