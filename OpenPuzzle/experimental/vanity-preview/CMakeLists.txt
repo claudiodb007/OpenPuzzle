@@ -73,3 +73,13 @@ add_executable(VanityRunSessionRouteTests tests/RunSessionRouteTests.cpp)
 target_link_libraries(VanityRunSessionRouteTests PRIVATE OpenPuzzleCore)
 target_compile_options(VanityRunSessionRouteTests PRIVATE -UNDEBUG)
 add_test(NAME VanityRunSessionRouteTests COMMAND VanityRunSessionRouteTests)
+
+# Undeployed receipt protocol proposal. No native build/GPU/network required.
+add_test(NAME VanityReceiptLedgerTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/ReceiptLedgerTests.py)
+add_test(NAME VanityReceiptRecoveryTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/ReceiptRecoveryTests.py)
+add_test(NAME VanityEndpointPreflightTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/EndpointPreflightTests.py)
+set_tests_properties(VanityReceiptLedgerTests VanityReceiptRecoveryTests VanityEndpointPreflightTests
+    PROPERTIES TIMEOUT 60)
