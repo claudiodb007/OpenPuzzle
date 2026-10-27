@@ -367,7 +367,7 @@ MainWindow::~MainWindow() {
 
 void MainWindow::buildInterface() {
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
-  setWindowTitle("OpenPuzzle — Vanity preview 0.10.1");
+  setWindowTitle(qEnvironmentVariable("OPENPUZZLE_VANITY_COORDINATOR")=="1"?"OpenPuzzle — Vanity RunSession preview 0.12.0":"OpenPuzzle — Vanity preview 0.10.1");
 #else
   setWindowTitle("OpenPuzzle");
 #endif

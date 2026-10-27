@@ -54,6 +54,7 @@ const char* words[][4]={
 }
 QString VanityPanel::text(int key) const {return QString::fromUtf8(words[key][static_cast<int>(language_)]);}
 VanityPanel::VanityPanel(QString cli,UiLanguage language,QWidget* parent,bool embedded):QDialog(parent),cli_(std::move(cli)),language_(language){
+ coordinator_=qEnvironmentVariable("OPENPUZZLE_VANITY_COORDINATOR")=="1";
  setObjectName("vanityPanel");setWindowTitle(text(0));resize(760,620);
  auto* layout=new QVBoxLayout(this);hint_=new QLabel(text(9));hint_->setWordWrap(true);hint_->setTextFormat(Qt::PlainText);layout->addWidget(hint_);
  title_=new QLabel(text(1));title_->setObjectName("CardTitle");layout->addWidget(title_);
@@ -75,13 +76,13 @@ VanityPanel::VanityPanel(QString cli,UiLanguage language,QWidget* parent,bool em
  connect(benchmark_,&QPushButton::clicked,this,[this]{if(QMessageBox::question(this,text(0),text(12),QMessageBox::Yes|QMessageBox::No,QMessageBox::No)==QMessageBox::Yes)start("measured-benchmark");});
  connect(stop_,&QPushButton::clicked,this,&VanityPanel::stop);
  connect(safe_,&QPushButton::clicked,this,[this]{
-   if(!process_||(action_!="measured-test"&&action_!="measured-resume")||!QFileInfo(runRoot_+"/controls").isDir())return;
-   QFile flag(runRoot_+"/controls/safe-stop");if(flag.open(QIODevice::WriteOnly|QIODevice::NewOnly)){flag.setPermissions(QFile::ReadOwner|QFile::WriteOwner);flag.write("stop\n");flag.close();safeRequested_=true;safe_->setEnabled(false);status(15);availability();}
+   if(!process_||(action_!="measured-test"&&action_!="measured-resume")||!QFileInfo(controlsPath()).isDir())return;
+   QFile flag(controlsPath()+"/safe-stop");if(flag.open(QIODevice::WriteOnly|QIODevice::NewOnly)){flag.setPermissions(QFile::ReadOwner|QFile::WriteOwner);flag.write("stop\n");flag.close();safeRequested_=true;safe_->setEnabled(false);status(15);availability();}
  });
  if(embedded){setWindowFlags(Qt::Widget);for(auto* b:{run_,benchmark_,resume_,safe_,stop_,close_})b->hide();output_->setMinimumHeight(120);output_->setMaximumHeight(200);}
  availability();if(!store_.isEmpty())QTimer::singleShot(0,this,[this]{start("measured-show");});else status(21);
 }
-void VanityPanel::availability(){bool idle=!process_&&hostAllowed_,configured=!store_.isEmpty();import_->setEnabled(idle&&configured);verify_->setEnabled(idle&&configured);run_->setEnabled(idle&&ready_);benchmark_->setEnabled(idle&&ready_);stop_->setEnabled(process_&&!cancelled_&&(action_=="measured-test"||action_=="measured-resume"||action_=="measured-benchmark"));safe_->setEnabled(controlsReady_&&process_&&!cancelled_&&!safeRequested_&&(action_=="measured-test"||action_=="measured-resume")&&QFileInfo(runRoot_+"/controls").isDir());resume_->setEnabled(idle&&ready_&&runs_->currentData().toMap().value("available").toBool());runs_->setEnabled(idle&&ready_);close_->setEnabled(!process_);if(stateChanged)stateChanged();}
+void VanityPanel::availability(){bool idle=!process_&&hostAllowed_,configured=!store_.isEmpty();import_->setEnabled(idle&&configured);verify_->setEnabled(idle&&configured);run_->setEnabled(idle&&ready_);benchmark_->setEnabled(idle&&ready_);stop_->setEnabled(process_&&!cancelled_&&(action_=="measured-test"||action_=="measured-resume"||action_=="measured-benchmark"));safe_->setEnabled(controlsReady_&&process_&&!cancelled_&&!safeRequested_&&(action_=="measured-test"||action_=="measured-resume")&&QFileInfo(controlsPath()).isDir());resume_->setEnabled(idle&&ready_&&runs_->currentData().toMap().value("available").toBool());runs_->setEnabled(idle&&ready_);close_->setEnabled(!process_);if(stateChanged)stateChanged();}
 void VanityPanel::start(const QString& action,const QString& candidate){
  if(process_||store_.isEmpty()||(!hostAllowed_&&action!="measured-show"&&action!="measured-runs"))return;
  action_=action;controlsReady_=false;cancelled_=false;safeRequested_=false;pending_.clear();decoder_=QStringDecoder(QStringDecoder::Utf8);
@@ -91,6 +92,12 @@ void VanityPanel::start(const QString& action,const QString& candidate){
  if(action=="measured-import")args<<"--from"<<candidate;
  if(action=="measured-test"){runRoot_=QDir(store_).absoluteFilePath("run-"+QUuid::createUuid().toString(QUuid::WithoutBraces));args<<"--run-root"<<runRoot_;}
  if(action=="measured-resume"){runRoot_=candidate;args<<"--run-root"<<runRoot_<<"--expected-state"<<resumeState_;}
+ if(coordinator_&&(action=="measured-test"||action=="measured-resume"||action=="measured-runs")){
+  const QString route=action=="measured-test"?"start":action=="measured-resume"?"resume":"runs";
+  args=QStringList{"run","20","--engine","vanity","--backend","cuda","--vanity-session",route,"--store",store_};
+  if(route!="runs")args<<"--enable-experimental-vanity-local"<<"--run-root"<<runRoot_;
+  if(route=="resume")args<<"--expected-state"<<resumeState_;
+ }
  if(action!="measured-runs"){output_->clear();statusKey_=-1;progressData_={};status_->clear();}availability();
  connect(p,&QProcess::readyReadStandardOutput,this,&VanityPanel::drain);
  connect(p,&QProcess::finished,this,[this,p](int code,QProcess::ExitStatus exit){drain();if(!pending_.isEmpty())output_->appendPlainText(pending_);if(code!=0&&(action_=="measured-show"||action_=="measured-import")){ready_=false;profileData_={};profile_->setText(text(10));}auto finishedAction=action_;if(finishedAction!="measured-runs")status(exit==QProcess::NormalExit&&code==0?((finishedAction=="measured-show"||finishedAction=="measured-import")?26:16):code==130?17:18);else if(code!=0){runs_->clear();status(18);}process_=nullptr;p->deleteLater();if(finishedAction!="measured-runs"&&ready_)start("measured-runs");else availability();});
@@ -113,15 +120,18 @@ void VanityPanel::drain(){
   availability();
  }
 }
+QString VanityPanel::controlsPath() const {return runRoot_+(coordinator_?"/native/controls":"/controls");}
 bool VanityPanel::writeCancel(){
  if(!controlsReady_||(action_!="measured-test"&&action_!="measured-resume"))return false;
- const QFileInfo root(runRoot_),controls(runRoot_+"/controls");
+ const QFileInfo root(runRoot_),controls(controlsPath());
  if(root.absolutePath()!=QDir(store_).absolutePath()||root.isSymLink()||!root.isDir()||root.canonicalFilePath()!=root.absoluteFilePath()
     ||controls.isSymLink()||!controls.isDir()||controls.canonicalFilePath()!=controls.absoluteFilePath())return false;
  // A completed seal must remain immutable even if the final process-exit
  // notification has not reached the UI yet.
- if(QFileInfo::exists(runRoot_+"/resume-state.json")&&!QFileInfo::exists(runRoot_+"/resume-active.json"))return false;
- const QString name=runRoot_+"/controls/cancel";QFileInfo info(name);
+ const QString seal=runRoot_+(coordinator_?"/coordinator-seal.json":"/resume-state.json");
+ const QString active=runRoot_+(coordinator_?"/coordinator-active.json":"/resume-active.json");
+ if(QFileInfo::exists(seal)&&!QFileInfo::exists(active))return false;
+ const QString name=controlsPath()+"/cancel";QFileInfo info(name);
  if(info.isSymLink())return false;
  if(info.exists())return info.isFile()&&info.size()==0;
  QFile flag(name);if(!flag.open(QIODevice::WriteOnly|QIODevice::NewOnly))return false;

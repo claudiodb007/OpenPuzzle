@@ -11,8 +11,8 @@ BATCH=256*1024
 
 def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 class Fixture:
- def __init__(self,root,kind='normal',engine=ENGINE,count=5*BATCH+7,grid=1,segment=2*BATCH,target=None,planning=2519.41):
-  self.root=Path(root);self.planning=float(planning);self.client_id="opv-coord-"+str(uuid.uuid4());self.kind=kind;self.engine=Path(engine);self.count=count;self.grid=grid;self.segment=segment;self.target=target or s.address(s.key_hash(s.BASE-1));self.requests=[];self.claims=0;self.complete_attempts=0;self.completions=0;self.progress=[];self.errors=[];self.reports=0;self.seen={};outer=self
+ def __init__(self,root,kind='normal',engine=ENGINE,count=5*BATCH+7,grid=1,segment=2*BATCH,target=None,planning=2519.41,*,gpu_uuid=None,port=0,client_id=None,resume_only=False,initial_checked=0):
+  self.root=Path(root);self.planning=float(planning);self.gpu_uuid=gpu_uuid or UUID;self.resume_only=resume_only;self.client_id=client_id or "opv-coord-"+str(uuid.uuid4());self.kind=kind;self.engine=Path(engine);self.count=count;self.grid=grid;self.segment=segment;self.target=target or s.address(s.key_hash(s.BASE-1));self.requests=[];self.claims=0;self.complete_attempts=0;self.completions=0;self.progress=[initial_checked] if resume_only else [];self.errors=[];self.reports=0;self.seen={};outer=self
   class Handler(http.server.BaseHTTPRequestHandler):
    protocol_version='HTTP/1.1'
    def log_message(self,*_):pass
@@ -21,7 +21,7 @@ class Fixture:
      body=json.loads(self.rfile.read(int(self.headers['Content-Length'])));outer.requests.append(dict(path=self.path,payload=body));code,response=outer.handle(self.path,body)
     except Exception as error:outer.errors.append(str(error));code,response=500,dict(error='fixture_error')
     data=json.dumps(response,separators=(',',':')).encode();self.send_response(code);self.send_header('Content-Length',str(len(data)));self.send_header('Connection','close');self.end_headers();self.wfile.write(data);self.close_connection=True
-  self.server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler);self.server.daemon_threads=True
+  self.server=http.server.ThreadingHTTPServer(('127.0.0.1',port),Handler);self.server.daemon_threads=True
   self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start();self.url='http://127.0.0.1:'+str(self.server.server_port)
  def close(self):self.server.shutdown();self.server.server_close();self.thread.join()
  def handle(self,path,b):
@@ -32,6 +32,7 @@ class Fixture:
    assert b['client_id']==self.client_id and b['engines']==[dict(name='Vanity',backend='cuda',installed=True,available=True)]
    return 200,dict(success=True)
   if path=='/api/range/claim':
+   assert not self.resume_only, 'Resume cannot claim another assignment'
    self.claims+=1;assert self.claims==1
    assert b['client_id']==self.client_id and b['puzzle']==20 and b['backend']=='cuda' and b['target_duration_minutes']==60 and abs(b['speed_mkeys']-self.planning)<.000001
    if self.kind=='unavailable':return 200,dict(available=False,reason='No work')
@@ -60,12 +61,12 @@ class Fixture:
   if path=='/api/puzzle/report-solution':self.reports+=1;assert set(b)=={'assignment_id','client_id'};return 200,dict(success=True)
   raise AssertionError(path)
  def argv(self,resume=False):
-  options=dict(server=self.url,root=str(self.root),controls=str(self.root/'controls'),engine=str(self.engine),engine_sha256=sha(self.engine),adapter=str(ADAPTER),adapter_sha256=sha(ADAPTER),client_id=self.client_id,target=self.target,puzzle='20',grid=str(self.grid),segment_keys=str(self.segment),scope_start=f'{s.BASE:064x}',scope_end=f'{s.BASE+self.count-1:064x}',gpu_uuid=UUID,speed_mkeys=format(self.planning,'.12f'))
+  options=dict(server=self.url,root=str(self.root),controls=str(self.root/'controls'),engine=str(self.engine),engine_sha256=sha(self.engine),adapter=str(ADAPTER),adapter_sha256=sha(ADAPTER),client_id=self.client_id,target=self.target,puzzle='20',grid=str(self.grid),segment_keys=str(self.segment),scope_start=f'{s.BASE:064x}',scope_end=f'{s.BASE+self.count-1:064x}',gpu_uuid=self.gpu_uuid,speed_mkeys=format(self.planning,'.12f'))
   args=[str(CLI),'vanity-preview','coordinator-test','--enable-experimental-vanity-local']
   for k,v in options.items():args+=['--'+k.replace('_','-'),v]
   if resume:args+=['--resume']
   return args
- def env(self):return dict(os.environ,CUDA_VISIBLE_DEVICES=UUID,HOME=str(self.root/'home'),XDG_CONFIG_HOME=str(self.root/'home/.config'),XDG_DATA_HOME=str(self.root/'home/.local/share'),OPENPUZZLE_EXECUTION_SLOT='cuda-0')
+ def env(self):return dict(os.environ,CUDA_VISIBLE_DEVICES=self.gpu_uuid,HOME=str(self.root/'home'),XDG_CONFIG_HOME=str(self.root/'home/.config'),XDG_DATA_HOME=str(self.root/'home/.local/share'),OPENPUZZLE_EXECUTION_SLOT='cuda-0')
  def state(self):return (self.root/'coordinator-state.txt').read_text().splitlines()[2].split()
  def kernels(self):return list(self.root.glob('segment-*/attempt-*/engine.log'))
 class Tests(unittest.TestCase):

@@ -60,6 +60,7 @@ public:
       const std::vector<GpuInfo> &openclDevices);
 
 private:
+  int runOrdinary(const std::vector<std::string> &args) const;
   ClientIterationResult runOnce(
       const std::vector<std::string> &args,
       bool initializeClient = true) const;

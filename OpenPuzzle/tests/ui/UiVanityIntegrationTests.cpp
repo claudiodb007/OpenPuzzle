@@ -51,9 +51,13 @@ if args[0]=='status':
  print((store/'status').read_text());sys.exit()
 if args[:2]==['gpu-control','list']:
  print('OpenPuzzle-GPU-controls 1');sys.exit()
-if args[0]!='vanity-preview':
+if args[0] not in ('vanity-preview','run'):
  (store/'unexpected').write_text(json.dumps(args));sys.exit(3)
 action=args[1]
+coordinator=args[0]=='run'
+if coordinator:
+ assert args[:7]==['run','20','--engine','vanity','--backend','cuda','--vanity-session']
+ action={'start':'measured-test','resume':'measured-resume','runs':'measured-runs'}[args[7]]
 if action=='measured-show':
  if (store/'fail').exists():print('damaged');sys.exit(2)
  print(json.dumps(dict(status='ready',median_mkeys=2597.33,planning_mkeys=2519.41,gpu='Synthetic RTX 4070 SUPER',grid=1024,threads=256,points=1024)));sys.exit()
@@ -63,8 +67,8 @@ if action=='measured-runs':
 (store/'last-execution-argv').write_text(json.dumps(args))
 root=None
 if action in ('measured-test','measured-resume'):
- root=Path(args[args.index('--run-root')+1]);(root/'controls').mkdir(parents=True,exist_ok=True)
- if action=='measured-resume' and (root/'controls/cancel').exists():(root/'controls/cancel').unlink()
+ root=Path(args[args.index('--run-root')+1]);control=root/('native/controls' if coordinator else 'controls');control.mkdir(parents=True,exist_ok=True)
+ if action=='measured-resume' and (control/'cancel').exists():(control/'cancel').unlink()
 def stop(*_):
  if root:(store/'saved-run').write_text(json.dumps(dict(path=str(root),available=True,checked=100,total=200,state_sha256='a'*64)))
  print('cancelled',flush=True);sys.exit(130)
@@ -72,8 +76,8 @@ signal.signal(signal.SIGTERM,signal.SIG_IGN if (store/'ignore-term').exists() el
 if root:
  print(json.dumps(dict(status='running',checked=100,total=200,speed_mkeys=123)),flush=True)
  until=time.monotonic()+.5
- while not (root/'controls/safe-stop').exists():
-  if (root/'controls/cancel').exists():stop()
+ while not (control/'safe-stop').exists():
+  if (control/'cancel').exists():stop()
   if action=='measured-resume' and time.monotonic()>until:break
   print(json.dumps(dict(status='running',checked=100,total=200,speed_mkeys=123)),flush=True)
   time.sleep(.01)
@@ -102,14 +106,14 @@ sys.exit(2)
    assert(control<QLabel>(w,"statusSummary")->text().contains("123.00"));
    auto* lang=control<QComboBox>(w,"language");lang->setCurrentIndex((language+1)%4);assert(control<QLabel>(w,"statusSummary")->text().contains("123.00"));lang->setCurrentIndex(language);
    QTimer::singleShot(0,[]{for(auto* t:QApplication::topLevelWidgets())if(auto* m=qobject_cast<QMessageBox*>(t))m->accept();});w.close();assert(w.isVisible());
-   heldMouseClick(stop);assert(until([&]{return resume->isEnabled();}));QFile::remove(tmp.filePath("ignore-term"));auto selected=p->findChild<QComboBox*>("vanityRuns")->currentData().toMap();assert(QFile::exists(selected.value("path").toString()+"/controls/cancel"));auto audit=read(tmp.filePath("ui-controls.jsonl"));assert(audit.contains("stop-requested")&&audit.contains("\"cancel_marker\":true"));assert(!safe->isEnabled());w.close();
+   heldMouseClick(stop);assert(until([&]{return resume->isEnabled();}));QFile::remove(tmp.filePath("ignore-term"));auto selected=p->findChild<QComboBox*>("vanityRuns")->currentData().toMap();assert(QFile::exists(selected.value("path").toString()+(qEnvironmentVariable("OPENPUZZLE_VANITY_COORDINATOR")=="1"?"/native/controls/cancel":"/controls/cancel")));auto audit=read(tmp.filePath("ui-controls.jsonl"));assert(audit.contains("stop-requested")&&audit.contains("\"cancel_marker\":true"));assert(!safe->isEnabled());w.close();
   }
   {
    MainWindow w;w.show();auto* mode=control<QComboBox>(w,"executionMode");assert(mode->currentData().toInt()==100);
    auto* p=panel(w);auto* start=control<QPushButton>(w,"start");auto* resume=control<QPushButton>(w,"resumeVanity");auto* safe=control<QPushButton>(w,"safeStop");auto* stop=control<QPushButton>(w,"stop");auto* bench=control<QPushButton>(w,"benchmark");
    assert(until([&]{return resume->isEnabled();}));auto selected=p->findChild<QComboBox*>("vanityRuns")->currentData().toMap();auto before=read(tmp.filePath("last-execution-argv"));answer(QMessageBox::No);resume->click();assert(before==read(tmp.filePath("last-execution-argv")));
    answer(QMessageBox::Yes);resume->click();assert(until([&]{return safe->isEnabled();}));assert(until([&]{return start->isEnabled();}));assert(!resume->isEnabled());
-   auto a=QJsonDocument::fromJson(read(tmp.filePath("last-execution-argv"))).array();assert(a.contains("measured-resume")&&a.contains("--expected-state")&&a.contains(QString(64,'a'))&&a.contains(selected.value("path").toString()));
+   auto a=QJsonDocument::fromJson(read(tmp.filePath("last-execution-argv"))).array();assert(a.contains(qEnvironmentVariable("OPENPUZZLE_VANITY_COORDINATOR")=="1"?"--vanity-session":"measured-resume")&&a.contains("--expected-state")&&a.contains(QString(64,'a'))&&a.contains(selected.value("path").toString()));
    answer(QMessageBox::Yes);start->click();assert(until([&]{return safe->isEnabled();}));heldMouseClick(safe);assert(!safe->isEnabled());assert(until([&]{return start->isEnabled();}));
    answer(QMessageBox::Yes);bench->click();assert(until([&]{return p->findChild<QPlainTextEdit*>("vanityOutput")->toPlainText().contains("synthetic measurement");}));assert(!safe->isEnabled()&&!mode->isEnabled());heldMouseClick(stop);assert(until([&]{return bench->isEnabled();}));assert(!QFile::exists(tmp.filePath("unexpected")));
    write(tmp.filePath("fail"),"fail");p->findChild<QPushButton*>("vanityVerify")->click();assert(until([&]{return !p->busy();}));assert(!start->isEnabled()&&!resume->isEnabled()&&!bench->isEnabled());QFile::remove(tmp.filePath("fail"));p->findChild<QPushButton*>("vanityVerify")->click();assert(until([&]{return start->isEnabled();}));

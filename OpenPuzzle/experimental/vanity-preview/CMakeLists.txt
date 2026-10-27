@@ -41,7 +41,9 @@ add_test(NAME VanityResumeTests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SO
 set_tests_properties(VanityResumeTests PROPERTIES TIMEOUT 180)
 
 # Native normal-client request path; strictly loopback-only in this stage.
-target_sources(OpenPuzzleCore PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/CoordinatorSession.cpp)
+target_sources(OpenPuzzleCore PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/CoordinatorSession.cpp ${CMAKE_CURRENT_SOURCE_DIR}/VanityRunRoute.cpp)
+target_compile_definitions(OpenPuzzleCore PRIVATE
+    OPENPUZZLE_VANITY_COORDINATOR_SCRIPT="${CMAKE_CURRENT_SOURCE_DIR}/measured/Coordinator.py")
 add_executable(VanityCoordinatorPlanTests tests/CoordinatorPlanTests.cpp)
 target_include_directories(VanityCoordinatorPlanTests PRIVATE ../../include ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(VanityCoordinatorPlanTests PRIVATE -UNDEBUG)
@@ -50,3 +52,11 @@ add_test(NAME VanityCoordinatorSessionTests COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/CoordinatorSessionTests.py
     $<TARGET_FILE:OpenPuzzle> $<TARGET_FILE:OpenPuzzleVanityAdapter>)
 set_tests_properties(VanityCoordinatorSessionTests PROPERTIES TIMEOUT 180)
+
+add_test(NAME VanityCoordinatorDesktopTests COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/CoordinatorDesktopTests.py $<TARGET_FILE:OpenPuzzle>)
+set_tests_properties(VanityCoordinatorDesktopTests PROPERTIES TIMEOUT 180)
+add_executable(VanityRunSessionRouteTests tests/RunSessionRouteTests.cpp)
+target_link_libraries(VanityRunSessionRouteTests PRIVATE OpenPuzzleCore)
+target_compile_options(VanityRunSessionRouteTests PRIVATE -UNDEBUG)
+add_test(NAME VanityRunSessionRouteTests COMMAND VanityRunSessionRouteTests)

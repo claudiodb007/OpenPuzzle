@@ -2354,7 +2354,7 @@ void RunSession::validateConcurrentGpuSelection(
   }
 }
 
-int RunSession::run(
+int RunSession::runOrdinary(
     const std::vector<std::string> &args) const {
   // Reject the experimental engine before recovery, runtime acquisition or network work.
   if (!args.empty() && (args.front() == "run" || args.front() == "claim")) {

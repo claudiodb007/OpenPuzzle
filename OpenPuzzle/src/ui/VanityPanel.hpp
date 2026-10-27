@@ -29,6 +29,8 @@ private:
  void drain();
  void stop();
  bool writeCancel();
+ QString controlsPath() const;
+ bool coordinator_=false;
  void controlEvent(const QString& event,bool marker);
  QString cli_,store_,runRoot_,action_,resumeState_;
  QComboBox* runs_;

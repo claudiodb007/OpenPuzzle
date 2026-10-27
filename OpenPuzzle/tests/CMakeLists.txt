@@ -191,6 +191,11 @@ if(TARGET OpenPuzzleUi)
         target_compile_definitions(UiVanityIntegrationTests PRIVATE
             OPENPUZZLE_VERSION="${PROJECT_VERSION}" OPENPUZZLE_ENABLE_VANITY_PREVIEW=1)
         add_test(NAME UiVanityIntegrationTests COMMAND UiVanityIntegrationTests)
+        add_test(NAME UiVanityCoordinatorIntegrationTests COMMAND ${CMAKE_COMMAND} -E env
+            OPENPUZZLE_VANITY_COORDINATOR=1 $<TARGET_FILE:UiVanityIntegrationTests>)
+        set_tests_properties(UiVanityCoordinatorIntegrationTests PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120)
+
         set_tests_properties(UiVanityIntegrationTests PROPERTIES
             ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 90)
     endif()
