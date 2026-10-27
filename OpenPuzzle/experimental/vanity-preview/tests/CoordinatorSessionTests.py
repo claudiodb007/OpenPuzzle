@@ -1,69 +1,49 @@
 #!/usr/bin/env python3
 """Native HttpRangeClient, native adapter, loopback server and synthetic GPU engine."""
-import hashlib,http.server,json,os,signal,subprocess,sys,tempfile,threading,time,unittest,uuid
+import os,signal,subprocess,sys,tempfile,time,unittest
 from pathlib import Path
 CLI=Path(sys.argv.pop(1)).resolve();ADAPTER=Path(sys.argv.pop(1)).resolve()
-sys.path.insert(0,str(Path(__file__).parent/'support'))
+sys.path.insert(0,str(Path(__file__).parent.parent/'measured'))
+from LocalCoordinator import LocalAssignmentServer
 import Support as s
 UUID='GPU-11111111-2222-3333-4444-555555555555'
 ENGINE=Path(__file__).with_name('FakeTargetEngine.py').resolve()
 BATCH=256*1024
 
-def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
-class Fixture:
+class Fixture(LocalAssignmentServer):
+ """Test-only defaults and faults around the shared local runtime contract."""
  def __init__(self,root,kind='normal',engine=ENGINE,count=5*BATCH+7,grid=1,segment=2*BATCH,target=None,planning=2519.41,*,gpu_uuid=None,port=0,client_id=None,resume_only=False,initial_checked=0):
-  self.root=Path(root);self.planning=float(planning);self.gpu_uuid=gpu_uuid or UUID;self.resume_only=resume_only;self.client_id=client_id or "opv-coord-"+str(uuid.uuid4());self.kind=kind;self.engine=Path(engine);self.count=count;self.grid=grid;self.segment=segment;self.target=target or s.address(s.key_hash(s.BASE-1));self.requests=[];self.claims=0;self.complete_attempts=0;self.completions=0;self.progress=[initial_checked] if resume_only else [];self.errors=[];self.reports=0;self.seen={};outer=self
-  class Handler(http.server.BaseHTTPRequestHandler):
-   protocol_version='HTTP/1.1'
-   def log_message(self,*_):pass
-   def do_POST(self):
-    try:
-     body=json.loads(self.rfile.read(int(self.headers['Content-Length'])));outer.requests.append(dict(path=self.path,payload=body));code,response=outer.handle(self.path,body)
-    except Exception as error:outer.errors.append(str(error));code,response=500,dict(error='fixture_error')
-    data=json.dumps(response,separators=(',',':')).encode();self.send_response(code);self.send_header('Content-Length',str(len(data)));self.send_header('Connection','close');self.end_headers();self.wfile.write(data);self.close_connection=True
-  self.server=http.server.ThreadingHTTPServer(('127.0.0.1',port),Handler);self.server.daemon_threads=True
-  self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start();self.url='http://127.0.0.1:'+str(self.server.server_port)
- def close(self):self.server.shutdown();self.server.server_close();self.thread.join()
+  self.kind=kind
+  super().__init__(root,cli=CLI,adapter=ADAPTER,engine=engine,count=count,grid=grid,segment=segment,
+   target=target or s.address(s.key_hash(s.BASE-1)),planning=planning,gpu_uuid=gpu_uuid or UUID,
+   port=port,client_id=client_id,resume_only=resume_only,initial_checked=initial_checked)
  def handle(self,path,b):
-  self.seen[path]=self.seen.get(path,0)+1
-  if path=='/api/client/register':
-   assert b==dict(client_id=self.client_id);return 200,dict(success=True)
-  if path=='/api/client/heartbeat':
-   assert b['client_id']==self.client_id and b['engines']==[dict(name='Vanity',backend='cuda',installed=True,available=True)]
-   return 200,dict(success=True)
   if path=='/api/range/claim':
-   assert not self.resume_only, 'Resume cannot claim another assignment'
-   self.claims+=1;assert self.claims==1
-   assert b['client_id']==self.client_id and b['puzzle']==20 and b['backend']=='cuda' and b['target_duration_minutes']==60 and abs(b['speed_mkeys']-self.planning)<.000001
+   code,response=super().handle(path,b)
    if self.kind=='unavailable':return 200,dict(available=False,reason='No work')
    if self.kind=='ambiguous':return 503,dict(error='temporary_unavailable')
    if self.kind=='redirect':return 302,dict(error='redirect')
-   a=dict(assignment_id='coordinator-assignment-A',puzzle=20,range_id=37,target=self.target,search_mode='linear',required_backend='cuda',start=f'{s.BASE:064x}',end=f'{s.BASE+self.count-1:064x}')
-   if self.kind=='wrong-target':a['target']=s.address(s.key_hash(s.BASE))
-   if self.kind=='outside-scope':a['end']=f'{s.BASE+self.count:064x}'
-   return 200,a
-  assert b['client_id']==self.client_id and b['assignment_id']=='coordinator-assignment-A'
+   if self.kind=='wrong-target':response['target']=s.address(s.key_hash(s.BASE))
+   if self.kind=='outside-scope':response['end']=f'{s.BASE+self.count:064x}'
+   return code,response
   if path=='/api/range/progress':
+   self.assignment_identity(b);n=int(b['keys_checked'])
    if self.kind=='bad-ack':return 200,dict(success=False)
-   n=int(b['keys_checked']);assert 0<=n<=self.count and (not self.progress or n>=self.progress[-1])
    if self.kind=='lease-before' or self.kind=='lease-during' and n>0:return 409,dict(error='assignment_lease_expired')
    if self.kind=='progress-fail' and n>0:return 503,dict(error='temporary_unavailable')
    if self.kind=='progress-once' and n>0 and not getattr(self,'failed_once',False):self.failed_once=True;return 503,dict(error='temporary_unavailable')
-   self.progress.append(n)
+   reply=super().handle(path,b)
    if self.kind in ('cancel','safe') and n>0:
     (self.root/'controls'/('cancel' if self.kind=='cancel' else 'safe-stop')).touch(mode=0o600)
-   return 200,dict(success=True)
+   return reply
   if path=='/api/range/complete':
-   self.complete_attempts+=1;assert int(b['keys_checked'])==self.count and self.progress[-1]==self.count and b['status']=='completed' and b['exit_code']==0
-   if self.kind=='completion-fail':return 503,dict(error='temporary_unavailable')
-   if self.kind=='completion-once' and self.complete_attempts==1:return 503,dict(error='temporary_unavailable')
-   self.completions+=1;assert self.completions==1;return 200,dict(success=True)
-  if path=='/api/puzzle/report-solution':self.reports+=1;assert set(b)=={'assignment_id','client_id'};return 200,dict(success=True)
-  raise AssertionError(path)
+   if self.kind=='completion-fail' or self.kind=='completion-once' and self.complete_attempts==0:
+    self.assignment_identity(b);assert int(b['keys_checked'])==self.count and self.progress[-1]==self.count and b['status']=='completed' and b['exit_code']==0
+    self.complete_attempts+=1;return 503,dict(error='temporary_unavailable')
+  return super().handle(path,b)
  def argv(self,resume=False):
-  options=dict(server=self.url,root=str(self.root),controls=str(self.root/'controls'),engine=str(self.engine),engine_sha256=sha(self.engine),adapter=str(ADAPTER),adapter_sha256=sha(ADAPTER),client_id=self.client_id,target=self.target,puzzle='20',grid=str(self.grid),segment_keys=str(self.segment),scope_start=f'{s.BASE:064x}',scope_end=f'{s.BASE+self.count-1:064x}',gpu_uuid=self.gpu_uuid,speed_mkeys=format(self.planning,'.12f'))
   args=[str(CLI),'vanity-preview','coordinator-test','--enable-experimental-vanity-local']
-  for k,v in options.items():args+=['--'+k.replace('_','-'),v]
+  for k,v in self.options().items():args+=[k,v]
   if resume:args+=['--resume']
   return args
  def env(self):return dict(os.environ,CUDA_VISIBLE_DEVICES=self.gpu_uuid,HOME=str(self.root/'home'),XDG_CONFIG_HOME=str(self.root/'home/.config'),XDG_DATA_HOME=str(self.root/'home/.local/share'),OPENPUZZLE_EXECUTION_SLOT='cuda-0')

@@ -81,9 +81,8 @@ class Tests(unittest.TestCase):
         for name,digest in seal['files'].items():self.assertEqual(s.sha(history/'before'/name),digest)
 
     def stop_at_progress(self,final,wait_terminal=False):
-        original=c.fixture_module
-        def module(cli,adapter):
-            result=original(cli,adapter);parent=result.Fixture
+        parent=c.LocalAssignmentServer
+        def server(*args,**kwargs):
             class Trigger(parent):
                 def handle(instance,path,body):
                     reply=super().handle(path,body)
@@ -97,9 +96,8 @@ class Tests(unittest.TestCase):
                             assert checkpoint.is_file() and checkpoint.read_text().split()[7]=='complete', 'Terminal checkpoint was not confirmed'
                         (instance.root/'controls/cancel').touch(mode=0o600)
                     return reply
-            result.Fixture=Trigger
-            return result
-        with self.hardware(),patch.object(c,'fixture_module',side_effect=module):
+            return Trigger(*args,**kwargs)
+        with self.hardware(),patch.object(c,'LocalAssignmentServer',side_effect=server):
             self.assertEqual(c.execute(self.store,self.directory,base.CLI),130)
 
     def test_stop_before_first_kernel_resumes_assigned_range(self):
@@ -218,5 +216,52 @@ class Tests(unittest.TestCase):
             result=subprocess.run([str(base.CLI),*args],capture_output=True,text=True,timeout=10)
             self.assertEqual(result.returncode,code,result.stdout+result.stderr)
         self.assertFalse(self.directory.exists())
+
+    def test_standalone_runtime_without_test_tree_stops_and_resumes(self):
+        import subprocess
+        import sys
+        standalone=self.root/'standalone'/'measured'
+        shutil.copytree(Path(c.__file__).parent,standalone,ignore=shutil.ignore_patterns('__pycache__'))
+        self.assertFalse((standalone.parent/'tests').exists())
+        tools=self.root/'standalone-tools';tools.mkdir();gpu=self.record['uuid']
+        inventory=tools/'nvidia-smi'
+        inventory.write_text('#!/usr/bin/env python3\nimport sys\nquery=sys.argv[1]\n'+
+            'if query.startswith("--query-compute-apps"):pass\n'+
+            'elif query=="--query-gpu=uuid,name,driver_version":print("'+gpu+', NVIDIA GeForce RTX 4070 SUPER, synthetic-driver")\n'+
+            'elif query.startswith("--query-gpu=uuid,temperature.gpu"):print("'+gpu+',30,20,245,0,1000,1000,50")\n'+
+            'else:raise SystemExit("Unexpected GPU write/query")\n')
+        inventory.chmod(0o700)
+        env=dict(os.environ,PATH=str(tools)+os.pathsep+os.environ['PATH'],PYTHONDONTWRITEBYTECODE='1')
+        prefix=[sys.executable,str(standalone/'Coordinator.py')]
+        common=['--cli',str(base.CLI),'--store',str(self.store)]
+        with (self.root/'standalone.log').open('w') as log:
+            child=subprocess.Popen(prefix+['start',*common,'--run-root',str(self.directory),'--enable-experimental-vanity-local'],env=env,stdout=log,stderr=log,start_new_session=True)
+            try:
+                deadline=time.monotonic()+15
+                while time.monotonic()<deadline:
+                    cp=next((self.directory/'native').glob('segment-*/checkpoint.txt'),None)
+                    if cp and int(cp.read_text().split()[6])>0:break
+                    self.assertIsNone(child.poll());time.sleep(.01)
+                self.assertTrue(cp and int(cp.read_text().split()[6])>0)
+                child.terminate();self.assertEqual(child.wait(timeout=15),130,(self.root/'standalone.log').read_text())
+            finally:s.stop_owned(child)
+        listed=subprocess.run(prefix+['runs',*common],env=env,capture_output=True,text=True,timeout=15)
+        self.assertEqual(listed.returncode,0,listed.stderr)
+        row=json.loads(listed.stdout)['runs'][0];self.assertTrue(row['available'],row)
+        resume=prefix+['resume',*common,'--run-root',str(self.directory),'--expected-state',row['state_sha256'],'--enable-experimental-vanity-local']
+        # The owned seal pins the runtime contract rather than a test file.
+        contract=standalone/'LocalCoordinator.py';original=contract.read_bytes();before=self.snapshot()
+        try:
+            contract.write_bytes(original+b'\n# changed contract\n')
+            refused=subprocess.run(resume,env=env,capture_output=True,text=True,timeout=15)
+            self.assertEqual(refused.returncode,2);self.assertIn('Coordinator source differs',refused.stderr)
+            self.assertEqual(self.snapshot(),before)
+        finally:contract.write_bytes(original)
+        result=subprocess.run(resume,env=env,capture_output=True,text=True,timeout=20)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        meta=e.read_json(self.directory/c.META);seal=e.read_json(self.directory/c.SEAL)
+        self.assertEqual(meta['schema'],'openpuzzle_coordinator_desktop_v2')
+        self.assertEqual(meta['contract_sha256'],s.sha(contract))
+        self.assertEqual((seal['native']['checked'],seal['native']['claims'],seal['native']['completions']),(c.TOTAL,1,1))
 
 if __name__=='__main__':unittest.main(verbosity=2)

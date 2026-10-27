@@ -4,7 +4,6 @@ import argparse
 import ctypes
 import fcntl
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -20,6 +19,8 @@ import Profile as p
 import Resume as r
 import Evidence as e
 import Support as s
+import LocalCoordinator as local
+from LocalCoordinator import LocalAssignmentServer
 
 TOTAL = 2**36
 SEGMENT = 2**35
@@ -32,27 +33,9 @@ def emit(**values):
     print(json.dumps(values,ensure_ascii=False),flush=True)
 
 
-def fixture_module(cli,adapter):
-    before=sys.argv[:]
-    try:
-        sys.argv=['coordinator-desktop',str(cli),str(adapter)]
-        spec=importlib.util.spec_from_file_location('CoordinatorDesktopContract',Path(__file__).parent.parent/'tests/CoordinatorSessionTests.py')
-        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-        return module
-    finally:
-        sys.argv=before
-
-
-def native_command(fixture,cli,resume=False):
-    legacy=fixture.argv()
-    fields=legacy[4:] # Drop executable, vanity-preview, coordinator-test and opt-in.
-    command=[str(cli),'run','20','--engine','vanity','--backend','cuda','--vanity-native-local','--enable-experimental-vanity-local']
-    for key,value in zip(fields[::2],fields[1::2]):
-        if key=='--puzzle':
-            e.require(value=='20','Local synthetic puzzle differs');continue
-        command.extend(['--target-engine' if key=='--engine' else key,value])
-    if resume:command.append('--resume')
-    return command
+def native_command(server,cli,resume=False):
+    e.require(server.cli==cli,'Local coordinator CLI differs')
+    return server.command(resume)
 
 
 def native_idle(directory):
@@ -145,9 +128,9 @@ def inspect(store,directory,cli,expected=None,allow_complete=False):
     seal_path=r.private_file(directory,SEAL)
     if expected is not None:e.require(s.sha(seal_path)==expected,'Stale coordinator resume confirmation')
     seal=e.read_json(seal_path);meta=e.read_json(r.private_file(directory,META));record,proof,paths=p.read_selected(store)
-    e.require(meta['schema']=='openpuzzle_coordinator_desktop_v1' and meta['profile_binding']==record['binding_sha256'] and meta['gpu_uuid']==record['uuid'],'Coordinator measured profile differs')
+    e.require(meta['schema']=='openpuzzle_coordinator_desktop_v2' and meta['profile_binding']==record['binding_sha256'] and meta['gpu_uuid']==record['uuid'],'Coordinator measured profile differs')
     e.require(meta['cli']==str(cli) and meta['cli_sha256']==s.sha(cli),'Coordinator CLI differs')
-    e.require(meta['script_sha256']==s.sha(Path(__file__)) and meta['contract_sha256']==s.sha(Path(__file__).parent.parent/'tests/CoordinatorSessionTests.py'),'Coordinator source differs')
+    e.require(meta['script_sha256']==s.sha(Path(__file__)) and meta['contract_sha256']==s.sha(Path(local.__file__)),'Coordinator source differs')
     e.require(meta['grid']==record['grid'] and meta['planning_mkeys']==record['planning_mkeys'],'Coordinator launch profile differs')
     e.require(meta['native_options']['--engine']==str(paths['engine']) and meta['native_options']['--engine-sha256']==s.sha(paths['engine']) and meta['native_options']['--adapter']==str(paths['adapter']) and meta['native_options']['--adapter-sha256']==s.sha(paths['adapter']),'Measured executables differ')
     e.require(seal['files']==pins(directory),'Coordinator evidence changed')
@@ -180,12 +163,11 @@ def execute(store,directory,cli,expected=None):
     else:
         e.require(directory.is_absolute() and directory.parent==store and directory.resolve()==directory and re.fullmatch(r'run-[0-9a-f-]{36}',directory.name) and not directory.exists(),'Fresh owned coordinator directory required')
     gpu,limit=p.hardware(record)
-    contract=fixture_module(cli,paths['adapter'])
     initial=before['native']['checked'] if resume else 0
     if not resume:
         directory.mkdir(mode=0o700);(directory/'native').mkdir();(directory/'native/home').mkdir()
     native=directory/'native';port=int(meta['native_options']['--server'].rsplit(':',1)[1]) if resume else 0
-    f=contract.Fixture(native,engine=paths['engine'],count=TOTAL,grid=record['grid'],segment=SEGMENT,planning=record['planning_mkeys'],gpu_uuid=gpu,port=port,client_id=meta['client_id'] if resume else None,resume_only=resume,initial_checked=initial)
+    f=LocalAssignmentServer(native,cli=cli,adapter=paths['adapter'],engine=paths['engine'],target=s.address(s.key_hash(s.BASE-1)),count=TOTAL,grid=record['grid'],segment=SEGMENT,planning=record['planning_mkeys'],gpu_uuid=gpu,port=port,client_id=meta['client_id'] if resume else None,resume_only=resume,initial_checked=initial)
     process=None;history=None;cancel=False;active=False;finished=False
     handlers={}
     def interrupted(*_):
@@ -203,8 +185,8 @@ def execute(store,directory,cli,expected=None):
                 e.require(s.sha(destination)==s.sha(directory/name),'Coordinator archive differs')
         else:
             command=native_command(f,cli)
-            legacy=f.argv();options=dict(zip(legacy[4::2],legacy[5::2]))
-            meta=dict(schema='openpuzzle_coordinator_desktop_v1',cli=str(cli),cli_sha256=s.sha(cli),profile_binding=record['binding_sha256'],gpu_uuid=gpu,grid=record['grid'],planning_mkeys=record['planning_mkeys'],target=f.target,client_id=f.client_id,native_options=options,argv=command,script_sha256=s.sha(Path(__file__)),contract_sha256=s.sha(Path(__file__).parent.parent/'tests/CoordinatorSessionTests.py'))
+            options=f.options()
+            meta=dict(schema='openpuzzle_coordinator_desktop_v2',cli=str(cli),cli_sha256=s.sha(cli),profile_binding=record['binding_sha256'],gpu_uuid=gpu,grid=record['grid'],planning_mkeys=record['planning_mkeys'],target=f.target,client_id=f.client_id,native_options=options,argv=command,script_sha256=s.sha(Path(__file__)),contract_sha256=s.sha(Path(local.__file__)))
             r.atomic(directory/META,meta)
         r.atomic(directory/ACTIVE,dict(resume=resume,expected=expected,history=str(history) if history else None));active=True
         handlers={sig:signal.signal(sig,interrupted) for sig in (signal.SIGTERM,signal.SIGINT)}

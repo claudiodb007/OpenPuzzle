@@ -56,6 +56,9 @@ set_tests_properties(VanityCoordinatorSessionTests PROPERTIES TIMEOUT 180)
 add_test(NAME VanityCoordinatorDesktopTests COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/CoordinatorDesktopTests.py $<TARGET_FILE:OpenPuzzle>)
 set_tests_properties(VanityCoordinatorDesktopTests PROPERTIES TIMEOUT 180)
+add_test(NAME VanityLocalCoordinatorTests COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/LocalCoordinatorTests.py)
+set_tests_properties(VanityLocalCoordinatorTests PROPERTIES TIMEOUT 60)
 add_executable(VanityRunSessionRouteTests tests/RunSessionRouteTests.cpp)
 target_link_libraries(VanityRunSessionRouteTests PRIVATE OpenPuzzleCore)
 target_compile_options(VanityRunSessionRouteTests PRIVATE -UNDEBUG)
