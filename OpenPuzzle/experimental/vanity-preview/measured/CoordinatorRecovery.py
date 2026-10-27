@@ -9,9 +9,12 @@ import Resume as r
 import Support as s
 
 
-def http_state(directory, meta, checked, phase):
-    calls = e.read_json(r.private_file(directory, 'http-requests.json'))
-    replies = e.read_json(r.private_file(directory, 'http-responses.json'))
+def http_state(directory, meta, checked, phase, data=None):
+    if data is None:
+        calls = e.read_json(r.private_file(directory, 'http-requests.json'))
+        replies = e.read_json(r.private_file(directory, 'http-responses.json'))
+    else:
+        calls,replies=data
     e.require(len(calls) == len(replies), 'Incomplete local HTTP response journal')
     registrations = claims = completions = 0
     attempted = acknowledged = 0
@@ -65,7 +68,7 @@ def http_state(directory, meta, checked, phase):
     return dict(acknowledged=acknowledged, completions=completions)
 
 
-def outcome(directory, meta, native, exit_code=None, owner_token=None):
+def outcome(directory, meta, native, exit_code=None, owner_token=None, http_data=None):
     raw = r.private_file(directory, 'native/session-binding.txt').read_bytes()
     state = r.private_file(directory, 'native/coordinator-state.txt').read_text().splitlines()
     rows = r.private_file(directory, 'native/coordinator-outcome.txt').read_text().splitlines()
@@ -82,7 +85,7 @@ def outcome(directory, meta, native, exit_code=None, owner_token=None):
         e.require(token==owner_token, 'Stale native invocation outcome')
     if exit_code is not None:
         e.require(code == exit_code, 'Native exit and durable outcome differ')
-    journal = http_state(directory, meta, native['checked'], phase)
+    journal = http_state(directory, meta, native['checked'], phase, http_data)
     transient = status in (0, 408, 429) or 500 <= status <= 599
     valid = (phase == 'done' and kind == 'done' and operation == 'complete' and code == 0 and status == 200
              or phase == 'paused' and kind == 'paused' and operation == 'control' and code == 130

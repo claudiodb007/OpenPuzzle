@@ -24,6 +24,18 @@ class Tests(unittest.TestCase):
 
     @contextlib.contextmanager
     def fault(self, kind):
+        if kind in ('network-during','lease-during'):
+            # Hold the synthetic engine at its first acknowledged batch until
+            # cancellation. This tests an in-flight outage, independently of
+            # machine load or the adapter's final-terminal cancellation race.
+            original=self.paths['engine'];engine=original.with_name('InterruptedBatchEngine.py')
+            source=original.read_text().replace("    print('OPV1 PROGRESS',checked,flush=True)",
+                "    print('OPV1 PROGRESS',checked,flush=True)\n    if first==s.BASE and checked==batch:\n        deadline=time.monotonic()+10\n        while not stopped and time.monotonic()<deadline:time.sleep(.001)\n        assert stopped, 'Expected bounded native cancellation'")
+            engine.write_text(source);engine.chmod(0o700);self.paths['engine']=engine
+            self.proof['executables']['engine']=dict(path=str(engine),sha256=s.sha(engine))
+            self.evidence=self.root/'interruption-measurement.json';s.write_json(self.evidence,self.proof)
+            self.record=e.profile(self.proof,self.evidence,self.paths);s.write_json(self.candidate,self.record)
+            desktop.p.import_profile(self.candidate,self.store)
         parent = c.LocalAssignmentServer
         class Fault(parent):
             def handle(instance, path, body):

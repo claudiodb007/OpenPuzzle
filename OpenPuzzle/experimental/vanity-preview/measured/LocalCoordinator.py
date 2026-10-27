@@ -8,8 +8,10 @@ import hashlib
 import http.server
 import json
 import math
+import os
 from pathlib import Path
 import re
+import tempfile
 import threading
 import uuid
 
@@ -28,6 +30,21 @@ def sha(path):
         for part in iter(lambda: stream.read(1024 * 1024), b''):
             h.update(part)
     return h.hexdigest()
+
+
+def private_write(path, data):
+    path=Path(path)
+    require(path.is_absolute() and path.resolve()==path and path.parent.is_dir(), 'Unsafe live journal path')
+    fd,name=tempfile.mkstemp(prefix='http-live-',dir=path.parent)
+    try:
+        with os.fdopen(fd,'wb') as stream:
+            stream.write(data);stream.flush();os.fsync(stream.fileno())
+        os.replace(name,path)
+        directory=os.open(path.parent,os.O_RDONLY|os.O_DIRECTORY)
+        try:os.fsync(directory)
+        finally:os.close(directory)
+    finally:
+        if os.path.exists(name):os.unlink(name)
 
 
 class LocalAssignmentServer:
@@ -69,6 +86,8 @@ class LocalAssignmentServer:
         self.seen = {}
         self._lock = threading.RLock()
         self._closed = False
+        self._journal = None
+        self.base_requests, self.base_responses = [], []
         outer = self
 
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -86,6 +105,7 @@ class LocalAssignmentServer:
                     require(isinstance(body, dict), 'Local JSON object required')
                     with outer._lock:
                         outer.requests.append(dict(path=self.path, payload=body))
+                        outer.persist(dict(path=self.path,payload=body))
                         before = (outer.claims, len(outer.progress), outer.completions, outer.reports)
                         code, response = outer.handle(self.path, body)
                         after = (outer.claims, len(outer.progress), outer.completions, outer.reports)
@@ -93,6 +113,7 @@ class LocalAssignmentServer:
                                            (b > a for a, b in zip(before, after))))
                         outer.responses.append(dict(path=self.path, payload=body, status=code,
                                                     reply=response, applied=applied))
+                        outer.persist(None)
                 except Exception as error:
                     with outer._lock:
                         outer.errors.append(str(error))
@@ -108,6 +129,23 @@ class LocalAssignmentServer:
             self.server.server_close()
             raise
         self.url = 'http://127.0.0.1:' + str(self.server.server_port)
+
+    def configure_journal(self, path, identity, owner_token, requests, responses, on_persist):
+        with self._lock:
+            require(not self.requests and self._journal is None, 'Live journal configured after requests')
+            require(len(requests)==len(responses), 'Incomplete previous HTTP journal')
+            self.base_requests, self.base_responses = list(requests), list(responses)
+            self._journal=(Path(path),identity,owner_token,on_persist)
+            self.persist(None)
+
+    def persist(self,pending):
+        if self._journal is None:return
+        path,identity,token,callback=self._journal
+        value=dict(schema='openpuzzle_http_live_v1',identity=identity,owner_token=token,
+                   requests=self.base_requests+self.requests,responses=self.base_responses+self.responses,pending=pending)
+        data=(json.dumps(value,sort_keys=True,indent=2)+'\n').encode()
+        private_write(path,data)
+        callback(hashlib.sha256(data).hexdigest())
 
     def close(self):
         if not self._closed:

@@ -1,6 +1,7 @@
 // MIT. Native client payloads and common completion monitor; loopback-only stage.
 #include "CoordinatorSession.hpp"
 #include "CoordinatorPlan.hpp"
+#include "CoordinatorPacer.hpp"
 #include "VanityPreviewEngine.hpp"
 #include "LoopbackHttp.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
@@ -119,22 +120,40 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
   CoordinatorPlan plan(state.a,puzzle,target,grid,cap);need(plan.start>=scopeStart&&plan.end<=scopeEnd&&state.offset<=state.checked&&state.checked<=plan.total,"Stored assignment differs from scope");
   need(state.offset==plan.total||state.offset%cap==0,"Unaligned completed segment prefix");
   for(uint64_t offset=0;offset<state.offset;){auto segment=plan.segment(offset);auto workspace=root/("segment-"+std::to_string(offset/cap));auto n=checkpoint(workspace/"checkpoint.txt",segment,digest(binding+"\n"+std::to_string(offset)));need(n.status=="complete"&&n.checked==segment.count,"Completed segment checkpoint missing");evidence(workspace,segment,n);offset+=segment.count;}
+  // After abrupt owner loss, the adapter may have durably acknowledged more
+  // local batches than the last coordinator counter. Validate before probing.
+  if(resume&&state.phase!="pending-complete"&&state.phase!="solution"&&state.offset<plan.total){
+   auto segment=plan.segment(state.offset);auto workspace=root/("segment-"+std::to_string(state.offset/cap));
+   auto native=checkpoint(workspace/"checkpoint.txt",segment,digest(binding+"\n"+std::to_string(state.offset)));evidence(workspace,segment,native);
+   need(native.status=="fresh"||native.status=="interrupted"||native.status=="complete","Native segment requires review");
+   need(state.checked<=state.offset+native.checked,"Coordinator counter exceeds durable coverage");
+   state.checked=state.offset+native.checked;save();
+  }
   auto failed=[&](const std::string& operation){
    failureKind=rejected(http.lastErrorCode())?"lease":transportKind;failureOperation=operation;
    state.phase=failureKind=="lease"?"rejected":"paused";save();return false;
   };
+  CoordinatorPacer pacer;
   auto nextHeartbeat=std::chrono::steady_clock::now()+std::chrono::seconds(30);
-  auto progress=[&](uint64_t checked,double rate=0.){
+  auto progress=[&](uint64_t checked,double rate=0.,bool force=false){
    need(checked>=state.checked&&checked<=plan.total,"Cumulative coordinator progress regressed/overflowed");state.checked=checked;save();
+   if(!pacer.due(checked,std::chrono::steady_clock::now(),force))return true;
    if(std::chrono::steady_clock::now()>=nextHeartbeat){if(!heartbeat("running"))return failed("heartbeat");nextHeartbeat=std::chrono::steady_clock::now()+std::chrono::seconds(30);}
-   for(int i=0;i<3;++i){if(http.progress(state.a.assignmentId,clientId,rate,std::to_string(checked)))return true;
+   for(int i=0;i<3;++i){if(http.progress(state.a.assignmentId,clientId,rate,std::to_string(checked))){pacer.acknowledged(checked,std::chrono::steady_clock::now());return true;}
     if(rejected(http.lastErrorCode())||transportKind!="network"||interrupted)break;
     if(i<2)backoff(i);
    }
    return failed("progress");
   };
-  auto ensureProgress=[&](uint64_t checked,const char* message){
-   if(!progress(checked)){publishOutcome(failureKind,failureOperation,2);throw std::runtime_error(message);}
+  auto ensureProgress=[&](uint64_t checked,const char* message,bool probe=true){
+   if(!probe&&pacer.confirmed(checked))return;
+   if(!progress(checked,0.,true)){publishOutcome(failureKind,failureOperation,2);throw std::runtime_error(message);}
+  };
+  auto pause=[&](){
+   if(!pacer.confirmed(state.checked)&&!progress(state.checked,0.,true)){
+    int code=state.phase=="rejected"?2:3;publishOutcome(failureKind,failureOperation,code);return code;
+   }
+   state.phase="paused";save();publishOutcome("paused","control",130);return 130;
   };
   auto ensureHeartbeat=[&]{
    if(!heartbeat("running")){failed("heartbeat");publishOutcome(failureKind,failureOperation,2);throw std::runtime_error("Running heartbeat failed");}
@@ -147,14 +166,14 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
     const auto archive=root/("resume-before-"+std::to_string(state.launches)+"-"+std::to_string(getpid())+".txt");need(!fs::exists(archive),"Resume journal already exists");write(archive,read(stateFile));fs::remove(controls/"cancel");
    }
    while(state.offset<plan.total){
-    if(stopped()){state.phase="paused";save();publishOutcome("paused","control",130);return 130;}
+    if(stopped())return pause();
     auto segment=plan.segment(state.offset);auto workspace=root/("segment-"+std::to_string(state.offset/cap));
     if(!fs::exists(workspace))fs::create_directory(workspace);directory(workspace);
     const auto segmentBinding=digest(binding+"\n"+std::to_string(state.offset));auto native=checkpoint(workspace/"checkpoint.txt",segment,segmentBinding);evidence(workspace,segment,native);
     need(native.status!="review"&&native.status!="faulted","Native segment requires review");
     if(native.status=="solution"){state.phase="solution";save();break;}
     if(native.status=="complete"){
-     need(native.checked==segment.count,"Incomplete native terminal");ensureProgress(state.offset+segment.count,"Recovered segment progress refused");state.offset+=segment.count;save();continue;
+     need(native.checked==segment.count,"Incomplete native terminal");ensureProgress(state.offset+segment.count,"Recovered segment progress refused",false);state.offset+=segment.count;save();continue;
     }
     need(state.checked<=state.offset+native.checked,"Coordinator acknowledged more than durable checkpoint");
     ensureProgress(state.offset+native.checked,"Resume lease probe refused");
@@ -165,7 +184,7 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
     EngineLaunchRequest request;request.engine="vanity-preview";request.backend="cuda";request.device=0;request.blocks=int(grid);request.threads=256;request.points=1024;request.startKey=segment.start;request.endKey=segment.end;request.workspace=workspace;request.targetFile=targetFile;
     VanityPreviewProgressParser parser(segment.count,native.checked);bool bad=false;std::string error;
     PosixProcessRunner runner;auto result=runner.run(selected->buildCommand(request),[&](const std::string& line){log<<line<<'\n';log.flush();if(bad)return;
-     try{auto value=parser.parseLine(line);if(value&&line.starts_with("OPV_CLIENT PROGRESS ")){if(!progress(state.offset+decimal(value->keysChecked),value->speedMKeys))throw std::runtime_error("Coordinator progress rejected");std::cout<<"OPV_COORD PROGRESS "<<state.checked<<" total="<<plan.total<<"\n"<<std::flush;}}
+     try{auto value=parser.parseLine(line);if(value&&line.starts_with("OPV_CLIENT PROGRESS ")){if(!progress(state.offset+decimal(value->keysChecked),value->speedMKeys,decimal(value->keysChecked)==segment.count))throw std::runtime_error("Coordinator progress rejected");std::cout<<"OPV_COORD PROGRESS "<<state.checked<<" total="<<plan.total<<"\n"<<std::flush;}}
      catch(const std::exception& e){bad=true;error=e.what();}
     },900,[&]{return bad||interrupted;});
     native=checkpoint(workspace/"checkpoint.txt",segment,segmentBinding);evidence(workspace,segment,native);
@@ -175,9 +194,9 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
      state.checked=state.offset+native.checked;save();int code=state.phase=="rejected"?2:3;
      publishOutcome(failureKind,failureOperation,code);std::cerr<<error<<'\n';return code;
     }
-    if(result.exitCode==130||stopped()){state.checked=state.offset+native.checked;state.phase="paused";save();publishOutcome("paused","control",130);return 130;}
+    if(result.exitCode==130||stopped()){state.checked=state.offset+native.checked;return pause();}
     need(result.started&&result.exitCode==0&&native.status=="complete"&&native.checked==segment.count,"Native segment did not complete exactly");
-    ensureProgress(state.offset+segment.count,"Final segment progress refused");state.offset+=segment.count;save();
+    ensureProgress(state.offset+segment.count,"Final segment progress refused",false);state.offset+=segment.count;save();
    }
    if(state.phase!="solution"){need(state.offset==plan.total&&state.checked==plan.total,"Incomplete assignment");state.phase="pending-complete";save();}
   }

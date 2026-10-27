@@ -148,6 +148,36 @@ class Tests(unittest.TestCase):
                 self.server(port=sock.getsockname()[1], client_id='opv-coord-resume', resume_only=True)
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), [self.binary.name])
 
+    def test_durable_journal_records_intent_and_effect_before_reply(self):
+        server=self.server();path=self.root/'http-live.json';snapshots=[]
+        def published(digest):
+            self.assertEqual(digest,local.sha(path))
+            snapshots.append(json.loads(path.read_text()))
+        server.configure_journal(path,dict(client_id=server.client_id,server=server.url),
+                                 'explicit-test-generation',[],[],published)
+        self.post(server,'/api/client/register',dict(client_id=server.client_id))
+        self.claim(server)
+        self.post(server,'/api/range/progress',self.assignment(server,keys_checked='100'))
+        self.post(server,'/api/range/complete',self.assignment(server,keys_checked='100',status='completed',exit_code=0))
+        self.assertEqual(len(snapshots),9)
+        self.assertIsNone(snapshots[0]['pending'])
+        for intent,settled in zip(snapshots[1::2],snapshots[2::2]):
+            self.assertIsNotNone(intent['pending']);self.assertIsNone(settled['pending'])
+            self.assertEqual(len(intent['requests']),len(intent['responses'])+1)
+            self.assertEqual(len(settled['requests']),len(settled['responses']))
+        self.assertTrue(snapshots[-1]['responses'][-1]['applied']['complete'])
+        self.assertEqual(path.stat().st_mode&0o077,0)
+
+    def test_failed_intent_publication_applies_no_claim(self):
+        server=self.server();path=self.root/'http-live.json'
+        def published(_):
+            if json.loads(path.read_text())['pending'] is not None:raise RuntimeError('synthetic intent-head failure')
+        server.configure_journal(path,{},'explicit-test-generation',[],[],published)
+        self.post(server,'/api/range/claim',dict(client_id=server.client_id,puzzle=20,
+            backend='cuda',target_duration_minutes=60,speed_mkeys=server.planning),400)
+        self.assertEqual(server.claims,0)
+        self.assertEqual(json.loads(path.read_text())['pending']['path'],'/api/range/claim')
+
     def test_runtime_import_has_no_test_or_argv_dependency(self):
         source = (MEASURED / 'Coordinator.py').read_text()
         self.assertNotIn('CoordinatorSessionTests', source)
