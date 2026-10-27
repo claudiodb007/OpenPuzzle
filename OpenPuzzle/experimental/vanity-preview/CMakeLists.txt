@@ -39,3 +39,14 @@ set_tests_properties(VanityMeasuredProfileTests PROPERTIES TIMEOUT 180)
 
 add_test(NAME VanityResumeTests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/ResumeTests.py $<TARGET_FILE:OpenPuzzle>)
 set_tests_properties(VanityResumeTests PROPERTIES TIMEOUT 180)
+
+# Native normal-client request path; strictly loopback-only in this stage.
+target_sources(OpenPuzzleCore PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/CoordinatorSession.cpp)
+add_executable(VanityCoordinatorPlanTests tests/CoordinatorPlanTests.cpp)
+target_include_directories(VanityCoordinatorPlanTests PRIVATE ../../include ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_options(VanityCoordinatorPlanTests PRIVATE -UNDEBUG)
+add_test(NAME VanityCoordinatorPlanTests COMMAND VanityCoordinatorPlanTests)
+add_test(NAME VanityCoordinatorSessionTests COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/CoordinatorSessionTests.py
+    $<TARGET_FILE:OpenPuzzle> $<TARGET_FILE:OpenPuzzleVanityAdapter>)
+set_tests_properties(VanityCoordinatorSessionTests PROPERTIES TIMEOUT 180)

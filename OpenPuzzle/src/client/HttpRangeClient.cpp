@@ -174,7 +174,10 @@ bool validKangarooAssignment(
 } // namespace
 
 HttpRangeClient::HttpRangeClient(std::string serverUrl)
-    : serverUrl_(normalizeServerUrl(std::move(serverUrl))) {}
+    : HttpRangeClient(std::move(serverUrl), {}) {}
+
+HttpRangeClient::HttpRangeClient(std::string serverUrl, HttpPostTransport transport)
+    : serverUrl_(normalizeServerUrl(std::move(serverUrl))), transport_(std::move(transport)) {}
 
 std::string HttpRangeClient::normalizeServerUrl(std::string value) {
   while (!value.empty() && value.back() == '/') {
@@ -414,9 +417,19 @@ bool HttpRangeClient::reportSolution(
       serverUrl_ +
       "/api/puzzle/report-solution";
 
+  std::string response;
+  if (transport_) {
+    const auto http = transport_(url, request);
+    response = http.body;
+    if (http.status < 200 || http.status >= 300) {
+      lastErrorCode_ = parseErrorCode(response);
+      lastError_ = response.empty() ? http.error : response;
+      return false;
+    }
+  } else {
 #ifdef _WIN32
   const auto http = WindowsHttpTransport::request("POST", url, request);
-  std::string response = http.body;
+  response = http.body;
   if (!http.success()) {
     lastErrorCode_ = parseErrorCode(response);
     lastError_ = response.empty() ? http.error : response;
@@ -459,7 +472,7 @@ bool HttpRangeClient::reportSolution(
 
   char buffer[4096];
 
-  std::string response;
+  response.clear();
 
   while (
       fgets(
@@ -506,6 +519,7 @@ bool HttpRangeClient::reportSolution(
   }
 
 #endif
+  }
 
   return true;
 }
@@ -535,9 +549,19 @@ bool HttpRangeClient::registerClient(const ClientRegistration &registration) {
 
   const std::string url = serverUrl_ + "/api/client/register";
 
+  std::string response;
+  if (transport_) {
+    const auto http = transport_(url, request.str());
+    response = http.body;
+    if (http.status < 200 || http.status >= 300) {
+      lastErrorCode_ = parseErrorCode(response);
+      lastError_ = response.empty() ? http.error : response;
+      return false;
+    }
+  } else {
 #ifdef _WIN32
   const auto http = WindowsHttpTransport::request("POST", url, request.str());
-  std::string response = http.body;
+  response = http.body;
   if (!http.success()) {
     lastErrorCode_ = parseErrorCode(response);
     lastError_ = response.empty() ? http.error : response;
@@ -569,7 +593,7 @@ bool HttpRangeClient::registerClient(const ClientRegistration &registration) {
   }
 
   char buffer[4096];
-  std::string response;
+  response.clear();
 
   while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
     response += buffer;
@@ -595,6 +619,7 @@ bool HttpRangeClient::registerClient(const ClientRegistration &registration) {
   }
 
 #endif
+  }
 
   return true;
 }
@@ -730,9 +755,19 @@ bool HttpRangeClient::heartbeat(const ClientHeartbeat &heartbeat) {
 
   const std::string url = serverUrl_ + "/api/client/heartbeat";
 
+  std::string response;
+  if (transport_) {
+    const auto http = transport_(url, request.str());
+    response = http.body;
+    if (http.status < 200 || http.status >= 300) {
+      lastErrorCode_ = parseErrorCode(response);
+      lastError_ = response.empty() ? http.error : response;
+      return false;
+    }
+  } else {
 #ifdef _WIN32
   const auto http = WindowsHttpTransport::request("POST", url, request.str());
-  std::string response = http.body;
+  response = http.body;
   if (!http.success()) {
     lastErrorCode_ = parseErrorCode(response);
     lastError_ = response.empty() ? http.error : response;
@@ -764,7 +799,7 @@ bool HttpRangeClient::heartbeat(const ClientHeartbeat &heartbeat) {
   }
 
   char buffer[4096];
-  std::string response;
+  response.clear();
 
   while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
     response += buffer;
@@ -790,6 +825,7 @@ bool HttpRangeClient::heartbeat(const ClientHeartbeat &heartbeat) {
   }
 
 #endif
+  }
 
   return true;
 }
@@ -883,9 +919,19 @@ HttpRangeClient::claim(
 
   const std::string url = serverUrl_ + "/api/range/claim";
 
+  std::string response;
+  if (transport_) {
+    const auto http = transport_(url, request.str());
+    response = http.body;
+    if (http.status < 200 || http.status >= 300) {
+      lastErrorCode_ = parseErrorCode(response);
+      lastError_ = response.empty() ? http.error : response;
+      return std::nullopt;
+    }
+  } else {
 #ifdef _WIN32
   const auto http = WindowsHttpTransport::request("POST", url, request.str());
-  std::string response = http.body;
+  response = http.body;
   if (!http.success()) {
     lastErrorCode_ = parseErrorCode(response);
     lastError_ = response.empty() ? http.error : response;
@@ -918,7 +964,7 @@ HttpRangeClient::claim(
 
   char buffer[4096];
 
-  std::string response;
+  response.clear();
 
   while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
     response += buffer;
@@ -944,6 +990,7 @@ HttpRangeClient::claim(
   }
 
 #endif
+  }
 
   auto claimResult =
       parseClaimResult(response);
@@ -1044,9 +1091,19 @@ bool HttpRangeClient::progress(const std::string &assignmentId,
 
   const std::string url = serverUrl_ + "/api/range/progress";
 
+  std::string response;
+  if (transport_) {
+    const auto http = transport_(url, request.str());
+    response = http.body;
+    if (http.status < 200 || http.status >= 300) {
+      lastErrorCode_ = parseErrorCode(response);
+      lastError_ = response.empty() ? http.error : response;
+      return false;
+    }
+  } else {
 #ifdef _WIN32
   const auto http = WindowsHttpTransport::request("POST", url, request.str());
-  std::string response = http.body;
+  response = http.body;
   if (!http.success()) {
     lastErrorCode_ = parseErrorCode(response);
     lastError_ = response.empty() ? http.error : response;
@@ -1079,7 +1136,7 @@ bool HttpRangeClient::progress(const std::string &assignmentId,
 
   char buffer[4096];
 
-  std::string response;
+  response.clear();
 
   while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
     response += buffer;
@@ -1108,6 +1165,7 @@ bool HttpRangeClient::progress(const std::string &assignmentId,
   }
 
 #endif
+  }
 
   return true;
 }
@@ -1190,9 +1248,19 @@ bool HttpRangeClient::complete(
 
   const std::string url = serverUrl_ + "/api/range/complete";
 
+  std::string response;
+  if (transport_) {
+    const auto http = transport_(url, request.str());
+    response = http.body;
+    if (http.status < 200 || http.status >= 300) {
+      lastErrorCode_ = parseErrorCode(response);
+      lastError_ = response.empty() ? http.error : response;
+      return false;
+    }
+  } else {
 #ifdef _WIN32
   const auto http = WindowsHttpTransport::request("POST", url, request.str());
-  std::string response = http.body;
+  response = http.body;
   if (!http.success()) {
     lastErrorCode_ = parseErrorCode(response);
     lastError_ = response.empty() ? http.error : response;
@@ -1225,7 +1293,7 @@ bool HttpRangeClient::complete(
 
   char buffer[4096];
 
-  std::string response;
+  response.clear();
 
   while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
     response += buffer;
@@ -1254,6 +1322,7 @@ bool HttpRangeClient::complete(
   }
 
 #endif
+  }
 
   return true;
 }

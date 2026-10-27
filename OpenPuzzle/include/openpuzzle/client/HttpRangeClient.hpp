@@ -6,13 +6,18 @@
 #include "openpuzzle/client/RangeClaimResult.hpp"
 
 #include <optional>
+#include <functional>
 #include <string>
 
 namespace openpuzzle::client {
 
+struct HttpPostResult { int status=0; std::string body,error; };
+using HttpPostTransport=std::function<HttpPostResult(const std::string&,const std::string&)>;
+
 class HttpRangeClient {
 public:
   explicit HttpRangeClient(std::string serverUrl);
+  HttpRangeClient(std::string serverUrl, HttpPostTransport transport);
 
   bool registerClient(const ClientRegistration &registration);
 
@@ -70,6 +75,7 @@ public:
 
 private:
   std::string serverUrl_;
+  HttpPostTransport transport_;
   std::string lastError_;
   std::string lastErrorCode_;
 
