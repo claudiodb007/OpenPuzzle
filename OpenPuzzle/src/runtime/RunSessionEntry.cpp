@@ -10,7 +10,7 @@ namespace openpuzzle {
 int RunSession::run(const std::vector<std::string>& args) const {
   bool vanity = false;
   for (std::size_t i = 0; i < args.size(); ++i) {
-    if (args[i] == "--vanity-session" || args[i] == "--vanity-native-local") vanity = true;
+    if (args[i] == "--vanity-session" || args[i] == "--vanity-native-local" || args[i] == "--receipt-protocol") vanity = true;
     if (args[i] != "--engine" || i + 1 == args.size()) continue;
     auto value = args[i + 1];
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {return std::tolower(c);});

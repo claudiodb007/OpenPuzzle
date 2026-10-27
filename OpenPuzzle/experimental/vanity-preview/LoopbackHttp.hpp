@@ -24,7 +24,7 @@ class LoopbackHttp {
   auto p=std::stoul(m[1]);if(p<1024||p>65535)throw std::runtime_error("Invalid loopback port");port_=static_cast<unsigned short>(p);
  }
  LocalHttpResponse post(const std::string& path,const std::string& body) const {
-  if(path.empty()||path[0]!='/'||path.find_first_not_of("/abcdefghijklmnopqrstuvwxyz-")!=std::string::npos||body.size()>8192)throw std::runtime_error("Invalid local HTTP request");
+  if(path.empty()||path[0]!='/'||path.find_first_not_of("/abcdefghijklmnopqrstuvwxyz-0123456789")!=std::string::npos||body.size()>8192)throw std::runtime_error("Invalid local HTTP request");
   struct Socket {int fd=-1;~Socket(){if(fd>=0)close(fd);}} s;
   s.fd=socket(AF_INET,SOCK_STREAM|SOCK_CLOEXEC|SOCK_NONBLOCK,0);if(s.fd<0)throw std::runtime_error("Loopback socket failed");
   auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);

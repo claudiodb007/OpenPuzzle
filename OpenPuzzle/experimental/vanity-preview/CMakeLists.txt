@@ -83,3 +83,12 @@ add_test(NAME VanityEndpointPreflightTests COMMAND ${Python3_EXECUTABLE} -B
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/EndpointPreflightTests.py)
 set_tests_properties(VanityReceiptLedgerTests VanityReceiptRecoveryTests VanityEndpointPreflightTests
     PROPERTIES TIMEOUT 60)
+
+add_executable(VanityReceiptJsonTests tests/ReceiptJsonTests.cpp)
+target_include_directories(VanityReceiptJsonTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_options(VanityReceiptJsonTests PRIVATE -UNDEBUG)
+add_test(NAME VanityReceiptJsonTests COMMAND VanityReceiptJsonTests)
+add_test(NAME VanityNativeReceiptTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/NativeReceiptTests.py
+    $<TARGET_FILE:OpenPuzzle> $<TARGET_FILE:OpenPuzzleVanityAdapter>)
+set_tests_properties(VanityNativeReceiptTests PROPERTIES TIMEOUT 180)

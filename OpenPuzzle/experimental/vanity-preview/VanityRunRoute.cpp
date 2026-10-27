@@ -45,8 +45,8 @@ int runLocalSessionRoute(const std::vector<std::string>& args) {
     values.erase("--engine"); values.erase("--backend");
     if (enabled.count("--vanity-native-local")) {
       need(!values.count("--vanity-session"), "Mixed local session routes");
-      const std::set<std::string> fields = {"--server", "--root", "--controls", "--target-engine", "--engine-sha256", "--adapter", "--adapter-sha256", "--client-id", "--target", "--grid", "--segment-keys", "--scope-start", "--scope-end", "--gpu-uuid", "--speed-mkeys"};
-      need(values.size() == fields.size() && enabled.count("--enable-experimental-vanity-local"), "Explicit native local binding required");
+      const std::set<std::string> fields = {"--server", "--root", "--controls", "--target-engine", "--engine-sha256", "--adapter", "--adapter-sha256", "--client-id", "--target", "--grid", "--segment-keys", "--scope-start", "--scope-end", "--gpu-uuid", "--speed-mkeys", "--receipt-protocol"};
+      need(values.size() == fields.size() - (values.count("--receipt-protocol") ? 0 : 1) && enabled.count("--enable-experimental-vanity-local"), "Explicit native local binding required");
       for (const auto& [key, value] : values) need(fields.count(key), "Unsupported local native option");
       std::vector<std::string> native = {"coordinator-test", "--enable-experimental-vanity-local", "--puzzle", "20"};
       for (const auto& [key, value] : values) {native.push_back(key == "--target-engine" ? "--engine" : key); native.push_back(value);}

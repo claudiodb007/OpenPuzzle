@@ -84,7 +84,7 @@ int runVanityCommand(const std::vector<std::string>& args){
    execv(native[0].c_str(),argv.data());throw std::runtime_error("Measured-profile helper could not start");
   }
   if(args[0]=="coordinator-test"){
-   const std::set<std::string> fields={"--server","--root","--controls","--engine","--engine-sha256","--adapter","--adapter-sha256","--client-id","--target","--puzzle","--grid","--segment-keys","--scope-start","--scope-end","--gpu-uuid","--speed-mkeys"};
+   const std::set<std::string> fields={"--server","--root","--controls","--engine","--engine-sha256","--adapter","--adapter-sha256","--client-id","--target","--puzzle","--grid","--segment-keys","--scope-start","--scope-end","--gpu-uuid","--speed-mkeys","--receipt-protocol"};
    std::map<std::string,std::string> values;bool enabled=false,resume=false;
    for(size_t i=1;i<args.size();++i){const auto& k=args[i];
     if(k=="--enable-experimental-vanity-local"){require(!enabled,"Repeated coordinator opt-in");enabled=true;continue;}
@@ -92,7 +92,7 @@ int runVanityCommand(const std::vector<std::string>& args){
     require(fields.count(k)&&i+1<args.size(),"Unknown/missing coordinator option");auto value=args[++i];
     require(!value.empty()&&value.find_first_of("\r\n\0",0,3)==std::string::npos&&values.emplace(k,value).second,"Repeated/invalid coordinator option");
    }
-   require(enabled&&values.size()==fields.size(),"Explicit local coordinator binding and opt-in required");
+   require(enabled&&values.size()==fields.size()-(values.count("--receipt-protocol")?0:1),"Explicit local coordinator binding and opt-in required");
    const auto& uuid=values.at("--gpu-uuid");require(uuid.size()==40&&uuid.rfind("GPU-",0)==0&&uuid.substr(4).find_first_not_of("0123456789abcdefABCDEF-")==std::string::npos,"Invalid coordinator GPU UUID");
    return vanityPreview::runCoordinatorSession(values,resume);
   }

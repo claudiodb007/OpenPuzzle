@@ -2,6 +2,8 @@
 #include "CoordinatorSession.hpp"
 #include "CoordinatorPlan.hpp"
 #include "CoordinatorPacer.hpp"
+#include "ReceiptClient.hpp"
+#include <memory>
 #include "VanityPreviewEngine.hpp"
 #include "LoopbackHttp.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
@@ -65,6 +67,8 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
  try{
   const auto get=[&](const char* key)->const std::string&{return o.at(key);};
   const auto server=get("--server"),clientId=get("--client-id"),target=get("--target");LoopbackHttp local(server);
+  const bool receiptMode=o.count("--receipt-protocol")!=0;
+  need(!receiptMode||get("--receipt-protocol")==receipts::protocol,"Unsupported local receipt protocol");
   const auto grid=decimal(get("--grid")),cap=decimal(get("--segment-keys"));const int puzzle=20;need(get("--puzzle")=="20","Local puzzle must be exactly 20");
   need(puzzle==20&&std::regex_match(clientId,std::regex("opv-coord-[A-Za-z0-9-]{1,80}")),"Isolated coordinator identity/puzzle required");
   const auto scopeStart=canonical(get("--scope-start")),scopeEnd=canonical(get("--scope-end"));need(scopeEnd>=scopeStart,"Descending local scope");
@@ -81,7 +85,7 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
   auto save=[&]{write(stateFile,encode(state,binding));};
   if(fs::exists(stateFile)){
    state=decode(read(stateFile),binding);need(read(root/"session-binding.txt")==raw,"Published coordinator binding differs");
-   if(!resume||!(state.phase=="assigned"||state.phase=="paused"||state.phase=="running"||state.phase=="pending-complete"||state.phase=="solution")) {std::cout<<"OPV_COORD BLOCKED "<<state.phase<<" next_claim_blocked=1\n";return 20;}
+   if(!resume||!(state.phase=="assigned"||state.phase=="paused"||state.phase=="running"||state.phase=="pending-complete"||state.phase=="solution"||(receiptMode&&state.phase=="claiming"))) {std::cout<<"OPV_COORD BLOCKED "<<state.phase<<" next_claim_blocked=1\n";return 20;}
   }else{need(!resume,"No coordinator run to resume");for(const auto& f:fs::directory_iterator(root))need(f.path().filename()=="owner.lock"||f.path().filename()=="controls"||f.path().filename()=="home","Occupied coordinator root preserved");write(root/"session-binding.txt",raw);save();}
   const auto targetText="OPV-TARGETS-1\np2pkh "+target+"\n";
   if(fs::exists(targetFile))need(read(targetFile)==targetText,"Coordinator public target changed");else write(targetFile,targetText);
@@ -90,6 +94,16 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
   const char* suppliedAttempt=getenv("OPENPUZZLE_VANITY_ATTEMPT");
   const std::string attemptToken=suppliedAttempt?suppliedAttempt:("native-"+std::to_string(getpid()));
   need(std::regex_match(attemptToken,std::regex("[A-Za-z0-9-]{1,80}")),"Invalid coordinator attempt identity");
+  // Canonical receipt values are immutable. Hash each value once per invocation;
+  // history validation must not start O(n^2) checksum subprocesses.
+  std::map<std::string,std::string> receiptHashes;
+  auto receiptDigest=[&](const std::string& value){auto found=receiptHashes.find(value);if(found!=receiptHashes.end())return found->second;auto hash=digest(value);receiptHashes.emplace(value,hash);return hash;};
+  std::unique_ptr<receipts::Client> receipt;
+  if(receiptMode){
+   auto receiptScope=receipts::Json::obj({{"puzzle",receipts::Json(uint64_t(20))},{"range_id",receipts::Json(uint64_t(37))},
+    {"start",scopeStart},{"end",scopeEnd},{"target",target},{"required_backend","cuda"}});
+   receipt=std::make_unique<receipts::Client>(root,server,clientId,receiptScope,binding,receiptDigest,resume,state.phase=="fresh"&&!resume);
+  }
   int transportStatus=0;
   std::string transportKind="review",failureKind,failureOperation;
   auto publishOutcome=[&](const std::string& kind,const std::string& operation,int code){
@@ -101,7 +115,9 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
    while(!interrupted&&std::chrono::steady_clock::now()<until)std::this_thread::sleep_for(std::chrono::milliseconds(10));
   };
   client::HttpRangeClient http(server,[&](const std::string& url,const std::string& body){
-   try{need(url.starts_with(server+"/api/"),"Transport escaped local endpoint");auto response=local.post(url.substr(server.size()),body);
+   try{need(url.starts_with(server+"/api/"),"Transport escaped local endpoint");auto path=url.substr(server.size());
+    auto response=receipt&&(path=="/api/range/claim"||path=="/api/range/progress"||path=="/api/range/complete")
+      ?receipt->operation(path.substr(path.rfind('/')+1),state.a.assignmentId,state.checked):local.post(path,body);
     transportStatus=response.status;transportKind=(response.status==408||response.status==429||(response.status>=500&&response.status<=599))?"network":"review";
     if(response.status>=200&&response.status<300&&url!=server+"/api/range/claim"&&(response.status!=200||response.body!="{\"success\":true}")){transportKind="review";return client::HttpPostResult{502,response.body,"Unacknowledged local response"};}
     return client::HttpPostResult{response.status,response.body,{}};
@@ -116,6 +132,12 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
    if(claim.unavailable()){state.phase="unavailable";save();return 0;}
    need(claim.assigned(),"Local claim failed/ambiguous; preserve state: "+claim.message);
    state.a=*claim.assignment;CoordinatorPlan valid(state.a,puzzle,target,grid,cap);need(valid.start>=scopeStart&&valid.end<=scopeEnd,"Assignment escaped local metadata scope");state.phase="assigned";save();
+  }
+  if(receipt&&state.phase=="claiming"){
+   need(resume,"Claim reconciliation requires explicit resume");auto claim=http.claimResult(clientId,puzzle,60,speed,"cuda","linear");
+   need(claim.assigned(),"Recovered receipt claim is not confirmed");state.a=*claim.assignment;
+   CoordinatorPlan recovered(state.a,puzzle,target,grid,cap);need(recovered.start==scopeStart&&recovered.end==scopeEnd,"Receipt claim scope differs");
+   state.phase="assigned";save();
   }
   CoordinatorPlan plan(state.a,puzzle,target,grid,cap);need(plan.start>=scopeStart&&plan.end<=scopeEnd&&state.offset<=state.checked&&state.checked<=plan.total,"Stored assignment differs from scope");
   need(state.offset==plan.total||state.offset%cap==0,"Unaligned completed segment prefix");
@@ -213,7 +235,9 @@ int runCoordinatorSession(const std::map<std::string,std::string>& o,bool resume
   }
   ClientRuntimeDependencies d;d.prepareSignals=[]{};d.stopRequested=[&]{return state.phase=="solution"||interrupted!=0;};d.safeStopRequested=[&]{return fs::exists(controls/"safe-stop");};d.clearSafeStop=[] {return true;};d.hasState=[&]{return state.phase!="done";};d.acquireRuntime=[] {return true;};d.releaseRuntime=[]{};d.removeState=[]()->bool{throw std::runtime_error("Preserved coordinator state must not be erased");};d.stopExecution=[](const auto&){return true;};
   d.finalKeysChecked=[&](const auto&){return std::to_string(state.checked);};
-  d.reportSolution=[&](const auto&,const auto& assignment,const auto& client,std::string& error){bool ok=http.reportSolution(assignment,client);error=http.lastError();if(ok){state.phase="reported";save();}return ok;};
+  d.reportSolution=[&](const auto&,const auto& assignment,const auto& client,std::string& error){
+   if(receipt){error="Local receipt protocol leaves solution notice for explicit review";return false;}
+   bool ok=http.reportSolution(assignment,client);error=http.lastError();if(ok){state.phase="reported";save();}return ok;};
   d.finalizeAssignment=[](const auto&,const auto&,const auto&,int,const auto&,const auto&,auto&)->client::AssignmentUploadStatus{throw std::runtime_error("Unexpected incomplete finalization");};
   d.heartbeat=[&](const auto&){client::ClientHeartbeatResult r;r.success=heartbeat("running");r.error=http.lastError();return r;};
   d.sleep=[](auto){throw std::runtime_error("Bounded coordinator retry exhausted; resume preserved state");};
