@@ -21,6 +21,7 @@ class ReceiptAssignmentServer(LocalAssignmentServer):
             raise
 
     def handle(self, path, body):
+        require(not self._closed,'Closed receipt peer refuses requests')
         if path in ('/api/client/register','/api/client/heartbeat'):
             return super().handle(path,body)
         require(path in ('/api/vanity/v1/operations','/api/vanity/v1/receipts/query'),
@@ -29,6 +30,12 @@ class ReceiptAssignmentServer(LocalAssignmentServer):
         self.seen[path]=self.seen.get(path,0)+1
         if path.endswith('/query'):return 200,self.ledger.query(body)
         return 200,self.ledger.execute(body)
+
+    def persist(self,pending):
+        # A timed-out accepted connection must not publish a new journal/head
+        # after the owner closes the peer and seals its evidence.
+        require(not self._closed,'Closed receipt peer refuses journal publication')
+        return super().persist(pending)
 
     def options(self):
         return dict(super().options(), **{'--receipt-protocol':PROTOCOL})

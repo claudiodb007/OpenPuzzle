@@ -61,7 +61,9 @@ def pins(directory):
     return result
 
 
-def coverage(directory,meta,http_data=None,cold=False):
+def coverage(directory,meta,http_data=None,cold=False,*,assignment_id="coordinator-assignment-A",journal=None):
+    receipt=journal is not None
+    if receipt:e.require(meta.get('schema')=='openpuzzle_receipt_desktop_v1' and re.fullmatch(r'[0-9a-f-]{36}',assignment_id),'Receipt coverage binding differs')
     native=directory/'native'
     raw=r.private_file(directory,'native/session-binding.txt').read_text()
     values=meta['native_options']
@@ -71,10 +73,15 @@ def coverage(directory,meta,http_data=None,cold=False):
     state=r.private_file(directory,'native/coordinator-state.txt').read_text().splitlines()
     e.require(len(state)==4 and state[:2]==['OPV-COORD-1',binding],'Native coordinator state differs')
     phase,offset,checked,launches=state[2].split();offset=int(offset);checked=int(checked);launches=int(launches)
+    if receipt and cold and phase=='claiming':
+        e.require(offset==checked==launches==0 and shlex.split(state[3])==['','0','0','','','','linear','','']
+                  and not list(native.glob('segment-*')) and journal['completions']==0,'Unreviewed claiming state')
+        return dict(phase='claiming',checked=0,total=TOTAL,launches=0,claims=1,completions=0)
     e.require(phase in (('assigned','running','paused','done','pending-complete','rejected') if cold else ('paused','done','pending-complete','rejected')) and 0<=offset<=checked<=TOTAL,'Unreviewed/nonresumable native state')
     assignment=shlex.split(state[3])
-    e.require(assignment==['coordinator-assignment-A','20','37',meta['target'],f'{s.BASE:064x}',f'{s.BASE+TOTAL-1:064x}','linear','cuda',''],'Native assignment metadata changed')
+    e.require(assignment==[assignment_id,'20','37',meta['target'],f'{s.BASE:064x}',f'{s.BASE+TOTAL-1:064x}','linear','cuda',''],'Native assignment metadata changed')
     prefix=0;attempt_count=0
+    if receipt:e.require({path.name for path in native.glob('segment-*')} <= {'segment-0','segment-1'},'Unexpected receipt native segment')
     for index in range(2):
         segment=native/('segment-'+str(index))
         if not segment.exists():continue
@@ -105,14 +112,17 @@ def coverage(directory,meta,http_data=None,cold=False):
         for start,n,complete in sorted(spans):
             e.require(start==contiguous,'Native attempts overlap/skip keys');contiguous+=n;completed=complete
         e.require(contiguous==done and (cp[7]!='complete' or completed and done==SEGMENT),'Native checkpoint lacks exact coverage')
+        if receipt and done==SEGMENT:e.require(cp[7]=='complete' and completed,'Receipt run lacks exact segment terminal proof')
         prefix+=done
-        if done<SEGMENT:break
+        if done<SEGMENT:
+            if receipt:e.require(index==1 or not (native/'segment-1').exists(),'Receipt native segment gap')
+            break
     if cold and phase in ('assigned','running'):
         e.require(checked<=prefix,'Native counter exceeds durable coverage')
         checked=prefix;phase='paused'
     e.require(prefix==checked and attempt_count==launches and (launches>0 or phase in ('paused','rejected') and checked==offset==0),'Native cumulative counter/launches differ')
     e.require((phase in ('done','pending-complete') and offset==checked==TOTAL) or (phase in ('paused','rejected') and offset in (0,SEGMENT) and offset<=checked<=offset+SEGMENT) or (phase=='rejected' and offset==checked==TOTAL),'Native phase and progress differ')
-    journal=recovery.http_state(directory,meta,checked,phase,http_data)
+    if journal is None:journal=recovery.http_state(directory,meta,checked,phase,http_data)
     return dict(phase=phase,checked=checked,total=TOTAL,launches=launches,claims=1,completions=journal['completions'])
 
 
@@ -177,6 +187,9 @@ def list_runs(store,cli):
     rows=[]
     for directory in sorted(store.glob('run-*')):
         if not (directory/META).exists():continue
+        from ReceiptDesktop import is_receipt, row as receipt_row
+        if is_receipt(directory):
+            rows.append(receipt_row(store,directory,cli));continue
         row=dict(path=str(directory),available=False)
         try:
             seal,meta,record,paths=inspect(store,directory,cli)
@@ -335,6 +348,9 @@ def main():
     try:
         fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
         if args.action=='runs':list_runs(store,cli);return 0
+        from ReceiptDesktop import enabled, is_receipt, execute as receipt_execute
+        if args.action=='start' and enabled(store,cli) or args.action=='resume' and is_receipt(args.run_root):
+            return receipt_execute(store,args.run_root,cli,args.expected_state)
         return execute(store,args.run_root,cli,args.expected_state)
     finally:os.close(fd)
 

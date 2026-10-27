@@ -92,3 +92,9 @@ add_test(NAME VanityNativeReceiptTests COMMAND ${Python3_EXECUTABLE} -B
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/NativeReceiptTests.py
     $<TARGET_FILE:OpenPuzzle> $<TARGET_FILE:OpenPuzzleVanityAdapter>)
 set_tests_properties(VanityNativeReceiptTests PROPERTIES TIMEOUT 180)
+
+add_test(NAME VanityReceiptDesktopTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/ReceiptDesktopTests.py $<TARGET_FILE:OpenPuzzle>)
+add_test(NAME VanityReceiptOwnerRecoveryTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/ReceiptOwnerRecoveryTests.py $<TARGET_FILE:OpenPuzzle>)
+set_tests_properties(VanityReceiptDesktopTests VanityReceiptOwnerRecoveryTests PROPERTIES TIMEOUT 180)
