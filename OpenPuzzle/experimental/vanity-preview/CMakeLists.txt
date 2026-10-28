@@ -14,7 +14,9 @@ target_compile_definitions(OpenPuzzleCore PRIVATE OPENPUZZLE_ENABLE_VANITY_PREVI
 
 add_executable(OpenPuzzleVanityAdapter VanityRangePreviewMain.cpp ../../src/core/PosixProcessRunner.cpp)
 target_include_directories(OpenPuzzleVanityAdapter PRIVATE ../../include)
-set_target_properties(OpenPuzzleVanityAdapter PROPERTIES OUTPUT_NAME openpuzzle-vanity-adapter RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+set_target_properties(OpenPuzzleVanityAdapter PROPERTIES
+    OUTPUT_NAME "${OPENPUZZLE_VANITY_ADAPTER_NAME}"
+    RUNTIME_OUTPUT_DIRECTORY "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}")
 add_dependencies(OpenPuzzle OpenPuzzleVanityAdapter)
 
 add_executable(VanityPreviewModelTests tests/ModelTests.cpp)

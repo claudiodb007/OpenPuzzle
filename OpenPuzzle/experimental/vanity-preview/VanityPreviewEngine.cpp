@@ -55,8 +55,13 @@ std::optional<ExecutionProgress> VanityPreviewProgressParser::parseLine(const st
  std::istringstream in(line);std::string magic,kind,a,b;in>>magic>>kind;
  ExecutionProgress p;
  if(kind=="PROGRESS"){
-  if(!(in>>a)||(in>>b))throw std::runtime_error("Malformed progress");
+  if(!(in>>a))throw std::runtime_error("Malformed progress");
   auto n=decimal(a);if(n<=checked_||n>total_)throw std::runtime_error("Invalid, duplicate or regressing progress");checked_=n;
+  if(in>>b){
+   if(!b.starts_with("elapsed_us=")||(in>>a))throw std::runtime_error("Malformed progress timing");
+   auto elapsed=decimal(b.substr(11));if(!elapsed||elapsed<=elapsedUs_)throw std::runtime_error("Invalid or regressing progress timing");
+   elapsedUs_=elapsed;p.speedMKeys=double(checked_-resumed_)/double(elapsedUs_);
+  }
  }else if(kind=="RESULT"){
   std::string status;if(!(in>>status))throw std::runtime_error("Missing terminal state");
   std::map<std::string,std::string> values;while(in>>a){auto pos=a.find('=');if(pos==std::string::npos||!values.emplace(a.substr(0,pos),a.substr(pos+1)).second)throw std::runtime_error("Malformed terminal fields");}
@@ -70,8 +75,6 @@ std::optional<ExecutionProgress> VanityPreviewProgressParser::parseLine(const st
  }else if(kind=="BLOCKED"){p.error=true;p.message="Preserved native state blocks launch";terminal_=true;return p;}
  else throw std::runtime_error("Unknown native adapter record");
  p.keysChecked=std::to_string(checked_);
- double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-start_).count();
- if(seconds>0)p.speedMKeys=(checked_-resumed_)/seconds/1e6;
  return p;
 }
 }

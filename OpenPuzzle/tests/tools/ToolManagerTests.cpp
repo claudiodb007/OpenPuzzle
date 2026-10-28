@@ -33,6 +33,18 @@ int main() {
   assert(std::filesystem::is_regular_file(*cuda));
   assert(std::filesystem::is_regular_file(*opencl));
 
+#ifdef OPENPUZZLE_TEST_VANITY
+  const auto vanity = ToolManager::vanityPath();
+
+  const auto vanityAdapter =
+      ToolManager::vanityAdapterPath();
+
+  assert(vanity);
+  assert(vanityAdapter);
+  assert(std::filesystem::is_regular_file(*vanity));
+  assert(std::filesystem::is_regular_file(*vanityAdapter));
+#endif
+
   assert(
       setenv(
           "OPENPUZZLE_KANGAROO_PATH",

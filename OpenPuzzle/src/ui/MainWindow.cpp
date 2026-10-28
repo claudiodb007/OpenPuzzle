@@ -367,7 +367,7 @@ MainWindow::~MainWindow() {
 
 void MainWindow::buildInterface() {
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
-  setWindowTitle(qEnvironmentVariableIsSet("OPENPUZZLE_VANITY_COMMON_PROFILE")?"OpenPuzzle — Vanity common runtime preview 0.20.0":qEnvironmentVariable("OPENPUZZLE_VANITY_COORDINATOR")=="1"?"OpenPuzzle — Vanity RunSession preview 0.12.0":"OpenPuzzle — Vanity preview 0.10.1");
+  setWindowTitle(QStringLiteral("OpenPuzzle %1").arg(QStringLiteral(OPENPUZZLE_VERSION)));
 #else
   setWindowTitle("OpenPuzzle");
 #endif
@@ -538,7 +538,8 @@ void MainWindow::buildInterface() {
   mode_->addItem(QString(), static_cast<int>(RunMode::KeyHuntCpu));
   mode_->addItem(QString(), static_cast<int>(RunMode::KangarooCuda));
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
-  mode_->addItem("Vanity / CUDA",qEnvironmentVariableIsSet("OPENPUZZLE_VANITY_COMMON_PROFILE") ? static_cast<int>(RunMode::VanityCuda) : 100);
+  mode_->addItem("Vanity / CUDA",qEnvironmentVariableIsSet("OPENPUZZLE_VANITY_STORE")
+      ? 100 : static_cast<int>(RunMode::VanityCuda));
 #endif
 
   device_ = new QSpinBox;

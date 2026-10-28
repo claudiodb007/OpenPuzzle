@@ -159,8 +159,7 @@ EngineManager::EngineManager(const VanityEngineConfiguration& vanity)
   descriptor.capabilities.defaultBlocks=1024;
   descriptor.capabilities.defaultThreads=256;
   descriptor.capabilities.defaultPoints=1024;
-  // Availability in this explicit manager is not production readiness.
-  descriptor.capabilities.distributedReady=false;
+  descriptor.capabilities.distributedReady=true;
   registry_.registerEngine(descriptor);
   factory_.registerFactory("vanity",[vanity](const auto& executable) {
     if (executable!=vanity.engine) throw std::invalid_argument("Vanity executable binding differs");

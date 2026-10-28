@@ -49,6 +49,8 @@ public:
   static std::optional<std::string> bitcrackOpenCLPath();
   static std::optional<std::string> keyhuntPath();
   static std::optional<std::string> kangarooPath();
+  static std::optional<std::string> vanityPath();
+  static std::optional<std::string> vanityAdapterPath();
 };
 
 } // namespace openpuzzle

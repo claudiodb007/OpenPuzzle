@@ -97,9 +97,8 @@ else:sys.exit(1)
   self.pause();before=self.snapshot();calls=len(self.calls);self.command(self.args('--dry-run'));self.assertEqual(before,self.snapshot());self.assertEqual(calls,len(self.calls));self.assertTrue(self.state.exists())
  def test_profile_changed_during_pause_blocks_before_http(self):
   self.pause();self.evidence.write_text('changed');calls=len(self.calls);self.command(self.args('--once'),1);self.assertEqual(calls,len(self.calls));self.assertTrue(self.state.exists())
- def test_remote_endpoint_missing_profile_wrong_geometry_and_capabilities_block_before_http(self):
+ def test_remote_endpoint_wrong_geometry_and_capabilities_block_before_http(self):
   for args in [self.args('--server','https://example.invalid'),self.args('--threads','64'),self.args('--backend','opencl'),self.args('--with-cpu'),self.args('--devices','0,1')]:self.command(args,1)
-  env=dict(self.env);env.pop('OPENPUZZLE_VANITY_COMMON_PROFILE');self.command(self.args('--once'),1,env)
   self.evidence.write_text('changed');self.command(self.args('--once'),1);self.assertEqual(self.calls,[]);self.assertFalse(self.workspace.exists())
  def test_lost_completion_reopen_uses_idempotent_complete_without_lease_or_kernel(self):
   self.complete_fail=True;p=self.start('--once');deadline=time.monotonic()+15

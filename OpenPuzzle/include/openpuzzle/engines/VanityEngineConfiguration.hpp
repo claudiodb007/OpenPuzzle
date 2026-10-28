@@ -2,8 +2,7 @@
 #include <string>
 
 namespace openpuzzle {
-// A verified measured profile supplies these paths. Registration is explicit;
-// ordinary production routing is enabled only after its own preflight.
+// The packaged engine and adapter supply these paths and immutable hashes.
 struct VanityEngineConfiguration {
   std::string engine;
   std::string adapter;

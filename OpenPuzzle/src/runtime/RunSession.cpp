@@ -2368,8 +2368,8 @@ int RunSession::runOrdinary(
       std::transform(engine.begin(), engine.end(), engine.begin(),
                      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
       if (engine == "vanity-preview" || (engine == "vanity" && !VanityRunProfile::configured())) {
-        std::cerr << "Vanity is experimental: production assignments are not enabled.\n"
-                  << "Use openpuzzle vanity-preview help for local profile and validation commands.\n"
+        std::cerr << "The bundled Vanity CUDA engine is unavailable or invalid.\n"
+                  << "Reinstall OpenPuzzle and run: openpuzzle doctor --offline\n"
                   << "No assignment requested.\n";
         return 1;
       }
@@ -2395,15 +2395,18 @@ int RunSession::runOrdinary(
     if(commonVanity) try {
       for(const auto* flag:{"--engine","--backend","--device","--server","--duration-minutes","--blocks","--threads","--points"})
         if(std::count(args.begin(),args.end(),flag)>1) throw std::runtime_error("Duplicate Vanity launch option");
-      auto profile=VanityRunProfile::load();
-      VanityRunProfile::requireLocalServer(serverUrl(args));
+      const auto existing=client::ClientStateStore::load();
+      const int vanityDevice=existing&&existing->engine=="Vanity" ? existing->device
+          : cliIntegerArgument(args,{"--device"},GpuManager::selectedGpu());
+      auto profile=VanityRunProfile::load(vanityDevice);
+      VanityRunProfile::requireServer(serverUrl(args));
       if(args.front()!="run" || selected!="vanity" || selectedBackend(args)!="cuda" ||
           hasArgument(args,"--devices") || hasArgument(args,"--with-cpu") || hasArgument(args,"--with-opencl") ||
           hasArgument(args,"--supervised-gpu-device") || hasArgument(args,"--rusticl-enable"))
-        throw std::runtime_error("Vanity requires one explicit CUDA run and the measured physical GPU");
+        throw std::runtime_error("Vanity requires one explicit CUDA run");
       if(cliIntegerArgument(args,{"--blocks","--b"},profile.grid)!=int(profile.grid) ||
          cliIntegerArgument(args,{"--threads","--t"},256)!=256 || cliIntegerArgument(args,{"--points","--p"},1024)!=1024)
-        throw std::runtime_error("Vanity geometry differs from measured profile");
+        throw std::runtime_error("Vanity geometry differs from the active GPU profile");
     } catch(const std::exception& error) {
       std::cerr << "Vanity start blocked: " << error.what() << "\nNo assignment requested; local evidence preserved.\n";
       return 1;
@@ -2563,8 +2566,11 @@ ClientIterationResult RunSession::runOnce(
   auto requestedCommonEngine=getArgument(args,"--engine");
   std::transform(requestedCommonEngine.begin(),requestedCommonEngine.end(),requestedCommonEngine.begin(),[](unsigned char c){return std::tolower(c);});
   if(requestedCommonEngine=="vanity") {
-    vanityProfile=VanityRunProfile::load();
-    VanityRunProfile::requireLocalServer(server);
+    const auto existing=client::ClientStateStore::load();
+    const int vanityDevice=existing&&existing->engine=="Vanity" ? existing->device
+        : getIntegerArgument(args,"--device",GpuManager::selectedGpu());
+    vanityProfile=VanityRunProfile::load(vanityDevice);
+    VanityRunProfile::requireServer(server);
   }
 
   /*
@@ -2917,7 +2923,7 @@ ClientIterationResult RunSession::runOnce(
       requestedEngine != "keyhunt" && requestedEngine != "vanity") {
     std::cerr
         << "Unsupported engine: " << requestedEngine << '\n'
-        << "Use kangaroo, bitcrack or keyhunt.\n";
+        << "Use vanity, kangaroo, bitcrack or keyhunt.\n";
     return 1;
   }
 
@@ -3327,7 +3333,7 @@ ClientIterationResult RunSession::runOnce(
    * não cria leases ou assignments no servidor.
    */
   if(subcommand=="run" && dryRun && vanityWorkload) {
-    std::cout << "Engine............. Vanity\nMeasured GPU....... " << vanityProfile->uuid
+        std::cout << "Engine............. Vanity\nGPU................ " << vanityProfile->gpu
               << "\nRequested keys..... " << vanityProfile->requestedKeys(targetDurationMinutes)
               << "\nDry run only. No assignment was requested.\n";return 0;
   }
@@ -3843,7 +3849,7 @@ ClientIterationResult RunSession::runOnce(
   state.threads = threads;
   state.points = points;
   state.profileManaged =
-      !cpuBackend && !kangarooAssignment && !manualProfile && !vanityWorkload;
+      vanityWorkload || (!cpuBackend && !kangarooAssignment && !manualProfile);
   state.gpuName =
       cpuBackend ? std::string{} : hardwareValue;
 

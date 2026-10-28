@@ -30,6 +30,14 @@ constexpr const char *KeyHuntEngineName =
 constexpr const char *KangarooEngineName =
     OPENPUZZLE_KANGAROO_ENGINE_NAME;
 
+#ifdef OPENPUZZLE_VANITY_ENGINE_NAME
+constexpr const char *VanityEngineName =
+    OPENPUZZLE_VANITY_ENGINE_NAME;
+
+constexpr const char *VanityAdapterName =
+    OPENPUZZLE_VANITY_ADAPTER_NAME;
+#endif
+
 constexpr const char *CudaEngineIdentity =
     OPENPUZZLE_CUDA_ENGINE_IDENTITY;
 
@@ -461,6 +469,24 @@ ToolManager::kangarooPath() {
   }
 
   return std::nullopt;
+}
+
+std::optional<std::string>
+ToolManager::vanityPath() {
+#ifdef OPENPUZZLE_VANITY_ENGINE_NAME
+  return bundledExecutable(VanityEngineName);
+#else
+  return std::nullopt;
+#endif
+}
+
+std::optional<std::string>
+ToolManager::vanityAdapterPath() {
+#ifdef OPENPUZZLE_VANITY_ENGINE_NAME
+  return bundledExecutable(VanityAdapterName);
+#else
+  return std::nullopt;
+#endif
 }
 
 } // namespace openpuzzle

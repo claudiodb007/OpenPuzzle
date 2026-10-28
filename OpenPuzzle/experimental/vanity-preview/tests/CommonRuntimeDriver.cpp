@@ -23,8 +23,8 @@ int main(int argc,char** argv){try{
     auto parser=EngineParserFactory::create("VaNiTy");need(bool(parser));
     need(!parser->parseLine("private engine diagnostic"));
     need(!parser->parseLine("OPV_CLIENT BEGIN total=300 resumed=100"));
-    need(parser->parseLine("OPV_CLIENT PROGRESS 200")->keysChecked=="200");
-    need(parser->parseLine("OPV_CLIENT PROGRESS 300")->keysChecked=="300");
+    auto first=parser->parseLine("OPV_CLIENT PROGRESS 200 elapsed_us=100");need(first->keysChecked=="200"&&first->speedMKeys==1.0);
+    auto second=parser->parseLine("OPV_CLIENT PROGRESS 300 elapsed_us=200");need(second->keysChecked=="300"&&second->speedMKeys==1.0);
     need(parser->parseLine("OPV_CLIENT RESULT complete checked=300 resumed=100 safe_stop=0 next_blocked=0")->finished);
     need(parser->parseLine("OPV_CLIENT PROGRESS 300")->error);
     for(const auto& bad:{"OPV_CLIENT PROGRESS 1","OPV_CLIENT BEGIN total=0 resumed=0","OPV_CLIENT BEGIN total=4 resumed=4","OPV_CLIENT BEGIN total=18446744073709551616 resumed=0"}){

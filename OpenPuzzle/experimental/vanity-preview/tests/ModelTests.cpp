@@ -15,12 +15,13 @@ int main(){try{
  require(f.create("bitcrack","preserved")->info().executable=="preserved");
  EngineLaunchRequest request;refused([&]{f.create("vanity-preview","")->buildCommand(request);});
  VanityPreviewProgressParser parser(200);require(!parser.parseLine("diagnostic"));
- require(parser.parseLine("OPV_CLIENT PROGRESS 100")->keysChecked=="100");
- refused([&]{parser.parseLine("OPV_CLIENT PROGRESS 100");});refused([&]{parser.parseLine("OPV_CLIENT PROGRESS 201");});
- parser.parseLine("OPV_CLIENT PROGRESS 200");auto p=parser.parseLine("OPV_CLIENT RESULT complete checked=200 resumed=0 safe_stop=0 next_blocked=0");require(p->finished&&!p->keyFound&&p->privateKey.empty());
+ auto first=parser.parseLine("OPV_CLIENT PROGRESS 100 elapsed_us=50");require(first->keysChecked=="100"&&first->speedMKeys==2.0);
+ refused([&]{parser.parseLine("OPV_CLIENT PROGRESS 100 elapsed_us=51");});refused([&]{parser.parseLine("OPV_CLIENT PROGRESS 201 elapsed_us=52");});
+ parser.parseLine("OPV_CLIENT PROGRESS 200 elapsed_us=100");auto p=parser.parseLine("OPV_CLIENT RESULT complete checked=200 resumed=0 safe_stop=0 next_blocked=0");require(p->finished&&!p->keyFound&&p->privateKey.empty());
  refused([&]{parser.parseLine("OPV_CLIENT PROGRESS 200");});
  VanityPreviewProgressParser partial(200);partial.parseLine("OPV_CLIENT PROGRESS 100");refused([&]{partial.parseLine("OPV_CLIENT RESULT complete checked=100 resumed=0 safe_stop=0 next_blocked=0");});
- VanityPreviewProgressParser resumed(200,100);resumed.parseLine("OPV_CLIENT PROGRESS 200");require(resumed.parseLine("OPV_CLIENT RESULT complete checked=200 resumed=100 safe_stop=0 next_blocked=0")->finished);
+ VanityPreviewProgressParser resumed(200,100);require(resumed.parseLine("OPV_CLIENT PROGRESS 200 elapsed_us=50")->speedMKeys==2.0);require(resumed.parseLine("OPV_CLIENT RESULT complete checked=200 resumed=100 safe_stop=0 next_blocked=0")->finished);
+ VanityPreviewProgressParser legacy(200);require(legacy.parseLine("OPV_CLIENT PROGRESS 100")->speedMKeys==0.0);
  std::cout<<"Vanity integration model passed: explicit opt-in, existing registry preserved, range carry, strict progress and resume\n";
  return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

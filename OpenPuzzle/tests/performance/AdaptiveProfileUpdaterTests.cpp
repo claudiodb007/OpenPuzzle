@@ -112,6 +112,29 @@ int main() {
   assert(!rejected.updated);
   assert(!rejected.error.empty());
 
+  auto firstVanity = state;
+  firstVanity.engine = "Vanity";
+  firstVanity.blocks = 32;
+  firstVanity.threads = 256;
+  firstVanity.points = 1024;
+  const auto created = updater.update(
+      firstVanity,
+      {2000.0, 2100.0, 2500.0, 2520.0, 2510.0, 2530.0, 2515.0});
+  assert(created.attempted);
+  assert(created.updated);
+  assert(near(created.sustainedSpeed, 2515.0));
+  assert(near(created.calibratedPlanningSpeed, 2439.55));
+  const auto vanityProfile = profiles.load(
+      firstVanity.gpuName,
+      firstVanity.backend,
+      firstVanity.engine);
+  assert(vanityProfile);
+  assert(vanityProfile->blocks == 32);
+  assert(vanityProfile->threads == 256);
+  assert(vanityProfile->points == 1024);
+  assert(near(vanityProfile->averageSpeed, 2439.55));
+  assert(vanityProfile->samples == 5);
+
   const auto workspace = root / "workspace";
   std::filesystem::create_directories(workspace);
   std::ofstream log(workspace / "bitcrack.log");

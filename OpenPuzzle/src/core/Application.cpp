@@ -130,7 +130,7 @@ static void printApplicationHelp() {
       << "Run options:\n"
       << "  --once           Execute one assignment\n"
       << "  --dry-run        Show local configuration only\n"
-      << "  --engine NAME    Select kangaroo, bitcrack or keyhunt\n"
+      << "  --engine NAME    Select vanity, kangaroo, bitcrack or keyhunt\n"
       << "  --backend NAME   Select cuda, opencl or cpu\n"
       << "  --device N       Select the primary GPU device\n"
       << "  --devices LIST   Select CUDA/OpenCL devices: all or 0,1,2,...\n"

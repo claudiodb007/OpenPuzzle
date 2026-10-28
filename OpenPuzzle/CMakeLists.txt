@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(OpenPuzzle VERSION 1.0.48 LANGUAGES CXX)
+project(OpenPuzzle VERSION 1.0.49 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -38,6 +38,20 @@ set(
     "${CMAKE_SOURCE_DIR}/../../cpu-engine-lab/keyhunt-portable/keyhunt"
     CACHE FILEPATH
     "Vetted KeyHunt CPU executable"
+)
+
+set(
+    OPENPUZZLE_BUNDLED_VANITY_ENGINE
+    "${CMAKE_SOURCE_DIR}/../OpenPuzzle-Vanity/bin/vanity-offline"
+    CACHE FILEPATH
+    "Vetted OpenPuzzle Vanity CUDA executable"
+)
+
+set(
+    OPENPUZZLE_VANITY_LICENSE
+    "${CMAKE_SOURCE_DIR}/../OpenPuzzle-Vanity/LICENSE"
+    CACHE FILEPATH
+    "License for the vetted OpenPuzzle Vanity CUDA executable"
 )
 
 foreach(_openpuzzle_engine
@@ -117,6 +131,18 @@ set(OPENPUZZLE_CUDA_ENGINE_NAME "cuBitCrack")
 set(OPENPUZZLE_OPENCL_ENGINE_NAME "clBitCrack")
 set(OPENPUZZLE_KEYHUNT_ENGINE_NAME "keyhunt")
 set(OPENPUZZLE_KANGAROO_ENGINE_NAME "psckangaroo")
+set(OPENPUZZLE_VANITY_ENGINE_NAME "vanity-offline")
+set(OPENPUZZLE_VANITY_ADAPTER_NAME "openpuzzle-vanity-adapter")
+
+set(_openpuzzle_vanity_default OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(_openpuzzle_vanity_default ON)
+endif()
+option(OPENPUZZLE_ENABLE_VANITY "Build the integrated Vanity CUDA engine and common runtime" ${_openpuzzle_vanity_default})
+option(OPENPUZZLE_ENABLE_VANITY_PREVIEW "Compatibility alias for older Vanity validation builds" OFF)
+if(OPENPUZZLE_ENABLE_VANITY_PREVIEW)
+    set(OPENPUZZLE_ENABLE_VANITY ON)
+endif()
 
 set(OPENPUZZLE_CUDA_ENGINE_IDENTITY
     "OpenPuzzle-BitCrack 1.0.0 CUDA protocol 2"
@@ -295,6 +321,8 @@ target_compile_definitions(OpenPuzzleCore
         OPENPUZZLE_OPENCL_ENGINE_NAME="${OPENPUZZLE_OPENCL_ENGINE_NAME}"
         OPENPUZZLE_KEYHUNT_ENGINE_NAME="${OPENPUZZLE_KEYHUNT_ENGINE_NAME}"
         OPENPUZZLE_KANGAROO_ENGINE_NAME="${OPENPUZZLE_KANGAROO_ENGINE_NAME}"
+        OPENPUZZLE_VANITY_ENGINE_NAME="${OPENPUZZLE_VANITY_ENGINE_NAME}"
+        OPENPUZZLE_VANITY_ADAPTER_NAME="${OPENPUZZLE_VANITY_ADAPTER_NAME}"
         OPENPUZZLE_CUDA_ENGINE_IDENTITY="${OPENPUZZLE_CUDA_ENGINE_IDENTITY}"
         OPENPUZZLE_OPENCL_ENGINE_IDENTITY="${OPENPUZZLE_OPENCL_ENGINE_IDENTITY}"
 )
@@ -343,6 +371,10 @@ set(OPENPUZZLE_KEYHUNT_ENGINE_BUILD_PATH
     "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}/${OPENPUZZLE_KEYHUNT_ENGINE_NAME}"
 )
 
+set(OPENPUZZLE_VANITY_ENGINE_BUILD_PATH
+    "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}/${OPENPUZZLE_VANITY_ENGINE_NAME}"
+)
+
 add_custom_command(
     OUTPUT
         "${OPENPUZZLE_CUDA_ENGINE_BUILD_PATH}"
@@ -366,12 +398,30 @@ add_custom_command(
     VERBATIM
 )
 
+set(OPENPUZZLE_BUNDLED_ENGINE_OUTPUTS
+    "${OPENPUZZLE_CUDA_ENGINE_BUILD_PATH}"
+    "${OPENPUZZLE_OPENCL_ENGINE_BUILD_PATH}"
+    "${OPENPUZZLE_KEYHUNT_ENGINE_BUILD_PATH}"
+)
+
+if(OPENPUZZLE_ENABLE_VANITY)
+    add_custom_command(
+        OUTPUT "${OPENPUZZLE_VANITY_ENGINE_BUILD_PATH}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${OPENPUZZLE_BUNDLED_VANITY_ENGINE}"
+            "${OPENPUZZLE_VANITY_ENGINE_BUILD_PATH}"
+        DEPENDS "${OPENPUZZLE_BUNDLED_VANITY_ENGINE}"
+        VERBATIM
+    )
+    list(APPEND OPENPUZZLE_BUNDLED_ENGINE_OUTPUTS
+        "${OPENPUZZLE_VANITY_ENGINE_BUILD_PATH}")
+endif()
+
 add_custom_target(
     OpenPuzzleBundledEngines ALL
-    DEPENDS
-        "${OPENPUZZLE_CUDA_ENGINE_BUILD_PATH}"
-        "${OPENPUZZLE_OPENCL_ENGINE_BUILD_PATH}"
-        "${OPENPUZZLE_KEYHUNT_ENGINE_BUILD_PATH}"
+    DEPENDS ${OPENPUZZLE_BUNDLED_ENGINE_OUTPUTS}
 )
 
 add_executable(OpenPuzzle
@@ -392,8 +442,13 @@ target_link_libraries(OpenPuzzle
 
 add_dependencies(OpenPuzzle OpenPuzzleBundledEngines)
 
-option(OPENPUZZLE_ENABLE_VANITY_PREVIEW "Enable local experimental Vanity CLI/profile validation (no production assignments)" OFF)
-if(OPENPUZZLE_ENABLE_VANITY_PREVIEW)
+if(OPENPUZZLE_ENABLE_VANITY)
+    if(NOT EXISTS "${OPENPUZZLE_BUNDLED_VANITY_ENGINE}")
+        message(FATAL_ERROR "Bundled Vanity executable not found: ${OPENPUZZLE_BUNDLED_VANITY_ENGINE}")
+    endif()
+    if(NOT EXISTS "${OPENPUZZLE_VANITY_LICENSE}")
+        message(FATAL_ERROR "Vanity license not found: ${OPENPUZZLE_VANITY_LICENSE}")
+    endif()
     add_subdirectory(experimental/vanity-preview)
 else()
     target_sources(OpenPuzzleCore PRIVATE src/engines/VanityRunProfileUnavailable.cpp)
@@ -479,7 +534,7 @@ if(OPENPUZZLE_BUILD_UI)
                 -Wall -Wextra -Wpedantic
         )
 
-        if(OPENPUZZLE_ENABLE_VANITY_PREVIEW)
+        if(OPENPUZZLE_ENABLE_VANITY)
             target_sources(OpenPuzzleUi PRIVATE src/ui/VanityPanel.cpp)
             target_compile_definitions(OpenPuzzleUi PRIVATE OPENPUZZLE_ENABLE_VANITY_PREVIEW=1)
         endif()
@@ -578,6 +633,20 @@ install(
         "${CMAKE_INSTALL_LIBEXECDIR}/OpenPuzzle"
 )
 
+if(OPENPUZZLE_ENABLE_VANITY)
+    install(
+        PROGRAMS "${OPENPUZZLE_BUNDLED_VANITY_ENGINE}"
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/OpenPuzzle"
+    )
+endif()
+
+if(TARGET OpenPuzzleVanityAdapter)
+    install(
+        TARGETS OpenPuzzleVanityAdapter
+        RUNTIME DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/OpenPuzzle"
+    )
+endif()
+
 install(
     FILES
         scripts/patches/psckangaroo-explicit-seed-v1.patch
@@ -643,6 +712,7 @@ install(
         docs/RELEASE_1.0.46.md
         docs/RELEASE_1.0.47.md
         docs/RELEASE_1.0.48.md
+        docs/RELEASE_1.0.49.md
         docs/SYSTEMD_SERVICE.md
     DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
 )
@@ -654,6 +724,14 @@ install(
     DESTINATION
         ${CMAKE_INSTALL_DOCDIR}/docs
 )
+
+if(OPENPUZZLE_ENABLE_VANITY)
+    install(
+        FILES "${OPENPUZZLE_VANITY_LICENSE}"
+        DESTINATION ${CMAKE_INSTALL_DOCDIR}/third-party/OpenPuzzle-Vanity
+        RENAME LICENSE
+    )
+endif()
 
 install(
     FILES
@@ -725,7 +803,7 @@ set(CPACK_PACKAGE_VENDOR "OpenPuzzle")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(
     CPACK_PACKAGE_DESCRIPTION_SUMMARY
-    "Continuous OpenPuzzle client with automatic GPU backend selection"
+    "Continuous OpenPuzzle client with BitCrack, Vanity, KeyHunt and Kangaroo routing"
 )
 set(
     CPACK_PACKAGE_FILE_NAME

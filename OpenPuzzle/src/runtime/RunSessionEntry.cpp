@@ -22,7 +22,7 @@ int RunSession::run(const std::vector<std::string>& args) const {
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
     return vanityPreview::runLocalSessionRoute(args);
 #else
-    std::cerr << "Vanity is experimental: production assignments are not enabled.\nNo assignment requested.\n";
+    std::cerr << "Vanity support is unavailable in this build.\nNo assignment requested.\n";
     return 1;
 #endif
   }

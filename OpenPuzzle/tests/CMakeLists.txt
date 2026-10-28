@@ -121,7 +121,7 @@ if(TARGET OpenPuzzleUi)
         COMMAND UiThermalHistoryTests
     )
 
-    if(OPENPUZZLE_ENABLE_VANITY_PREVIEW)
+    if(OPENPUZZLE_ENABLE_VANITY)
         add_executable(VanityPanelTests ui/VanityPanelTests.cpp ../src/ui/VanityPanel.cpp ../src/ui/UiTheme.cpp)
         target_include_directories(VanityPanelTests PRIVATE ../include ../src/ui)
         target_link_libraries(VanityPanelTests PRIVATE Qt6::Widgets)
@@ -180,7 +180,7 @@ if(TARGET OpenPuzzleUi)
         COMMAND UiControlTests
     )
 
-    if(OPENPUZZLE_ENABLE_VANITY_PREVIEW)
+    if(OPENPUZZLE_ENABLE_VANITY)
         get_target_property(_vanity_ui_sources UiControlTests SOURCES)
         list(REMOVE_ITEM _vanity_ui_sources ui/UiControlTests.cpp)
         add_executable(UiVanityIntegrationTests ui/UiVanityIntegrationTests.cpp
@@ -2189,6 +2189,17 @@ add_dependencies(
     ToolManagerTests
     OpenPuzzleBundledEngines
 )
+
+if(OPENPUZZLE_ENABLE_VANITY)
+    target_compile_definitions(
+        ToolManagerTests
+        PRIVATE OPENPUZZLE_TEST_VANITY=1
+    )
+    add_dependencies(
+        ToolManagerTests
+        OpenPuzzleVanityAdapter
+    )
+endif()
 
 add_test(
     NAME ToolManagerTests

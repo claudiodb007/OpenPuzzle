@@ -135,7 +135,7 @@ class Tests(unittest.TestCase):
 
     def test_log_corruption_or_terminal_tail_never_proves_completion(self):
         self.start();self.assertEqual(self.finished(),0);log=self.workspace/'vanity.log'
-        with log.open('a') as stream:stream.write('OPV_CLIENT PROGRESS 1\n')
+        with log.open('a') as stream:stream.write('OPV_CLIENT PROGRESS 1 elapsed_us=1\n')
         self.assertFalse(self.inspect()['proof'])
 
     def test_missing_native_attempt_proof_never_completes(self):

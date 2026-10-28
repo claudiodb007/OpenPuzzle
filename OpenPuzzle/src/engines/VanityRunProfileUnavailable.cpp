@@ -3,8 +3,8 @@
 namespace openpuzzle {
 namespace {[[noreturn]] void unavailable(){throw std::runtime_error("Vanity common routing is not included in this build");}}
 bool VanityRunProfile::configured(){return false;}
-VanityRunProfile VanityRunProfile::load(){unavailable();}
-void VanityRunProfile::requireLocalServer(const std::string&){unavailable();}
+VanityRunProfile VanityRunProfile::load(int){unavailable();}
+void VanityRunProfile::requireServer(const std::string&){unavailable();}
 std::uint64_t VanityRunProfile::maximumKeys()const{unavailable();}
 std::uint64_t VanityRunProfile::requestedKeys(int)const{unavailable();}
 void VanityRunProfile::validateHardware(int,bool)const{unavailable();}

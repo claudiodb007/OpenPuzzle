@@ -10,12 +10,14 @@
 namespace openpuzzle {
 struct VanityRunProfile {
   VanityEngineConfiguration executables;
-  std::string uuid,gpu,driver,fingerprint;
-  unsigned grid=0;
+  std::string gpu,fingerprint,uuid,driver;
+  int device=0;
+  unsigned grid=32;
   double planningMKeys=0,powerLimit=0;
+  bool localOnly=false;
   static bool configured();
-  static VanityRunProfile load();
-  static void requireLocalServer(const std::string& server);
+  static VanityRunProfile load(int device=0);
+  static void requireServer(const std::string& server);
   std::uint64_t maximumKeys() const;
   std::uint64_t requestedKeys(int minutes) const;
   void validateHardware(int device,bool requireIdle) const;

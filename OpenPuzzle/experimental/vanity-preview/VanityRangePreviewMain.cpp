@@ -135,6 +135,7 @@ int main(int argc,char** argv) {
   auto solutions=attempt/"solutions.txt";
   std::ofstream log(attempt/"engine.log");fs::permissions(attempt/"engine.log",fs::perms::owner_read|fs::perms::owner_write);
   status="running";publish();
+  const auto executionStarted=std::chrono::steady_clock::now();
   std::string command="exec "+quote(engine.string());
   for(const auto& a:std::vector<std::string>{targetMode?"--target-file":"--synthetic-only",protocol.plan.start,std::to_string(protocol.plan.count),std::to_string(plan.blocks),targets.string(),solutions.string(),mode,std::to_string(getpid())})command+=" "+quote(a);
   bool bad=false,stopRequested=false;std::string error;
@@ -151,7 +152,12 @@ int main(int argc,char** argv) {
     if(bad)return;
     try {
       protocol.consume(line);checked=resumed+protocol.checked;
-      if(line.rfind("OPV1 PROGRESS ",0)==0) {publish();emit("OPV_CLIENT PROGRESS "+std::to_string(checked));}
+      if(line.rfind("OPV1 PROGRESS ",0)==0) {
+        publish();
+        const auto elapsed=std::max<std::int64_t>(1,std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now()-executionStarted).count());
+        emit("OPV_CLIENT PROGRESS "+std::to_string(checked)+" elapsed_us="+std::to_string(elapsed));
+      }
     } catch(const std::exception& e){bad=true;error=e.what();}
   },900,shouldStop);
   if(bad)status="faulted";

@@ -41,15 +41,9 @@ AdaptiveProfileUpdater::update(
       state.backend,
       state.engine);
 
-  if (!existing) {
-    result.error =
-        "Managed GPU profile was not found";
-    return result;
-  }
-
-  if (existing->blocks != state.blocks ||
+  if (existing && (existing->blocks != state.blocks ||
       existing->threads != state.threads ||
-      existing->points != state.points) {
+      existing->points != state.points)) {
     result.error =
         "Completed launch does not match the managed GPU profile";
     return result;
@@ -57,7 +51,7 @@ AdaptiveProfileUpdater::update(
 
   const AdaptiveCalibration calibration;
   const auto calibrated = calibration.calibrate(
-      existing->averageSpeed,
+      existing ? existing->averageSpeed : 0.0,
       speedSamples);
 
   result.sustainedSpeed =
@@ -73,7 +67,17 @@ AdaptiveProfileUpdater::update(
     return result;
   }
 
-  auto updated = *existing;
+  GpuProfileRecord updated;
+  if (existing) {
+    updated = *existing;
+  } else {
+    updated.gpuName = state.gpuName;
+    updated.backend = state.backend;
+    updated.engine = state.engine;
+    updated.blocks = state.blocks;
+    updated.threads = state.threads;
+    updated.points = state.points;
+  }
   updated.averageSpeed =
       calibrated.calibratedPlanningSpeed;
 

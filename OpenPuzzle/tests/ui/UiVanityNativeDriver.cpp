@@ -3,6 +3,8 @@
 #include <QComboBox>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFrame>
+#include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
@@ -17,6 +19,7 @@ namespace {
 template<class T>T* control(MainWindow& w,const char* id){for(auto* p:w.findChildren<T*>())if(p->property("controlId").toString()==id)return p;assert(false);return nullptr;}
 bool until(const std::function<bool()>& f){QElapsedTimer t;t.start();do{QApplication::processEvents();if(f())return true;QThread::msleep(10);}while(t.elapsed()<20000);return f();}
 qulonglong checked(const QString& path){QFile f(path+"/vanity-native/checkpoint.txt");if(!f.open(QIODevice::ReadOnly))return 0;auto parts=f.readAll().simplified().split(' ');return parts.size()==9?parts[6].toULongLong():0;}
+QString metric(MainWindow& w,const QString& name){for(auto* frame:w.findChildren<QFrame*>("Metric")){auto labels=frame->findChildren<QLabel*>();QString title,value;for(auto* label:labels){if(label->objectName()=="MetricName")title=label->text();else if(label->objectName()=="MetricValue")value=label->text();}if(title==name)return value;}return {};}
 }
 int main(int argc,char** argv){
  QApplication app(argc,argv);app.setApplicationName("OpenPuzzle");app.setOrganizationName("OpenPuzzle Project");
@@ -28,6 +31,7 @@ int main(int argc,char** argv){
  if(phase=="resume-safe")assert(start->text().contains("Resume"));
  auto prior=checked(workspace);start->click();
  assert(until([&]{return control<QPushButton>(w,"stop")->isEnabled()&&checked(workspace)>prior;}));
+ assert(until([&]{const auto speed=metric(w,"Speed");return speed!="—"&&speed.endsWith(" MKey/s");}));
  if(phase=="pause"){
   QTimer::singleShot(0,[]{for(auto* p:QApplication::topLevelWidgets())if(auto* box=qobject_cast<QMessageBox*>(p))box->button(QMessageBox::Yes)->click();});
   control<QPushButton>(w,"stop")->click();assert(until([&]{return start->isEnabled()&&start->text().contains("Resume")&&!QFile::exists(data+"/runtime.pid");}));

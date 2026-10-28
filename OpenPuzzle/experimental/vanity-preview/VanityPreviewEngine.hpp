@@ -4,7 +4,6 @@
 #include "openpuzzle/engines/common/EngineFactory.hpp"
 #include "openpuzzle/engines/common/EngineRegistry.hpp"
 #include "openpuzzle/runtime/VanityRangeProtocol.hpp"
-#include <chrono>
 #include <filesystem>
 namespace openpuzzle::vanityPreview {
 struct AdapterConfig {
@@ -30,7 +29,6 @@ class VanityPreviewProgressParser final:public EngineOutputParser {
  public:
   explicit VanityPreviewProgressParser(uint64_t total,uint64_t resumed=0);
   std::optional<ExecutionProgress> parseLine(const std::string&)override;
- private:uint64_t total_,checked_,resumed_;bool terminal_=false;
-  std::chrono::steady_clock::time_point start_=std::chrono::steady_clock::now();
+ private:uint64_t total_,checked_,resumed_,elapsedUs_=0;bool terminal_=false;
 };
 }
