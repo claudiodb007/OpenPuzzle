@@ -367,7 +367,7 @@ MainWindow::~MainWindow() {
 
 void MainWindow::buildInterface() {
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
-  setWindowTitle(qEnvironmentVariable("OPENPUZZLE_VANITY_COORDINATOR")=="1"?"OpenPuzzle — Vanity RunSession preview 0.12.0":"OpenPuzzle — Vanity preview 0.10.1");
+  setWindowTitle(qEnvironmentVariableIsSet("OPENPUZZLE_VANITY_COMMON_PROFILE")?"OpenPuzzle — Vanity common runtime preview 0.20.0":qEnvironmentVariable("OPENPUZZLE_VANITY_COORDINATOR")=="1"?"OpenPuzzle — Vanity RunSession preview 0.12.0":"OpenPuzzle — Vanity preview 0.10.1");
 #else
   setWindowTitle("OpenPuzzle");
 #endif
@@ -538,7 +538,7 @@ void MainWindow::buildInterface() {
   mode_->addItem(QString(), static_cast<int>(RunMode::KeyHuntCpu));
   mode_->addItem(QString(), static_cast<int>(RunMode::KangarooCuda));
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
-  mode_->addItem("Vanity / CUDA",100);
+  mode_->addItem("Vanity / CUDA",qEnvironmentVariableIsSet("OPENPUZZLE_VANITY_COMMON_PROFILE") ? static_cast<int>(RunMode::VanityCuda) : 100);
 #endif
 
   device_ = new QSpinBox;
@@ -1143,10 +1143,13 @@ void MainWindow::updateActionAvailability() {
   const bool occupied = active_ || identityUnavailable_;
   const bool idle = statusAvailable_ && !occupied && !solutionFound_ && ready;
   const bool local = vanitySelected();
-  bool canStart=idle, canBenchmark=idle && !(gpuControls_ && gpuControls_->applying());
+  bool canStart=idle, canBenchmark=idle && selectedRunMode()!=RunMode::VanityCuda && !(gpuControls_ && gpuControls_->applying());
   bool canSafe=ready && occupied && !kangarooActive_;
   bool canStop=(benchmarkRunning_ && !benchmarkCancelRequested_) || (ready && occupied);
   QString startText=t("start"),stopText=t(benchmarkRunning_ ? "linux_benchmark_cancel" : "stop_now");
+  #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  if(vanityPaused_ && selectedRunMode()==RunMode::VanityCuda) startText=vanity_->caption(22);
+#endif
   QString safeHint=kangarooActive_ ? t("kangaroo_stop_hint") : t("safe_stop_hint");
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
   const bool hostAllowed=statusAvailable_&&!occupied&&!solutionFound_&&cliAvailable_&&!launchPending_&&!commandProcess_&&!(gpuControls_&&gpuControls_->applying());
@@ -1166,14 +1169,14 @@ void MainWindow::updateActionAvailability() {
   benchmark_->setEnabled(canBenchmark);
   if (gpuControls_) gpuControls_->setEnabled(!benchmarkRunning_ && !vanityBusy());
   refresh_->setEnabled(!busy);
-  selfTest_->setEnabled(idle && !local);
+  selfTest_->setEnabled(idle && !local && selectedRunMode()!=RunMode::VanityCuda);
   installKangaroo_->setEnabled(idle);
   doctor_->setEnabled(ready);updates_->setEnabled(ready);audit_->setEnabled(ready);
   mode_->setEnabled(idle);
   puzzle_->setEnabled(idle && !local);kangarooPuzzle_->setEnabled(idle);
   device_->setEnabled(idle && !local);openclDevice_->setEnabled(idle);
   cpuThreads_->setEnabled(idle);rusticlRadeonsi_->setEnabled(idle);
-  autoStart_->setEnabled(idle && !local);
+  autoStart_->setEnabled(idle && !local && selectedRunMode()!=RunMode::VanityCuda);
   updateThermalControlState();
   const QString busyHint = !statusAvailable_ ? t("status_unavailable_hint")
       : identityUnavailable_ ? t("identity_unavailable_message") : active_ ? t("busy_active") : QString();
@@ -1287,12 +1290,19 @@ void MainWindow::handleStatusResult(int exitCode, bool normalExit) {
   updateThermalAlerts(result);
 
   active_ = false;
+  vanityPaused_ = false;
   identityUnavailable_ = false;
   kangarooActive_ = false;
   QString solutionAssignmentId;
   for (const auto& slot : runtimeSlots) {
     const bool slotRunning = slotActive(slot);
     const bool slotUnknown = slotIdentityUnavailable(slot);
+    if(slot.fields.value("Engine").compare("Vanity",Qt::CaseInsensitive)==0 && !slotRunning && !slotUnknown &&
+        slot.fields.value("Status").compare("stopped",Qt::CaseInsensitive)==0) {
+      vanityPaused_=true;
+      auto index=mode_->findData(static_cast<int>(RunMode::VanityCuda));
+      if(index>=0){mode_->setCurrentIndex(index);puzzle_->setValue(slot.fields.value("Puzzle").toInt());}
+    }
     active_ = active_ || slotRunning;
     identityUnavailable_ = identityUnavailable_ || slotUnknown;
     kangarooActive_ = kangarooActive_ ||
@@ -2081,6 +2091,7 @@ void MainWindow::runCommand(
 }
 
 void MainWindow::runBenchmark() {
+  if(selectedRunMode()==RunMode::VanityCuda) return;
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
   if(vanitySelected()){vanity_->requestBenchmark();return;}
 #endif

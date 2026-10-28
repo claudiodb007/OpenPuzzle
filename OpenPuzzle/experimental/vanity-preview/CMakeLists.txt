@@ -6,6 +6,7 @@ target_sources(OpenPuzzleCore PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/VanityCommand.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/VanityPreviewEngine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/VanityCommonEngine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/VanityRunProfile.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LocalAssignmentMain.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/HttpAssignmentMain.cpp)
 target_include_directories(OpenPuzzleCore PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -108,3 +109,10 @@ add_test(NAME VanityCommonRuntimeTests COMMAND ${Python3_EXECUTABLE} -B
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/CommonRuntimeTests.py
     $<TARGET_FILE:VanityCommonRuntimeDriver> $<TARGET_FILE:OpenPuzzleVanityAdapter>)
 set_tests_properties(VanityCommonRuntimeTests PROPERTIES TIMEOUT 180)
+
+add_test(NAME VanityCommonRouteTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/CommonRouteTests.py $<TARGET_FILE:OpenPuzzle> $<TARGET_FILE:OpenPuzzleVanityAdapter>)
+set_tests_properties(VanityCommonRouteTests PROPERTIES TIMEOUT 180)
+add_test(NAME VanityCommonProfileTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/CommonProfileTests.py $<TARGET_FILE:OpenPuzzle>)
+set_tests_properties(VanityCommonProfileTests PROPERTIES TIMEOUT 60)

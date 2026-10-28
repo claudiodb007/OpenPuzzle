@@ -11,6 +11,7 @@ enum class RunMode {
   BitCrackCudaOpencl,
   KeyHuntCpu,
   KangarooCuda,
+  VanityCuda,
 };
 
 struct RunSelection {

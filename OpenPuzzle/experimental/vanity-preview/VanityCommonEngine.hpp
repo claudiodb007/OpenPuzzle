@@ -31,4 +31,5 @@ private:
 
 bool vanityCommonCompletionProof(const std::string& workspace, const std::string& expected);
 bool vanityCommonProgressWithinCoverage(const std::string& workspace, const std::string& checked);
+std::optional<std::uint64_t> vanityCommonCheckedCoverage(const std::string& workspace);
 }

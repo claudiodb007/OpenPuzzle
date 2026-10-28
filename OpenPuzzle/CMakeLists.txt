@@ -395,6 +395,8 @@ add_dependencies(OpenPuzzle OpenPuzzleBundledEngines)
 option(OPENPUZZLE_ENABLE_VANITY_PREVIEW "Enable local experimental Vanity CLI/profile validation (no production assignments)" OFF)
 if(OPENPUZZLE_ENABLE_VANITY_PREVIEW)
     add_subdirectory(experimental/vanity-preview)
+else()
+    target_sources(OpenPuzzleCore PRIVATE src/engines/VanityRunProfileUnavailable.cpp)
 endif()
 
 option(

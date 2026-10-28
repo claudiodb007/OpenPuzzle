@@ -107,5 +107,8 @@ int main() {
   assert(rejected({
       71, static_cast<RunMode>(99), 0, 0, 1, false}));
 
+  assert(RunCommandBuilder::build({69,RunMode::VanityCuda,2})==std::vector<std::string>({"run","69","--engine","vanity","--backend","cuda","--device","2"}));
+  assert(rejected({64,RunMode::VanityCuda}));assert(rejected({81,RunMode::VanityCuda}));
+  assert(rejected({69,RunMode::VanityCuda,-1}));
   return 0;
 }

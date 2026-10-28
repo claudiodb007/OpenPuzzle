@@ -16,6 +16,8 @@
 #include "openpuzzle/core/CommandContext.hpp"
 #include "openpuzzle/core/commands/BenchmarkCommand.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
+#include "openpuzzle/engines/VanityRunProfile.hpp"
+#include "openpuzzle/core/AtomicFile.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/hardware/GpuTelemetry.hpp"
 #include "openpuzzle/hardware/GpuThermalPolicy.hpp"
@@ -1241,6 +1243,7 @@ int stopExecution() {
   }
 
   if (!processIdentityMatches(*state)) {
+    if(state->engine=="Vanity"){std::cout << "Vanity checkpoint/state preserved for resume.\n";return 0;}
     client::ClientStateStore::remove();
 
     std::cout << "Execution is no longer running.\n"
@@ -1257,7 +1260,8 @@ int stopExecution() {
     return 1;
   }
 
-  client::ClientStateStore::remove();
+  if(state->engine!="Vanity") client::ClientStateStore::remove();
+  else std::cout << "Vanity checkpoint/state preserved for resume.\n";
 
   std::cout << "Execution stopped.\n"
             << "Assignment......... " << state->assignmentId << '\n';
@@ -2363,7 +2367,7 @@ int RunSession::runOrdinary(
       auto engine = args[i + 1];
       std::transform(engine.begin(), engine.end(), engine.begin(),
                      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-      if (engine == "vanity" || engine == "vanity-preview") {
+      if (engine == "vanity-preview" || (engine == "vanity" && !VanityRunProfile::configured())) {
         std::cerr << "Vanity is experimental: production assignments are not enabled.\n"
                   << "Use openpuzzle vanity-preview help for local profile and validation commands.\n"
                   << "No assignment requested.\n";
@@ -2378,6 +2382,30 @@ int RunSession::runOrdinary(
       std::cerr << "OpenPuzzle argument validation failed\n"
                 << "Problem............ " << error.what() << '\n'
                 << "Assignment......... not requested\n";
+      return 1;
+    }
+  }
+  bool commonVanity=false;
+  if (!args.empty() && (args.front()=="run" || args.front()=="claim")) {
+    auto selected=getArgument(args,"--engine");
+    std::transform(selected.begin(),selected.end(),selected.begin(),[](unsigned char c){return std::tolower(c);});
+    auto state=client::ClientStateStore::load();
+    commonVanity=selected=="vanity" || (state && state->engine=="Vanity");
+    for(std::size_t i=0;i+1<args.size();++i) if(args[i]=="--engine" && normalizedGpuName(args[i+1])=="vanity") commonVanity=true;
+    if(commonVanity) try {
+      for(const auto* flag:{"--engine","--backend","--device","--server","--duration-minutes","--blocks","--threads","--points"})
+        if(std::count(args.begin(),args.end(),flag)>1) throw std::runtime_error("Duplicate Vanity launch option");
+      auto profile=VanityRunProfile::load();
+      VanityRunProfile::requireLocalServer(serverUrl(args));
+      if(args.front()!="run" || selected!="vanity" || selectedBackend(args)!="cuda" ||
+          hasArgument(args,"--devices") || hasArgument(args,"--with-cpu") || hasArgument(args,"--with-opencl") ||
+          hasArgument(args,"--supervised-gpu-device") || hasArgument(args,"--rusticl-enable"))
+        throw std::runtime_error("Vanity requires one explicit CUDA run and the measured physical GPU");
+      if(cliIntegerArgument(args,{"--blocks","--b"},profile.grid)!=int(profile.grid) ||
+         cliIntegerArgument(args,{"--threads","--t"},256)!=256 || cliIntegerArgument(args,{"--points","--p"},1024)!=1024)
+        throw std::runtime_error("Vanity geometry differs from measured profile");
+    } catch(const std::exception& error) {
+      std::cerr << "Vanity start blocked: " << error.what() << "\nNo assignment requested; local evidence preserved.\n";
       return 1;
     }
   }
@@ -2459,6 +2487,11 @@ int RunSession::runOrdinary(
       hasArgument(args, "--dry-run") ||
       hasArgument(args, "--preflight-only") ||
       hasArgument(args, "--once")) {
+    if(commonVanity && hasArgument(args,"--once") && !hasArgument(args,"--dry-run") && !hasArgument(args,"--preflight-only")) {
+      if(!ClientRuntimeControl::acquire()) {std::cerr << "OpenPuzzle runtime already owned/unavailable\n";return 1;}
+      struct Owner {~Owner(){ClientRuntimeControl::clearSafeStop();ClientRuntimeControl::release();}} owner;
+      return runOnce(args).exitCode;
+    }
     return runOnce(args).exitCode;
   }
 
@@ -2526,6 +2559,14 @@ ClientIterationResult RunSession::runOnce(
   const std::string server =
       serverUrl(args);
 
+  std::optional<VanityRunProfile> vanityProfile;
+  auto requestedCommonEngine=getArgument(args,"--engine");
+  std::transform(requestedCommonEngine.begin(),requestedCommonEngine.end(),requestedCommonEngine.begin(),[](unsigned char c){return std::tolower(c);});
+  if(requestedCommonEngine=="vanity") {
+    vanityProfile=VanityRunProfile::load();
+    VanityRunProfile::requireLocalServer(server);
+  }
+
   /*
    * Recuperar primeiro qualquer execução local
    * pertencente a uma sessão anterior.
@@ -2533,6 +2574,60 @@ ClientIterationResult RunSession::runOnce(
   if (subcommand == "run") {
     const auto existing = client::ClientStateStore::load();
     bool rejectedKangarooRecovery = false;
+    if(existing && existing->engine=="Vanity") {
+      if(!vanityProfile) throw std::runtime_error("Explicit Vanity profile required for recovery");
+      vanityProfile->requireWorkspaceBinding(existing->workspace,server);
+      if(hasArgument(args,"--dry-run") || hasArgument(args,"--preflight-only")) {
+        std::cout << "Vanity recovery preview; no assignment request or launch.\n";return 0;
+      }
+      if(client::ExecutionSyncService().inspect().identityUnavailable)
+        throw std::runtime_error("Vanity process identity unavailable; state preserved");
+      if(!processIdentityMatches(*existing) && !client::ExecutionSyncService::solutionFile(existing->workspace,existing->engine)) {
+        auto metadata=PuzzleMetadataCatalog::load(existing->puzzle);
+        if(!metadata || selectedPuzzle(args)!=existing->puzzle) throw std::runtime_error("Vanity recovery puzzle differs");
+        client::RangeAssignment assignment;assignment.assignmentId=existing->assignmentId;assignment.puzzle=existing->puzzle;
+        assignment.rangeId=existing->rangeId;assignment.target=existing->target;assignment.start=existing->start;assignment.end=existing->end;assignment.searchMode="linear";
+        vanityProfile->validateAssignment(assignment,*metadata);
+        auto checked=vanityProfile->prepareRecovery(*existing,assignmentWorkspace(existing->assignmentId),server);
+        auto expected=client::ExecutionSyncService::assignedKeyCount(existing->start,existing->end).value_or("");
+        const bool complete=client::ExecutionSyncService::hasCompletionProof(existing->workspace,existing->engine,expected);
+        if(!complete && std::to_string(checked)==expected) throw std::runtime_error("Vanity final native evidence requires review");
+        client::HttpRangeClient lease(server);
+        // A lost completion response may mean the server already finalized the lease.
+        // Its existing idempotent complete endpoint is the authority for this case.
+        if(!complete && !lease.progress(existing->assignmentId,existing->clientId,vanityProfile->planningMKeys,std::to_string(checked))) {
+          auto status=client::ExecutionSyncService::classifyProgressError(lease.lastErrorCode());
+          if(status==client::AssignmentUploadStatus::TemporaryFailure) return ClientIterationResult::retry(lease.lastError());
+          std::cerr << "Vanity lease refused; checkpoint and state preserved: " << lease.lastError() << '\n';return 1;
+        }
+        if(complete) {
+          if(!writePrivateFileAtomically(std::filesystem::path(existing->workspace)/"exit.code","0\n"))
+            throw std::runtime_error("Cannot adopt native Vanity completion");
+        } else {
+          vanityProfile->validateHardware(existing->device,true);
+          EngineLaunchRequest launch;launch.engine="Vanity";launch.backend="CUDA";launch.device=0;
+          launch.blocks=vanityProfile->grid;launch.threads=256;launch.points=1024;launch.workspace=existing->workspace;
+          launch.startKey=existing->start;launch.endKey=existing->end;launch.targets={existing->target};
+          EngineManager manager(vanityProfile->executables);
+          auto engine=manager.create("vanity",vanityProfile->executables.engine);
+          if(!engine) throw std::runtime_error("Common Vanity engine unavailable");
+          StartExecutionRequest request;request.workspace=existing->workspace;request.command=engine->buildCommand(launch);
+          auto marker=std::filesystem::path(existing->workspace)/"exit.code";
+          if(std::filesystem::exists(marker)) {
+            auto archive=std::filesystem::path(existing->workspace)/("exit-before-resume-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+            std::filesystem::rename(marker,archive);
+          }
+          auto handle=BackgroundExecutionLauncher().start(request);auto state=*existing;
+          state.pid=handle.pid;state.bootId=client::ClientStateStore::currentBootId();state.command=request.command;
+          state.processStartTime=LinuxProcessIdentity::startTime(handle.pid).value_or(0);
+          if(state.bootId.empty() || !state.processStartTime || !client::ClientStateStore::save(state)) {
+            ExecutionStopper().stop(handle.workspace);throw std::runtime_error("Cannot persist resumed Vanity identity");
+          }
+        }
+        std::cout << "Resuming same Vanity assignment: " << existing->assignmentId << " checked=" << checked << '\n';
+        return monitoredResult(ClientRuntime().run(server,existing->assignmentId,existing->clientId,existing->workspace));
+      }
+    }
 
     if (existing &&
         processIdentityMatches(*existing)) {
@@ -2819,11 +2914,17 @@ ClientIterationResult RunSession::runOnce(
       !requestedEngine.empty() &&
       requestedEngine != "kangaroo" &&
       requestedEngine != "bitcrack" &&
-      requestedEngine != "keyhunt") {
+      requestedEngine != "keyhunt" && requestedEngine != "vanity") {
     std::cerr
         << "Unsupported engine: " << requestedEngine << '\n'
         << "Use kangaroo, bitcrack or keyhunt.\n";
     return 1;
+  }
+
+  const bool vanityWorkload=requestedEngine=="vanity";
+  if(vanityWorkload) {
+    if(!vanityProfile || !puzzleMetadata) throw std::runtime_error("Explicit Vanity puzzle/profile required");
+    vanityProfile->validatePuzzle(*puzzleMetadata);
   }
 
   const bool puzzleSupportsKangaroo =
@@ -3047,7 +3148,7 @@ ClientIterationResult RunSession::runOnce(
   if (subcommand == "run" &&
       initializeClient &&
       runBackend != "cpu" &&
-      !supervisedGpuDevice) {
+      !supervisedGpuDevice && !vanityWorkload) {
     FirstRunSetup setup;
 
     if (!setup.ensureConfigured()) {
@@ -3082,7 +3183,7 @@ ClientIterationResult RunSession::runOnce(
     if (
         initializeClient &&
         !dryRun &&
-        !kangarooWorkload &&
+        !kangarooWorkload && !vanityWorkload &&
         runBackend != "cpu") {
       RunBenchmarkPreparationDependencies
           preparationDependencies;
@@ -3114,6 +3215,8 @@ ClientIterationResult RunSession::runOnce(
       }
     }
   }
+
+  if(vanityWorkload) vanityProfile->validateHardware(runDevice,true);
 
   if (
       subcommand == "run" &&
@@ -3160,9 +3263,9 @@ ClientIterationResult RunSession::runOnce(
       subcommand == "run" &&
       runBackend != "cpu") {
     const auto measured =
-        kangarooWorkload
+        vanityWorkload ? std::optional<double>{vanityProfile->planningMKeys} : (kangarooWorkload
             ? std::optional<double>{}
-            : measuredSpeedMKeys(args);
+            : measuredSpeedMKeys(args));
 
     if (measured) {
       speedMKeys = *measured;
@@ -3223,6 +3326,11 @@ ClientIterationResult RunSession::runOnce(
    * Não regista heartbeat, não reclama trabalho e
    * não cria leases ou assignments no servidor.
    */
+  if(subcommand=="run" && dryRun && vanityWorkload) {
+    std::cout << "Engine............. Vanity\nMeasured GPU....... " << vanityProfile->uuid
+              << "\nRequested keys..... " << vanityProfile->requestedKeys(targetDurationMinutes)
+              << "\nDry run only. No assignment was requested.\n";return 0;
+  }
   if (subcommand == "run" && dryRun) {
     if (runBackend == "cpu") {
       const int cpuThreads =
@@ -3331,7 +3439,8 @@ ClientIterationResult RunSession::runOnce(
           runBackend,
           kangarooWorkload
               ? "kangaroo"
-              : "linear");
+              : "linear",
+          vanityWorkload ? vanityProfile->requestedKeys(targetDurationMinutes) : 0);
 
   if (claimResult.unavailable()) {
     if (subcommand == "claim") {
@@ -3369,6 +3478,8 @@ ClientIterationResult RunSession::runOnce(
 
   const auto assignment =
       claimResult.assignment;
+
+  if(vanityWorkload) vanityProfile->validateAssignment(*assignment,*puzzleMetadata);
 
   printAssignment(*assignment);
 
@@ -3421,13 +3532,10 @@ ClientIterationResult RunSession::runOnce(
   const std::string expectedEngine =
       kangarooAssignment
           ? "kangaroo"
-          : (cpuBackend ? "keyhunt" : "bitcrack");
+          : (vanityWorkload ? "vanity" : (cpuBackend ? "keyhunt" : "bitcrack"));
 
   const std::string engine =
-      getArgument(
-          args,
-          "--engine",
-          expectedEngine);
+      requestedEngine.empty() ? expectedEngine : requestedEngine;
 
   if (engine != expectedEngine) {
     throw std::runtime_error(
@@ -3444,7 +3552,7 @@ ClientIterationResult RunSession::runOnce(
           ? 0
           : runDevice;
 
-  int engineDevice = device;
+  int engineDevice = vanityWorkload ? 0 : device;
   if (
       supervisedGpuDevice &&
       runBackend == "cuda") {
@@ -3479,6 +3587,8 @@ ClientIterationResult RunSession::runOnce(
       hasArgument(args, "--threads") || hasArgument(args, "--t") ||
       hasArgument(args, "--points") || hasArgument(args, "--p");
 
+  if(vanityWorkload){blocks=vanityProfile->grid;threads=256;points=1024;}
+
   std::string hardwareLabel = "CPU processors";
   std::string hardwareValue =
       std::to_string(
@@ -3496,7 +3606,7 @@ ClientIterationResult RunSession::runOnce(
     hardwareValue = gpu.name;
   }
 
-  if (!cpuBackend && !kangarooAssignment && !manualProfile) {
+  if (!cpuBackend && !kangarooAssignment && !manualProfile && !vanityWorkload) {
     GpuProfileManager profiles(context.db);
 
     const auto gpu =
@@ -3529,7 +3639,9 @@ ClientIterationResult RunSession::runOnce(
 
   std::string executable;
 
-  if (kangarooAssignment) {
+  if(vanityWorkload) {
+    executable=vanityProfile->executables.engine;
+  } else if (kangarooAssignment) {
     const auto kangaroo =
         ToolManager::kangarooPath();
 
@@ -3611,7 +3723,7 @@ ClientIterationResult RunSession::runOnce(
   capability.engine =
       kangarooAssignment
           ? "Kangaroo"
-          : (cpuBackend ? "KeyHunt" : "BitCrack");
+          : (vanityWorkload ? "Vanity" : (cpuBackend ? "KeyHunt" : "BitCrack"));
 
   capability.backend =
       cpuBackend
@@ -3641,7 +3753,8 @@ ClientIterationResult RunSession::runOnce(
           ? KangarooWalkSeed::generate()
           : std::string{};
 
-  EngineManager engineManager;
+  auto engineManager=vanityWorkload ? EngineManager(vanityProfile->executables) : EngineManager();
+  if(vanityWorkload) vanityProfile->bindWorkspace(workspace,server);
 
   ExecutionRequestBuilder builder(engineManager);
 
@@ -3730,7 +3843,7 @@ ClientIterationResult RunSession::runOnce(
   state.threads = threads;
   state.points = points;
   state.profileManaged =
-      !cpuBackend && !kangarooAssignment && !manualProfile;
+      !cpuBackend && !kangarooAssignment && !manualProfile && !vanityWorkload;
   state.gpuName =
       cpuBackend ? std::string{} : hardwareValue;
 

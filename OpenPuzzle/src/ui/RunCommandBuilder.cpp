@@ -12,6 +12,8 @@ bool RunCommandBuilder::supportsPuzzle(
     return false;
   }
 
+  if(mode==RunMode::VanityCuda) return puzzle>=65 && puzzle<=80;
+
   if (mode != RunMode::KangarooCuda) {
     return true;
   }
@@ -41,6 +43,7 @@ std::vector<std::string> RunCommandBuilder::build(
   case RunMode::BitCrackCudaOpencl:
   case RunMode::KeyHuntCpu:
   case RunMode::KangarooCuda:
+  case RunMode::VanityCuda:
     break;
   default:
     throw std::invalid_argument(
@@ -78,6 +81,10 @@ std::vector<std::string> RunCommandBuilder::build(
   if (selection.device < 0) {
     throw std::invalid_argument(
         "GPU device must be non-negative");
+  }
+
+  if(selection.mode==RunMode::VanityCuda) {
+    arguments.insert(arguments.end(),{"--engine","vanity","--backend","cuda","--device",std::to_string(selection.device)});return arguments;
   }
 
   if (selection.mode == RunMode::KangarooCuda) {

@@ -99,6 +99,9 @@ struct ClientRuntimeDependencies {
       const std::string &workspace)>
       finalKeysChecked;
 
+  // Optional: a stopped engine with resumable native evidence keeps its lease/state.
+  std::function<bool(const std::string& workspace)> preserveCheckpoint;
+
   std::function<bool()> removeState;
 
   std::function<bool()> hasState;

@@ -961,6 +961,13 @@ ExecutionSyncService::tick(
   const bool completed =
       exitCode == 0;
 
+  if (state->engine=="Vanity" && (!completed || !hasCompletionProof(
+          artifacts(*state),state->engine,assignedKeyCount(state->start,state->end).value_or("")))) {
+    result.checkpointPreserved=true;
+    result.completionError="Vanity checkpoint preserved for explicit resume/review";
+    return result;
+  }
+
   std::string finalKeysChecked =
       finalProgress
           ? finalProgress->keysChecked

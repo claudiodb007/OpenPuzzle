@@ -297,6 +297,18 @@ int main() {
     }
   }
 
+  {
+    std::string payload;int requests=0;
+    HttpRangeClient local("http://127.0.0.1:12345",[&](const auto&,const auto& body){++requests;payload=body;return HttpPostResult{200,json,{}};});
+    assert(local.claim("fixture",71,1,2500,"cuda","linear"));
+    assert(payload.find("requested_keys")==std::string::npos);
+    assert(local.claim("fixture",71,1,2500,"cuda","linear",68719476736ULL));
+    assert(payload.find("\"requested_keys\":68719476736")!=std::string::npos);
+    assert(!local.claim("fixture",71,1,2500,"cuda","kangaroo",1));
+    assert(!local.claim("fixture",71,1,2500,"cuda","linear",100000000000000001ULL));
+    assert(requests==2);
+  }
+
   std::cout
       << "HttpRangeClientTests passed\n";
 

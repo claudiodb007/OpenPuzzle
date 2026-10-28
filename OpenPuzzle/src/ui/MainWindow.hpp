@@ -148,6 +148,7 @@ private:
   bool benchmarkCancelRequested_ = false;
   QStringDecoder benchmarkDecoder_{QStringDecoder::Utf8};
   bool active_ = false;
+  bool vanityPaused_ = false;
   bool identityUnavailable_ = false;
   bool statusAvailable_ = false;
   bool statusTimedOut_ = false;

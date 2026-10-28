@@ -416,6 +416,8 @@ int ClientRuntime::run(
       return SolutionFoundExitCode;
       }
 
+      if (finalSync.completionUploaded && finalSync.stateRemoved) return 0;
+
       if (finalSync.hasProgress &&
           finalSync.progressUploaded) {
         std::cout
@@ -440,6 +442,11 @@ int ClientRuntime::run(
 
       std::cout
           << "Search engine....... stopped\n";
+
+      if (dependencies_.preserveCheckpoint && dependencies_.preserveCheckpoint(workspace)) {
+        std::cout << "Checkpoint......... preserved\nAssignment......... paused; run again to resume\n";
+        return 130;
+      }
 
       const std::string finalKeysChecked =
           dependencies_.finalKeysChecked(
@@ -513,6 +520,11 @@ int ClientRuntime::run(
 
     const auto result =
         dependencies_.sync(serverUrl);
+
+    if (result.checkpointPreserved) {
+      std::cerr << "Checkpoint......... preserved; explicit resume/review required\n";
+      return 130;
+    }
 
     if (!result.hasState) {
       /*

@@ -33,6 +33,7 @@ struct ExecutionSyncResult {
    * Esta situação nunca representa conclusão.
    */
   bool interrupted = false;
+  bool checkpointPreserved = false;
 
   bool hasProgress = false;
   ExecutionProgress progress;

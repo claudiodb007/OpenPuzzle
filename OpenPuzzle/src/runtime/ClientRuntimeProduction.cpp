@@ -115,12 +115,18 @@ ClientRuntime::productionDependencies(
       [](const std::string &workspace) {
         const auto progress =
             client::ExecutionSyncService::
-                latestProgress(workspace);
+                latestProgress(workspace,
+                    client::ClientStateStore::load().value_or(client::ClientExecutionState{}).engine);
 
         return progress
             ? progress->keysChecked
             : std::string{};
       };
+
+  dependencies.preserveCheckpoint = [](const std::string& workspace) {
+    auto state=client::ClientStateStore::load();
+    return state && state->engine=="Vanity" && state->workspace==workspace;
+  };
 
   dependencies.removeState =
       [] {
@@ -173,6 +179,15 @@ ClientRuntime::productionDependencies(
       [](std::chrono::seconds duration) {
         std::this_thread::sleep_for(duration);
       };
+
+  dependencies.wakeRequested = [notifiedPid=0]() mutable {
+    auto state=client::ClientStateStore::load();
+    if(!state || state->engine!="Vanity") return false;
+    if(state->pid==notifiedPid) return false;
+    auto result=client::ExecutionSyncService().inspect();
+    if(result.hasState && !result.running && !result.identityUnavailable) {notifiedPid=state->pid;return true;}
+    return false;
+  };
 
   dependencies.thermalPoll =
       [thermalObserver, protectionRequested = false]() mutable {

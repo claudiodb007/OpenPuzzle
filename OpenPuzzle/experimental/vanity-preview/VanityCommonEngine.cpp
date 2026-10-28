@@ -154,4 +154,9 @@ bool vanityCommonProgressWithinCoverage(const std::string& workspace,const std::
   auto root=fs::path(workspace);auto b=binding(root);
   return vanityPreview::decimal(checked)<=coverage(root/"vanity-native",b,false);
 }catch(...){return false;}}
+std::optional<std::uint64_t> vanityCommonCheckedCoverage(const std::string& workspace){try{
+  auto root=fs::path(workspace);auto b=binding(root);
+  if(!fs::exists(root/"vanity-native"))return 0;
+  return coverage(root/"vanity-native",b,false);
+}catch(...){return std::nullopt;}}
 }

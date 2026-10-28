@@ -8,6 +8,7 @@
 #include <optional>
 #include <functional>
 #include <string>
+#include <cstdint>
 
 namespace openpuzzle::client {
 
@@ -33,7 +34,8 @@ public:
       int targetDurationMinutes,
       double speedMKeys = 0.0,
       const std::string &backend = {},
-      const std::string &searchMode = "linear");
+      const std::string &searchMode = "linear",
+      std::uint64_t requestedKeys = 0);
 
   RangeClaimResult claimResult(
       const std::string &clientId,
@@ -41,7 +43,8 @@ public:
       int targetDurationMinutes,
       double speedMKeys = 0.0,
       const std::string &backend = {},
-      const std::string &searchMode = "linear");
+      const std::string &searchMode = "linear",
+      std::uint64_t requestedKeys = 0);
 
   bool complete(
       const std::string &assignmentId,

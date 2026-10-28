@@ -442,9 +442,7 @@ bool HttpRangeClient::reportSolution(
       << "curl"
       << " --silent"
       << " --show-error"
-      << " --location"
-      << " --post301"
-      << " --post302"
+      << (serverUrl_.starts_with("http://127.0.0.1:") ? " --noproxy '*' --max-redirs 0" : " --location --post301 --post302")
       << " --fail-with-body"
       << " --connect-timeout 10"
       << " --max-time 30"
@@ -573,9 +571,7 @@ bool HttpRangeClient::registerClient(const ClientRegistration &registration) {
   command << "curl"
           << " --silent"
           << " --show-error"
-          << " --location"
-          << " --post301"
-          << " --post302"
+          << (serverUrl_.starts_with("http://127.0.0.1:") ? " --noproxy '*' --max-redirs 0" : " --location --post301 --post302")
           << " --fail-with-body"
           << " --connect-timeout 10"
           << " --max-time 30"
@@ -779,9 +775,7 @@ bool HttpRangeClient::heartbeat(const ClientHeartbeat &heartbeat) {
   command << "curl"
           << " --silent"
           << " --show-error"
-          << " --location"
-          << " --post301"
-          << " --post302"
+          << (serverUrl_.starts_with("http://127.0.0.1:") ? " --noproxy '*' --max-redirs 0" : " --location --post301 --post302")
           << " --fail-with-body"
           << " --connect-timeout 10"
           << " --max-time 30"
@@ -837,7 +831,8 @@ HttpRangeClient::claim(
     int targetDurationMinutes,
     double speedMKeys,
     const std::string &backend,
-    const std::string &searchMode) {
+    const std::string &searchMode,
+    std::uint64_t requestedKeys) {
   lastError_.clear();
   lastErrorCode_.clear();
 
@@ -894,6 +889,11 @@ HttpRangeClient::claim(
   std::ostringstream request;
   request.imbue(std::locale::classic());
 
+  if(requestedKeys && (searchMode!="linear" || requestedKeys>100000000000000000ULL)) {
+    lastError_="Explicit requested_keys exceeds the linear API contract";
+    return std::nullopt;
+  }
+
   request << "{"
           << "\"client_id\":\"" << jsonEscape(clientId) << "\","
           << "\"puzzle\":" << puzzle << ","
@@ -905,6 +905,8 @@ HttpRangeClient::claim(
           << "\"target_duration_minutes\":" << targetDurationMinutes << ","
           << "\"speed_mkeys\":" << std::fixed << std::setprecision(6)
           << speedMKeys;
+
+  if(requestedKeys) request << ",\"requested_keys\":" << requestedKeys;
 
   if (searchMode == "kangaroo") {
     request
@@ -943,9 +945,7 @@ HttpRangeClient::claim(
   command << "curl"
           << " --silent"
           << " --show-error"
-          << " --location"
-          << " --post301"
-          << " --post302"
+          << (serverUrl_.starts_with("http://127.0.0.1:") ? " --noproxy '*' --max-redirs 0" : " --location --post301 --post302")
           << " --fail-with-body"
           << " --connect-timeout 10"
           << " --max-time 30"
@@ -1010,7 +1010,8 @@ RangeClaimResult HttpRangeClient::claimResult(
     int targetDurationMinutes,
     double speedMKeys,
     const std::string &backend,
-    const std::string &searchMode) {
+    const std::string &searchMode,
+    std::uint64_t requestedKeys) {
   auto assignment =
       claim(
           clientId,
@@ -1018,7 +1019,8 @@ RangeClaimResult HttpRangeClient::claimResult(
           targetDurationMinutes,
           speedMKeys,
           backend,
-          searchMode);
+          searchMode,
+          requestedKeys);
 
   RangeClaimResult result;
 
@@ -1115,9 +1117,7 @@ bool HttpRangeClient::progress(const std::string &assignmentId,
   command << "curl"
           << " --silent"
           << " --show-error"
-          << " --location"
-          << " --post301"
-          << " --post302"
+          << (serverUrl_.starts_with("http://127.0.0.1:") ? " --noproxy '*' --max-redirs 0" : " --location --post301 --post302")
           << " --fail-with-body"
           << " --connect-timeout 10"
           << " --max-time 30"
@@ -1272,9 +1272,7 @@ bool HttpRangeClient::complete(
   command << "curl"
           << " --silent"
           << " --show-error"
-          << " --location"
-          << " --post301"
-          << " --post302"
+          << (serverUrl_.starts_with("http://127.0.0.1:") ? " --noproxy '*' --max-redirs 0" : " --location --post301 --post302")
           << " --fail-with-body"
           << " --connect-timeout 10"
           << " --max-time 30"
