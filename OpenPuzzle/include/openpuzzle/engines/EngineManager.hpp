@@ -3,6 +3,7 @@
 #include "openpuzzle/engines/ISearchEngine.hpp"
 #include "openpuzzle/engines/common/EngineFactory.hpp"
 #include "openpuzzle/engines/common/EngineRegistry.hpp"
+#include "openpuzzle/engines/VanityEngineConfiguration.hpp"
 
 #include <optional>
 #include <string>
@@ -12,6 +13,7 @@ namespace openpuzzle {
 class EngineManager {
 public:
   EngineManager();
+  explicit EngineManager(const VanityEngineConfiguration& vanity);
 
   SearchEnginePtr create(
       const std::string& engine,

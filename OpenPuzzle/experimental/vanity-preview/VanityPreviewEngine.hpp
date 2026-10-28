@@ -10,6 +10,7 @@ namespace openpuzzle::vanityPreview {
 struct AdapterConfig {
   std::string adapter,engine,knownKeys,binding,controls,mode="exhaust";
   bool targetMode=false;
+  bool commonRuntime=false;
 };
 std::string shellQuote(const std::string& value);
 uint64_t inclusiveCount(const std::string& start,const std::string& end);

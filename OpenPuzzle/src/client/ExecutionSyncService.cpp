@@ -3,6 +3,9 @@
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
 #include "openpuzzle/engines/EngineParserFactory.hpp"
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+#include "VanityCommonEngine.hpp"
+#endif
 #include "openpuzzle/core/LocalPaths.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #ifdef _WIN32
@@ -211,7 +214,7 @@ bool ExecutionSyncService::readLatestProgress(
   }
 
   const std::string logName =
-      engineId == "keyhunt"
+      engineId == "vanity" ? "vanity.log" : engineId == "keyhunt"
           ? "keyhunt.log"
           : (
                 engineId == "kangaroo" ||
@@ -293,6 +296,9 @@ bool ExecutionSyncService::readLatestProgress(
 
   parseRecord(record);
 
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  if(engineId=="vanity"&&found&&!vanityCommonProgressWithinCoverage(workspace,progress.keysChecked))return false;
+#endif
   return found;
 }
 
@@ -363,6 +369,12 @@ bool ExecutionSyncService::hasCompletionProof(
 
   const bool keyhunt =
       engineId == "keyhunt";
+
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  if(engineId=="vanity")return vanityCommonCompletionProof(workspace,expectedKeys);
+#else
+  if(engineId=="vanity")return false;
+#endif
 
   const bool kangaroo =
       engineId == "kangaroo" ||
@@ -512,7 +524,7 @@ ExecutionSyncService::speedSamples(
   const auto logPath =
       pathFromUtf8(workspace) /
       engineLog(
-          engineId == "keyhunt"
+          engineId == "vanity" ? "vanity.log" : engineId == "keyhunt"
               ? "keyhunt.log"
               : (
                     engineId == "kangaroo" ||

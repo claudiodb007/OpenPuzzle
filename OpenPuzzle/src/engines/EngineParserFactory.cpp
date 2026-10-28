@@ -3,6 +3,9 @@
 #include "openpuzzle/adapters/bitcrack/BitCrackProgressParser.hpp"
 #include "openpuzzle/adapters/keyhunt/KeyHuntProgressParser.hpp"
 #include "openpuzzle/adapters/kangaroo/KangarooProgressParser.hpp"
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+#include "VanityCommonEngine.hpp"
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -28,6 +31,10 @@ EngineParserFactory::create(
     const std::string& engine) {
   const auto engineId =
       normalize(engine);
+
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  if (engineId == "vanity") return std::make_unique<VanityCommonProgressParser>();
+#endif
 
   if (engineId == "bitcrack") {
     return std::make_unique<

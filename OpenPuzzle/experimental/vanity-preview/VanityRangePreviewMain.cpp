@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <chrono>
+#include <regex>
 #include <fcntl.h>
 #include <sys/file.h>
 #include <sys/prctl.h>
@@ -46,8 +47,21 @@ struct Lock {
 int main(int argc,char** argv) {
  try {
   // Explicit synthetic or public-target fixture gate. Production remains disabled.
-  if(argc!=11&&argc!=13)throw std::runtime_error("Usage: ENGINE WORKSPACE START COUNT GRID KNOWN_KEYS exhaust|stop BINDING CONTROL_DIR --synthetic-only [--owner PID]");
+  if(argc<11||argc>15)throw std::runtime_error("Usage: ENGINE WORKSPACE START COUNT GRID KNOWN_KEYS exhaust|stop BINDING CONTROL_DIR --synthetic-only [--owner PID]");
+  bool commonRuntime=false,ownerParent=false;uint64_t owner=0;
+  for(int i=11;i<argc;++i){
+    std::string option=argv[i];
+    if(option=="--common-runtime"&&!commonRuntime)commonRuntime=true;
+    else if(option=="--owner-parent"&&!ownerParent&&!owner)ownerParent=true;
+    else if(option=="--owner"&&!owner&&!ownerParent&&i+1<argc){
+      owner=decimal(argv[++i]);if(owner<2||owner>uint64_t(INT32_MAX))throw std::runtime_error("Invalid explicit adapter owner");
+    }
+    else throw std::runtime_error("Invalid/repeated adapter option");
+  }
+  if(ownerParent&&!commonRuntime)throw std::runtime_error("Parent binding requires common runtime");
+  if(commonRuntime&&!ownerParent)throw std::runtime_error("Common runtime requires parent ownership");
   bool targetMode=std::string(argv[10])=="--targets-only";
+  if(commonRuntime&&!targetMode)throw std::runtime_error("Common runtime requires public target protocol");
   if(!targetMode&&std::string(argv[10])!="--synthetic-only")throw std::runtime_error("Explicit input gate required");
   Plan plan(argv[3],decimal(argv[4]),decimal(argv[5]));
   std::string mode=argv[7],binding=argv[8];
@@ -87,9 +101,9 @@ int main(int argc,char** argv) {
     if(!ok)throw std::runtime_error("Checkpoint directory fsync failed");
   };
   signal(SIGTERM,cancel);signal(SIGINT,cancel);signal(SIGPIPE,SIG_IGN);
-  if(argc==13){
-    const auto owner=decimal(argv[12]);
-    if(std::string(argv[11])!="--owner"||owner<2||owner>uint64_t(INT32_MAX)||prctl(PR_SET_PDEATHSIG,SIGTERM)!=0||getppid()!=pid_t(owner))
+  if(ownerParent)owner=getppid();
+  if(owner||ownerParent){
+    if(owner<2||owner>uint64_t(INT32_MAX)||prctl(PR_SET_PDEATHSIG,SIGTERM)!=0||getppid()!=pid_t(owner))
       throw std::runtime_error("Local integration owner changed");
   }
   openpuzzle::PosixProcessRunner runner;
@@ -97,6 +111,24 @@ int main(int argc,char** argv) {
   auto id=runner.run("exec "+quote(engine.string())+" --identity",[&](const std::string& l){identity+=l;},20);
   if(!id.started||id.exitCode!=0||identity!=(targetMode?"OpenPuzzle-VanityRange 0.2.0 CUDA target protocol 1":"OpenPuzzle-VanityRange 0.1.0 CUDA synthetic protocol 1"))throw std::runtime_error("Unrecognized experimental engine");
   uint64_t resumed=checked;
+  std::ofstream commonLog;
+  if(commonRuntime){
+    auto path=root.parent_path()/"vanity.log";
+    if(fs::is_symlink(fs::symlink_status(path)))throw std::runtime_error("Unsafe common Vanity log");
+    if(fs::exists(path)){
+      if(!fs::is_regular_file(path)||fs::file_size(path)>1024*1024)throw std::runtime_error("Invalid previous common Vanity log");
+      std::ifstream previous(path);std::string text((std::istreambuf_iterator<char>(previous)),{});
+      auto archive=root.parent_path()/("vanity-attempt-"+std::to_string(getpid())+"-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".log");
+      if(!openpuzzle::writePrivateFileAtomically(archive,text))throw std::runtime_error("Cannot archive common Vanity log");
+    }
+    commonLog.open(path,std::ios::trunc);if(!commonLog)throw std::runtime_error("Cannot open common Vanity log");
+    fs::permissions(path,fs::perms::owner_read|fs::perms::owner_write);
+  }
+  auto emit=[&](const std::string& line){
+    if(commonRuntime){commonLog<<line<<'\n';commonLog.flush();if(!commonLog)throw std::runtime_error("Cannot publish common Vanity progress");}
+    std::cout<<line<<'\n'<<std::flush;if(!std::cout)interrupted=1;
+  };
+  if(commonRuntime)emit("OPV_CLIENT BEGIN total="+std::to_string(plan.count)+" resumed="+std::to_string(resumed));
   Protocol protocol(Plan(add(plan.start,resumed),plan.count-resumed,plan.blocks));
   std::string token=std::to_string(getpid())+"-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
   auto attempt=root/("attempt-"+token);if(!fs::create_directory(attempt))throw std::runtime_error("Attempt collision");privateDir(attempt);
@@ -115,10 +147,11 @@ int main(int argc,char** argv) {
   };
   auto result=runner.run(command,[&](const std::string& line){
     log<<line<<"\n";log.flush();
+    if(commonRuntime&&line.rfind("OPV_CLIENT ",0)==0){bad=true;error="Engine attempted to forge adapter protocol";return;}
     if(bad)return;
     try {
       protocol.consume(line);checked=resumed+protocol.checked;
-      if(line.rfind("OPV1 PROGRESS ",0)==0) {publish();std::cout<<"OPV_CLIENT PROGRESS "<<checked<<"\n"<<std::flush;if(!std::cout)interrupted=1;}
+      if(line.rfind("OPV1 PROGRESS ",0)==0) {publish();emit("OPV_CLIENT PROGRESS "+std::to_string(checked));}
     } catch(const std::exception& e){bad=true;error=e.what();}
   },900,shouldStop);
   if(bad)status="faulted";
@@ -128,8 +161,22 @@ int main(int argc,char** argv) {
   else status="interrupted";
   // Safe stop is sticky across attempts and blocks the next assignment.
   if(fs::exists(controls/"safe-stop"))safe=true;
+  if(commonRuntime&&status=="solution"){
+    std::string decoded;
+    auto info=runner.run("exec "+quote(engine.string())+" --target-info "+quote(targets.string()),[&](const auto& line){decoded+=line+'\n';},20);
+    std::istringstream targetInfo(decoded);std::string expectedHash,expectedAddress,extra;
+    if(!info.started||info.exitCode!=0||!(targetInfo>>expectedHash>>expectedAddress)||(targetInfo>>extra))throw std::runtime_error("Cannot verify private common Vanity result");
+    if(fs::file_size(solutions)>4096)throw std::runtime_error("Oversized common Vanity result");
+    std::ifstream privateResult(solutions);std::string marker,key,hash,address,wif;
+    if(!(privateResult>>marker>>key>>hash>>address>>wif)||(privateResult>>extra)||marker!="MATCH"||key!=canonical(key)||key<plan.start||key>plan.end||hash!=expectedHash||address!=expectedAddress||!std::regex_match(wif,std::regex("[KL][1-9A-HJ-NP-Za-km-z]{51}")))
+      throw std::runtime_error("Invalid private common Vanity result");
+    auto destination=root.parent_path()/"found.txt";
+    if(fs::exists(destination)||fs::is_symlink(fs::symlink_status(destination)))throw std::runtime_error("Existing private result preserved");
+    const auto text="OPENPUZZLE_SOLUTION_V1\naddress="+address+"\nprivate_key_wif="+wif+"\ncompression=compressed\n";
+    if(!openpuzzle::writePrivateFileAtomically(destination,text))throw std::runtime_error("Cannot preserve private common Vanity result");
+  }
   publish();
-  std::cout<<"OPV_CLIENT RESULT "<<status<<" checked="<<checked<<" resumed="<<resumed<<" safe_stop="<<(safe?1:0)<<" next_blocked="<<((safe||status!="complete")?1:0)<<"\n";
+  emit("OPV_CLIENT RESULT "+status+" checked="+std::to_string(checked)+" resumed="+std::to_string(resumed)+" safe_stop="+(safe?"1":"0")+" next_blocked="+((safe||status!="complete")?"1":"0"));
   if(!error.empty())std::cerr<<"Protocol refused: "<<error<<"\n";
   if(status=="complete")return 0;if(status=="solution")return 10;if(status=="interrupted")return 130;return 2;
  }catch(const std::exception& e){std::cerr<<"Preview refused: "<<e.what()<<"\n";return 2;}

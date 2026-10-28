@@ -33,7 +33,9 @@ std::string VanityPreviewEngine::buildCommand(const EngineLaunchRequest& r)const
  if(config_.binding.size()!=64||config_.binding.find_first_not_of("0123456789abcdef")!=std::string::npos||(config_.mode!="exhaust"&&config_.mode!="stop"))throw std::runtime_error("Invalid experimental binding/mode");
  if(r.workspace.empty()||!fs::path(r.workspace).is_absolute())throw std::runtime_error("Absolute private workspace required");
  std::string cmd="exec "+shellQuote(config_.adapter);
- for(const auto& arg:std::vector<std::string>{config_.engine,r.workspace,plan.start,std::to_string(plan.count),std::to_string(plan.blocks),config_.knownKeys,config_.mode,config_.binding,config_.controls,config_.targetMode?"--targets-only":"--synthetic-only","--owner",std::to_string(getpid())})cmd+=" "+shellQuote(arg);
+ for(const auto& arg:std::vector<std::string>{config_.engine,r.workspace,plan.start,std::to_string(plan.count),std::to_string(plan.blocks),config_.knownKeys,config_.mode,config_.binding,config_.controls,config_.targetMode?"--targets-only":"--synthetic-only"})cmd+=" "+shellQuote(arg);
+ if(config_.commonRuntime)cmd+=" --common-runtime --owner-parent";
+ else cmd+=" --owner "+std::to_string(getpid());
  return cmd;
 }
 void registerVanityPreview(EngineRegistry& registry,EngineFactory& factory,const AdapterConfig& config,bool enabled){

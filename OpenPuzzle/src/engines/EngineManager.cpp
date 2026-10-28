@@ -5,6 +5,10 @@
 #include "openpuzzle/engines/keyhunt/KeyHuntEngine.hpp"
 #include "openpuzzle/engines/kangaroo/KangarooEngine.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+#include "VanityCommonEngine.hpp"
+#endif
+#include <stdexcept>
 
 #include <algorithm>
 #include <cctype>
@@ -136,6 +140,38 @@ SearchEnginePtr EngineManager::create(
       executable);
 }
 
+EngineManager::EngineManager(const VanityEngineConfiguration& vanity)
+    : EngineManager() {
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  VanityCommonEngine engine(vanity);
+  if (!engine.prepare()) throw std::invalid_argument("Verified Vanity executables required");
+  EngineDescriptor descriptor;
+  descriptor.id="vanity"; descriptor.name="Vanity"; descriptor.version="0.2.0";
+  descriptor.backend="CUDA";
+  descriptor.runtime.executable=vanity.engine;
+  descriptor.runtime.installed=true; descriptor.runtime.available=true;
+  descriptor.capabilities.cuda=true;
+  descriptor.capabilities.supportsUncompressed=false;
+  descriptor.capabilities.supportsBenchmark=false;
+  descriptor.capabilities.supportsLinearSearch=true;
+  descriptor.capabilities.supportsCheckpoint=true;
+  descriptor.capabilities.supportsResume=true;
+  descriptor.capabilities.defaultBlocks=1024;
+  descriptor.capabilities.defaultThreads=256;
+  descriptor.capabilities.defaultPoints=1024;
+  // Availability in this explicit manager is not production readiness.
+  descriptor.capabilities.distributedReady=false;
+  registry_.registerEngine(descriptor);
+  factory_.registerFactory("vanity",[vanity](const auto& executable) {
+    if (executable!=vanity.engine) throw std::invalid_argument("Vanity executable binding differs");
+    return std::make_unique<VanityCommonEngine>(vanity);
+  });
+#else
+  (void)vanity;
+  throw std::invalid_argument("Vanity support is not included in this build");
+#endif
+}
+
 std::optional<std::string>
 EngineManager::resolveExecutable(
     const std::string& engine,
@@ -158,7 +194,7 @@ EngineManager::resolveExecutable(
     return std::nullopt;
   }
 
-  if (engineId == "kangaroo" &&
+  if ((engineId == "kangaroo" || engineId == "vanity") &&
       backendId != "cuda") {
     return std::nullopt;
   }

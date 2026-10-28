@@ -5,6 +5,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 target_sources(OpenPuzzleCore PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/VanityCommand.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/VanityPreviewEngine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/VanityCommonEngine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LocalAssignmentMain.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/HttpAssignmentMain.cpp)
 target_include_directories(OpenPuzzleCore PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -98,3 +99,12 @@ add_test(NAME VanityReceiptDesktopTests COMMAND ${Python3_EXECUTABLE} -B
 add_test(NAME VanityReceiptOwnerRecoveryTests COMMAND ${Python3_EXECUTABLE} -B
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/ReceiptOwnerRecoveryTests.py $<TARGET_FILE:OpenPuzzle>)
 set_tests_properties(VanityReceiptDesktopTests VanityReceiptOwnerRecoveryTests PROPERTIES TIMEOUT 180)
+
+add_executable(VanityCommonRuntimeDriver tests/CommonRuntimeDriver.cpp)
+target_include_directories(VanityCommonRuntimeDriver PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(VanityCommonRuntimeDriver PRIVATE OpenPuzzleCore)
+target_compile_options(VanityCommonRuntimeDriver PRIVATE -UNDEBUG)
+add_test(NAME VanityCommonRuntimeTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/CommonRuntimeTests.py
+    $<TARGET_FILE:VanityCommonRuntimeDriver> $<TARGET_FILE:OpenPuzzleVanityAdapter>)
+set_tests_properties(VanityCommonRuntimeTests PROPERTIES TIMEOUT 180)
