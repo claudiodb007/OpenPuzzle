@@ -109,8 +109,7 @@ void VanityRunProfile::requireServer(const std::string& server){
 }
 
 std::uint64_t VanityRunProfile::maximumKeys()const{
-  // Keep the validated native assignment budget independent of launch grid.
-  return std::uint64_t(1)<<36;
+  return AssignmentRangeLimit;
 }
 
 std::uint64_t VanityRunProfile::requestedKeys(int minutes)const{

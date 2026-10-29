@@ -30,9 +30,9 @@ else:sys.exit(1)
    def do_POST(self):
     q=json.loads(self.rfile.read(int(self.headers['Content-Length'])));test.calls.append((self.path,q));code=200
     if self.path=='/api/range/claim':
-     test.assertEqual(q['client_id'],test.client);test.assertEqual(q['puzzle'],69);test.assertEqual(q['backend'],'cuda');test.assertEqual(q['requested_keys'],2**36)
+     test.assertEqual(q['client_id'],test.client);test.assertEqual(q['puzzle'],69);test.assertEqual(q['backend'],'cuda');test.assertEqual(q['requested_keys'],300000000000)
      result=dict(assignment_id=test.assignment,puzzle=69,range_id=37,target=test.target,start=f'{test.first:x}',end=f'{test.first+test.count-1:x}',search_mode='linear')
-     if test.bad_range:result['end']=f'{test.first+2**39:x}'
+     if test.bad_range:result['end']=f'{test.first+100000000000000000:x}'
     elif self.path=='/api/range/progress':
      test.assertEqual(q['assignment_id'],test.assignment);test.assertEqual(q['client_id'],test.client);test.assertGreaterEqual(int(q['keys_checked']),test.checked);test.checked=int(q['keys_checked'])
      result=dict(success=True,status='running')

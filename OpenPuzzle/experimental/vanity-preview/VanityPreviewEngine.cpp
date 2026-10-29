@@ -17,7 +17,7 @@ uint64_t inclusiveCount(const std::string& first,const std::string& last){
   if(i<48&&n)throw std::runtime_error("Range count exceeds native scalar limit");
   if(i>=48)diff|=uint64_t(n)<<((63-i)*4);
  }
- if(diff>=((uint64_t(1)<<40)))throw std::runtime_error("Experimental range too large");
+ if(diff>=AssignmentRangeLimit)throw std::runtime_error("Range exceeds assignment API limit");
  return diff+1;
 }
 EngineInfo VanityPreviewEngine::info()const{
@@ -28,7 +28,8 @@ bool VanityPreviewEngine::prepare(){return info().available&&access(config_.engi
 std::string VanityPreviewEngine::buildCommand(const EngineLaunchRequest& r)const{
  if(r.engine!="vanity-preview"||r.backend!="cuda"||r.device!=0||r.threads!=256||r.points!=1024||r.blocks<1)
   throw std::runtime_error("Unsupported experimental engine/backend/device/geometry");
- Plan plan(r.startKey,inclusiveCount(r.startKey,r.endKey),r.blocks);
+ Plan plan(r.startKey,inclusiveCount(r.startKey,r.endKey),r.blocks,
+     config_.commonRuntime?AssignmentRangeLimit:NativeRangeLimit);
  if(r.targetFile!=config_.knownKeys||!fs::is_regular_file(r.targetFile)||!fs::is_directory(config_.controls))throw std::runtime_error("Synthetic fixture input missing");
  if(config_.binding.size()!=64||config_.binding.find_first_not_of("0123456789abcdef")!=std::string::npos||(config_.mode!="exhaust"&&config_.mode!="stop"))throw std::runtime_error("Invalid experimental binding/mode");
  if(r.workspace.empty()||!fs::path(r.workspace).is_absolute())throw std::runtime_error("Absolute private workspace required");

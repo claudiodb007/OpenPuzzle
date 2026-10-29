@@ -3223,7 +3223,8 @@ ClientIterationResult RunSession::runOnce(
 
     if (initializeClient && !dryRun && vanityWorkload) {
       RunBenchmarkPreparationDependencies preparationDependencies;
-      preparationDependencies.hasValidProfile = [&vanityProfile] {
+      preparationDependencies.hasValidProfile = [&vanityProfile, runDevice] {
+        vanityProfile = VanityRunProfile::load(runDevice);
         return vanityProfile.has_value() &&
             std::isfinite(vanityProfile->planningMKeys) &&
             vanityProfile->planningMKeys > 0.0;

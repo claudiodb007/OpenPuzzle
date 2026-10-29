@@ -27,8 +27,11 @@ production client.
   the previous profile.
 - Geometry is therefore selected per GPU rather than fixed at `grid=1024`.
   Threads and points remain at the engine contract values (`256` and `1024`),
-  while the native assignment budget remains independently fixed at `2^36`
-  keys. Provisional `grid=32` profiles from pre-release candidates are ignored
+  while assignment size follows measured speed and the selected duration using
+  the existing API limit. The adapter runs consecutive native pieces within
+  that one assignment; Stop/Resume preserves the exact checked prefix, and
+  Safe Stop finishes the whole assignment before blocking the next claim.
+  Provisional `grid=32` profiles from pre-release candidates are ignored
   and trigger the automatic benchmark.
 
 The packaged Vanity engine is CUDA-only in this release. It supports linear

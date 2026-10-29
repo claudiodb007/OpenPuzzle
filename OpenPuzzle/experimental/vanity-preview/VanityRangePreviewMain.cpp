@@ -63,7 +63,7 @@ int main(int argc,char** argv) {
   bool targetMode=std::string(argv[10])=="--targets-only";
   if(commonRuntime&&!targetMode)throw std::runtime_error("Common runtime requires public target protocol");
   if(!targetMode&&std::string(argv[10])!="--synthetic-only")throw std::runtime_error("Explicit input gate required");
-  Plan plan(argv[3],decimal(argv[4]),decimal(argv[5]));
+  Plan plan(argv[3],decimal(argv[4]),decimal(argv[5]),commonRuntime?AssignmentRangeLimit:NativeRangeLimit);
   std::string mode=argv[7],binding=argv[8];
   if((mode!="exhaust"&&mode!="stop") || binding.size()!=64 || binding.find_first_not_of("0123456789abcdef")!=std::string::npos)
     throw std::runtime_error("Invalid mode/binding");
@@ -116,10 +116,10 @@ int main(int argc,char** argv) {
     auto path=root.parent_path()/"vanity.log";
     if(fs::is_symlink(fs::symlink_status(path)))throw std::runtime_error("Unsafe common Vanity log");
     if(fs::exists(path)){
-      if(!fs::is_regular_file(path)||fs::file_size(path)>1024*1024)throw std::runtime_error("Invalid previous common Vanity log");
-      std::ifstream previous(path);std::string text((std::istreambuf_iterator<char>(previous)),{});
+      if(!fs::is_regular_file(path)||fs::file_size(path)>512ULL*1024*1024)throw std::runtime_error("Invalid previous common Vanity log");
       auto archive=root.parent_path()/("vanity-attempt-"+std::to_string(getpid())+"-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".log");
-      if(!openpuzzle::writePrivateFileAtomically(archive,text))throw std::runtime_error("Cannot archive common Vanity log");
+      if(!fs::copy_file(path,archive,fs::copy_options::none))throw std::runtime_error("Cannot archive common Vanity log");
+      fs::permissions(archive,fs::perms::owner_read|fs::perms::owner_write);
     }
     commonLog.open(path,std::ios::trunc);if(!commonLog)throw std::runtime_error("Cannot open common Vanity log");
     fs::permissions(path,fs::perms::owner_read|fs::perms::owner_write);
@@ -129,16 +129,9 @@ int main(int argc,char** argv) {
     std::cout<<line<<'\n'<<std::flush;if(!std::cout)interrupted=1;
   };
   if(commonRuntime)emit("OPV_CLIENT BEGIN total="+std::to_string(plan.count)+" resumed="+std::to_string(resumed));
-  Protocol protocol(Plan(add(plan.start,resumed),plan.count-resumed,plan.blocks));
-  std::string token=std::to_string(getpid())+"-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-  auto attempt=root/("attempt-"+token);if(!fs::create_directory(attempt))throw std::runtime_error("Attempt collision");privateDir(attempt);
-  auto solutions=attempt/"solutions.txt";
-  std::ofstream log(attempt/"engine.log");fs::permissions(attempt/"engine.log",fs::perms::owner_read|fs::perms::owner_write);
-  status="running";publish();
   const auto executionStarted=std::chrono::steady_clock::now();
-  std::string command="exec "+quote(engine.string());
-  for(const auto& a:std::vector<std::string>{targetMode?"--target-file":"--synthetic-only",protocol.plan.start,std::to_string(protocol.plan.count),std::to_string(plan.blocks),targets.string(),solutions.string(),mode,std::to_string(getpid())})command+=" "+quote(a);
   bool bad=false,stopRequested=false;std::string error;
+  fs::path solutions;
   auto shouldStop=[&] {
     try {
       if(fs::exists(controls/"safe-stop"))safe=true;
@@ -146,12 +139,26 @@ int main(int argc,char** argv) {
     } catch(const std::exception& e){bad=true;error=e.what();}
     return bad||stopRequested;
   };
+  do {
+  if(shouldStop()){status="interrupted";break;}
+  const uint64_t offset=checked;
+  // The existing native engine receives bounded contiguous pieces of the same
+  // server assignment. Only the adapter tracks the full assignment total.
+  const uint64_t segmentLimit=commonRuntime?std::min(NativeRangeLimit,plan.batch*4096):NativeRangeLimit;
+  Protocol protocol(Plan(add(plan.start,offset),std::min(plan.count-offset,segmentLimit),plan.blocks));
+  std::string token=std::to_string(getpid())+"-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+  auto attempt=root/("attempt-"+token);if(!fs::create_directory(attempt))throw std::runtime_error("Attempt collision");privateDir(attempt);
+  solutions=attempt/"solutions.txt";
+  std::ofstream log(attempt/"engine.log");fs::permissions(attempt/"engine.log",fs::perms::owner_read|fs::perms::owner_write);
+  status="running";publish();
+  std::string command="exec "+quote(engine.string());
+  for(const auto& a:std::vector<std::string>{targetMode?"--target-file":"--synthetic-only",protocol.plan.start,std::to_string(protocol.plan.count),std::to_string(plan.blocks),targets.string(),solutions.string(),mode,std::to_string(getpid())})command+=" "+quote(a);
   auto result=runner.run(command,[&](const std::string& line){
     log<<line<<"\n";log.flush();
     if(commonRuntime&&line.rfind("OPV_CLIENT ",0)==0){bad=true;error="Engine attempted to forge adapter protocol";return;}
     if(bad)return;
     try {
-      protocol.consume(line);checked=resumed+protocol.checked;
+      protocol.consume(line);checked=offset+protocol.checked;
       if(line.rfind("OPV1 PROGRESS ",0)==0) {
         publish();
         const auto elapsed=std::max<std::int64_t>(1,std::chrono::duration_cast<std::chrono::microseconds>(
@@ -159,12 +166,14 @@ int main(int argc,char** argv) {
         emit("OPV_CLIENT PROGRESS "+std::to_string(checked)+" elapsed_us="+std::to_string(elapsed));
       }
     } catch(const std::exception& e){bad=true;error=e.what();}
-  },900,shouldStop);
+  },commonRuntime?0:900,shouldStop);
   if(bad)status="faulted";
   else if(protocol.solution && result.exitCode==10 && fs::is_regular_file(solutions) && fs::file_size(solutions)>0)status="solution";
-  else if(protocol.completed(result.exitCode) && !stopRequested)status="complete";
+  else if(protocol.completed(result.exitCode) && !stopRequested)status=checked==plan.count?"complete":"running";
   else if(hasSolutions(root) || checked==plan.count)status="review";
   else status="interrupted";
+  publish();
+  } while(status=="running");
   // Safe stop is sticky across attempts and blocks the next assignment.
   if(fs::exists(controls/"safe-stop"))safe=true;
   if(commonRuntime&&status=="solution"){

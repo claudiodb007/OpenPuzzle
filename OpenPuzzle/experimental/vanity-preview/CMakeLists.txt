@@ -118,3 +118,7 @@ set_tests_properties(VanityCommonRouteTests PROPERTIES TIMEOUT 180)
 add_test(NAME VanityCommonProfileTests COMMAND ${Python3_EXECUTABLE} -B
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/CommonProfileTests.py $<TARGET_FILE:OpenPuzzle>)
 set_tests_properties(VanityCommonProfileTests PROPERTIES TIMEOUT 60)
+add_test(NAME VanityDurationTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/DurationTests.py
+    $<TARGET_FILE:VanityCommonRuntimeDriver> $<TARGET_FILE:OpenPuzzleVanityAdapter>)
+set_tests_properties(VanityDurationTests PROPERTIES TIMEOUT 120)

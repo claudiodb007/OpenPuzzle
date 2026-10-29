@@ -17,11 +17,14 @@ namespace fs=std::filesystem;
 using namespace vanityPreview;
 void need(bool ok,const char* message){if(!ok)throw std::runtime_error(message);}
 std::string lower(std::string value){for(char& c:value)c=std::tolower(static_cast<unsigned char>(c));return value;}
-std::string read(const fs::path& path,std::uintmax_t maximum=1024*1024){
+std::ifstream privateInput(const fs::path& path,std::uintmax_t maximum=1024*1024){
   struct stat st{};
   need(path.is_absolute()&&fs::canonical(path)==path&&lstat(path.c_str(),&st)==0&&S_ISREG(st.st_mode)
        &&st.st_uid==getuid()&&!(st.st_mode&0077)&&st.st_size>=0&&std::uintmax_t(st.st_size)<=maximum,"Unsafe/missing Vanity evidence");
-  std::ifstream input(path);need(bool(input),"Cannot read Vanity evidence");
+  std::ifstream input(path);need(bool(input),"Cannot read Vanity evidence");return input;
+}
+std::string read(const fs::path& path,std::uintmax_t maximum=1024*1024){
+  auto input=privateInput(path,maximum);
   return std::string((std::istreambuf_iterator<char>(input)),{});
 }
 std::string invoke(const std::string& command){
@@ -44,14 +47,14 @@ Binding binding(const fs::path& workspace){
   auto text=read(workspace/"vanity-binding.txt");std::istringstream input(text);Binding b;std::string magic,extra;
   need(bool(input>>magic>>b.start>>b.count>>b.grid>>std::quoted(b.target)>>std::quoted(b.engine)>>b.engineHash
       >>std::quoted(b.adapter)>>b.adapterHash)&&!(input>>extra)&&magic=="OPV-COMMON-1","Invalid common Vanity binding");
-  Plan plan(b.start,b.count,b.grid);need(b.start==plan.start,"Noncanonical Vanity start");b.hash=digest(text);
+  Plan plan(b.start,b.count,b.grid,AssignmentRangeLimit);need(b.start==plan.start,"Noncanonical Vanity start");b.hash=digest(text);
   need(read(workspace/"vanity-targets.txt")=="OPV-TARGETS-1\np2pkh "+b.target+'\n',"Vanity target binding changed");
   return b;
 }
 // Same exact batch/interval/terminal contract as the existing coordinator.
 // This is native evidence; a shared log or server acknowledgement cannot replace it.
 uint64_t coverage(const fs::path& root,const Binding& b,bool terminal){
-  Plan plan(b.start,b.count,b.grid);
+  Plan plan(b.start,b.count,b.grid,AssignmentRangeLimit);
   auto cp=read(root/"checkpoint.txt",4096);std::istringstream input(cp);
   std::string magic,hash,start,count,grid,mode,done,status,safe,extra;
   need(bool(input>>magic>>hash>>start>>count>>grid>>mode>>done>>status>>safe)&&!(input>>extra)
@@ -69,7 +72,7 @@ uint64_t coverage(const fs::path& root,const Binding& b,bool terminal){
     need(!records.empty(),"Missing Vanity native interval proof");
     std::istringstream begin(records.front());std::string kind,first,n,batch;
     need(bool(begin>>magic>>kind>>first>>n>>batch)&&!(begin>>extra)&&magic=="OPV1"&&kind=="BEGIN","Missing Vanity native BEGIN");
-    Plan sub(first,decimal(n),b.grid);need(sub.start>=plan.start&&sub.end==plan.end,"Vanity attempt escaped assignment");
+    Plan sub(first,decimal(n),b.grid);need(sub.start>=plan.start&&sub.end<=plan.end,"Vanity attempt escaped assignment");
     Protocol protocol(sub);for(const auto& record:records)protocol.consume(record);
     auto offset=sub.start==plan.start?0:inclusiveCount(plan.start,sub.start)-1;
     spans.emplace_back(offset,protocol.checked,protocol.complete);
@@ -97,8 +100,7 @@ std::string VanityCommonEngine::buildCommand(const EngineLaunchRequest& request)
   need(lower(request.engine)=="vanity"&&lower(request.backend)=="cuda"&&request.device==0
        &&request.threads==256&&request.points==1024&&request.targets.size()==1&&request.publicKey.empty(),"Unsupported common Vanity request");
   need(std::regex_match(request.targets[0],std::regex("1[1-9A-HJ-NP-Za-km-z]{25,34}")),"Invalid Vanity P2PKH target");
-  Plan plan(request.startKey,inclusiveCount(request.startKey,request.endKey),request.blocks);
-  need(plan.count<=plan.batch*8192,"Common Vanity range exceeds bounded native evidence budget");
+  Plan plan(request.startKey,inclusiveCount(request.startKey,request.endKey),request.blocks,AssignmentRangeLimit);
   const fs::path workspace=request.workspace;
   need(workspace.is_absolute()&&fs::canonical(workspace)==workspace&&fs::is_directory(fs::symlink_status(workspace)),"Private direct Vanity workspace required");
   struct stat st{};need(stat(workspace.c_str(),&st)==0&&st.st_uid==getuid()&&!(st.st_mode&0077),"Vanity workspace permissions differ");
@@ -134,7 +136,7 @@ std::optional<ExecutionProgress> VanityCommonProgressParser::parseLine(const std
     if(line.starts_with("OPV_CLIENT BEGIN ")){
       need(!parser_,"Repeated common Vanity BEGIN");std::istringstream input(line);std::string a,b,total,resumed,extra;
       need(bool(input>>a>>b>>total>>resumed)&&!(input>>extra)&&total.starts_with("total=")&&resumed.starts_with("resumed="),"Malformed common Vanity BEGIN");
-      auto n=decimal(total.substr(6)),prior=decimal(resumed.substr(8));need(n&&n<=(uint64_t(1)<<40)&&prior<n,"Invalid common Vanity bounds");
+      auto n=decimal(total.substr(6)),prior=decimal(resumed.substr(8));need(n&&n<=AssignmentRangeLimit&&prior<n,"Invalid common Vanity bounds");
       total_=std::to_string(n);parser_=std::make_unique<VanityPreviewProgressParser>(n,prior);return std::nullopt;
     }
     need(bool(parser_),"Common Vanity progress without BEGIN");
@@ -146,7 +148,7 @@ bool VanityCommonProgressParser::complete(const std::string& expected)const{
 }
 bool vanityCommonCompletionProof(const std::string& workspace,const std::string& expected){try{
   auto root=fs::path(workspace);auto b=binding(root);need(std::to_string(b.count)==expected,"Vanity total differs from assignment");
-  VanityCommonProgressParser parser;std::istringstream log(read(root/"vanity.log"));std::string line;
+  VanityCommonProgressParser parser;auto log=privateInput(root/"vanity.log",512ULL*1024*1024);std::string line;
   while(std::getline(log,line))parser.parseLine(line);
   return parser.complete(expected)&&coverage(root/"vanity-native",b,true)==b.count;
 }catch(...){return false;}}

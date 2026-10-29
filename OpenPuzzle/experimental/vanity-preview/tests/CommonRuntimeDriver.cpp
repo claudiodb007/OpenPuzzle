@@ -1,5 +1,6 @@
 #include "VanityCommonEngine.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
+#include "openpuzzle/engines/VanityRunProfile.hpp"
 #include "openpuzzle/engines/EngineParserFactory.hpp"
 #include "openpuzzle/runtime/ExecutionRequestBuilder.hpp"
 #include "openpuzzle/runtime/BackgroundExecutionLauncher.hpp"
@@ -16,6 +17,15 @@
 using namespace openpuzzle;
 static void need(bool ok){if(!ok)throw std::runtime_error("Common runtime test assertion failed");}
 int main(int argc,char** argv){try{
+  if(argc==2&&std::string(argv[1])=="duration"){
+    VanityRunProfile profile;profile.planningMKeys=2500;
+    need(profile.requestedKeys(60)==9000000000000ULL);
+    need(profile.requestedKeys(2)==300000000000ULL);
+    need(profile.requestedKeys(360)==54000000000000ULL);
+    profile.planningMKeys=5000;need(profile.requestedKeys(60)==18000000000000ULL);
+    profile.planningMKeys=1e15;need(profile.requestedKeys(360)==100000000000000000ULL);
+    std::cout<<"Duration sizing uses speed, minutes and the common API limit\n";return 0;
+  }
   if(argc==2&&std::string(argv[1])=="parser"){
     EngineManager manager;need(!manager.registry().find("vanity"));
     need(manager.registry().find("bitcrack")&&manager.registry().find("keyhunt")&&manager.registry().find("kangaroo"));

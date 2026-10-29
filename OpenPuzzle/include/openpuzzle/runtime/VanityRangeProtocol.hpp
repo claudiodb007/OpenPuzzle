@@ -8,6 +8,8 @@
 #include <string>
 
 namespace openpuzzle { namespace vanityPreview {
+inline constexpr uint64_t NativeRangeLimit = uint64_t(1) << 40;
+inline constexpr uint64_t AssignmentRangeLimit = 100000000000000000ULL;
 inline uint64_t decimal(const std::string& text) {
   if(text.empty() || text.find_first_not_of("0123456789")!=std::string::npos)
     throw std::runtime_error("Invalid unsigned integer");
@@ -39,8 +41,8 @@ inline std::string add(std::string value,uint64_t increment) {
 struct Plan {
   std::string start,end;
   uint64_t count,batch,blocks;
-  Plan(const std::string& first,uint64_t size,uint64_t grid):start(canonical(first)),count(size),blocks(grid) {
-    if(!count || count>(uint64_t(1)<<40) || !blocks || blocks>4096 || (blocks&(blocks-1)))
+  Plan(const std::string& first,uint64_t size,uint64_t grid,uint64_t maximum=NativeRangeLimit):start(canonical(first)),count(size),blocks(grid) {
+    if(!count || count>maximum || !blocks || blocks>4096 || (blocks&(blocks-1)))
       throw std::runtime_error("Experimental count/grid limit");
     end=add(start,count-1); batch=blocks*256*1024;
     if(start<canonical("10000000000000000") || end>=canonical("100000000000000000000"))

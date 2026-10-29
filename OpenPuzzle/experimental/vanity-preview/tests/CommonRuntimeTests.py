@@ -157,8 +157,11 @@ class Tests(unittest.TestCase):
         result=self.command([str(DRIVER),'export',str(self.workspace),str(self.count)]);self.assertTrue(json.loads(result.stdout)['success'])
         for p in self.workspace.rglob('*.txt'):self.assertEqual(p.stat().st_mode&0o077,0)
 
-    def test_interval_above_native_limit_refused_before_native_directory(self):
-        self.count=2**40+1;self.command(self.args('build'),code=2);self.assertFalse((self.workspace/'vanity-native').exists())
+    def test_assignment_above_native_limit_is_built_for_adapter_segmentation(self):
+        self.count=2**40+1;self.command(self.args('build'));self.assertFalse((self.workspace/'vanity-native').exists())
+
+    def test_interval_above_assignment_api_limit_refused_before_native_directory(self):
+        self.count=100000000000000001;self.command(self.args('build'),code=2);self.assertFalse((self.workspace/'vanity-native').exists())
 
     def test_wrong_assignment_total_does_not_accept_another_terminal(self):
         self.start();self.assertEqual(self.finished(),0);self.count+=1;self.assertFalse(self.inspect()['proof'])
