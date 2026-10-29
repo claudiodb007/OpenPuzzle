@@ -599,7 +599,7 @@ void MainWindow::buildInterface() {
   start_->setObjectName("PrimaryButton");
   safeStop_ = new QPushButton;
   safeStop_->setProperty("controlId", "safeStop");
-  safeStop_->setObjectName("SecondaryButton");
+  safeStop_->setObjectName("SafeStopButton");
   stop_ = new QPushButton;
   stop_->setProperty("controlId", "stop");
   stop_->setObjectName("DangerButton");

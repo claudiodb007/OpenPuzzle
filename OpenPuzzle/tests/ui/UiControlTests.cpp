@@ -286,6 +286,7 @@ int main(int argc, char* argv[]) {
 
   assert(start != nullptr);
   assert(safeStop != nullptr && !safeStop->isEnabled());
+  assert(safeStop->objectName() == "SafeStopButton");
   assert(stop != nullptr && !stop->isEnabled());
   assert(installKangaroo != nullptr);
   assert(installKangaroo->isEnabled());

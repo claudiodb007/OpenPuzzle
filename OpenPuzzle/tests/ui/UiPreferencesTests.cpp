@@ -89,6 +89,11 @@ int main() {
   assert(dark.contains(
       "QLabel#ThermalBadge[thermalState=\"critical\"],"));
   assert(dark.contains(
+      "QPushButton#SafeStopButton {\n"
+      "      background: #b45309;"));
+  assert(dark.contains("QPushButton#SafeStopButton:hover"));
+  assert(dark.contains("QPushButton#SafeStopButton:disabled"));
+  assert(dark.contains(
       "QFrame#ThermalAlertBanner[thermalAlertLevel=\"warning\"]"));
   assert(dark.contains(
       "QFrame#ThermalAlertBanner[thermalAlertLevel=\"critical\"]"));

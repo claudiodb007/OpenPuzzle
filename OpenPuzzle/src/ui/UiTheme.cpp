@@ -216,6 +216,15 @@ QString themeStyleSheet(UiTheme theme) {
       background: %5;
       color: %2;
     }
+    QPushButton#SafeStopButton {
+      background: #b45309;
+      color: #ffffff;
+      border: 1px solid #d97706;
+    }
+    QPushButton#SafeStopButton:hover {
+      background: #d97706;
+      border-color: #f59e0b;
+    }
     QPushButton#DangerButton {
       background: %14;
       color: %15;
@@ -233,6 +242,7 @@ QString themeStyleSheet(UiTheme theme) {
     }
     QPushButton#PrimaryButton:disabled,
     QPushButton#SecondaryButton:disabled,
+    QPushButton#SafeStopButton:disabled,
     QPushButton#DangerButton:disabled,
     QPushButton#ToolButton:disabled {
       background: %5;
