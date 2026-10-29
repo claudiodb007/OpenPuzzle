@@ -20,6 +20,9 @@ production client.
 - The first completed assignment creates the normal per-GPU `Vanity` profile.
   Later assignments reuse and adapt that profile through the existing GPU
   profile database. No private measurement path is distributed.
+- The initial CUDA geometry is the validated `grid=1024`, while the native
+  assignment budget remains fixed at `2^36` keys. Provisional `grid=32`
+  profiles created by pre-release candidates are migrated after completion.
 
 The packaged Vanity engine is CUDA-only in this release. It supports linear
 P2PKH puzzles 65 through 80. The selected physical CUDA device is mapped to

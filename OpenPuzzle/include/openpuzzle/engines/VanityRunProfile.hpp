@@ -12,7 +12,8 @@ struct VanityRunProfile {
   VanityEngineConfiguration executables;
   std::string gpu,fingerprint,uuid,driver;
   int device=0;
-  unsigned grid=32;
+  // Exact geometry validated by the real RTX 4070 SUPER measurements.
+  unsigned grid=1024;
   double planningMKeys=0,powerLimit=0;
   bool localOnly=false;
   static bool configured();

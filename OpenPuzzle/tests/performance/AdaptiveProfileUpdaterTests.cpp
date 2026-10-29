@@ -114,7 +114,7 @@ int main() {
 
   auto firstVanity = state;
   firstVanity.engine = "Vanity";
-  firstVanity.blocks = 32;
+  firstVanity.blocks = 1024;
   firstVanity.threads = 256;
   firstVanity.points = 1024;
   const auto created = updater.update(
@@ -129,11 +129,40 @@ int main() {
       firstVanity.backend,
       firstVanity.engine);
   assert(vanityProfile);
-  assert(vanityProfile->blocks == 32);
+  assert(vanityProfile->blocks == 1024);
   assert(vanityProfile->threads == 256);
   assert(vanityProfile->points == 1024);
   assert(near(vanityProfile->averageSpeed, 2439.55));
   assert(vanityProfile->samples == 5);
+
+  auto provisionalVanity = firstVanity;
+  provisionalVanity.gpuName = "Provisional Vanity GPU";
+  provisionalVanity.blocks = 32;
+  const auto provisionalCreated = updater.update(
+      provisionalVanity,
+      {1300.0, 1310.0, 1320.0, 1330.0, 1340.0, 1350.0, 1360.0});
+  assert(provisionalCreated.updated);
+  const auto provisionalProfile = profiles.load(
+      provisionalVanity.gpuName,
+      provisionalVanity.backend,
+      provisionalVanity.engine);
+  assert(provisionalProfile);
+  assert(provisionalProfile->blocks == 32);
+  assert(provisionalProfile->threads == 256);
+  assert(provisionalProfile->points == 1024);
+  provisionalVanity.blocks = 1024;
+  const auto migrated = updater.update(
+      provisionalVanity,
+      {2500.0, 2510.0, 2520.0, 2530.0, 2540.0, 2550.0, 2560.0});
+  assert(migrated.updated);
+  const auto migratedProfile = profiles.load(
+      provisionalVanity.gpuName,
+      provisionalVanity.backend,
+      provisionalVanity.engine);
+  assert(migratedProfile);
+  assert(migratedProfile->blocks == 1024);
+  assert(migratedProfile->threads == 256);
+  assert(migratedProfile->points == 1024);
 
   const auto workspace = root / "workspace";
   std::filesystem::create_directories(workspace);

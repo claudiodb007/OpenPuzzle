@@ -41,7 +41,18 @@ AdaptiveProfileUpdater::update(
       state.backend,
       state.engine);
 
-  if (existing && (existing->blocks != state.blocks ||
+  const bool migrateProvisionalVanity =
+      existing &&
+      state.engine == "Vanity" &&
+      state.backend == "CUDA" &&
+      existing->blocks == 32 &&
+      existing->threads == 256 &&
+      existing->points == 1024 &&
+      state.blocks == 1024 &&
+      state.threads == 256 &&
+      state.points == 1024;
+
+  if (existing && !migrateProvisionalVanity && (existing->blocks != state.blocks ||
       existing->threads != state.threads ||
       existing->points != state.points)) {
     result.error =
@@ -51,7 +62,9 @@ AdaptiveProfileUpdater::update(
 
   const AdaptiveCalibration calibration;
   const auto calibrated = calibration.calibrate(
-      existing ? existing->averageSpeed : 0.0,
+      existing && !migrateProvisionalVanity
+          ? existing->averageSpeed
+          : 0.0,
       speedSamples);
 
   result.sustainedSpeed =
@@ -68,7 +81,7 @@ AdaptiveProfileUpdater::update(
   }
 
   GpuProfileRecord updated;
-  if (existing) {
+  if (existing && !migrateProvisionalVanity) {
     updated = *existing;
   } else {
     updated.gpuName = state.gpuName;

@@ -87,10 +87,14 @@ VanityRunProfile VanityRunProfile::load(int selectedDevice){
   profile.gpu=GpuManager::currentGpu("CUDA",selectedDevice).name;
   need(!profile.gpu.empty(),"Selected Vanity CUDA device is unavailable");
   if(const auto measured=profileFor(profile.gpu)){
-    need(measured->blocks>0&&measured->blocks<=4096&&!(measured->blocks&(measured->blocks-1))
-         &&measured->threads==256&&measured->points==1024&&std::isfinite(measured->averageSpeed)&&measured->averageSpeed>0,
-         "Stored Vanity GPU profile is invalid");
-    profile.grid=static_cast<unsigned>(measured->blocks);profile.planningMKeys=measured->averageSpeed;
+    const bool provisionalCandidate=
+        measured->blocks==32&&measured->threads==256&&measured->points==1024;
+    if(!provisionalCandidate){
+      need(measured->blocks>0&&measured->blocks<=4096&&!(measured->blocks&(measured->blocks-1))
+           &&measured->threads==256&&measured->points==1024&&std::isfinite(measured->averageSpeed)&&measured->averageSpeed>0,
+           "Stored Vanity GPU profile is invalid");
+      profile.grid=static_cast<unsigned>(measured->blocks);profile.planningMKeys=measured->averageSpeed;
+    }
   }
   profile.fingerprint=invoke("printf %s "+shellQuote(profile.executables.engineSha256+profile.executables.adapterSha256+
       std::to_string(profile.device)+profile.gpu+std::to_string(profile.grid))+" | sha256sum").substr(0,64);
@@ -105,7 +109,8 @@ void VanityRunProfile::requireServer(const std::string& server){
 }
 
 std::uint64_t VanityRunProfile::maximumKeys()const{
-  return std::min<std::uint64_t>(std::uint64_t(1)<<40,std::uint64_t(grid)*256*1024*8192);
+  // Keep the validated native assignment budget independent of launch grid.
+  return std::uint64_t(1)<<36;
 }
 
 std::uint64_t VanityRunProfile::requestedKeys(int minutes)const{

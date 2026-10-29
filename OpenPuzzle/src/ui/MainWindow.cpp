@@ -15,6 +15,7 @@
 #include <QTextCursor>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFile>
@@ -1222,6 +1223,14 @@ QString MainWindow::cliExecutable() const {
 
   if (!overridePath.isEmpty()) {
     return overridePath;
+  }
+
+  const QString bundled =
+      QDir(QCoreApplication::applicationDirPath())
+          .filePath("openpuzzle");
+  const QFileInfo bundledInfo(bundled);
+  if (bundledInfo.isFile() && bundledInfo.isExecutable()) {
+    return bundledInfo.absoluteFilePath();
   }
 
   return QStandardPaths::findExecutable("openpuzzle");
