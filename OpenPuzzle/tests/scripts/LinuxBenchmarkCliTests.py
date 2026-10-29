@@ -60,6 +60,36 @@ if test -f "$OPENPUZZLE_TEST_ROOT/hold"; then
 fi
 ''')
         engine.chmod(0o700)
+        vanity = engines / 'vanity-offline'
+        vanity.write_text('''#!/usr/bin/env python3
+import os
+import sys
+import time
+
+if sys.argv[1:] == ['--identity']:
+    print('OpenPuzzle-VanityRange 0.2.0 CUDA target protocol 1')
+    raise SystemExit(0)
+assert len(sys.argv) == 9 and sys.argv[1] == '--target-file', sys.argv
+start = sys.argv[2].lower().rjust(64, '0')
+count = int(sys.argv[3])
+grid = int(sys.argv[4])
+output = sys.argv[6]
+batch = grid * 256 * 1024
+with open(output, 'wb'):
+    pass
+os.chmod(output, 0o600)
+print(f'OPV1 BEGIN {start} {count} {batch}', flush=True)
+checked = 0
+target_mkeys = 3000 if grid == 1024 else 1000
+delay = batch / (target_mkeys * 1_000_000)
+for _ in range(8):
+    time.sleep(delay)
+    checked += batch
+    print(f'OPV1 PROGRESS {checked}', flush=True)
+print(f'OPV1 STOPPED {checked}', flush=True)
+raise SystemExit(130)
+''')
+        vanity.chmod(0o700)
         args = [str(cli), 'benchmark', '--backend', 'cuda', '--gpu', '0', '--auto', '--real', '--require-idle']
 
         def run(arguments=args):
@@ -141,7 +171,21 @@ fi
         # A subsequent successful measurement remains possible after cancellation.
         assert run().returncode == 0
         assert not list(data.glob('client*.json'))
-        print('LinuxBenchmarkCliTests passed: real CLI automatic selection, DB save, failure/cancel preservation, owned-child shutdown, workspace lock and retry; synthetic engines only.')
+
+        vanity_result = run([
+            str(cli), 'benchmark', '--engine', 'vanity', '--backend', 'cuda',
+            '--gpu', '0', '--auto', '--real', '--require-idle', '--seconds', '10'
+        ])
+        if vanity_result.returncode:
+            raise RuntimeError(vanity_result.stdout)
+        rows = profiles()
+        assert len(rows) == 2, rows
+        vanity_profile = next(row for row in rows if row[3] == 'Vanity')
+        assert vanity_profile[2:7] == ('CUDA', 'Vanity', 1024, 256, 1024), vanity_profile
+        assert vanity_profile[7] > 0 and vanity_profile[10] >= 4, vanity_profile
+        assert 'Validated Vanity configuration' in vanity_result.stdout
+        assert 'Candidate matrix. 5 configurations' in vanity_result.stdout
+        print('LinuxBenchmarkCliTests passed: BitCrack and Vanity automatic selection, DB save, failure/cancel preservation, owned-child shutdown, workspace lock and retry; synthetic engines only.')
 
 
 if __name__ == '__main__':

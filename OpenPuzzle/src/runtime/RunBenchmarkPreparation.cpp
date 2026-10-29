@@ -45,7 +45,8 @@ bool RunBenchmarkPreparation::ensureProfile() const {
         << "Assignment......... not requested\n"
         << "[4/4] Server contact not started\n"
         << "Action 1........... run: openpuzzle doctor\n"
-        << "Action 2........... run: openpuzzle benchmark --real --auto\n";
+        << "Action 2........... run: "
+        << dependencies_.benchmarkCommand << '\n';
 
     return false;
   }
@@ -59,7 +60,8 @@ bool RunBenchmarkPreparation::ensureProfile() const {
         << "Assignment......... not requested\n"
         << "[4/4] Server contact not started\n"
         << "Action 1........... run: openpuzzle doctor\n"
-        << "Action 2........... run: openpuzzle benchmark --real --auto\n";
+        << "Action 2........... run: "
+        << dependencies_.benchmarkCommand << '\n';
 
     return false;
   }

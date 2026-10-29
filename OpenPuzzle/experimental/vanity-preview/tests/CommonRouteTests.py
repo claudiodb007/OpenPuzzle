@@ -79,11 +79,24 @@ else:sys.exit(1)
   self.fail(self.diagnostic())
  def wait(self,p,code=0):self.assertEqual(p.wait(timeout=20),code,self.diagnostic())
  def snapshot(self):return {str(p.relative_to(self.workspace)):hashlib.sha256(p.read_bytes()).hexdigest() for p in self.workspace.rglob('attempt-*/engine.log')}
+ def wait_native_stopped(self):
+  deadline=time.monotonic()+5
+  while time.monotonic()<deadline:
+   logs=list(self.workspace.rglob('attempt-*/engine.log'))
+   if logs:
+    terminal=True
+    for log in logs:
+     records=[line for line in log.read_text().splitlines() if line.startswith('OPV1 ')]
+     terminal=terminal and bool(records) and records[-1].startswith('OPV1 STOPPED ')
+    if terminal:return
+   time.sleep(.02)
+  self.fail('Native stop record was not quiescent\n'+self.diagnostic())
  def test_ordinary_once_uses_capped_existing_api_and_common_completion(self):
   self.engine_name='VANITY';p=self.start('--once');self.wait(p);self.assertEqual(sum(x=='/api/range/claim' for x,_ in self.calls),1);self.assertEqual(sum(x=='/api/range/complete' for x,_ in self.calls),1)
   self.assertIn('Engine............. Vanity',self.diagnostic());self.assertTrue((self.workspace/'vanity-run-profile.txt').is_file());self.assertFalse(self.state.exists())
  def pause(self):
   p=self.start('--once');self.wait_progress();self.command(['stop']);self.wait(p,130)
+  self.wait_native_stopped()
   self.assertEqual(sum(x=='/api/range/complete' for x,_ in self.calls),0);self.assertTrue(self.state.exists());self.assertIn('stopped',self.command(['status']).stdout)
  def test_stop_reopen_resume_same_assignment_and_preserve_native_attempts(self):
   self.pause();before=self.snapshot();p=self.start('--once');self.wait(p);self.assertEqual(sum(x=='/api/range/claim' for x,_ in self.calls),1)

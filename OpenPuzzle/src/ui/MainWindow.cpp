@@ -367,11 +367,7 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::buildInterface() {
-#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
   setWindowTitle(QStringLiteral("OpenPuzzle %1").arg(QStringLiteral(OPENPUZZLE_VERSION)));
-#else
-  setWindowTitle("OpenPuzzle");
-#endif
   setMinimumSize(820, 620);
   resize(1120, 860);
 
@@ -415,6 +411,11 @@ void MainWindow::buildInterface() {
   subtitle_->setObjectName("Subtitle");
   subtitle_->setWordWrap(true);
   identity->addWidget(subtitle_);
+  version_ = new QLabel(
+      QStringLiteral("OpenPuzzle %1")
+          .arg(QStringLiteral(OPENPUZZLE_VERSION)));
+  version_->setObjectName("VersionLabel");
+  identity->addWidget(version_);
   header->addLayout(identity);
   header->addStretch();
 
@@ -1145,7 +1146,7 @@ void MainWindow::updateActionAvailability() {
   const bool occupied = active_ || identityUnavailable_;
   const bool idle = statusAvailable_ && !occupied && !solutionFound_ && ready;
   const bool local = vanitySelected();
-  bool canStart=idle, canBenchmark=idle && selectedRunMode()!=RunMode::VanityCuda && !(gpuControls_ && gpuControls_->applying());
+  bool canStart=idle, canBenchmark=idle && !(gpuControls_ && gpuControls_->applying());
   bool canSafe=ready && occupied && !kangarooActive_;
   bool canStop=(benchmarkRunning_ && !benchmarkCancelRequested_) || (ready && occupied);
   QString startText=t("start"),stopText=t(benchmarkRunning_ ? "linux_benchmark_cancel" : "stop_now");
@@ -2101,7 +2102,6 @@ void MainWindow::runCommand(
 }
 
 void MainWindow::runBenchmark() {
-  if(selectedRunMode()==RunMode::VanityCuda) return;
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
   if(vanitySelected()){vanity_->requestBenchmark();return;}
 #endif
@@ -2115,15 +2115,18 @@ void MainWindow::runBenchmark() {
   auto* backend = new QComboBox(&dialog);
   backend->setObjectName("benchmarkBackend");
   backend->addItem("CUDA", "cuda");
-  backend->addItem("OpenCL", "opencl");
-  backend->setCurrentIndex(selectedRunMode() == RunMode::BitCrackOpencl ? 1 : 0);
+  const bool vanityBenchmark = selectedRunMode() == RunMode::VanityCuda;
+  if (!vanityBenchmark) backend->addItem("OpenCL", "opencl");
+  backend->setCurrentIndex(
+      !vanityBenchmark && selectedRunMode() == RunMode::BitCrackOpencl ? 1 : 0);
+  backend->setEnabled(!vanityBenchmark);
   auto* device = new QSpinBox(&dialog);
   device->setObjectName("benchmarkDevice");
   device->setRange(0, 31);
   device->setValue(device_->value());
   auto* rusticl = new QCheckBox(t("linux_benchmark_rusticl"), &dialog);
   rusticl->setObjectName("benchmarkRusticl");
-  rusticl->setChecked(rusticlRadeonsi_->isChecked());
+  rusticl->setChecked(!vanityBenchmark && rusticlRadeonsi_->isChecked());
   auto* hint = new QLabel(t("linux_benchmark_confirm"), &dialog);
   hint->setWordWrap(true);
   hint->setMinimumWidth(430);
@@ -2155,6 +2158,7 @@ void MainWindow::runBenchmark() {
   if (executable.isEmpty()) { showOutput(t("error"), t("cli_missing")); return; }
   QStringList arguments{"benchmark", "--backend", backend->currentData().toString(),
                         "--gpu", QString::number(device->value()), "--auto", "--real", "--require-idle"};
+  if (vanityBenchmark) arguments << "--engine" << "vanity";
   if (backend->currentData() == "opencl" && rusticl->isChecked())
     arguments << "--rusticl-enable" << "radeonsi";
 

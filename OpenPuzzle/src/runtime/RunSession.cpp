@@ -3220,6 +3220,35 @@ ClientIterationResult RunSession::runOnce(
         return 1;
       }
     }
+
+    if (initializeClient && !dryRun && vanityWorkload) {
+      RunBenchmarkPreparationDependencies preparationDependencies;
+      preparationDependencies.hasValidProfile = [&vanityProfile] {
+        return vanityProfile.has_value() &&
+            std::isfinite(vanityProfile->planningMKeys) &&
+            vanityProfile->planningMKeys > 0.0;
+      };
+      preparationDependencies.runBenchmark = [runDevice] {
+        return BenchmarkCommand().run({
+            "--real",
+            "--auto",
+            "--engine",
+            "vanity",
+            "--backend",
+            "cuda",
+            "--gpu",
+            std::to_string(runDevice),
+        });
+      };
+      preparationDependencies.benchmarkCommand =
+          "openpuzzle benchmark --engine vanity --backend cuda --real --auto";
+
+      const RunBenchmarkPreparation preparation(preparationDependencies);
+      if (!preparation.ensureProfile()) {
+        return 1;
+      }
+      vanityProfile = VanityRunProfile::load(runDevice);
+    }
   }
 
   if(vanityWorkload) vanityProfile->validateHardware(runDevice,true);

@@ -215,6 +215,12 @@ int main(int argc, char* argv[]) {
   assert(thermalAlertMessage != nullptr);
   assert(thermalHistoryOutput != nullptr);
   assert(clearThermalHistory != nullptr);
+  auto* versionLabel = window.findChild<QLabel*>("VersionLabel");
+  assert(versionLabel != nullptr);
+  assert(versionLabel->text() ==
+         QStringLiteral("OpenPuzzle %1")
+             .arg(QStringLiteral(OPENPUZZLE_VERSION)));
+  assert(versionLabel->isVisible());
   assert(thermalAlertBanner->isHidden());
   assert(thermalHistoryOutput->toPlainText() ==
          "No thermal events have been recorded.");

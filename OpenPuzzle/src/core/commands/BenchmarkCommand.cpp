@@ -1,4 +1,6 @@
 #include "openpuzzle/core/CliInteger.hpp"
+#include "openpuzzle/core/AtomicFile.hpp"
+#include "openpuzzle/core/PosixProcessRunner.hpp"
 #include "openpuzzle/core/SignalHandler.hpp"
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
 #include "openpuzzle/client/ExecutionSyncService.hpp"
@@ -19,15 +21,22 @@
 #include "openpuzzle/performance/BenchmarkRunner.hpp"
 #include "openpuzzle/performance/GpuProfileManager.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+#include "openpuzzle/runtime/VanityRangeProtocol.hpp"
 #include "openpuzzle/tools/ToolManager.hpp"
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -126,6 +135,127 @@ struct FlushBenchmarkOutput {
   FlushBenchmarkOutput() { std::cout << std::unitbuf; }
   ~FlushBenchmarkOutput() { std::cout.flags(flags); }
 };
+
+std::string benchmarkShellQuote(const std::string& value) {
+  if (value.find('\0') != std::string::npos) {
+    throw std::runtime_error("NUL in benchmark argument");
+  }
+  std::string result = "'";
+  for (const char character : value) {
+    result += character == '\'' ? "'\\''" : std::string(1, character);
+  }
+  return result + "'";
+}
+
+std::vector<BenchmarkConfiguration> vanityCandidateMatrix(int computeUnits) {
+  int anchor = 64;
+  const int requested = std::max(1, computeUnits) * 2;
+  while (anchor < requested && anchor < 4096) anchor *= 2;
+  anchor = std::clamp(anchor, 64, 4096);
+
+  std::vector<BenchmarkConfiguration> result;
+  for (const int factor : {1, 2, 4, 8, 16}) {
+    const auto blocks = static_cast<long long>(anchor) * factor;
+    if (blocks > 4096) break;
+    result.push_back({static_cast<int>(blocks), 256, 1024});
+  }
+  while (result.size() < 5 && result.front().blocks > 64) {
+    result.insert(result.begin(), {result.front().blocks / 2, 256, 1024});
+  }
+  return result;
+}
+
+BenchmarkResult runVanityCandidate(
+    const std::string& engine,
+    const fs::path& workspace,
+    const BenchmarkConfiguration& configuration,
+    int seconds) {
+  using namespace vanityPreview;
+  BenchmarkResult result;
+  result.configuration = configuration;
+  if (configuration.blocks < 64 || configuration.blocks > 4096 ||
+      (configuration.blocks & (configuration.blocks - 1)) ||
+      configuration.threads != 256 || configuration.points != 1024) {
+    return result;
+  }
+
+  const std::string start = "10000000000000000";
+  const std::uint64_t count = std::uint64_t{1} << 40;
+  Protocol protocol(Plan(start, count, configuration.blocks));
+  const auto targets = workspace / "vanity-benchmark-targets.txt";
+  const auto output = workspace / "vanity-benchmark-found.txt";
+  const std::string targetText =
+      "OPV-TARGETS-1\np2pkh 1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH\n";
+
+  if (fs::exists(targets) || fs::is_symlink(targets)) {
+    if (fs::is_symlink(targets) || !fs::is_regular_file(targets)) return result;
+    std::ifstream input(targets);
+    if (std::string((std::istreambuf_iterator<char>(input)), {}) != targetText) return result;
+  } else if (!writePrivateFileAtomically(targets, targetText)) {
+    return result;
+  }
+  if (fs::exists(output) || fs::is_symlink(output)) {
+    if (fs::is_symlink(output) || !fs::is_regular_file(output) || !fs::remove(output)) return result;
+  }
+
+  std::ostringstream command;
+  for (const auto& argument : std::vector<std::string>{
+           engine, "--target-file", start, std::to_string(count),
+           std::to_string(configuration.blocks), targets.string(),
+           output.string(), "exhaust", std::to_string(getpid())}) {
+    if (command.tellp() > 0) command << ' ';
+    command << benchmarkShellQuote(argument);
+  }
+
+  bool invalid = false;
+  std::vector<double> samples;
+  std::uint64_t previous = 0;
+  auto previousTime = std::chrono::steady_clock::now();
+  PosixProcessRunner runner;
+  const auto execution = runner.run(
+      command.str(),
+      [&](const std::string& line) {
+        if (invalid || !line.starts_with("OPV1 ")) return;
+        try {
+          protocol.consume(line);
+          if (!line.starts_with("OPV1 PROGRESS ")) return;
+          const auto now = std::chrono::steady_clock::now();
+          const double elapsed = std::chrono::duration<double>(now - previousTime).count();
+          if (elapsed > 0.0 && protocol.checked > previous) {
+            samples.push_back(
+                static_cast<double>(protocol.checked - previous) / elapsed / 1000000.0);
+          }
+          previous = protocol.checked;
+          previousTime = now;
+        } catch (...) {
+          invalid = true;
+        }
+      },
+      seconds,
+      [] { return SignalHandler::stopRequested(); });
+
+  if (SignalHandler::stopRequested() || !execution.started || invalid ||
+      !protocol.begun || (!protocol.stopped && !protocol.complete) ||
+      !fs::is_regular_file(output) || fs::file_size(output) != 0) {
+    return result;
+  }
+  const std::size_t first = samples.size() > 2 ? 2 : samples.size();
+  if (samples.size() - first < 4) return result;
+  double total = 0.0;
+  result.minimumSpeed = std::numeric_limits<double>::max();
+  for (std::size_t index = first; index < samples.size(); ++index) {
+    const double value = samples[index];
+    if (!std::isfinite(value) || value <= 0.0) return BenchmarkResult{configuration};
+    total += value;
+    result.minimumSpeed = std::min(result.minimumSpeed, value);
+    result.maximumSpeed = std::max(result.maximumSpeed, value);
+  }
+  result.samples = static_cast<int>(samples.size() - first);
+  result.averageSpeed = total / result.samples;
+  result.speedMKeys = result.averageSpeed;
+  result.success = std::isfinite(result.averageSpeed) && result.averageSpeed > 0.0;
+  return result;
+}
 } // namespace
 
 int BenchmarkCommand::run(const std::vector<std::string> &args) const {
@@ -170,6 +300,16 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
               "--backend",
               configuredBackend));
 
+  const std::string requestedEngine =
+      normalizeBackend(getStringArg(args, "--engine", "bitcrack"));
+
+  if (requestedEngine != "bitcrack" && requestedEngine != "vanity") {
+    throw benchmarkError(
+        "OP-BENCH-012",
+        "unsupported benchmark engine: " + requestedEngine,
+        "use --engine bitcrack or --engine vanity");
+  }
+
   if (
       backend != "cuda" &&
       backend != "opencl") {
@@ -177,6 +317,13 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
         "OP-BENCH-003",
         "unsupported BitCrack backend: " + backend,
         "use --backend cuda or --backend opencl");
+  }
+
+  if (requestedEngine == "vanity" && backend != "cuda") {
+    throw benchmarkError(
+        "OP-BENCH-013",
+        "Vanity automatic tuning requires CUDA",
+        "use --engine vanity --backend cuda --auto --real");
   }
 
   if (gpu < 0) {
@@ -287,6 +434,9 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
   std::cout << "Backend......... "
             << backendLabel
             << "\n";
+  std::cout << "Engine.......... "
+            << (requestedEngine == "vanity" ? "Vanity" : "BitCrack")
+            << "\n";
   std::cout << "GPU............. " << gpu << "\n";
   std::cout << "GPU name........ " << gpuInfo.name << "\n";
   std::cout << "Compute units... " << gpuInfo.computeUnits << "\n";
@@ -299,6 +449,104 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
     std::cout << "Use --real to run a real benchmark.\n";
     (void)autoMode;
     return 0;
+  }
+
+  if (requestedEngine == "vanity") {
+    if (!autoMode) {
+      throw benchmarkError(
+          "OP-BENCH-014",
+          "Vanity requires automatic geometry selection",
+          "add --auto");
+    }
+    const auto vanity = ToolManager::vanityPath();
+    if (!vanity || !fs::is_regular_file(*vanity)) {
+      throw benchmarkError(
+          "OP-ENGINE-006",
+          "bundled Vanity CUDA executable is unavailable",
+          "reinstall OpenPuzzle and run: openpuzzle doctor --offline");
+    }
+    std::string identity;
+    const auto identityResult = PosixProcessRunner().run(
+        benchmarkShellQuote(*vanity) + " --identity",
+        [&](const std::string& line) { identity += line + "\n"; }, 20);
+    if (!identityResult.started || identityResult.exitCode != 0 ||
+        identity != "OpenPuzzle-VanityRange 0.2.0 CUDA target protocol 1\n") {
+      throw benchmarkError(
+          "OP-ENGINE-007",
+          "bundled Vanity identity was rejected",
+          "reinstall OpenPuzzle and run: openpuzzle doctor --offline");
+    }
+    const char* home = std::getenv("HOME");
+    if (!home || !*home) {
+      throw benchmarkError("OP-ENV-001", "HOME is not available", "run from a normal user login session");
+    }
+    const auto workspace = fs::path(home) / ".local/share/OpenPuzzle/benchmark-vanity";
+    WorkspaceSecurity::prepare(workspace);
+    BenchmarkLock benchmarkLock(workspace);
+    if (setenv("CUDA_DEVICE_ORDER", "PCI_BUS_ID", 1) != 0 ||
+        setenv("CUDA_VISIBLE_DEVICES", std::to_string(gpu).c_str(), 1) != 0) {
+      throw benchmarkError("OP-BENCH-015", "cannot isolate the selected CUDA device", "check the CUDA environment");
+    }
+
+    AutoTuner tuner;
+    std::vector<BenchmarkResult> results;
+    const auto candidates = vanityCandidateMatrix(gpuInfo.computeUnits);
+    std::cout << "Candidate matrix. " << candidates.size() << " configurations\n";
+    int index = 1;
+    for (const auto& candidate : candidates) {
+      if (SignalHandler::stopRequested()) return cancelledBenchmark();
+      requireIdle();
+      std::cout << "\n[" << index++ << "/" << candidates.size() << "] "
+                << "grid=" << candidate.blocks << " threads=256 points=1024\n";
+      auto measured = runVanityCandidate(*vanity, workspace, candidate, seconds);
+      results.push_back(measured);
+      std::cout << "Average.......... " << measured.averageSpeed << " MKey/s\n"
+                << "Minimum.......... " << measured.minimumSpeed << " MKey/s\n"
+                << "Maximum.......... " << measured.maximumSpeed << " MKey/s\n"
+                << "Samples.......... " << measured.samples << "\n"
+                << "Success.......... " << (measured.success ? "yes" : "no") << "\n";
+    }
+    auto best = tuner.selectBest(results);
+    if (!best.success) {
+      std::cerr << "\nNo valid Vanity benchmark configuration was found.\n";
+      return 1;
+    }
+    const int validationSeconds = std::min(120, std::max(20, seconds * 2));
+    std::cout << "\nValidating Vanity finalist\n"
+              << "---------------------------\n"
+              << "Grid............. " << best.configuration.blocks << "\n"
+              << "Maximum seconds.. " << validationSeconds << "\n";
+    requireIdle();
+    auto validated = runVanityCandidate(*vanity, workspace, best.configuration, validationSeconds);
+    if (SignalHandler::stopRequested()) return cancelledBenchmark();
+    if (!validated.success) {
+      std::cerr << "Final validation.. failed\nGPU profile was not changed.\n";
+      return 1;
+    }
+    const double planningSpeed = AutoTuner::planningSpeed(validated);
+    GpuProfileRecord profile;
+    profile.gpuName = gpuInfo.name;
+    profile.backend = "CUDA";
+    profile.engine = "Vanity";
+    profile.blocks = validated.configuration.blocks;
+    profile.threads = 256;
+    profile.points = 1024;
+    profile.averageSpeed = planningSpeed;
+    profile.minimumSpeed = validated.minimumSpeed;
+    profile.maximumSpeed = validated.maximumSpeed;
+    profile.samples = validated.samples;
+    if (SignalHandler::stopRequested()) return cancelledBenchmark();
+    requireIdle();
+    const bool saved = GpuProfileManager(context.db).save(profile);
+    std::cout << "\nValidated Vanity configuration\n"
+              << "------------------------------\n"
+              << "Grid............. " << profile.blocks << "\n"
+              << "Threads.......... " << profile.threads << "\n"
+              << "Points........... " << profile.points << "\n"
+              << "Average.......... " << validated.averageSpeed << " MKey/s\n"
+              << "Planning speed... " << planningSpeed << " MKey/s\n"
+              << "Saved profile..... " << (saved ? "yes" : "no") << "\n";
+    return saved ? 0 : 1;
   }
 
   const auto bitcrack =

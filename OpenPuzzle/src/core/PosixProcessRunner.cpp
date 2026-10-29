@@ -284,9 +284,27 @@ ProcessResult PosixProcessRunner::run(
         std::chrono::steady_clock::now() +
         std::chrono::seconds(1);
 
-    while (!childWaited &&
-           std::chrono::steady_clock::now() <
-               terminationDeadline) {
+    while ((!childWaited || !pipeClosed) &&
+           std::chrono::steady_clock::now() < terminationDeadline) {
+      pollfd descriptor{};
+      descriptor.fd = pipefd[0];
+      descriptor.events = POLLIN | POLLHUP | POLLERR;
+      if (!pipeClosed && poll(&descriptor, 1, 25) > 0 &&
+          (descriptor.revents & (POLLIN | POLLHUP | POLLERR))) {
+        char buffer[4096];
+        while (true) {
+          const ssize_t count = read(pipefd[0], buffer, sizeof(buffer));
+          if (count > 0) {
+            pending.append(buffer, static_cast<std::size_t>(count));
+            emitRecords(pending, onLine, nullptr);
+            continue;
+          }
+          if (count == 0) pipeClosed = true;
+          if (count < 0 && errno == EINTR) continue;
+          break;
+        }
+      }
+
       const pid_t waitResult =
           waitpid(
               pid,
@@ -295,22 +313,17 @@ ProcessResult PosixProcessRunner::run(
 
       if (waitResult == pid) {
         childWaited = true;
-        break;
       }
-
-      std::this_thread::sleep_for(
-          std::chrono::milliseconds(25));
     }
 
-    if (!childWaited) {
+    if (!childWaited || !pipeClosed) {
       signalProcessGroup(
           pid,
           SIGKILL);
 
-      waitpid(
-          pid,
-          &status,
-          0);
+      if (!childWaited) {
+        waitpid(pid, &status, 0);
+      }
 
       childWaited = true;
     }

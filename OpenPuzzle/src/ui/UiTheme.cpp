@@ -71,10 +71,14 @@ QString themeStyleSheet(UiTheme theme) {
       font-weight: 700;
       color: %2;
     }
-    QLabel#Subtitle, QLabel#FormLabel {
+    QLabel#Subtitle, QLabel#VersionLabel, QLabel#FormLabel {
       color: %4;
     }
     QLabel#Subtitle { font-size: 13px; }
+    QLabel#VersionLabel {
+      font-size: 12px;
+      font-weight: 650;
+    }
     QLabel#FormLabel {
       font-size: 12px;
       font-weight: 600;

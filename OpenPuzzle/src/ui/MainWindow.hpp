@@ -85,6 +85,7 @@ private:
   RunMode selectedRunMode() const;
 
   QLabel* subtitle_ = nullptr;
+  QLabel* version_ = nullptr;
   QLabel* currentStateTitle_ = nullptr;
   QLabel* newExecutionTitle_ = nullptr;
   QLabel* toolsTitle_ = nullptr;

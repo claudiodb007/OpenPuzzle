@@ -9,16 +9,21 @@ int main() {
   PosixProcessRunner runner;
 
   bool receivedProgress = false;
+  bool receivedShutdownRecord = false;
 
   const auto startedAt =
       std::chrono::steady_clock::now();
 
   const auto result =
       runner.run(
-          "printf 'progress\\r'; sleep 3",
+          "trap \"printf 'stopped\\n'; exit 0\" TERM; "
+          "printf 'progress\\r'; while :; do sleep 1; done",
           [&](const std::string &line) {
             if (line == "progress") {
               receivedProgress = true;
+            }
+            if (line == "stopped") {
+              receivedShutdownRecord = true;
             }
           },
           1);
@@ -37,6 +42,9 @@ int main() {
 
   if (!receivedProgress)
     return 3;
+
+  if (!receivedShutdownRecord)
+    return 5;
 
   if (elapsed.count() >= 2500)
     return 4;

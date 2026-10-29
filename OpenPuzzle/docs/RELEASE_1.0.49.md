@@ -17,12 +17,19 @@ production client.
 - The live speed shown by the shared status card is calculated from the
   adapter's monotonic elapsed time. It is not the planning value and does not
   depend on how quickly the UI rereads the log.
-- The first completed assignment creates the normal per-GPU `Vanity` profile.
-  Later assignments reuse and adapt that profile through the existing GPU
-  profile database. No private measurement path is distributed.
-- The initial CUDA geometry is the validated `grid=1024`, while the native
-  assignment budget remains fixed at `2^36` keys. Provisional `grid=32`
-  profiles created by pre-release candidates are migrated after completion.
+- Before the first assignment on a GPU, the common automatic benchmark measures
+  a bounded matrix of power-of-two Vanity grids, validates the best sustained
+  result and stores it as the normal `GPU + CUDA + Vanity` profile. No claim,
+  heartbeat or assignment request is made until that profile exists.
+- Later assignments reuse and adapt the measured speed through the existing GPU
+  profile database. The desktop Benchmark button uses the same CLI path and can
+  deliberately remeasure the selected GPU; cancellation or failure preserves
+  the previous profile.
+- Geometry is therefore selected per GPU rather than fixed at `grid=1024`.
+  Threads and points remain at the engine contract values (`256` and `1024`),
+  while the native assignment budget remains independently fixed at `2^36`
+  keys. Provisional `grid=32` profiles from pre-release candidates are ignored
+  and trigger the automatic benchmark.
 
 The packaged Vanity engine is CUDA-only in this release. It supports linear
 P2PKH puzzles 65 through 80. The selected physical CUDA device is mapped to
@@ -48,7 +55,7 @@ force; this release does not change power limits, clocks or fan settings.
 - `OpenPuzzle-1.0.49-source.tar.gz`
 - Release manifest and SHA-256 files.
 
-Before publication, validate the affected native and desktop suites, run one
-ordinary CUDA acceptance assignment with Stop/Resume and Safe Stop, inspect the
-package contents, and verify the production API preflight. Do not repeat the
-historical benchmark solely for this release.
+Before publication, validate the affected native and desktop suites, allow the
+candidate to perform its one required automatic Vanity benchmark on the target
+GPU, then run one ordinary CUDA acceptance assignment with Stop/Resume and Safe
+Stop. Inspect the package contents and verify the production API preflight.

@@ -12,7 +12,7 @@ struct VanityRunProfile {
   VanityEngineConfiguration executables;
   std::string gpu,fingerprint,uuid,driver;
   int device=0;
-  // Exact geometry validated by the real RTX 4070 SUPER measurements.
+  // Safe fallback used only until the selected GPU has an automatic profile.
   unsigned grid=1024;
   double planningMKeys=0,powerLimit=0;
   bool localOnly=false;

@@ -2,10 +2,12 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QDir>
+#include <QDialog>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonArray>
+#include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
@@ -35,6 +37,7 @@ root=Path(os.environ['OPV_UI_FIXTURE']);args=sys.argv[1:]
 with (root/'argv').open('a') as f:f.write(json.dumps(args)+'\n')
 if args[0]=='status':print((root/'status').read_text());sys.exit()
 if args[:2]==['gpu-control','list']:print('OpenPuzzle-GPU-controls 1');sys.exit()
+if args[0]=='benchmark':print('Vanity automatic benchmark complete');sys.exit()
 if args[0]=='run':
  assert args==['run','69','--engine','vanity','--backend','cuda','--device','0'],args
  (root/'status').write_text('Status............. running\nEngine............. Vanity\nBackend............ CUDA\nPuzzle............. 69\nAssignment......... fixture-assignment\n');sys.exit()
@@ -47,9 +50,21 @@ if args[0]=='safestop':sys.exit()
   QSettings settings;settings.clear();settings.setValue("ui/language",QStringList{"en","pt","fr","es"}[language]);settings.sync();
   write(tmp.filePath("status"),"Status............. idle\nExecution.......... none\n");
   MainWindow w;w.show();auto* mode=control<QComboBox>(w,"executionMode");auto* start=control<QPushButton>(w,"start");
+  auto* version=w.findChild<QLabel*>("VersionLabel");assert(version&&version->isVisible()&&version->text()==QStringLiteral("OpenPuzzle %1").arg(QStringLiteral(OPENPUZZLE_VERSION)));
   assert(until([&]{return mode->isEnabled();}));int index=mode->findData(static_cast<int>(RunMode::VanityCuda));assert(index>=0);assert(mode->findData(100)<0);
   mode->setCurrentIndex(index);control<QSpinBox>(w,"puzzle")->setValue(69);
-  assert(!control<QPushButton>(w,"benchmark")->isEnabled());assert(control<QPushButton>(w,"resumeVanity")->isHidden());
+  auto* benchmark=control<QPushButton>(w,"benchmark");
+  assert(benchmark->isEnabled());assert(control<QPushButton>(w,"resumeVanity")->isHidden());
+  if(language==0){
+   QTimer::singleShot(0,[&w]{auto* dialog=w.findChild<QDialog*>("linuxBenchmarkDialog");assert(dialog);
+    auto* backend=dialog->findChild<QComboBox*>("benchmarkBackend");assert(backend&&!backend->isEnabled()&&backend->currentData()=="cuda");
+    dialog->findChild<QSpinBox*>("benchmarkDevice")->setValue(3);
+    dialog->findChild<QPushButton*>("benchmarkConfirm")->click();});
+   benchmark->click();
+   assert(until([&]{return read(tmp.filePath("argv")).contains("[\"benchmark\", \"--backend\", \"cuda\", \"--gpu\", \"3\", \"--auto\", \"--real\", \"--require-idle\", \"--engine\", \"vanity\"]");}));
+   assert(until([&]{return benchmark->isEnabled();}));
+  }
+  control<QSpinBox>(w,"cudaDevice")->setValue(0);
   start->click();assert(until([&]{return control<QPushButton>(w,"stop")->isEnabled();}));
   control<QPushButton>(w,"safeStop")->click();assert(until([&]{return read(tmp.filePath("argv")).contains("[\"safestop\"]");}));
   assert(until([&]{return control<QPushButton>(w,"stop")->isEnabled();}));
@@ -60,5 +75,5 @@ if args[0]=='safestop':sys.exit()
  }
  // A reopened ordinary UI finds the shared paused state and selects its puzzle.
  {MainWindow w;w.show();auto* start=control<QPushButton>(w,"start");assert(until([&]{return start->isEnabled();}));assert(control<QComboBox>(w,"executionMode")->currentData().toInt()==static_cast<int>(RunMode::VanityCuda));assert(control<QSpinBox>(w,"puzzle")->value()==69);w.close();}
- std::cout<<"Shared main controls: ordinary Vanity argv, stop/safestop, paused reopen/resume, four languages, no benchmark/legacy route.\n";
+ std::cout<<"Shared main controls: ordinary Vanity argv, automatic benchmark, stop/safestop, paused reopen/resume, four languages and no legacy route.\n";
 }

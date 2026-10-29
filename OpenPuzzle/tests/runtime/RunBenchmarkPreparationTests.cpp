@@ -39,7 +39,8 @@ CapturedPreparation runCaptured(
 }
 
 RunBenchmarkPreparation makePreparation(
-    State &state) {
+    State &state,
+    std::string benchmarkCommand = "openpuzzle benchmark --real --auto") {
   RunBenchmarkPreparationDependencies dependencies;
 
   dependencies.hasValidProfile =
@@ -58,6 +59,7 @@ RunBenchmarkPreparation makePreparation(
         ++state.benchmarkCalls;
         return state.benchmarkResult;
       };
+  dependencies.benchmarkCommand = std::move(benchmarkCommand);
 
   return RunBenchmarkPreparation(
       std::move(dependencies));
@@ -73,6 +75,19 @@ int main() {
     assert(preparation.ensureProfile());
     assert(state.profileChecks == 1);
     assert(state.benchmarkCalls == 0);
+  }
+
+  {
+    State state;
+    state.profile = false;
+    state.benchmarkResult = 7;
+    const auto captured = runCaptured(makePreparation(
+        state,
+        "openpuzzle benchmark --engine vanity --backend cuda --real --auto"));
+    assert(!captured.success);
+    assert(captured.output.find(
+        "openpuzzle benchmark --engine vanity --backend cuda --real --auto") !=
+        std::string::npos);
   }
 
   {
