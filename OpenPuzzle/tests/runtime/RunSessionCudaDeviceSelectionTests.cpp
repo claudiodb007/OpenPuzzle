@@ -52,6 +52,13 @@ int main() {
       cudaGpu(3),
   };
 
+  assert(RunSession::selectedCudaDevices(
+      {"run","71","--engine","vanity","--backend","cuda","--devices","all"},sixGpus)==
+      std::vector<int>({0,1,2,3,4,5}));
+  assert(RunSession::cudaWorkerArguments(
+      {"run","71","--engine","vanity","--backend","cuda","--devices","3,1","--once"},3)==
+      std::vector<std::string>({"run","71","--engine","vanity","--backend","cuda","--once","--device","3","--supervised-gpu-device"}));
+
   assert(
       RunSession::selectedCudaDevices(
           {

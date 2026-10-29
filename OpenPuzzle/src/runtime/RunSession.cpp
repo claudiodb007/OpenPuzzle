@@ -1693,6 +1693,7 @@ int runMultiGpu(
     const std::vector<std::string>& args,
     const std::string& backend) {
   const bool opencl = backend == "opencl";
+  const bool vanity = normalizedGpuName(getArgument(args,"--engine","bitcrack")) == "vanity";
   /*
    * Populate both inventory caches before forking. Child workers inherit
    * this immutable snapshot and therefore registration, heartbeat, profile
@@ -1719,7 +1720,7 @@ int runMultiGpu(
   if (metadata &&
       metadata->searchMode == "kangaroo") {
     throw std::runtime_error(
-        "--devices supports BitCrack linear puzzles only; "
+        "--devices supports BitCrack or Vanity linear puzzles only; "
         "Kangaroo remains exclusive");
   }
 
@@ -1750,7 +1751,7 @@ int runMultiGpu(
   }
 
   FirstRunSetup setup;
-  if (!setup.ensureConfigured(backend)) {
+  if (!vanity && !setup.ensureConfigured(backend)) {
     throw std::runtime_error(
         "Unable to configure the selected multi-GPU backend");
   }
@@ -2165,11 +2166,11 @@ RunSession::selectedCudaDevices(
   }
 
   const auto engine =
-      getArgument(args, "--engine", "bitcrack");
+      normalizedGpuName(getArgument(args, "--engine", "bitcrack"));
 
-  if (engine != "bitcrack") {
+  if (engine != "bitcrack" && engine != "vanity") {
     throw std::runtime_error(
-        "--devices currently requires --engine bitcrack");
+        "--devices requires --engine bitcrack or vanity");
   }
 
   return CudaDeviceSelection::resolve(
@@ -2395,18 +2396,20 @@ int RunSession::runOrdinary(
     if(commonVanity) try {
       for(const auto* flag:{"--engine","--backend","--device","--server","--duration-minutes","--blocks","--threads","--points"})
         if(std::count(args.begin(),args.end(),flag)>1) throw std::runtime_error("Duplicate Vanity launch option");
-      const auto existing=client::ClientStateStore::load();
-      const int vanityDevice=existing&&existing->engine=="Vanity" ? existing->device
-          : cliIntegerArgument(args,{"--device"},GpuManager::selectedGpu());
-      auto profile=VanityRunProfile::load(vanityDevice);
       VanityRunProfile::requireServer(serverUrl(args));
       if(args.front()!="run" || selected!="vanity" || selectedBackend(args)!="cuda" ||
-          hasArgument(args,"--devices") || hasArgument(args,"--with-cpu") || hasArgument(args,"--with-opencl") ||
-          hasArgument(args,"--supervised-gpu-device") || hasArgument(args,"--rusticl-enable"))
-        throw std::runtime_error("Vanity requires one explicit CUDA run");
-      if(cliIntegerArgument(args,{"--blocks","--b"},profile.grid)!=int(profile.grid) ||
-         cliIntegerArgument(args,{"--threads","--t"},256)!=256 || cliIntegerArgument(args,{"--points","--p"},1024)!=1024)
-        throw std::runtime_error("Vanity geometry differs from the active GPU profile");
+          hasArgument(args,"--with-cpu") || hasArgument(args,"--with-opencl") || hasArgument(args,"--rusticl-enable"))
+        throw std::runtime_error("Vanity requires CUDA; use --device N or --devices all|N,N");
+      // Each supervisor worker validates its own selected physical GPU/profile.
+      if(!hasArgument(args,"--devices")) {
+        const auto existing=client::ClientStateStore::load();
+        const int vanityDevice=existing&&existing->engine=="Vanity" ? existing->device
+            : cliIntegerArgument(args,{"--device"},GpuManager::selectedGpu());
+        auto profile=VanityRunProfile::load(vanityDevice);
+        if(cliIntegerArgument(args,{"--blocks","--b"},profile.grid)!=int(profile.grid) ||
+           cliIntegerArgument(args,{"--threads","--t"},256)!=256 || cliIntegerArgument(args,{"--points","--p"},1024)!=1024)
+          throw std::runtime_error("Vanity geometry differs from the active GPU profile");
+      }
     } catch(const std::exception& error) {
       std::cerr << "Vanity start blocked: " << error.what() << "\nNo assignment requested; local evidence preserved.\n";
       return 1;

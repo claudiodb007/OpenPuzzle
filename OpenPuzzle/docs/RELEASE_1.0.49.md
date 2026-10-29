@@ -41,6 +41,12 @@ the physical device number for recovery and telemetry.
 
 ## Packaging and safety
 
+CUDA rigs use the existing shared supervisor with
+`openpuzzle run 71 --engine vanity --backend cuda --devices all` (or a device
+list such as `--devices 0,2`). Each GPU gets its own `cuda-N` slot and server
+assignment of about one hour, its existing GPU profile and a UUID-isolated CUDA
+view. The ordinary global status, Stop and Safe Stop controls cover all slots.
+
 The Linux DEB and TGZ include the vetted Vanity engine, its native adapter and
 third-party license under the existing OpenPuzzle `libexec` layout. User
 profiles, checkpoints, reports, private keys and local evidence are never

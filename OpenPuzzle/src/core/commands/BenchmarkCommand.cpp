@@ -483,8 +483,9 @@ int BenchmarkCommand::run(const std::vector<std::string> &args) const {
     const auto workspace = fs::path(home) / ".local/share/OpenPuzzle/benchmark-vanity";
     WorkspaceSecurity::prepare(workspace);
     BenchmarkLock benchmarkLock(workspace);
+    const auto visibleDevice = gpuInfo.uuid.empty() ? std::to_string(gpu) : gpuInfo.uuid;
     if (setenv("CUDA_DEVICE_ORDER", "PCI_BUS_ID", 1) != 0 ||
-        setenv("CUDA_VISIBLE_DEVICES", std::to_string(gpu).c_str(), 1) != 0) {
+        setenv("CUDA_VISIBLE_DEVICES", visibleDevice.c_str(), 1) != 0) {
       throw benchmarkError("OP-BENCH-015", "cannot isolate the selected CUDA device", "check the CUDA environment");
     }
 

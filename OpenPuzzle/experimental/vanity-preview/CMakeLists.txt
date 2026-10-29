@@ -122,3 +122,7 @@ add_test(NAME VanityDurationTests COMMAND ${Python3_EXECUTABLE} -B
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/DurationTests.py
     $<TARGET_FILE:VanityCommonRuntimeDriver> $<TARGET_FILE:OpenPuzzleVanityAdapter>)
 set_tests_properties(VanityDurationTests PROPERTIES TIMEOUT 120)
+add_test(NAME VanityMultiGpuTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/MultiGpuTests.py
+    $<TARGET_FILE:OpenPuzzle> $<TARGET_FILE:OpenPuzzleVanityAdapter>)
+set_tests_properties(VanityMultiGpuTests PROPERTIES TIMEOUT 120)

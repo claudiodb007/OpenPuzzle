@@ -134,8 +134,10 @@ void VanityRunProfile::validateHardware(int selectedDevice,bool)const{
     while(std::getline(processes,line)){const auto values=fields(line);need(values.size()!=2||values[1]!=uuid,"Selected Vanity GPU is busy");}
     need(setenv("CUDA_VISIBLE_DEVICES",uuid.c_str(),1)==0&&setenv("CUDA_DEVICE_ORDER","PCI_BUS_ID",1)==0,"Cannot isolate measured Vanity GPU");return;
   }
-  need(GpuManager::currentGpu("CUDA",selectedDevice).name==gpu,"Vanity CUDA device identity changed");
-  need(setenv("CUDA_VISIBLE_DEVICES",std::to_string(selectedDevice).c_str(),1)==0&&setenv("CUDA_DEVICE_ORDER","PCI_BUS_ID",1)==0,
+  const auto selected=GpuManager::currentGpu("CUDA",selectedDevice);
+  need(selected.name==gpu,"Vanity CUDA device identity changed");
+  const auto visible=selected.uuid.empty()?std::to_string(selectedDevice):selected.uuid;
+  need(setenv("CUDA_VISIBLE_DEVICES",visible.c_str(),1)==0&&setenv("CUDA_DEVICE_ORDER","PCI_BUS_ID",1)==0,
        "Cannot isolate selected Vanity GPU");
 }
 
