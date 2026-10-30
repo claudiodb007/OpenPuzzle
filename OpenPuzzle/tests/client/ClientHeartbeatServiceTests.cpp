@@ -1,6 +1,7 @@
 #include "openpuzzle/client/ClientHeartbeatService.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
+#include "openpuzzle/tools/ToolManager.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -131,7 +132,7 @@ int main() {
   }
 
   assert(
-      heartbeat.engines.size() == 4);
+      heartbeat.engines.size() == 5);
 
   const auto kangaroo =
       std::find_if(
@@ -144,6 +145,21 @@ int main() {
           });
 
   assert(kangaroo != heartbeat.engines.end());
+
+  const auto vanity = std::find_if(
+      heartbeat.engines.begin(), heartbeat.engines.end(),
+      [](const ClientEngineCapability& engine) {
+        return engine.name == "Vanity" && engine.backend == "CUDA";
+      });
+  assert(vanity != heartbeat.engines.end());
+  assert(std::count_if(
+      heartbeat.engines.begin(), heartbeat.engines.end(),
+      [](const ClientEngineCapability& engine) { return engine.name == "Vanity"; }) == 1);
+  const bool vanityInstalled =
+      openpuzzle::ToolManager::vanityPath().has_value() &&
+      openpuzzle::ToolManager::vanityAdapterPath().has_value();
+  assert(vanity->installed == vanityInstalled);
+  assert(vanity->available == vanityInstalled);
 
   for (const auto& engine :
        heartbeat.engines) {

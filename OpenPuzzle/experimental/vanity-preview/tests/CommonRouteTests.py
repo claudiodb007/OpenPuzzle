@@ -8,7 +8,7 @@ import Support as s
 class Tests(unittest.TestCase):
  def setUp(self):
   os.umask(0o077);self.tmp=tempfile.TemporaryDirectory(prefix="opv ordinary ç ' $() ");self.root=Path(self.tmp.name);self.home=self.root/'home';self.home.mkdir()
-  self.bin=self.root/'bin';self.bin.mkdir();self.calls=[];self.reject=False;self.bad_range=False;self.complete_fail=False;self.processes=[];self.checked=0
+  self.bin=self.root/'bin';self.bin.mkdir();self.calls=[];self.reject=False;self.bad_range=False;self.complete_fail=False;self.cancel_fail=False;self.processes=[];self.checked=0
   shutil.copytree(Path(__file__).parent/'support',self.root/'support');self.engine=self.root/'FakeTargetEngine.py'
   self.engine.write_text((Path(__file__).parent/'FakeTargetEngine.py').read_text());self.engine.chmod(0o700)
   self.engine_name='vanity';self.uuid='GPU-12345678-1234-1234-1234-123456789abc';self.assignment=str(uuid.uuid4());self.client=str(uuid.uuid4());self.count=2**30;self.first=s.BASE;self.target=s.address(s.key_hash(s.BASE-2))
@@ -38,7 +38,12 @@ else:sys.exit(1)
      result=dict(success=True,status='running')
      if test.reject:result=dict(error='assignment_lease_expired',message='Lease expired');code=409
     elif self.path=='/api/range/complete':
-     test.assertEqual(q['assignment_id'],test.assignment);test.assertEqual(q['status'],'completed');test.assertEqual(q['exit_code'],0);test.assertEqual(int(q['keys_checked']),test.count);result=dict(success=True,status='completed',already_finalized=True)
+     test.assertEqual(q['assignment_id'],test.assignment)
+     if q['status']=='cancelled':
+      test.assertEqual(q['exit_code'],-2);test.assertLessEqual(int(q.get('keys_checked') or '0'),test.count);result=dict(success=True,status='cancelled',already_finalized=True)
+      if test.cancel_fail:result=dict(error='temporary_unavailable');code=503
+     else:
+      test.assertEqual(q['status'],'completed');test.assertEqual(q['exit_code'],0);test.assertEqual(int(q['keys_checked']),test.count);result=dict(success=True,status='completed',already_finalized=True)
      if test.complete_fail:result=dict(error='temporary_unavailable');code=503
     elif self.path in ('/api/client/register','/api/client/heartbeat'):result=dict(success=True)
     else:result=dict(error='unexpected_endpoint');code=404
@@ -95,13 +100,29 @@ else:sys.exit(1)
   self.engine_name='VANITY';p=self.start('--once');self.wait(p);self.assertEqual(sum(x=='/api/range/claim' for x,_ in self.calls),1);self.assertEqual(sum(x=='/api/range/complete' for x,_ in self.calls),1)
   self.assertIn('Engine............. Vanity',self.diagnostic());self.assertTrue((self.workspace/'vanity-run-profile.txt').is_file());self.assertFalse(self.state.exists())
  def pause(self):
-  p=self.start('--once');self.wait_progress();self.command(['stop']);self.wait(p,130)
+  # Native interruption without a user Stop remains recoverable.
+  p=self.start('--once');self.wait_progress();(self.workspace/'vanity-controls/cancel').touch();self.wait(p,130)
   self.wait_native_stopped()
+  (self.workspace/'vanity-controls/cancel').unlink()
   self.assertEqual(sum(x=='/api/range/complete' for x,_ in self.calls),0);self.assertTrue(self.state.exists());self.assertIn('stopped',self.command(['status']).stdout)
- def test_stop_reopen_resume_same_assignment_and_preserve_native_attempts(self):
+ def test_native_interruption_reopens_same_assignment_and_preserves_attempts(self):
   self.pause();before=self.snapshot();p=self.start('--once');self.wait(p);self.assertEqual(sum(x=='/api/range/claim' for x,_ in self.calls),1)
   for name,digest in before.items():self.assertEqual(hashlib.sha256((self.workspace/name).read_bytes()).hexdigest(),digest)
   self.assertEqual(sum(x=='/api/range/complete' for x,_ in self.calls),1)
+ def test_user_stop_cancels_existing_assignment_and_removes_active_state(self):
+  p=self.start('--once');self.wait_progress();self.command(['stop']);self.wait(p)
+  self.wait_native_stopped();self.assertFalse(self.state.exists());self.assertTrue((self.workspace/'cancel-requested.txt').is_file())
+  completions=[q for path,q in self.calls if path=='/api/range/complete']
+  self.assertEqual(len(completions),1);self.assertEqual(completions[0]['status'],'cancelled');self.assertEqual(sum(path=='/api/range/claim' for path,_ in self.calls),1)
+ def test_cancel_response_failure_retries_cancel_without_lease_claim_or_kernel(self):
+  self.cancel_fail=True;p=self.start('--once');self.wait_progress();self.command(['stop']);self.wait(p,1)
+  self.wait_native_stopped();before=self.snapshot();self.assertTrue(self.state.exists());self.cancel_fail=False;self.reject=True;calls=len(self.calls)
+  p=self.start('--once');self.wait(p);self.assertEqual(before,self.snapshot());self.assertFalse(self.state.exists())
+  self.assertEqual([path for path,_ in self.calls[calls:]],['/api/range/complete'])
+  self.assertEqual(self.calls[-1][1]['status'],'cancelled')
+ def test_user_stop_cancels_previously_interrupted_assignment(self):
+  self.pause();self.command(['stop']);self.assertFalse(self.state.exists())
+  self.assertEqual([q['status'] for path,q in self.calls if path=='/api/range/complete'],['cancelled'])
  def test_safe_stop_finishes_assignment_then_blocks_next_claim(self):
   p=self.start();self.wait_progress();self.command(['safestop']);self.wait(p);self.assertEqual(sum(x=='/api/range/claim' for x,_ in self.calls),1);self.assertEqual(sum(x=='/api/range/complete' for x,_ in self.calls),1)
  def test_refused_lease_keeps_checkpoint_no_claim_no_launch(self):

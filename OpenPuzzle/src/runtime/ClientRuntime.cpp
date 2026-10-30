@@ -432,6 +432,12 @@ int ClientRuntime::run(
 
       std::cout << "Stopping search engine...\n";
 
+      if (dependencies_.prepareCancellation && !dependencies_.prepareCancellation(workspace)) {
+        dependencies_.stopExecution(workspace);
+        std::cerr << "Cancellation intent could not be saved; engine stop requested and local state preserved.\n";
+        return 1;
+      }
+
       if (!dependencies_.stopExecution(
               workspace)) {
         std::cerr
@@ -736,6 +742,15 @@ int ClientRuntime::run(
           << '\n'
           << "Local state retained for diagnosis.\n";
 
+      return 1;
+    }
+
+    if (result.interrupted && result.exitCode == -2) {
+      if (result.completionUploaded && result.stateRemoved) {
+        std::cout << "Assignment......... cancelled\nLocal state........ removed\n";
+        return 0;
+      }
+      std::cerr << "Cancellation pending; local state retained for retry.\n";
       return 1;
     }
 

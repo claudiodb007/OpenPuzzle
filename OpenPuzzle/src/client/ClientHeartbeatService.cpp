@@ -7,6 +7,7 @@
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/hardware/GpuTelemetry.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
+#include "openpuzzle/tools/ToolManager.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -372,6 +373,17 @@ ClientHeartbeatService::engines() {
       makeCapability(
           "Kangaroo",
           "CUDA"));
+
+  ClientEngineCapability vanity;
+  vanity.name = "Vanity";
+  vanity.backend = "CUDA";
+  // The common Vanity runtime needs both packaged executables. Discovery
+  // reports installation only; it does not launch an engine or benchmark.
+  vanity.installed =
+      ToolManager::vanityPath().has_value() &&
+      ToolManager::vanityAdapterPath().has_value();
+  vanity.available = vanity.installed;
+  capabilities.push_back(std::move(vanity));
 
   return capabilities;
 }

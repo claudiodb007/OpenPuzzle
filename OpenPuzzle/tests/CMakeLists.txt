@@ -1698,6 +1698,16 @@ add_executable(ClientHeartbeatServiceTests
     client/ClientHeartbeatServiceTests.cpp
 )
 
+add_executable(VanityCancellationIntentTests client/VanityCancellationIntentTests.cpp)
+target_link_libraries(VanityCancellationIntentTests PRIVATE OpenPuzzleCore)
+target_compile_options(VanityCancellationIntentTests PRIVATE -UNDEBUG)
+add_test(NAME VanityCancellationIntentTests COMMAND VanityCancellationIntentTests)
+add_executable(VanityCancellationSyncDriver client/VanityCancellationSyncDriver.cpp)
+target_link_libraries(VanityCancellationSyncDriver PRIVATE OpenPuzzleCore)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(NAME VanityCancellationSyncTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/client/VanityCancellationSyncTests.py $<TARGET_FILE:VanityCancellationSyncDriver>)
+
 target_link_libraries(ClientHeartbeatServiceTests
     PRIVATE
         OpenPuzzleCore

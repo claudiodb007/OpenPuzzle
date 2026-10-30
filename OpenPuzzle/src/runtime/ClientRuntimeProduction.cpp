@@ -123,9 +123,9 @@ ClientRuntime::productionDependencies(
             : std::string{};
       };
 
-  dependencies.preserveCheckpoint = [](const std::string& workspace) {
+  dependencies.prepareCancellation = [](const std::string& workspace) {
     auto state=client::ClientStateStore::load();
-    return state && state->engine=="Vanity" && state->workspace==workspace;
+    return state && state->workspace==workspace && client::ExecutionSyncService::requestCancellation(*state);
   };
 
   dependencies.removeState =

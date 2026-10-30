@@ -275,6 +275,11 @@ int main() {
     bool stopped = false;
     bool cancelled = false;
     bool stateRemoved = false;
+    bool cancellationPrepared = false;
+    dependencies.prepareCancellation = [&](const std::string& workspace) {
+      assert(workspace == "/tmp/workspace-3");
+      assert(!stopped);cancellationPrepared = true;return true;
+    };
 
     dependencies.stopRequested =
         [] {
@@ -291,6 +296,7 @@ int main() {
     dependencies.stopExecution =
         [&](const std::string &workspace) {
           assert(workspace == "/tmp/workspace-3");
+          assert(cancellationPrepared);
           stopped = true;
           return true;
         };
@@ -335,6 +341,36 @@ int main() {
     assert(stopped);
     assert(cancelled);
     assert(stateRemoved);
+  }
+
+  {
+    auto dependencies=makeDependencies();
+    bool stopped=false;
+    dependencies.stopRequested=[] {return true;};
+    dependencies.prepareCancellation=[](const std::string&) {return false;};
+    dependencies.stopExecution=[&](const std::string&) {stopped=true;return true;};
+    dependencies.finalizeAssignment=[](const auto&,const auto&,const auto&,int,const auto&,const auto&,auto&) {
+      assert(false);return client::AssignmentUploadStatus::Uploaded;
+    };
+    dependencies.removeState=[] {assert(false);return false;};
+    ClientRuntime runtime(std::move(dependencies));
+    assert(runtime.run("https://server.test","assignment","client","/tmp/test")==1);
+    assert(stopped);
+  }
+
+  for (bool accepted : {false,true}) {
+    auto dependencies=makeDependencies();
+    dependencies.sync=[accepted](const std::string&) {
+      client::ExecutionSyncResult result;result.hasState=true;result.hasExitCode=true;
+      result.exitCode=-2;result.interrupted=true;result.completionUploaded=accepted;result.stateRemoved=accepted;
+      result.completionStatus=accepted?client::AssignmentUploadStatus::Uploaded:client::AssignmentUploadStatus::TemporaryFailure;
+      return result;
+    };
+    dependencies.finalizeAssignment=[](const auto&,const auto&,const auto&,int,const auto&,const auto&,auto&) {
+      assert(false);return client::AssignmentUploadStatus::Uploaded;
+    };
+    ClientRuntime runtime(std::move(dependencies));
+    assert(runtime.run("https://server.test","assignment","client","/tmp/test")== (accepted?0:1));
   }
 
   /*

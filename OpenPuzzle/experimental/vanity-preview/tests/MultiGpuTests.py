@@ -7,7 +7,7 @@ CLI=Path(sys.argv.pop(1)).resolve();ADAPTER=Path(sys.argv.pop(1)).resolve()
 class Tests(unittest.TestCase):
  def setUp(self):
   os.umask(0o077);self.tmp=tempfile.TemporaryDirectory(prefix='opv-multi-');self.root=Path(self.tmp.name);self.home=self.root/'home';self.home.mkdir()
-  self.calls=[];self.claims={};self.completions=[];self.process=None
+  self.calls=[];self.claims={};self.completions=[];self.final_statuses=[];self.process=None
   engines=self.root/'libexec/OpenPuzzle';engines.mkdir(parents=True)
   self.cli=self.root/'openpuzzle';shutil.copy2(CLI,self.cli);shutil.copy2(ADAPTER,engines/'openpuzzle-vanity-adapter')
   shutil.copytree(Path(__file__).parent/'support',engines/'support')
@@ -51,7 +51,12 @@ else:sys.exit(1)
      test.assertNotIn(slot,test.claims);identifier=str(uuid.uuid4());test.claims[slot]=identifier;first=test.first+d*2**35
      result=dict(assignment_id=identifier,puzzle=71,range_id=80+d,target=test.target,start=f'{first:x}',end=f'{first+test.count-1:x}',search_mode='linear')
     elif self.path=='/api/range/complete':
-     test.assertEqual(int(q['keys_checked']),test.count);test.assertIn(q['assignment_id'],test.claims.values());test.completions.append(q['assignment_id']);result=dict(success=True,status='completed')
+     test.assertIn(q['assignment_id'],test.claims.values());test.completions.append(q['assignment_id']);test.final_statuses.append(q['status'])
+     if q['status']=='completed':test.assertEqual(int(q['keys_checked']),test.count);test.assertEqual(q['exit_code'],0)
+     else:test.assertEqual(q['status'],'cancelled');test.assertEqual(q['exit_code'],-2);test.assertLessEqual(int(q['keys_checked']),test.count)
+     result=dict(success=True,status=q['status'])
+    elif self.path=='/api/client/heartbeat':
+     vanity=[entry for entry in q['engines'] if entry['name']=='Vanity'];test.assertEqual(len(vanity),1);test.assertEqual(vanity[0],dict(name='Vanity',backend='CUDA',installed=True,available=True));result=dict(success=True,status='running')
     else:result=dict(success=True,status='running')
     data=json.dumps(result).encode();self.send_response(200);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
   self.server=ThreadingHTTPServer(('127.0.0.1',0),Handler);self.server.daemon_threads=True;threading.Thread(target=self.server.serve_forever,daemon=True).start()
@@ -68,6 +73,10 @@ else:sys.exit(1)
  def command(self,args):
   r=subprocess.run([str(self.cli),*args],env=self.env,capture_output=True,text=True,timeout=25);self.assertEqual(r.returncode,0,r.stdout+r.stderr);return r.stdout
  def test_shared_supervisor_two_slots_physical_binding_and_global_safe_stop(self):
+  self.run_supervisor('safestop')
+ def test_shared_supervisor_global_stop_cancels_both_assignments(self):
+  self.run_supervisor('stop')
+ def run_supervisor(self,control):
   with (self.root/'runtime.log').open('w') as log:
    self.process=subprocess.Popen([str(self.cli),'run','71','--engine','vanity','--backend','cuda','--devices','all'],env=self.env,stdout=log,stderr=subprocess.STDOUT)
   data=self.home/'.local/share/OpenPuzzle'
@@ -79,9 +88,11 @@ else:sys.exit(1)
    time.sleep(.02)
   else:self.fail((self.root/'runtime.log').read_text())
   self.assertEqual(len(list(data.glob('client-cuda-*.state'))),2)
-  self.command(['safestop']);(self.root/'release').touch()
+  self.command([control])
+  if control=='safestop':(self.root/'release').touch()
   self.assertEqual(self.process.wait(timeout=30),0,(self.root/'runtime.log').read_text())
   self.assertEqual(set(self.claims),{'cuda-0','cuda-1'});self.assertCountEqual(self.completions,list(self.claims.values()))
+  self.assertEqual(self.final_statuses,['completed' if control=='safestop' else 'cancelled']*2)
   rows=[json.loads(row) for row in (self.root/'launches').read_text().splitlines()];self.assertEqual({row['device'] for row in rows},{0,1})
 
 if __name__=='__main__':unittest.main(verbosity=2)

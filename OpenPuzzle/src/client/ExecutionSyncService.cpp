@@ -7,12 +7,15 @@
 #include "VanityCommonEngine.hpp"
 #endif
 #include "openpuzzle/core/LocalPaths.hpp"
+#include "openpuzzle/core/AtomicFile.hpp"
 #include "openpuzzle/runtime/WorkspaceSecurity.hpp"
 #ifdef _WIN32
 #include "openpuzzle/runtime/WindowsExecutionState.hpp"
 #include "openpuzzle/core/WindowsPrivateFile.hpp"
 #include "openpuzzle/runtime/WindowsEngineProcess.hpp"
 #else
+#include <fcntl.h>
+#include <sys/stat.h>
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/performance/AdaptiveProfileUpdater.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
@@ -75,6 +78,33 @@ void nativeExit(const ClientExecutionState& state, ExecutionSyncResult& result) 
 ExecutionSyncService::ExecutionSyncService()
     : ExecutionSyncService(
           defaultStartTime) {}
+
+#ifndef _WIN32
+bool ExecutionSyncService::cancellationRequested(const ClientExecutionState& state) {
+  if (state.engine != "Vanity") return false;
+  const auto path=std::filesystem::path(state.workspace)/"cancel-requested.txt";
+  const int fd=::open(path.c_str(),O_RDONLY|O_NONBLOCK|O_NOFOLLOW);
+  if(fd<0) {
+    if(errno==ENOENT)return false;
+    throw std::runtime_error("Cancellation intent unreadable; state preserved");
+  }
+  struct stat info{};char bytes[512];
+  const bool safe=fstat(fd,&info)==0 && S_ISREG(info.st_mode) && info.st_uid==getuid() && !(info.st_mode&0077) && info.st_size>0 && info.st_size<512;
+  const auto size=safe?::read(fd,bytes,sizeof(bytes)):-1;::close(fd);
+  const std::string expected="OP-CANCEL-1\n"+state.assignmentId+"\n"+state.clientId+"\n";
+  if(!safe || size!=info.st_size || std::string(bytes,size<0?0:size)!=expected)
+    throw std::runtime_error("Cancellation intent differs; state preserved");
+  return true;
+}
+bool ExecutionSyncService::requestCancellation(const ClientExecutionState& state) {
+  if(state.engine!="Vanity")return true;
+  try {
+    if(cancellationRequested(state))return true;
+    return writePrivateFileAtomically(std::filesystem::path(state.workspace)/"cancel-requested.txt",
+        "OP-CANCEL-1\n"+state.assignmentId+"\n"+state.clientId+"\n");
+  } catch(...) {return false;}
+}
+#endif
 
 ExecutionSyncService::ExecutionSyncService(
     ProcessStartTimeReader processStartTimeReader)
@@ -958,10 +988,16 @@ ExecutionSyncService::tick(
           artifacts(*state),
           state->engine);
 
-  const bool completed =
-      exitCode == 0;
+  bool explicitlyCancelled = false;
+#ifndef _WIN32
+  explicitlyCancelled = cancellationRequested(*state);
+  if(explicitlyCancelled) {
+    exitCode=-2;result.exitCode=exitCode;result.interrupted=true;
+  }
+#endif
+  const bool completed = exitCode == 0;
 
-  if (state->engine=="Vanity" && (!completed || !hasCompletionProof(
+  if (state->engine=="Vanity" && !explicitlyCancelled && (!completed || !hasCompletionProof(
           artifacts(*state),state->engine,assignedKeyCount(state->start,state->end).value_or("")))) {
     result.checkpointPreserved=true;
     result.completionError="Vanity checkpoint preserved for explicit resume/review";

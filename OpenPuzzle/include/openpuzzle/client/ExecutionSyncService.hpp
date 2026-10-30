@@ -123,6 +123,13 @@ public:
   classifyCompletionError(
       const std::string& errorCode);
 
+#ifndef _WIN32
+  // Persist explicit cancellation before stopping. A pending cancellation must
+  // be retried, never interpreted as permission to resume/reclaim the range.
+  static bool requestCancellation(const ClientExecutionState& state);
+  static bool cancellationRequested(const ClientExecutionState& state);
+#endif
+
 private:
   enum class ProcessIdentityStatus {
     Running,

@@ -1243,7 +1243,14 @@ int stopExecution() {
   }
 
   if (!processIdentityMatches(*state)) {
-    if(state->engine=="Vanity"){std::cout << "Vanity checkpoint/state preserved for resume.\n";return 0;}
+    if(state->engine=="Vanity") {
+      if(client::ExecutionSyncService().inspect().identityUnavailable || !client::ExecutionSyncService::requestCancellation(*state)) {
+        std::cerr << "Vanity cancellation identity/intent unavailable; state preserved.\n";return 1;
+      }
+      const auto result=client::ExecutionSyncService().tick(serverUrl({}));
+      if(!result.stateRemoved){std::cerr << "Cancellation pending; state preserved: " << result.completionError << '\n';return 1;}
+      std::cout << "Assignment......... cancelled\n";return 0;
+    }
     client::ClientStateStore::remove();
 
     std::cout << "Execution is no longer running.\n"
@@ -1254,6 +1261,10 @@ int stopExecution() {
 
   ExecutionStopper stopper;
 
+  if(state->engine=="Vanity" && !client::ExecutionSyncService::requestCancellation(*state)) {
+    std::cerr << "Vanity cancellation intent unavailable; state preserved.\n";return 1;
+  }
+
   if (!stopper.stop(state->workspace)) {
     std::cerr << "Unable to stop execution " << state->pid << '\n';
 
@@ -1261,7 +1272,10 @@ int stopExecution() {
   }
 
   if(state->engine!="Vanity") client::ClientStateStore::remove();
-  else std::cout << "Vanity checkpoint/state preserved for resume.\n";
+  else {
+    const auto result=client::ExecutionSyncService().tick(serverUrl({}));
+    if(!result.stateRemoved){std::cerr << "Cancellation pending; state preserved: " << result.completionError << '\n';return 1;}
+  }
 
   std::cout << "Execution stopped.\n"
             << "Assignment......... " << state->assignmentId << '\n';
@@ -2591,6 +2605,12 @@ ClientIterationResult RunSession::runOnce(
       }
       if(client::ExecutionSyncService().inspect().identityUnavailable)
         throw std::runtime_error("Vanity process identity unavailable; state preserved");
+      if(client::ExecutionSyncService::cancellationRequested(*existing)) {
+        if(processIdentityMatches(*existing) && !ExecutionStopper().stop(existing->workspace))
+          throw std::runtime_error("Pending Vanity cancellation could not stop engine; state preserved");
+        std::cout << "Retrying assignment cancellation; no claim, lease renewal or engine launch.\n";
+        return monitoredResult(ClientRuntime().run(server,existing->assignmentId,existing->clientId,existing->workspace));
+      }
       if(!processIdentityMatches(*existing) && !client::ExecutionSyncService::solutionFile(existing->workspace,existing->engine)) {
         auto metadata=PuzzleMetadataCatalog::load(existing->puzzle);
         if(!metadata || selectedPuzzle(args)!=existing->puzzle) throw std::runtime_error("Vanity recovery puzzle differs");
