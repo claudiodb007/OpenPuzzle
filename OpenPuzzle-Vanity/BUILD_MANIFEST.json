@@ -1,6 +1,8 @@
 {
-  "based_on": "2432e02ad0af7b5569feb52669018035efa7a2c8",
+  "based_on": "f75bb4cd0cd997931a48124ca2b9b81e7fa1f379",
   "build_recipe_sha256": "ace5252ae9bb730263d1674324446d0e5cc57b34d99ef60f1e9906ff12ba688c",
+  "candidate_fingerprint": "f2ce510a5e59f1459fb11133449b5de1fec0f8c32543264ad0b1fe69bd182d50",
+  "cpu_wait_policy": "cudaDeviceScheduleBlockingSync",
   "cubin_architectures": [
     50,
     52,
@@ -17,11 +19,10 @@
     12,
     4
   ],
-  "engine_sha256": "ba950a0992ace1b6d06281e0ee676f6fc42f02f86973303cb0ef0d1020a17a9d",
+  "engine_sha256": "0d9c797f998e250449d9cbccced7395b0086cae3909a00277f6d1baed162cf72",
   "format": 1,
   "hardware_acceptance": {
-    "RTX 3080": 5,
-    "RTX 4070 SUPER": 1
+    "RTX 3080": 5
   },
   "host_cpp_flags": [
     "-fno-strict-aliasing"
@@ -73,6 +74,6 @@
     "hash/sha256_sse.cpp": "a6bff7fa7028efe4fa23a56d3918d169c73edea883be57c33d96eec35ad154f9",
     "hash/sha512.cpp": "fb6a4771846dcb63052969b9e67337a1a504d63e4af723a6d4642bc2cb9c78d8",
     "hash/sha512.h": "df167ade9be1f9599a77856d88af16775f5ebd01f91496719e83ddd5a72611e2",
-    "offline.cpp": "c1d6081e5c6a04887210378633c424a036b5237aa7eacd9271da366fe2034b39"
+    "offline.cpp": "79e1e9ec56a1e53d118e129cd0be00f85dd2fcaa3ad66289aceb4c3a74de68e7"
   }
 }

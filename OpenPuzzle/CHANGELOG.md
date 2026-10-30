@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.53 — Release CPU while Vanity waits for CUDA
+
+- Request and verify blocking synchronization, preserving other context flags.
+- Package the exact candidate tested on five RTX 3080 cards simultaneously.
+- Preserve kernels, profiles, range sizing, multi-GPU slots and common controls.
+
 ## 1.0.52 — Correct native Vanity benchmark ownership
 
 - Exec the benchmark engine directly under the client, preserving owner checks.

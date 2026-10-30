@@ -30,6 +30,16 @@ static void writeAll(int fd,const std::string& s) {
   size_t n=0;while(n<s.size()) {ssize_t k=write(fd,s.data()+n,s.size()-n);if(k<0&&errno==EINTR)continue;if(k<=0)throw std::runtime_error("Solution write failed");n+=k;}
   if(fsync(fd))throw std::runtime_error("Solution fsync failed");
 }
+static void configureBlockingSynchronization() {
+  unsigned int flags=0;
+  if(cudaGetDeviceFlags(&flags)!=cudaSuccess ||
+     cudaSetDeviceFlags((flags & ~cudaDeviceScheduleMask) | cudaDeviceScheduleBlockingSync)!=cudaSuccess ||
+     cudaGetDeviceFlags(&flags)!=cudaSuccess ||
+     (flags & cudaDeviceScheduleMask)!=cudaDeviceScheduleBlockingSync)
+    throw std::runtime_error("CUDA blocking synchronization setup failed");
+  std::cout<<"OPV-CPU-WAIT-1 blocking\n"<<std::flush;
+}
+
 int main(int argc,char** argv) {
   int solutionFd=-1;
   try {
@@ -56,6 +66,7 @@ int main(int argc,char** argv) {
     signal(SIGTERM,stop);signal(SIGINT,stop);
     if(prctl(PR_SET_PDEATHSIG,SIGTERM)!=0 || getppid()!=pid_t(owner))throw std::runtime_error("Owner changed");
     int devices=0;if(cudaGetDeviceCount(&devices)!=cudaSuccess || devices!=1)throw std::runtime_error("Exactly one visible CUDA GPU required");
+    configureBlockingSynchronization();
     auto targets=opvTargets::load(argv[5]);
     std::map<uint16_t,std::set<uint32_t>> buckets;
     for(const auto& pair:targets) {

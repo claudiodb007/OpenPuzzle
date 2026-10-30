@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(OpenPuzzle VERSION 1.0.52 LANGUAGES CXX)
+project(OpenPuzzle VERSION 1.0.53 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -716,6 +716,7 @@ install(
         docs/RELEASE_1.0.50.md
         docs/RELEASE_1.0.51.md
         docs/RELEASE_1.0.52.md
+        docs/RELEASE_1.0.53.md
         docs/SYSTEMD_SERVICE.md
     DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
 )
@@ -819,3 +820,15 @@ set(
 set(CPACK_PACKAGE_CHECKSUM "SHA256")
 
 include(CPack)
+
+# CPU-only regression of the native CUDA scheduling helper.
+if(BUILD_TESTING AND UNIX AND NOT APPLE)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME VanityBlockingWaitTests
+            COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/VanityBlockingWaitTests.py"
+                "${CMAKE_CURRENT_SOURCE_DIR}/../OpenPuzzle-Vanity/source/offline.cpp"
+                "${CMAKE_CXX_COMPILER}")
+    endif()
+endif()
