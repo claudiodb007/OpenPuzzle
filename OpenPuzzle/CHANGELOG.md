@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.51 — Vanity CUDA architecture compatibility
+
+- Package Maxwell/Pascal/Volta/Turing/Ampere/Ada/Hopper device targets and PTX.
+- Preserve legacy CPU hash aliasing semantics and verify address checksums.
+- Retain ordinary profiles, range sizing, multi-GPU controls and cancellation.
+- Preserve real known-address evidence from one RTX 4070 SUPER and five RTX 3080.
+
 ## 1.0.48 — Automatic desktop GPU benchmarks
 
 - Run automatic CUDA/OpenCL tuning from the Linux desktop after confirmation,

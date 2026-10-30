@@ -1,0 +1,78 @@
+{
+  "based_on": "2432e02ad0af7b5569feb52669018035efa7a2c8",
+  "build_recipe_sha256": "ace5252ae9bb730263d1674324446d0e5cc57b34d99ef60f1e9906ff12ba688c",
+  "cubin_architectures": [
+    50,
+    52,
+    60,
+    61,
+    70,
+    75,
+    80,
+    86,
+    89,
+    90
+  ],
+  "cuda_toolkit_version": [
+    12,
+    4
+  ],
+  "engine_sha256": "ba950a0992ace1b6d06281e0ee676f6fc42f02f86973303cb0ef0d1020a17a9d",
+  "format": 1,
+  "hardware_acceptance": {
+    "RTX 3080": 5,
+    "RTX 4070 SUPER": 1
+  },
+  "host_cpp_flags": [
+    "-fno-strict-aliasing"
+  ],
+  "ptx_architectures": [
+    50
+  ],
+  "sources": {
+    "Base58.cpp": "6ecf3c2de7fc4d300da005c2c58d17f135f242d56d90e8ea03ce79475cbca9fa",
+    "Base58.h": "0a13f9f2afeda2b879aeecc7c74fb71b8bdab6b289e24993fcf909975b2c7c32",
+    "Bech32.cpp": "1c18d49edfe645ab7df34395cdaf49e72a63f0ed12b260f1cb753736cb2c9881",
+    "Bech32.h": "265a5d8ff20954cbb4ebdca93c6d5127d091b176be2d25c3cc39424bf928a095",
+    "GPU/GPUBase58.h": "6cd24c04c8509351cca59e3f2a023f3b869a4e9285f913213332cc621cc2bcdc",
+    "GPU/GPUCompute.h": "9c88f8c864d7e5dd23a63da0aaebf2e5a806ddd7e633ca47c219aea6c5d8e79a",
+    "GPU/GPUEngine.cu": "1fe625cb022970ff9b209144d9cc1acb63c1ad39e23e97dc3b92da27140f9c2a",
+    "GPU/GPUEngine.h": "a208de29b4ab48d4fc231cffe8f96b31ef2df86004e1b146d31790bd4f010247",
+    "GPU/GPUGenerate.cpp": "67ae5442c48ef7a8ba7c155ff03710fd71de46cefd4ec6546382e3964bf232ab",
+    "GPU/GPUGroup.h": "1f30632bfdaecaec709f89f20f9fab010960bfa44e9419ccb7e058b7aabd384b",
+    "GPU/GPUHash.h": "a02bc200e849b8595d35abdbc8f6288856068e2b61eb0fe5164a2eb95ee28e1a",
+    "GPU/GPUMath.h": "896bd79b4f4d75bed43271f60907a0ec38ea1889b3f1c39416a4563dbda6579f",
+    "GPU/GPUWildcard.h": "6303d89768cb39e5247ad53fcc441b5e9017df0b4f3707e53b1b290a28e6f971",
+    "Int.cpp": "37053a082cb0ea8846925adbf50410a0f593ea74a9147d2e655af8a0a3f3ebb8",
+    "Int.h": "579a3f7460aa01d48493bffaeccdb9beed67511791954cee43fbbecb66f40e8f",
+    "IntGroup.cpp": "d84be18445497337375cdc87637a6cb5c19eac94872fdeedf8584df2a1b9f6d8",
+    "IntGroup.h": "3911d1f6b0f6c328db29da3bea6c9b05331ebbc43adced7b226043967b4e241d",
+    "IntMod.cpp": "5df94f9116d6d89b5e45cd8f042649cc08a2fa90b692aba8255f910c17695853",
+    "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "Point.cpp": "934efb23a1369488bb0426591bb48cc3f3d0dbc46ecc64dd0fcd3343478d074b",
+    "Point.h": "8dffd2798849d924261c3d9869ab73b8940c4741359530577f90c50bc6999759",
+    "Random.cpp": "ad2955541944a12a25c137eab540872858faa9be2528be6d8008d0ea9119d2fa",
+    "Random.h": "5ec5019bf6f2a5ab579f1242b17ab617b9011e29359559b0160a0c8caf21739c",
+    "SECP256K1.cpp": "6982547aa700dd9cbf161089c1f8e5e480d1fccd7c423cffc3d2cefcc9794b83",
+    "SECP256k1.h": "457b9dd56d78b292afcbff2b6bfc69d5c9742aaa26daedc5477e497ea2e1dfa9",
+    "TargetInput.hpp": "a3a9796b8e454a9ff60bc982338d21c595b50c5e345d781753defe1c60aa17b2",
+    "Timer.cpp": "504f8aad4b1f080f62c85d91044c9f88adde628473ca8509bb2210d9b7b1664a",
+    "Timer.h": "1ed0bfb95376f9c48b89c5ae184cd855f029f8548127e4eade5aa60cd5ccb558",
+    "UPSTREAM.json": "21e5611a6475ae12e706c75837b75ea4a032af59d764f1f7d7ed1eae0c4624ed",
+    "Wildcard.cpp": "95db41e235b93f0227def9345fa599da74cb0e9f789fba88135c15325b917390",
+    "Wildcard.h": "20152826d808bde8c02019b43f2aa5bbef9ae2643c32fc8f9841e6fe166e473b",
+    "client/openpuzzle/core/AtomicFile.hpp": "7bcef8df6b1e50842ea8464e7000edc39c521a7769839cfa785d524d07758e67",
+    "client/openpuzzle/core/IProcessRunner.hpp": "ee4c6a85f2f36866114dd93cf3adfc281c87f7b024c1e24244a59e96e97d31e9",
+    "client/openpuzzle/core/PosixProcessRunner.hpp": "041126cddda6f77cf9be75185a3b46fc8debad492669f3ca16908affaa5bbd1c",
+    "client/openpuzzle/runtime/VanityRangeProtocol.hpp": "ba4bee173bf6e3a8c52536f6e5d879d9fdb269a79b678d6ae630aa0d983c8e9f",
+    "hash/ripemd160.cpp": "08ea8d812482d59d1ce7ad1c9aaa32a5cb888a1f4228389b36e21cd064192909",
+    "hash/ripemd160.h": "d5c6d4aed136d79da16b3a8ab2cc638992238b7289f992fb1762ffda87f1d492",
+    "hash/ripemd160_sse.cpp": "1ae5dadea1adc0c0f4466dd3de6c33779867cc9483f62a3276d90b6c85ba281c",
+    "hash/sha256.cpp": "5a1bfa1765eed4b5e18befa52d6d862e55c791db807d1b9059382a9837770367",
+    "hash/sha256.h": "b5fda07ee0c758f2108520de23c83c66aafe3a3b872a8eae69c6464b4636f38c",
+    "hash/sha256_sse.cpp": "a6bff7fa7028efe4fa23a56d3918d169c73edea883be57c33d96eec35ad154f9",
+    "hash/sha512.cpp": "fb6a4771846dcb63052969b9e67337a1a504d63e4af723a6d4642bc2cb9c78d8",
+    "hash/sha512.h": "df167ade9be1f9599a77856d88af16775f5ebd01f91496719e83ddd5a72611e2",
+    "offline.cpp": "c1d6081e5c6a04887210378633c424a036b5237aa7eacd9271da366fe2034b39"
+  }
+}
