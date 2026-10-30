@@ -173,10 +173,18 @@ BenchmarkResult runVanityCandidate(
   using namespace vanityPreview;
   BenchmarkResult result;
   result.configuration = configuration;
+  std::string diagnostic;
+  int nativeExit = -1;
+  const auto reject = [&](const std::string& reason) {
+    std::cerr << "Vanity candidate... " << reason << "\n";
+    if (nativeExit >= 0) std::cerr << "Native exit........ " << nativeExit << "\n";
+    if (!diagnostic.empty()) std::cerr << "Native diagnostic.. " << diagnostic << "\n";
+    return result;
+  };
   if (configuration.blocks < 64 || configuration.blocks > 4096 ||
       (configuration.blocks & (configuration.blocks - 1)) ||
       configuration.threads != 256 || configuration.points != 1024) {
-    return result;
+    return reject("unsupported grid/threads/points");
   }
 
   const std::string start = "10000000000000000";
@@ -188,17 +196,18 @@ BenchmarkResult runVanityCandidate(
       "OPV-TARGETS-1\np2pkh 1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH\n";
 
   if (fs::exists(targets) || fs::is_symlink(targets)) {
-    if (fs::is_symlink(targets) || !fs::is_regular_file(targets)) return result;
+    if (fs::is_symlink(targets) || !fs::is_regular_file(targets)) return reject("unsafe benchmark target file");
     std::ifstream input(targets);
-    if (std::string((std::istreambuf_iterator<char>(input)), {}) != targetText) return result;
+    if (std::string((std::istreambuf_iterator<char>(input)), {}) != targetText) return reject("benchmark target contents differ; preserved");
   } else if (!writePrivateFileAtomically(targets, targetText)) {
-    return result;
+    return reject("cannot create private benchmark target file");
   }
   if (fs::exists(output) || fs::is_symlink(output)) {
-    if (fs::is_symlink(output) || !fs::is_regular_file(output) || !fs::remove(output)) return result;
+    if (fs::is_symlink(output) || !fs::is_regular_file(output) || !fs::remove(output)) return reject("unsafe or occupied benchmark output");
   }
 
   std::ostringstream command;
+  command << "exec"; // Keep the native engine directly owned by this client.
   for (const auto& argument : std::vector<std::string>{
            engine, "--target-file", start, std::to_string(count),
            std::to_string(configuration.blocks), targets.string(),
@@ -215,7 +224,11 @@ BenchmarkResult runVanityCandidate(
   const auto execution = runner.run(
       command.str(),
       [&](const std::string& line) {
-        if (invalid || !line.starts_with("OPV1 ")) return;
+        if (!line.starts_with("OPV1 ")) {
+          if (line.starts_with("FAILED: ") || diagnostic.empty()) diagnostic = line.substr(0, 512);
+          return;
+        }
+        if (invalid) return;
         try {
           protocol.consume(line);
           if (!line.starts_with("OPV1 PROGRESS ")) return;
@@ -227,25 +240,28 @@ BenchmarkResult runVanityCandidate(
           }
           previous = protocol.checked;
           previousTime = now;
-        } catch (...) {
+        } catch (const std::exception& error) {
           invalid = true;
+          diagnostic = (std::string("Protocol error: ") + error.what()).substr(0, 512);
         }
       },
       seconds,
       [] { return SignalHandler::stopRequested(); });
 
-  if (SignalHandler::stopRequested() || !execution.started || invalid ||
+  nativeExit = execution.exitCode;
+  if (SignalHandler::stopRequested()) return result;
+  if (!execution.started || invalid ||
       !protocol.begun || (!protocol.stopped && !protocol.complete) ||
       !fs::is_regular_file(output) || fs::file_size(output) != 0) {
-    return result;
+    return reject("native session did not finish coherently");
   }
   const std::size_t first = samples.size() > 2 ? 2 : samples.size();
-  if (samples.size() - first < 4) return result;
+  if (samples.size() - first < 4) return reject("fewer than four usable progress samples");
   double total = 0.0;
   result.minimumSpeed = std::numeric_limits<double>::max();
   for (std::size_t index = first; index < samples.size(); ++index) {
     const double value = samples[index];
-    if (!std::isfinite(value) || value <= 0.0) return BenchmarkResult{configuration};
+    if (!std::isfinite(value) || value <= 0.0) return reject("invalid native speed sample");
     total += value;
     result.minimumSpeed = std::min(result.minimumSpeed, value);
     result.maximumSpeed = std::max(result.maximumSpeed, value);

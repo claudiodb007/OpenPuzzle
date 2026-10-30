@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.52 — Correct native Vanity benchmark ownership
+
+- Exec the benchmark engine directly under the client, preserving owner checks.
+- Show bounded native diagnostics and strengthen the synthetic owner regression.
+- Preserve the tested 1.0.51 engine, profiles, range sizing and normal controls.
+
 ## 1.0.51 — Vanity CUDA architecture compatibility
 
 - Package Maxwell/Pascal/Volta/Turing/Ampere/Ada/Hopper device targets and PTX.

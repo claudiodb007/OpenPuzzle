@@ -70,6 +70,11 @@ if sys.argv[1:] == ['--identity']:
     print('OpenPuzzle-VanityRange 0.2.0 CUDA target protocol 1')
     raise SystemExit(0)
 assert len(sys.argv) == 9 and sys.argv[1] == '--target-file', sys.argv
+assert int(sys.argv[8]) == os.getppid(), 'native benchmark requires its actual owner as parent'
+root = __import__('pathlib').Path(os.environ['OPENPUZZLE_TEST_ROOT'])
+if (root / 'vanity-fail').exists():
+    print('FAILED: synthetic native initialization failure', flush=True)
+    raise SystemExit(2)
 start = sys.argv[2].lower().rjust(64, '0')
 count = int(sys.argv[3])
 grid = int(sys.argv[4])
@@ -185,6 +190,17 @@ raise SystemExit(130)
         assert vanity_profile[7] > 0 and vanity_profile[10] >= 4, vanity_profile
         assert 'Validated Vanity configuration' in vanity_result.stdout
         assert 'Candidate matrix. 5 configurations' in vanity_result.stdout
+
+        # Native diagnostics must survive the runner and a failed retry must keep the profile.
+        vanity_baseline = profiles()
+        (root / 'vanity-fail').touch()
+        rejected = run([
+            str(cli), 'benchmark', '--engine', 'vanity', '--backend', 'cuda',
+            '--gpu', '0', '--auto', '--real', '--require-idle', '--seconds', '10'
+        ])
+        assert rejected.returncode != 0 and profiles() == vanity_baseline
+        assert 'Native diagnostic.. FAILED: synthetic native initialization failure' in rejected.stdout
+        assert 'Native exit........ 2' in rejected.stdout
         print('LinuxBenchmarkCliTests passed: BitCrack and Vanity automatic selection, DB save, failure/cancel preservation, owned-child shutdown, workspace lock and retry; synthetic engines only.')
 
 
