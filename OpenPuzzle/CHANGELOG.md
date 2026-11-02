@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.54 — Complete Vanity benchmark grid coverage
+
+- Test all seven supported grids, 64 through 4096, before validating the winner.
+- Verify native launch coverage and selection through the synthetic CLI test.
+- Preserve existing measured profiles, the 1.0.53 engine and common controls.
+
 ## 1.0.53 — Release CPU while Vanity waits for CUDA
 
 - Request and verify blocking synchronization, preserving other context flags.

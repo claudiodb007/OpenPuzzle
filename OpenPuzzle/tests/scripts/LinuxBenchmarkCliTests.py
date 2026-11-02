@@ -78,6 +78,8 @@ if (root / 'vanity-fail').exists():
 start = sys.argv[2].lower().rjust(64, '0')
 count = int(sys.argv[3])
 grid = int(sys.argv[4])
+with (root / 'vanity-grids').open('a') as record:
+    record.write(str(grid) + '\\n')
 output = sys.argv[6]
 batch = grid * 256 * 1024
 with open(output, 'wb'):
@@ -189,7 +191,10 @@ raise SystemExit(130)
         assert vanity_profile[2:7] == ('CUDA', 'Vanity', 1024, 256, 1024), vanity_profile
         assert vanity_profile[7] > 0 and vanity_profile[10] >= 4, vanity_profile
         assert 'Validated Vanity configuration' in vanity_result.stdout
-        assert 'Candidate matrix. 5 configurations' in vanity_result.stdout
+        assert 'Candidate matrix. 7 configurations' in vanity_result.stdout
+        assert (root / 'vanity-grids').read_text().splitlines() == [
+            '64', '128', '256', '512', '1024', '2048', '4096', '1024'
+        ]
 
         # Native diagnostics must survive the runner and a failed retry must keep the profile.
         vanity_baseline = profiles()

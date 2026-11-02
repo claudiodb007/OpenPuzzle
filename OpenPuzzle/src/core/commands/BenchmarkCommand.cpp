@@ -147,20 +147,10 @@ std::string benchmarkShellQuote(const std::string& value) {
   return result + "'";
 }
 
-std::vector<BenchmarkConfiguration> vanityCandidateMatrix(int computeUnits) {
-  int anchor = 64;
-  const int requested = std::max(1, computeUnits) * 2;
-  while (anchor < requested && anchor < 4096) anchor *= 2;
-  anchor = std::clamp(anchor, 64, 4096);
-
+std::vector<BenchmarkConfiguration> vanityCandidateMatrix(int) {
   std::vector<BenchmarkConfiguration> result;
-  for (const int factor : {1, 2, 4, 8, 16}) {
-    const auto blocks = static_cast<long long>(anchor) * factor;
-    if (blocks > 4096) break;
-    result.push_back({static_cast<int>(blocks), 256, 1024});
-  }
-  while (result.size() < 5 && result.front().blocks > 64) {
-    result.insert(result.begin(), {result.front().blocks / 2, 256, 1024});
+  for (const int blocks : {64, 128, 256, 512, 1024, 2048, 4096}) {
+    result.push_back({blocks, 256, 1024});
   }
   return result;
 }
