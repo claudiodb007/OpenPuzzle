@@ -2320,6 +2320,7 @@ add_test(
         ${CMAKE_COMMAND}
         "-DINSTALLER=${OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH}"
         "-DPATCH_FILE=${OPENPUZZLE_PSCKANGAROO_PATCH_BUILD_PATH}"
+        "-DCHECKPOINT_PATCH_FILE=${OPENPUZZLE_PSCKANGAROO_CHECKPOINT_PATCH_BUILD_PATH}"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PsckangarooInstallerPatchContractTests.cmake
 )
 
@@ -2467,4 +2468,11 @@ if(UNIX AND NOT APPLE)
             ${CMAKE_CURRENT_SOURCE_DIR}/scripts/LinuxBenchmarkCliTests.py
             $<TARGET_FILE:OpenPuzzle>)
     set_tests_properties(LinuxBenchmarkCliTests PROPERTIES TIMEOUT 90)
+endif()
+
+if(UNIX AND NOT APPLE)
+    add_test(NAME KangarooSparseCheckpointTests
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/KangarooSparseCheckpointTests.py"
+            "${CMAKE_CXX_COMPILER}")
 endif()

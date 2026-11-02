@@ -58,3 +58,28 @@ PSCKangaroo executable is compiled locally after the user explicitly runs:
 ```text
 openpuzzle engine install psckangaroo
 ```
+
+## Sparse checkpoint storage on Linux (1.0.55)
+
+The same installer now applies the hash-pinned `sparse-checkpoint-v1` patch to
+TameStore.h after the existing explicit-seed patch. Both patches and all modified
+source files are verified before compilation. The engine manifest retains schema
+`openpuzzle-external-engine-v2` and adds checkpoint storage/patch provenance.
+
+The checkpoint writer preserves the exact RCKDT5C-v3 byte stream while seeking
+past zero-only table runs. On filesystems supporting sparse regular files, this
+reduces allocated disk space for partly empty tables. Logical file size, RAM
+capacity, DP selection, collision data and reader behavior are unchanged. Full
+tables may offer little or no saving. Windows keeps the dense write path.
+
+Already installed external engines and old checkpoints are preserved. Enable the
+new writer only through the normal explicit command, after stopping Kangaroo:
+
+```sh
+openpuzzle engine install psckangaroo --force
+```
+
+This local rebuild does not launch a search. Checkpoints saved by the previous
+engine remain readable, and subsequent saves use sparse storage. The client
+update does not compact or delete existing checkpoints. Use `du` to assess
+allocated space; `ls -lh` still displays the complete logical size.

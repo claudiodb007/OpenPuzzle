@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.55 — Sparse external Kangaroo checkpoints on Linux
+
+- Preserve the native checkpoint format while skipping zero-only table runs.
+- Pin and verify the second source patch in the existing external installer.
+- Test byte identity, legacy resume and checkpoint preservation on I/O failures.
+- Keep installed external engines unchanged until an explicit local rebuild.
+
 ## 1.0.54 — Complete Vanity benchmark grid coverage
 
 - Test all seven supported grids, 64 through 4096, before validating the winner.

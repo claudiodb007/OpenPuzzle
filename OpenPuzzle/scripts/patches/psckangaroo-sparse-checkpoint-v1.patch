@@ -1,0 +1,57 @@
+--- a/TameStore.h
++++ b/TameStore.h
+@@ -142,6 +142,45 @@
+ };
+ #pragma pack(pop)
+ 
++// Preserve the legacy checkpoint byte stream while avoiding physical zero runs.
++// The Windows writer is unchanged; POSIX regular files represent skipped bytes
++// as zero-filled holes. SaveCheckpoint still fsyncs and atomically renames.
++static size_t OpenPuzzleWriteCheckpointEntries(
++    const WildEntryCompact* table, u64 count, FILE* fp) {
++#ifdef _WIN32
++    return fwrite(table, sizeof(WildEntryCompact), count, fp);
++#else
++    if (count > ((u64(1) << 63) - 1) / sizeof(WildEntryCompact) ||
++        count > size_t(-1) / sizeof(WildEntryCompact)) return 0;
++    const size_t bytes = size_t(count) * sizeof(WildEntryCompact);
++    if (bytes == 0) return 0;
++    const unsigned char* data = reinterpret_cast<const unsigned char*>(table);
++    static const unsigned char zeros[4096] = {};
++    const auto flush_run = [&](size_t start, size_t length, bool empty) {
++        if (empty) return FSEEK64(fp, int64_t(length), SEEK_CUR) == 0;
++        return fwrite(data + start, 1, length, fp) == length;
++    };
++    size_t start = 0;
++    bool empty_run = false;
++    for (size_t position = 0; position < bytes;) {
++        const size_t remaining = bytes - position;
++        const size_t length = remaining < sizeof(zeros) ? remaining : sizeof(zeros);
++        const bool empty = memcmp(data + position, zeros, length) == 0;
++        if (position == 0) empty_run = empty;
++        if (empty != empty_run) {
++            if (!flush_run(start, position - start, empty_run))
++                return start / sizeof(WildEntryCompact);
++            start = position;
++            empty_run = empty;
++        }
++        position += length;
++    }
++    if (!flush_run(start, bytes - start, empty_run))
++        return start / sizeof(WildEntryCompact);
++    return size_t(count);
++#endif
++}
++
+ class SpinLock {
+     std::atomic_flag flag = ATOMIC_FLAG_INIT;
+ public:
+@@ -1356,7 +1395,7 @@
+         // v56C: Only write tables that are allocated (skip NULL → saves ~117GB in ALL-TAME)
+         for (int t = 0; t < 2; t++) {
+             if (wild_table[t]) {
+-                size_t written = fwrite(wild_table[t], sizeof(WildEntryCompact), wild_table_size, fp);
++                size_t written = OpenPuzzleWriteCheckpointEntries(wild_table[t], wild_table_size, fp);
+                 if (written != wild_table_size)
+                     return abort_save("failed to write wild_table data (disk full?)");
+             }

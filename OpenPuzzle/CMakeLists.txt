@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(OpenPuzzle VERSION 1.0.54 LANGUAGES CXX)
+project(OpenPuzzle VERSION 1.0.55 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -339,6 +339,10 @@ set(OPENPUZZLE_PSCKANGAROO_PATCH_BUILD_PATH
     "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}/patches/psckangaroo-explicit-seed-v1.patch"
 )
 
+set(OPENPUZZLE_PSCKANGAROO_CHECKPOINT_PATCH_BUILD_PATH
+    "${OPENPUZZLE_BUNDLED_ENGINE_BUILD_DIRECTORY}/patches/psckangaroo-sparse-checkpoint-v1.patch"
+)
+
 configure_file(
     scripts/install_psckangaroo_external.sh
     "${OPENPUZZLE_PSCKANGAROO_INSTALLER_BUILD_PATH}"
@@ -348,6 +352,12 @@ configure_file(
 configure_file(
     scripts/patches/psckangaroo-explicit-seed-v1.patch
     "${OPENPUZZLE_PSCKANGAROO_PATCH_BUILD_PATH}"
+    COPYONLY
+)
+
+configure_file(
+    scripts/patches/psckangaroo-sparse-checkpoint-v1.patch
+    "${OPENPUZZLE_PSCKANGAROO_CHECKPOINT_PATCH_BUILD_PATH}"
     COPYONLY
 )
 
@@ -650,6 +660,7 @@ endif()
 install(
     FILES
         scripts/patches/psckangaroo-explicit-seed-v1.patch
+        scripts/patches/psckangaroo-sparse-checkpoint-v1.patch
     DESTINATION
         "${CMAKE_INSTALL_LIBEXECDIR}/OpenPuzzle/patches"
 )
@@ -718,6 +729,7 @@ install(
         docs/RELEASE_1.0.52.md
         docs/RELEASE_1.0.53.md
         docs/RELEASE_1.0.54.md
+        docs/RELEASE_1.0.55.md
         docs/SYSTEMD_SERVICE.md
     DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
 )

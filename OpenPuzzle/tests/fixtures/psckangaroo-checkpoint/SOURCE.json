@@ -1,0 +1,9 @@
+{
+  "upstream": "https://github.com/pscamillo/PSCKangaroo",
+  "commit": "021e997a2c9de28d86e3d8db3a5f65188653a80a",
+  "baseline_sha256": "7fdd5d793b7c5c731fcb4d66f868ba9b77716b75bb9c203547bf8894bb19517b",
+  "candidate_sha256": "48740e063d6c5f6db7637ababaf0749076884fa2ec13fef72efd6e1fb4929b75",
+  "patch_sha256": "0d239ddb21f28efb52dc814c79eab68af2461d008b726031b78574e5b7ff7a95",
+  "format_unchanged": true,
+  "gpu_kernel_changed": false
+}

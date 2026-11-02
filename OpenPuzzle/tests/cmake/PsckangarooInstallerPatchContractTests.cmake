@@ -35,3 +35,23 @@ foreach(required_patch_text
     message(FATAL_ERROR "compatibility patch is missing: ${required_patch_text}")
   endif()
 endforeach()
+
+if(NOT DEFINED CHECKPOINT_PATCH_FILE OR NOT EXISTS "${CHECKPOINT_PATCH_FILE}")
+  message(FATAL_ERROR "PSCKangaroo sparse checkpoint patch is required")
+endif()
+file(SHA256 "${CHECKPOINT_PATCH_FILE}" actual_checkpoint_patch_sha)
+if(NOT installer_content MATCHES "CHECKPOINT_PATCH_SHA256=\"${actual_checkpoint_patch_sha}\"")
+  message(FATAL_ERROR "installer does not pin the sparse checkpoint patch SHA-256")
+endif()
+foreach(required_checkpoint_text
+    "git -C \"$source_dir\" apply --check \"$checkpoint_patch_file\""
+    "git -C \"$source_dir\" apply --reverse --check \"$checkpoint_patch_file\""
+    "PATCHED_TAMESTORE_SHA256"
+    "checkpoint_storage=sparse-zero-runs-v1"
+    "checkpoint_format=RCKDT5C-v3"
+    "checkpoint_patch_sha256=$CHECKPOINT_PATCH_SHA256")
+  string(FIND "${installer_content}" "${required_checkpoint_text}" required_position)
+  if(required_position EQUAL -1)
+    message(FATAL_ERROR "installer checkpoint contract is missing: ${required_checkpoint_text}")
+  endif()
+endforeach()

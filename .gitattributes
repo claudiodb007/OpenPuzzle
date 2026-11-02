@@ -1,1 +1,5 @@
 OpenPuzzle/scripts/patches/psckangaroo-explicit-seed-v1.patch whitespace=-blank-at-eol
+
+# Preserve exact pinned upstream bytes and unified-diff context.
+OpenPuzzle/tests/fixtures/psckangaroo-checkpoint/TameStore.h whitespace=-blank-at-eol
+OpenPuzzle/scripts/patches/psckangaroo-sparse-checkpoint-v1.patch whitespace=-blank-at-eol

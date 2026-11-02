@@ -10,9 +10,13 @@ PATCH_ID="explicit-seed-v1"
 PATCH_SHA256="59092a431b94eacebc66a46afc202a84d1b21e162e339bfcaeb9ee25b3c2a03e"
 PATCHED_RCK_SHA256="8c99fe7d327531c145f817f082d460172b86b9aedf5de99090016dfd425a8b79"
 PATCHED_README_SHA256="a2f33d35cd571523bc20f2089ae51dc2972ee9b2a21f77d546769261830cbd8d"
+CHECKPOINT_PATCH_ID="sparse-checkpoint-v1"
+CHECKPOINT_PATCH_SHA256="0d239ddb21f28efb52dc814c79eab68af2461d008b726031b78574e5b7ff7a95"
+PATCHED_TAMESTORE_SHA256="48740e063d6c5f6db7637ababaf0749076884fa2ec13fef72efd6e1fb4929b75"
 ARCHITECTURES="sm_60 sm_61 sm_70 sm_75 sm_80 sm_86 sm_89 sm_90 compute_89"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 patch_file="$script_dir/patches/psckangaroo-explicit-seed-v1.patch"
+checkpoint_patch_file="$script_dir/patches/psckangaroo-sparse-checkpoint-v1.patch"
 
 usage() {
   cat <<'EOF'
@@ -22,7 +26,7 @@ Usage:
   openpuzzle engine install psckangaroo [--force]
 
 This explicit command downloads pinned GPLv3 source, verifies its Git commit
-and tree, applies a bundled hash-verified OpenPuzzle compatibility patch,
+and tree, applies hash-verified walk-seed and sparse-checkpoint patches,
 builds it locally with the installed NVIDIA CUDA toolkit, and places
 the executable in the current user's OpenPuzzle engine directory.
 
@@ -86,6 +90,7 @@ printf '%s\n' '-----------------------------------------'
 printf 'Source.............. %s\n' "$UPSTREAM_URL"
 printf 'Commit.............. %s\n' "$UPSTREAM_COMMIT"
 printf 'Compatibility patch. %s (%s)\n' "$PATCH_ID" "$PATCH_SHA256"
+printf 'Checkpoint storage.. %s (%s)\n' "$CHECKPOINT_PATCH_ID" "$CHECKPOINT_PATCH_SHA256"
 printf 'Destination......... %s\n' "$target"
 printf 'CUDA runtime........ static local link\n'
 printf 'GPU execution....... none\n\n'
@@ -105,15 +110,24 @@ actual_patch_sha="$(sha256sum "$patch_file" | awk '{print $1}')"
 [[ "$actual_patch_sha" == "$PATCH_SHA256" ]] || die "compatibility patch hash verification failed"
 git -C "$source_dir" apply --check "$patch_file" || die "compatibility patch preflight failed"
 git -C "$source_dir" apply "$patch_file" || die "compatibility patch application failed"
+
+[[ -f "$checkpoint_patch_file" && ! -L "$checkpoint_patch_file" ]] || die "checkpoint patch is missing or unsafe"
+actual_checkpoint_patch_sha="$(sha256sum "$checkpoint_patch_file" | awk '{print $1}')"
+[[ "$actual_checkpoint_patch_sha" == "$CHECKPOINT_PATCH_SHA256" ]] || die "checkpoint patch hash verification failed"
+git -C "$source_dir" apply --check "$checkpoint_patch_file" || die "checkpoint patch preflight failed"
+git -C "$source_dir" apply "$checkpoint_patch_file" || die "checkpoint patch application failed"
 git -C "$source_dir" diff --check || die "patched source whitespace validation failed"
 patched_paths="$(git -C "$source_dir" diff --name-only -- | sort)"
-expected_patched_paths=$'RCKangaroo_hunt_v2.cpp\nREADME.md'
+expected_patched_paths=$'RCKangaroo_hunt_v2.cpp\nREADME.md\nTameStore.h'
 [[ "$patched_paths" == "$expected_patched_paths" ]] || die "compatibility patch changed unexpected files"
 [[ "$(sha256sum "$source_dir/RCKangaroo_hunt_v2.cpp" | awk '{print $1}')" == "$PATCHED_RCK_SHA256" ]] || \
   die "patched RCKangaroo source hash verification failed"
 [[ "$(sha256sum "$source_dir/README.md" | awk '{print $1}')" == "$PATCHED_README_SHA256" ]] || \
   die "patched README hash verification failed"
 git -C "$source_dir" apply --reverse --check "$patch_file" || die "applied patch reverse verification failed"
+[[ "$(sha256sum "$source_dir/TameStore.h" | awk '{print $1}')" == "$PATCHED_TAMESTORE_SHA256" ]] || \
+  die "patched checkpoint source hash verification failed"
+git -C "$source_dir" apply --reverse --check "$checkpoint_patch_file" || die "checkpoint patch reverse verification failed"
 
 common=(
   -O3 -march=x86-64 -mtune=generic -pthread
@@ -186,6 +200,11 @@ patch_id=$PATCH_ID
 patch_sha256=$PATCH_SHA256
 patched_rck_sha256=$PATCHED_RCK_SHA256
 patched_readme_sha256=$PATCHED_README_SHA256
+checkpoint_storage=sparse-zero-runs-v1
+checkpoint_format=RCKDT5C-v3
+checkpoint_patch_id=$CHECKPOINT_PATCH_ID
+checkpoint_patch_sha256=$CHECKPOINT_PATCH_SHA256
+patched_tamestore_sha256=$PATCHED_TAMESTORE_SHA256
 binary_sha256=$binary_sha
 architectures=$ARCHITECTURES
 cuda_runtime=static-local-build
