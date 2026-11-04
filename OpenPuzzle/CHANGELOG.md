@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.56 — Compact PSCKangaroo checkpoints on Linux
+
+- Write compact checkpoints with block and metadata checksums.
+- Resume legacy and compact files and reject failed explicit loads.
+- Validate the pinned installer patch and preserve the last successful save on I/O failure.
+
 ## 1.0.55 — Sparse external Kangaroo checkpoints on Linux
 
 - Preserve the native checkpoint format while skipping zero-only table runs.

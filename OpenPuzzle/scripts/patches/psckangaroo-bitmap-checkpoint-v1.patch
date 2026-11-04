@@ -1,0 +1,476 @@
+diff --git a/TameStore.h b/TameStore.h
+--- a/TameStore.h
++++ b/TameStore.h
+@@ -38,6 +38,122 @@
+ #endif
+ #include "defs.h"
+ 
++#include <algorithm>
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <cstdio>
++#include <cstring>
++#include <type_traits>
++#include <zlib.h>
++
++namespace checkpoint_bitmap {
++
++constexpr std::size_t entries_per_block = 4096;
++
++inline std::array<unsigned char, 4> checksum(const void* data, std::size_t size) {
++    const auto value = crc32(0, static_cast<const Bytef*>(data), static_cast<uInt>(size));
++    return {static_cast<unsigned char>(value),
++            static_cast<unsigned char>(value >> 8),
++            static_cast<unsigned char>(value >> 16),
++            static_cast<unsigned char>(value >> 24)};
++}
++
++// Blocks carry one mode byte, a checksum of the original entries, and either
++// raw entries or a bitmap followed by occupied entries in ascending slot order.
++// The caller supplies the table length from the checkpoint container.
++template <typename Entry>
++bool writeTable(FILE* stream, const Entry* table, std::size_t count) {
++    static_assert(sizeof(Entry) == 16 && std::is_trivially_copyable_v<Entry>);
++    std::array<Entry, entries_per_block> occupied;
++    while (count != 0) {
++        const auto slots = std::min(count, entries_per_block);
++        const auto bitmap_size = (slots + 7) / 8;
++        std::array<unsigned char, entries_per_block / 8> bitmap{};
++        std::size_t occupied_count = 0;
++        for (std::size_t i = 0; i < slots; ++i) {
++            if (table[i].part1 == 0 && table[i].part2 == 0) {
++                continue;
++            }
++            bitmap[i / 8] |= 1u << (i % 8);
++            occupied[occupied_count++] = table[i];
++        }
++        const auto raw_size = slots * sizeof(Entry);
++        const auto occupied_size = occupied_count * sizeof(Entry);
++        const bool compact = bitmap_size + occupied_size < raw_size;
++        const auto crc = checksum(table, raw_size);
++        if (std::fputc(compact ? 1 : 0, stream) == EOF ||
++            std::fwrite(crc.data(), 1, crc.size(), stream) != crc.size()) {
++            return false;
++        }
++        if (compact) {
++            if (std::fwrite(bitmap.data(), 1, bitmap_size, stream) != bitmap_size ||
++                std::fwrite(occupied.data(), 1, occupied_size, stream) != occupied_size) {
++                return false;
++            }
++        } else if (std::fwrite(table, 1, raw_size, stream) != raw_size) {
++            return false;
++        }
++        table += slots;
++        count -= slots;
++    }
++    return true;
++}
++
++template <typename Entry>
++bool readTable(FILE* stream, Entry* table, std::size_t count) {
++    static_assert(sizeof(Entry) == 16 && std::is_trivially_copyable_v<Entry>);
++    std::array<Entry, entries_per_block> block;
++    std::array<Entry, entries_per_block> occupied;
++    while (count != 0) {
++        const auto slots = std::min(count, entries_per_block);
++        const auto raw_size = slots * sizeof(Entry);
++        const int mode = std::fgetc(stream);
++        std::array<unsigned char, 4> expected_crc;
++        if ((mode != 0 && mode != 1) ||
++            std::fread(expected_crc.data(), 1, expected_crc.size(), stream) != expected_crc.size()) {
++            return false;
++        }
++        if (mode == 0) {
++            if (std::fread(block.data(), 1, raw_size, stream) != raw_size) {
++                return false;
++            }
++        } else {
++            const auto bitmap_size = (slots + 7) / 8;
++            std::array<unsigned char, entries_per_block / 8> bitmap;
++            if (std::fread(bitmap.data(), 1, bitmap_size, stream) != bitmap_size) {
++                return false;
++            }
++            if (slots % 8 != 0 && (bitmap[bitmap_size - 1] >> (slots % 8)) != 0) {
++                return false;
++            }
++            std::size_t occupied_count = 0;
++            for (std::size_t i = 0; i < slots; ++i) {
++                occupied_count += (bitmap[i / 8] >> (i % 8)) & 1u;
++            }
++            if (bitmap_size + occupied_count * sizeof(Entry) >= raw_size ||
++                std::fread(occupied.data(), sizeof(Entry), occupied_count, stream) != occupied_count) {
++                return false;
++            }
++            std::size_t next = 0;
++            for (std::size_t i = 0; i < slots; ++i) {
++                block[i] = ((bitmap[i / 8] >> (i % 8)) & 1u) ? occupied[next++] : Entry{};
++            }
++        }
++        if (checksum(block.data(), raw_size) != expected_crc) {
++            return false;
++        }
++        if (table) {
++            std::memcpy(table, block.data(), raw_size);
++            table += slots;
++        }
++        count -= slots;
++    }
++    return true;
++}
++
++}  // namespace checkpoint_bitmap
++
+ // ============================================================================
+ // PORTABILITY: 64-bit fseek/ftell
+ // ============================================================================
+@@ -1221,7 +1337,7 @@
+     }
+     
+     // Load wilds from checkpoint file (RCKDT43 format) - loads only table[1] data
+-    u64 LoadWildsFromCheckpoint(const char* filename) {
++    u64 LoadWildsFromCheckpoint(const char* filename, bool& compact_error) {
+         if (!initialized || !wild_table[1]) return 0;
+         
+         FILE* fp = fopen(filename, "rb");
+@@ -1233,6 +1349,15 @@
+         CheckpointHeader header;
+         if (fread(&header, sizeof(header), 1, fp) != 1) { fclose(fp); return false; }
+         
++        if (memcmp(header.magic, "OPZKCP1", 8) == 0) {
++            compact_error = !ReadBitmapCheckpoint(fp, header, true);
++            fclose(fp);
++            if (compact_error || !(header.tables_present & 2)) return 0;
++            wild_count[1].store(header.wild_count_w2);
++            circular_mode_active[1] = (header.circular_mode_w2 != 0);
++            return header.wild_count_w2;
++        }
++
+         if (memcmp(header.magic, "RCKDT5C", 7) != 0) {
+             if (memcmp(header.magic, "RCKDT5B", 7) == 0) {
+                 header.tables_present = 3;  // v56C always wrote both
+@@ -1311,10 +1436,40 @@
+     };
+ #pragma pack(pop)
+     
++    // The compact container keeps the native header and bucket layout, adds
++    // checksummed table blocks, then a checksum of the header and bucket states.
++    bool ReadBitmapCheckpoint(FILE* fp, const CheckpointHeader& header, bool preload) {
++        if (header.version != 4 || header.wild_table_size != wild_table_size ||
++            (header.tables_present != 1 && header.tables_present != 3) ||
++            header.circular_mode_w1 > 1 || header.circular_mode_w2 > 1) {
++            return false;
++        }
++        for (int t = 0; t < 2; ++t) {
++            if ((header.tables_present & (1u << t)) &&
++                !checkpoint_bitmap::readTable(fp, preload && t == 0 ? nullptr : wild_table[t],
++                                              wild_table_size)) {
++                return false;
++            }
++        }
++        u32 crc = crc32(0, reinterpret_cast<const Bytef*>(&header), sizeof(header));
++        for (u32 i = 0; i < SPATIAL_BUCKETS; ++i) {
++            u64 state[2];
++            if (fread(state, sizeof(u64), 2, fp) != 2) return false;
++            crc = crc32(crc, reinterpret_cast<const Bytef*>(state), sizeof(state));
++            if (!preload) {
++                spatial_buckets[i].write_index.store(state[0]);
++                spatial_buckets[i].fill_count.store(state[1]);
++            }
++        }
++        u32 expected;
++        return fread(&expected, sizeof(expected), 1, fp) == 1 &&
++               expected == crc && fgetc(fp) == EOF && !ferror(fp);
++    }
++
+     bool SaveCheckpoint(const char* filename) {
+         if (!initialized || !wild_table[0]) return false;
+         
+-        printf("\n*** SAVING CHECKPOINT v56C: %s ***\n", filename);
++        printf("\n*** SAVING CHECKPOINT OPZKCP1: %s ***\n", filename);
+         
+         // v61: Atomic write pattern — write to temp, fsync, rename.
+         // Protects against crash/power-loss/disk-full mid-write leaving
+@@ -1339,8 +1494,8 @@
+         
+         CheckpointHeader header;
+         memset(&header, 0, sizeof(header));
+-        memcpy(header.magic, "RCKDT5C", 8);
+-        header.version = 3;
++        memcpy(header.magic, "OPZKCP1", 8);
++        header.version = 4;
+         header.wild_table_size = wild_table_size;
+         header.wild_count_w1 = wild_count[0].load();
+         header.wild_count_w2 = wild_count[1].load();
+@@ -1356,23 +1511,25 @@
+         // v56C: Only write tables that are allocated (skip NULL → saves ~117GB in ALL-TAME)
+         for (int t = 0; t < 2; t++) {
+             if (wild_table[t]) {
+-                size_t written = fwrite(wild_table[t], sizeof(WildEntryCompact), wild_table_size, fp);
+-                if (written != wild_table_size)
++                if (!checkpoint_bitmap::writeTable(fp, wild_table[t], wild_table_size))
+                     return abort_save("failed to write wild_table data (disk full?)");
+             }
+             // NULL tables: simply not written (tables_present bitmask tells loader)
+         }
+         
+-        // Save spatial bucket states
+-        for (u32 i = 0; i < SPATIAL_BUCKETS; i++) {
+-            u64 wi = spatial_buckets[i].write_index.load();
+-            u64 fc = spatial_buckets[i].fill_count.load();
+-            if (fwrite(&wi, sizeof(u64), 1, fp) != 1 ||
+-                fwrite(&fc, sizeof(u64), 1, fp) != 1) {
++        u32 metadata_crc = crc32(0, reinterpret_cast<const Bytef*>(&header), sizeof(header));
++        for (u32 i = 0; i < SPATIAL_BUCKETS; ++i) {
++            const u64 state[] = {spatial_buckets[i].write_index.load(),
++                                 spatial_buckets[i].fill_count.load()};
++            if (fwrite(state, sizeof(u64), 2, fp) != 2)
+                 return abort_save("failed to write spatial bucket state");
+-            }
+-        }
+-        
++            metadata_crc = crc32(metadata_crc, reinterpret_cast<const Bytef*>(state), sizeof(state));
++        }
++        if (fwrite(&metadata_crc, sizeof(metadata_crc), 1, fp) != 1)
++            return abort_save("failed to write checkpoint metadata checksum");
++        const auto checkpoint_bytes = ftello(fp);
++        if (checkpoint_bytes < 0) return abort_save("failed to measure checkpoint");
++
+         // v61: Force data to physical storage BEFORE rename. Without this,
+         // the rename publishes a file whose contents may still be in the
+         // kernel page cache — a crash here would leave a "valid" filename
+@@ -1396,7 +1553,7 @@
+         
+         // Show actual size saved
+         size_t tables_written = (wild_table[0] ? 1 : 0) + (wild_table[1] ? 1 : 0);
+-        double gb_saved = (double)(tables_written * wild_table_size * sizeof(WildEntryCompact)) / (1024.0*1024*1024);
++        double gb_saved = static_cast<double>(checkpoint_bytes) / (1024.0*1024*1024);
+         printf("*** CHECKPOINT SAVED (W1/TAMEs: %lluM, W2: %lluM, tables: %zu, %.1f GB) ***\n",
+                (unsigned long long)(header.wild_count_w1 / 1000000),
+                (unsigned long long)(header.wild_count_w2 / 1000000),
+@@ -1412,59 +1569,68 @@
+         CheckpointHeader header;
+         if (fread(&header, sizeof(header), 1, fp) != 1) { fclose(fp); return false; }
+         
+-        if (memcmp(header.magic, "RCKDT5C", 7) != 0) {
+-            // v56C: Backward compat with v56C checkpoints (same data, old header)
+-            if (memcmp(header.magic, "RCKDT5B", 7) == 0) {
+-                printf("  (Converting v56B checkpoint → v56C format)\n");
+-                header.tables_present = 3;  // v56C always wrote both tables
+-            } else {
+-                printf("ERROR: Invalid format (expected RCKDT5C or RCKDT5B)\n");
++        const bool compact = memcmp(header.magic, "OPZKCP1", 8) == 0;
++        if (compact) {
++            if (!ReadBitmapCheckpoint(fp, header, false)) {
+                 fclose(fp);
+                 return false;
+             }
+-        }
+-        
+-        if (header.wild_table_size != wild_table_size) {
+-            printf("ERROR: Table size mismatch (file: %llu, current: %llu)\n",
+-                   (unsigned long long)header.wild_table_size,
+-                   (unsigned long long)wild_table_size);
+-            fclose(fp);
+-            return false;
+-        }
+-        
+-        // v56C: Only read tables that were saved (tables_present bitmask)
+-        for (int t = 0; t < 2; t++) {
+-            bool in_file = (header.tables_present >> t) & 1;
+-            if (in_file && wild_table[t]) {
+-                // Table in file AND allocated → read
+-                // v61: validate full read to catch silent truncation/corruption
+-                size_t read_count = fread(wild_table[t], sizeof(WildEntryCompact), wild_table_size, fp);
+-                if (read_count != wild_table_size) {
+-                    printf("ERROR: Incomplete read of wild_table[%d] (got %llu/%llu entries)\n",
+-                           t, (unsigned long long)read_count, (unsigned long long)wild_table_size);
++        } else {
++            if (memcmp(header.magic, "RCKDT5C", 7) != 0) {
++                // v56C: Backward compat with v56C checkpoints (same data, old header)
++                if (memcmp(header.magic, "RCKDT5B", 7) == 0) {
++                    printf("  (Converting v56B checkpoint → v56C format)\n");
++                    header.tables_present = 3;  // v56C always wrote both tables
++                } else {
++                    printf("ERROR: Invalid format (expected RCKDT5C or RCKDT5B)\n");
+                     fclose(fp);
+                     return false;
+                 }
+-            } else if (in_file && !wild_table[t]) {
+-                // Table in file but NOT allocated → skip
+-                FSEEK64(fp, (int64_t)wild_table_size * (int64_t)sizeof(WildEntryCompact), SEEK_CUR);
+-            }
+-            // If not in file: nothing to read, table stays zeroed
+-        }
+-        
+-        // Load spatial bucket states
+-        for (u32 i = 0; i < SPATIAL_BUCKETS; i++) {
+-            u64 wi, fc;
+-            // v61: validate both reads to catch silent truncation
+-            if (fread(&wi, sizeof(u64), 1, fp) != 1 || fread(&fc, sizeof(u64), 1, fp) != 1) {
+-                printf("ERROR: Incomplete read of spatial bucket %u state\n", i);
++            }
++
++            if (header.wild_table_size != wild_table_size) {
++                printf("ERROR: Table size mismatch (file: %llu, current: %llu)\n",
++                       (unsigned long long)header.wild_table_size,
++                       (unsigned long long)wild_table_size);
+                 fclose(fp);
+                 return false;
+             }
+-            spatial_buckets[i].write_index.store(wi);
+-            spatial_buckets[i].fill_count.store(fc);
+-        }
+-        
++
++            // v56C: Only read tables that were saved (tables_present bitmask)
++            for (int t = 0; t < 2; t++) {
++                bool in_file = (header.tables_present >> t) & 1;
++                if (in_file && wild_table[t]) {
++                    // Table in file AND allocated → read
++                    // v61: validate full read to catch silent truncation/corruption
++                    size_t read_count = fread(wild_table[t], sizeof(WildEntryCompact), wild_table_size, fp);
++                    if (read_count != wild_table_size) {
++                        printf("ERROR: Incomplete read of wild_table[%d] (got %llu/%llu entries)\n",
++                               t, (unsigned long long)read_count, (unsigned long long)wild_table_size);
++                        fclose(fp);
++                        return false;
++                    }
++                } else if (in_file && !wild_table[t]) {
++                    // Table in file but NOT allocated → skip
++                    FSEEK64(fp, (int64_t)wild_table_size * (int64_t)sizeof(WildEntryCompact), SEEK_CUR);
++                }
++                // If not in file: nothing to read, table stays zeroed
++            }
++
++            // Load spatial bucket states
++            for (u32 i = 0; i < SPATIAL_BUCKETS; i++) {
++                u64 wi, fc;
++                // v61: validate both reads to catch silent truncation
++                if (fread(&wi, sizeof(u64), 1, fp) != 1 || fread(&fc, sizeof(u64), 1, fp) != 1) {
++                    printf("ERROR: Incomplete read of spatial bucket %u state\n", i);
++                    fclose(fp);
++                    return false;
++                }
++                spatial_buckets[i].write_index.store(wi);
++                spatial_buckets[i].fill_count.store(fc);
++            }
++
++        }
++
+         fclose(fp);
+         
+         wild_count[0].store(header.wild_count_w1);
+diff --git a/RCKangaroo_hunt_v2.cpp b/RCKangaroo_hunt_v2.cpp
+--- a/RCKangaroo_hunt_v2.cpp
++++ b/RCKangaroo_hunt_v2.cpp
+@@ -33,6 +33,7 @@
+ #include <thread>
+ #include <chrono>
+ #include <mutex>
++#include <shared_mutex>
+ #include <condition_variable>
+ #include <algorithm>
+ #include <deque>
+@@ -130,6 +131,15 @@
+ std::mutex gCollisionResolveMutex;
+ std::atomic<bool> gCollisionBeingResolved{false};
+ 
++// Hold a shared guard per DP batch. Checkpoint I/O takes the exclusive
++// guard so the table, occupancy counts and bucket states form one snapshot.
++static std::shared_mutex checkpointStateMutex;
++
++static bool SaveStableCheckpoint(const char* filename) {
++    std::unique_lock<std::shared_mutex> guard(checkpointStateMutex);
++    return gTameStore.SaveCheckpoint(filename);
++}
++
+ // Worker thread function - processes TRAP and HUNT
+ void WorkerThread(int thread_id) {
+     while (gWorkersRunning.load()) {
+@@ -150,6 +160,7 @@
+         }
+         
+         if (hasWork && chunk.data) {
++            std::shared_lock<std::shared_mutex> guard(checkpointStateMutex);
+             for (int i = chunk.start; i < chunk.end && !gSolved; i++) {
+                 u8* p = chunk.data + i * GPU_DP_SIZE;
+                 u8 x_bytes[16];
+@@ -1408,6 +1419,7 @@
+         // v51.1: No free() — localBuffer is pre-allocated pPntList2
+     }
+     else {
++        std::shared_lock<std::shared_mutex> guard(checkpointStateMutex);
+         // Fallback single-threaded (uses local buffer)
+         for (int i = 0; i < cnt && !gSolved; i++)
+         {
+@@ -1702,6 +1714,8 @@
+     }
+ }
+ 
++static bool checkpointLoadFailed = false;
++
+ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
+ {
+     if ((Range < 32) || (Range > 180))
+@@ -1757,7 +1771,9 @@
+             }
+             printf("\r\n");
+         } else {
+-            printf("WARNING: Failed to load checkpoint. Starting fresh.\r\n\r\n");
++            printf("ERROR: Failed to load checkpoint. Search aborted.\r\n");
++            checkpointLoadFailed = true;
++            return false;
+         }
+     }
+     
+@@ -2112,7 +2128,14 @@
+                 if (gPreloadWildsFile[0] != 0) {
+                     u64 preloaded = 0;
+                     if (gPreloadIsCheckpoint) {
+-                        preloaded = gTameStore.LoadWildsFromCheckpoint(gPreloadWildsFile);
++                        std::unique_lock<std::shared_mutex> guard(checkpointStateMutex);
++                        bool compact_error = false;
++                        preloaded = gTameStore.LoadWildsFromCheckpoint(gPreloadWildsFile, compact_error);
++                        if (compact_error) {
++                            printf("ERROR: Failed to load compact preload checkpoint. Search aborted.\r\n");
++                            checkpointLoadFailed = true;
++                            break;
++                        }
+                     } else {
+                         preloaded = gTameStore.LoadWildsFromDescartados(gPreloadWildsFile);
+                     }
+@@ -2222,7 +2245,7 @@
+             if (elapsed_hours >= gCheckpointIntervalHours) {
+                 printf("\n*** AUTO-CHECKPOINT (every %d hours) [%s phase] ***\n", 
+                        gCheckpointIntervalHours, gTrapPhase ? "TRAP" : "HUNT");
+-                if (gTameStore.SaveCheckpoint(gCheckpointFile)) {
++                if (SaveStableCheckpoint(gCheckpointFile)) {
+                     gLastCheckpointTime = current_time;
+                 }
+                 // v45: Also flush savedps to disk for safety
+@@ -2267,7 +2290,7 @@
+                            table_size > 0 ? (double)tame_count / table_size * 100.0 : 0.0);
+                     printf("  These will be reloaded on next run (resume TRAP or start HUNT).\n");
+                 }
+-                if (gTameStore.SaveCheckpoint(gCheckpointFile)) {
++                if (SaveStableCheckpoint(gCheckpointFile)) {
+                     printf("Checkpoint saved successfully.\n");
+                 } else {
+                     printf("WARNING: Checkpoint save failed.\n");
+@@ -2536,7 +2559,7 @@
+     printf("                   Ultra-compact 16-byte DPs | Async BSGS resolver\n");
+     printf("                   Dual hash table | Table freeze | Uniform jumps\n");
+     printf("  Modes:           ALL-TAME (recommended 130+ bits) | ALL-WILD | TRAP/HUNT\n");
+-    printf("  Checkpoint:      Auto-save + Ctrl+C safe exit (format RCKDT5C)\n");
++    printf("  Checkpoint:      Auto-save + Ctrl+C safe exit (format OPZKCP1)\n");
+     printf("\n");
+ 
+ #ifdef _WIN32
+@@ -2671,5 +2694,5 @@
+     free(pPntList2);
+     free(pPntList);
+     
+-    return 0;
++    return checkpointLoadFailed ? 1 : 0;
+ }

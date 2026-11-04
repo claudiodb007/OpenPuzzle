@@ -83,3 +83,14 @@ This local rebuild does not launch a search. Checkpoints saved by the previous
 engine remain readable, and subsequent saves use sparse storage. The client
 update does not compact or delete existing checkpoints. Use `du` to assess
 allocated space; `ls -lh` still displays the complete logical size.
+
+## Bitmap checkpoints on Linux (1.0.56)
+
+The bitmap checkpoint patch supersedes sparse writes for newly built engines.
+It encodes occupied table slots within each block and selects raw storage when
+the bitmap would be larger. The native loader supports both legacy formats.
+Explicit resume aborts on a failed checkpoint load.
+
+The installer requires zlib development files (`zlib1g-dev` on Ubuntu). Use the
+same explicit local rebuild command above. OPZKCP1 checkpoints need the updated
+engine. Keep a legacy checkpoint if a rollback is required.

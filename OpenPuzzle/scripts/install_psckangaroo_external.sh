@@ -8,15 +8,15 @@ UPSTREAM_COMMIT="021e997a2c9de28d86e3d8db3a5f65188653a80a"
 UPSTREAM_TREE="61533742ddcde64df0d993093317b570c68026a7"
 PATCH_ID="explicit-seed-v1"
 PATCH_SHA256="59092a431b94eacebc66a46afc202a84d1b21e162e339bfcaeb9ee25b3c2a03e"
-PATCHED_RCK_SHA256="8c99fe7d327531c145f817f082d460172b86b9aedf5de99090016dfd425a8b79"
+PATCHED_RCK_SHA256="962e6e59fa56056c88b7f779c5457db11cc9da1d37e8e03908dae8a51293136c"
 PATCHED_README_SHA256="a2f33d35cd571523bc20f2089ae51dc2972ee9b2a21f77d546769261830cbd8d"
-CHECKPOINT_PATCH_ID="sparse-checkpoint-v1"
-CHECKPOINT_PATCH_SHA256="0d239ddb21f28efb52dc814c79eab68af2461d008b726031b78574e5b7ff7a95"
-PATCHED_TAMESTORE_SHA256="48740e063d6c5f6db7637ababaf0749076884fa2ec13fef72efd6e1fb4929b75"
+CHECKPOINT_PATCH_ID="bitmap-checkpoint-v1"
+CHECKPOINT_PATCH_SHA256="2f2e6afdf04ca38de471892e0e603f62c64f37ff5f9df21a5e7c9e5ea6fb912b"
+PATCHED_TAMESTORE_SHA256="ebb19edb4c8264a9141997a4fab5ffe66e7bc2629bb7239c4f3b8e860e5bf218"
 ARCHITECTURES="sm_60 sm_61 sm_70 sm_75 sm_80 sm_86 sm_89 sm_90 compute_89"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 patch_file="$script_dir/patches/psckangaroo-explicit-seed-v1.patch"
-checkpoint_patch_file="$script_dir/patches/psckangaroo-sparse-checkpoint-v1.patch"
+checkpoint_patch_file="$script_dir/patches/psckangaroo-bitmap-checkpoint-v1.patch"
 
 usage() {
   cat <<'EOF'
@@ -26,7 +26,7 @@ Usage:
   openpuzzle engine install psckangaroo [--force]
 
 This explicit command downloads pinned GPLv3 source, verifies its Git commit
-and tree, applies hash-verified walk-seed and sparse-checkpoint patches,
+and tree, applies hash-verified walk-seed and bitmap-checkpoint patches,
 builds it locally with the installed NVIDIA CUDA toolkit, and places
 the executable in the current user's OpenPuzzle engine directory.
 
@@ -82,6 +82,12 @@ cleanup() {
   rm -rf -- "$work"
 }
 trap cleanup EXIT
+
+printf '#include <zlib.h>
+int main() { return crc32(0, nullptr, 0); }
+' |
+  g++ -std=c++17 -x c++ - -o "$work/zlib-link-check" -lz ||
+  die "building the bitmap candidate requires zlib development headers and library (zlib1g-dev on Ubuntu)"
 
 source_dir="$work/PSCKangaroo"
 
@@ -149,7 +155,7 @@ gpu_arch=(
 )
 
 pushd "$source_dir" >/dev/null
-g++ "${common[@]}" -I/usr/include -c RCKangaroo_hunt_v2.cpp -o RCKangaroo_hunt_v2.o
+g++ -std=c++17 "${common[@]}" -I/usr/include -c RCKangaroo_hunt_v2.cpp -o RCKangaroo_hunt_v2.o
 g++ "${common[@]}" -c Ec.cpp -o Ec.o
 g++ "${common[@]}" -I/usr/include -c GpuKang.cpp -o GpuKang.o
 nvcc -O3 "${gpu_arch[@]}" \
@@ -168,7 +174,7 @@ nvcc -O3 "${gpu_arch[@]}" \
   --ptxas-options=-v --cudart=static \
   -o psckangaroo \
   RCKangaroo_hunt_v2.o Ec.o GpuKang.o RCGpuCore.o utils.o \
-  -lcuda -lpthread
+  -lcuda -lpthread -lz
 popd >/dev/null
 
 [[ -f "$source_dir/psckangaroo" ]] || die "build did not produce psckangaroo"
@@ -200,8 +206,8 @@ patch_id=$PATCH_ID
 patch_sha256=$PATCH_SHA256
 patched_rck_sha256=$PATCHED_RCK_SHA256
 patched_readme_sha256=$PATCHED_README_SHA256
-checkpoint_storage=sparse-zero-runs-v1
-checkpoint_format=RCKDT5C-v3
+checkpoint_storage=bitmap-blocks-v1
+checkpoint_format=OPZKCP1-v4
 checkpoint_patch_id=$CHECKPOINT_PATCH_ID
 checkpoint_patch_sha256=$CHECKPOINT_PATCH_SHA256
 patched_tamestore_sha256=$PATCHED_TAMESTORE_SHA256

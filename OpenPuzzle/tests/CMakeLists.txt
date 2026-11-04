@@ -2476,3 +2476,13 @@ if(UNIX AND NOT APPLE)
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/KangarooSparseCheckpointTests.py"
             "${CMAKE_CXX_COMPILER}")
 endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(ZLIB QUIET)
+    if(ZLIB_FOUND)
+        add_test(NAME KangarooBitmapCheckpointTests
+            COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/scripts/KangarooBitmapCheckpointTests.py"
+                "${CMAKE_CXX_COMPILER}")
+    endif()
+endif()
