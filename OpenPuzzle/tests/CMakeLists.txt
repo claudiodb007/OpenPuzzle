@@ -2486,3 +2486,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
                 "${CMAKE_CXX_COMPILER}")
     endif()
 endif()
+
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(KangarooPauseTests runtime/KangarooPauseTests.cpp)
+    target_link_libraries(KangarooPauseTests PRIVATE OpenPuzzleCore)
+    add_test(NAME KangarooPauseTests COMMAND KangarooPauseTests)
+    set_tests_properties(KangarooPauseTests PROPERTIES TIMEOUT 45)
+    add_test(NAME KangarooPauseCliTests COMMAND "${Python3_EXECUTABLE}" -B
+        "${CMAKE_CURRENT_SOURCE_DIR}/scripts/KangarooPauseCliTests.py" "$<TARGET_FILE:OpenPuzzle>")
+    set_tests_properties(KangarooPauseCliTests PROPERTIES TIMEOUT 45)
+endif()

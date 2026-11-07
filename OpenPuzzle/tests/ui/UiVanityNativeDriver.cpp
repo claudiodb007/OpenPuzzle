@@ -5,12 +5,10 @@
 #include <QFile>
 #include <QFrame>
 #include <QLabel>
-#include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
 #include <QSpinBox>
 #include <QThread>
-#include <QTimer>
 #include <cassert>
 #include <functional>
 #include <iostream>
@@ -32,14 +30,19 @@ int main(int argc,char** argv){
  auto prior=checked(workspace);start->click();
  assert(until([&]{return control<QPushButton>(w,"stop")->isEnabled()&&checked(workspace)>prior;}));
  assert(until([&]{const auto speed=metric(w,"Speed");return speed!="—"&&speed.endsWith(" MKey/s");}));
+ assert(!control<QPushButton>(w,"benchmark")->isEnabled());
  if(phase=="pause"){
-  QTimer::singleShot(0,[]{for(auto* p:QApplication::topLevelWidgets())if(auto* box=qobject_cast<QMessageBox*>(p))box->button(QMessageBox::Yes)->click();});
-  control<QPushButton>(w,"stop")->click();assert(until([&]{return start->isEnabled()&&start->text().contains("Resume")&&!QFile::exists(data+"/runtime.pid");}));
+  // Simulate a recoverable native interruption. The UI Stop cancels the assignment.
+  QFile interruption(workspace + "/vanity-controls/cancel");
+  assert(interruption.open(QIODevice::WriteOnly | QIODevice::NewOnly));
+  interruption.close();
+  assert(until([&]{return start->isEnabled()&&start->text().contains("Resume")&&!QFile::exists(data+"/runtime.pid");}));
+  assert(interruption.remove());
   assert(QFile::exists(data+"/client.state"));
  }else{
   control<QPushButton>(w,"safeStop")->click();
   assert(until([&]{return !QFile::exists(data+"/client.state")&&!QFile::exists(data+"/runtime.pid")&&start->isEnabled();}));
  }
- assert(!control<QPushButton>(w,"benchmark")->isEnabled());w.close();
+ assert(control<QPushButton>(w,"benchmark")->isEnabled());w.close();
  std::cout<<"Actual MainWindow + ordinary native CLI: "<<phase.toStdString()<<" validated.\n";
 }

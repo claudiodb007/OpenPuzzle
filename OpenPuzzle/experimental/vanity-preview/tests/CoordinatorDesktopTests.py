@@ -210,11 +210,22 @@ class Tests(unittest.TestCase):
         state=c.inspect(self.store,self.directory,base.CLI,allow_complete=True)[0]['native']
         self.assertEqual((state['checked'],state['claims'],state['completions']),(c.TOTAL,1,1))
 
-    def test_run_session_rejects_production_and_unsupported_options(self):
+    def test_experimental_session_rejects_invalid_options_before_launch(self):
         import subprocess
-        for args,code in [(['run','71','--engine','vanity'],1),(['run','20','--engine','vanity','--backend','cuda','--vanity-session','start','--store',str(self.store),'--run-root',str(self.directory)],2),(['run','20','--engine','vanity','--backend','cuda','--vanity-session','runs','--store',str(self.store),'--server','https://claudiodb.com'],2)]:
-            result=subprocess.run([str(base.CLI),*args],capture_output=True,text=True,timeout=10)
-            self.assertEqual(result.returncode,code,result.stdout+result.stderr)
+        environment = dict(os.environ, HOME=str(self.root), OPENPUZZLE_SERVER_URL='http://127.0.0.1:9')
+        cases = [
+            ('71', ['start', '--run-root', str(self.directory)], 'Explicit local run 20 required'),
+            ('20', ['start', '--run-root', str(self.directory)], 'Explicit desktop opt-in required'),
+            ('20', ['runs', '--server', 'https://example.invalid'], 'Missing/extra desktop binding options'),
+        ]
+        for puzzle, options, diagnostic in cases:
+            with self.subTest(puzzle=puzzle, options=options):
+                args = ['run', puzzle, '--engine', 'vanity', '--backend', 'cuda',
+                        '--vanity-session', *options, '--store', str(self.store)]
+                result = subprocess.run([str(base.CLI), *args], env=environment,
+                                        capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn(diagnostic, result.stderr)
         self.assertFalse(self.directory.exists())
 
     def test_standalone_runtime_without_test_tree_stops_and_resumes(self):

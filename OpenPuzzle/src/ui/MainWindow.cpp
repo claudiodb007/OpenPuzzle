@@ -110,7 +110,7 @@ bool validRuntimeStatus(const QVector<RuntimeSlotStatus>& runtimeSlots) {
     return false;
   }
   static const QStringList states = {
-      "idle", "running", "waiting", "stopped", "solution found",
+      "idle", "running", "waiting", "stopped", "paused", "solution found",
       "identity unavailable"};
   for (const auto& slot : runtimeSlots) {
     const QString state = slot.fields.value("Status").toLower();
@@ -605,6 +605,13 @@ void MainWindow::buildInterface() {
   stop_->setProperty("controlId", "stop");
   stop_->setObjectName("DangerButton");
   actions->addWidget(start_);
+  pauseKangaroo_ = new QPushButton;
+  pauseKangaroo_->setProperty("controlId", "pauseKangaroo");
+  pauseKangaroo_->setObjectName("SecondaryButton");
+  actions->addWidget(pauseKangaroo_);
+  connect(pauseKangaroo_, &QPushButton::clicked, this, [this] {
+    runCommand("kangaroo_pause", {"pause"});
+  });
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
   resumeVanity_=new QPushButton;resumeVanity_->setProperty("controlId","resumeVanity");resumeVanity_->setObjectName("SecondaryButton");actions->addWidget(resumeVanity_);
   connect(resumeVanity_,&QPushButton::clicked,this,[this]{if(vanitySelected())vanity_->requestResume();});
@@ -1149,7 +1156,7 @@ void MainWindow::updateActionAvailability() {
   bool canStart=idle, canBenchmark=idle && !(gpuControls_ && gpuControls_->applying());
   bool canSafe=ready && occupied && !kangarooActive_;
   bool canStop=(benchmarkRunning_ && !benchmarkCancelRequested_) || (ready && occupied);
-  QString startText=t("start"),stopText=t(benchmarkRunning_ ? "linux_benchmark_cancel" : "stop_now");
+  QString startText=t(kangarooPaused_ ? "kangaroo_resume" : "start"),stopText=t(benchmarkRunning_ ? "linux_benchmark_cancel" : "stop_now");
   #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
   if(vanityPaused_ && selectedRunMode()==RunMode::VanityCuda) startText=vanity_->caption(22);
 #endif
@@ -1168,16 +1175,20 @@ void MainWindow::updateActionAvailability() {
   // QAbstractButton discard the click when the user releases the mouse.
   start_->setEnabled(canStart);start_->setText(startText);
   safeStop_->setEnabled(canSafe);safeStop_->setToolTip(safeHint);
-  stop_->setEnabled(canStop);stop_->setText(stopText);
+  stop_->setEnabled(canStop || (ready && kangarooPaused_));stop_->setText(stopText);
+  pauseKangaroo_->setText(t("kangaroo_pause"));
+  pauseKangaroo_->setToolTip(t("kangaroo_pause_hint"));
+  pauseKangaroo_->setVisible(kangarooActive_ || kangarooPaused_ || selectedRunMode()==RunMode::KangarooCuda);
+  pauseKangaroo_->setEnabled(ready && kangarooActive_ && !identityUnavailable_);
   benchmark_->setEnabled(canBenchmark);
   if (gpuControls_) gpuControls_->setEnabled(!benchmarkRunning_ && !vanityBusy());
   refresh_->setEnabled(!busy);
   selfTest_->setEnabled(idle && !local && selectedRunMode()!=RunMode::VanityCuda);
   installKangaroo_->setEnabled(idle);
   doctor_->setEnabled(ready);updates_->setEnabled(ready);audit_->setEnabled(ready);
-  mode_->setEnabled(idle);
-  puzzle_->setEnabled(idle && !local);kangarooPuzzle_->setEnabled(idle);
-  device_->setEnabled(idle && !local);openclDevice_->setEnabled(idle);
+  mode_->setEnabled(idle && !kangarooPaused_);
+  puzzle_->setEnabled(idle && !local && !kangarooPaused_);kangarooPuzzle_->setEnabled(idle && !kangarooPaused_);
+  device_->setEnabled(idle && !local && !kangarooPaused_);openclDevice_->setEnabled(idle && !kangarooPaused_);
   cpuThreads_->setEnabled(idle);rusticlRadeonsi_->setEnabled(idle);
   autoStart_->setEnabled(idle && !local && selectedRunMode()!=RunMode::VanityCuda);
   updateThermalControlState();
@@ -1302,6 +1313,7 @@ void MainWindow::handleStatusResult(int exitCode, bool normalExit) {
 
   active_ = false;
   vanityPaused_ = false;
+  kangarooPaused_ = false;
   identityUnavailable_ = false;
   kangarooActive_ = false;
   QString solutionAssignmentId;
@@ -1313,6 +1325,14 @@ void MainWindow::handleStatusResult(int exitCode, bool normalExit) {
       vanityPaused_=true;
       auto index=mode_->findData(static_cast<int>(RunMode::VanityCuda));
       if(index>=0){mode_->setCurrentIndex(index);puzzle_->setValue(slot.fields.value("Puzzle").toInt());}
+    }
+    if (slot.fields.value("Engine").compare("Kangaroo",Qt::CaseInsensitive)==0 &&
+        slot.fields.value("Status").compare("paused",Qt::CaseInsensitive)==0 && !slotUnknown) {
+      kangarooPaused_ = true;
+      const int index = mode_->findData(static_cast<int>(RunMode::KangarooCuda));
+      if (index >= 0) mode_->setCurrentIndex(index);
+      const int puzzleIndex = kangarooPuzzle_->findData(slot.fields.value("Puzzle").toInt());
+      if (puzzleIndex >= 0) kangarooPuzzle_->setCurrentIndex(puzzleIndex);
     }
     active_ = active_ || slotRunning;
     identityUnavailable_ = identityUnavailable_ || slotUnknown;
@@ -1379,7 +1399,7 @@ void MainWindow::updateStatusSummary() {
       ? t("solution_saved")
       : (identityUnavailable_
              ? t("identity_unavailable_message")
-             : (active_ ? t("runtime_active") : t("no_execution"))));
+             : (kangarooPaused_ ? t("kangaroo_paused_hint") : (active_ ? t("runtime_active") : t("no_execution")))));
 }
 
 void MainWindow::updateStatusBadge() {
@@ -1389,7 +1409,7 @@ void MainWindow::updateStatusBadge() {
           ? t(statusIssueKey_ == "consulting" ? "status_pending" : "status_unavailable")
           : (identityUnavailable_
                  ? t("identity_unavailable")
-                 : (active_ ? t("running") : t("stopped"))));
+                 : (kangarooPaused_ ? t("kangaroo_paused") : (active_ ? t("running") : t("stopped")))));
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
   if(vanitySelected()&&!active_&&!identityUnavailable_&&statusAvailable_){statusBadge_->setText("Vanity / CUDA");statusBadge_->setToolTip(vanity_->caption(0));}
 #endif
@@ -1977,6 +1997,8 @@ void MainWindow::startExecution() {
         QString::fromUtf8(error.what()));
     return;
   }
+
+  if (kangarooPaused_) arguments.push_back("--resume-paused");
 
   const QString logPath = runtimeLogPath();
   if (!QDir().mkpath(

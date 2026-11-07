@@ -100,6 +100,9 @@ struct ClientRuntimeDependencies {
       finalKeysChecked;
 
   std::function<bool(const std::string& workspace)> prepareCancellation;
+  // Explicit pause has its own cooperative stop; cancellation stays separate.
+  std::function<bool()> pauseRequested;
+  std::function<bool(const std::string& workspace)> pauseExecution;
 
   // Optional: a stopped engine with resumable native evidence keeps its lease/state.
   std::function<bool(const std::string& workspace)> preserveCheckpoint;

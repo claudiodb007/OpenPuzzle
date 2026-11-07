@@ -13,7 +13,8 @@ class Tests(unittest.TestCase):
  def setUp(self):
   os.umask(0o077);self.tmp=tempfile.TemporaryDirectory(prefix="opv measured ç ' $() ");self.root=Path(self.tmp.name)
   self.store=self.root/'profiles';self.store.mkdir();self.evidence=self.root/'MEASUREMENT.json'
-  self.engine=Path(__file__).with_name('FakeTargetEngine.py').resolve();self.adapter=CLI.parent/'openpuzzle-vanity-adapter'
+  self.engine = Path(__file__).with_name('FakeTargetEngine.py').resolve()
+  self.adapter = CLI.parent / 'libexec' / 'OpenPuzzle' / 'openpuzzle-vanity-adapter'
   self.paths=dict(cli=CLI,adapter=self.adapter,engine=self.engine,bitcrack=CLI)
   self.prior=self.root/'prior';self.prior.mkdir();s.write_json(self.prior/'SUMMARY.json',dict(version='0.6.0',status='completed',real_gpu_requested=True,production_enabled=False))
   source=self.root/'HTTP_SOURCE.json';source.write_bytes((ROOT/'HTTP_SOURCE.json').read_bytes())

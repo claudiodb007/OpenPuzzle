@@ -124,6 +124,8 @@ private:
   QPushButton* start_ = nullptr;
   QPushButton* safeStop_ = nullptr;
   QPushButton* stop_ = nullptr;
+  QPushButton* pauseKangaroo_ = nullptr;
+  bool kangarooPaused_ = false;
   QPushButton* refresh_ = nullptr;
   QPushButton* benchmark_ = nullptr;
   VanityPanel* vanity_ = nullptr;

@@ -1,3 +1,4 @@
+#include "openpuzzle/runtime/KangarooPause.hpp"
 #include "openpuzzle/runtime/KangarooCheckpointRecoveryPlanner.hpp"
 
 #include "openpuzzle/engines/EngineLaunchRequest.hpp"
@@ -136,7 +137,7 @@ KangarooCheckpointRecoveryPlanner::build(
     error.clear();
   }
 
-  if (std::filesystem::exists(expected / "exit.code", error) && !error) {
+  if (std::filesystem::exists(expected / "exit.code", error) && !error && !KangarooPause::paused(state)) {
     return rejected("Execution already has an exit marker");
   }
   error.clear();

@@ -426,6 +426,21 @@ int main(int argc, char* argv[]) {
   assert(!safeStop->isEnabled());
   assert(stop->isEnabled() && !start->isEnabled());
 
+  auto* pauseKangaroo = control<QPushButton>(window, "pauseKangaroo");
+  assert(pauseKangaroo && !pauseKangaroo->isEnabled());
+  readStatus("Slot............... primary\nStatus............. running\n"
+             "Engine............. Kangaroo\nBackend............ CUDA\nPuzzle............. 140\n");
+  assert(pauseKangaroo->isEnabled() && !pauseKangaroo->isHidden());
+  clickAndExpect(pauseKangaroo,logPath,"pause\n");
+  assert(waitUntil([&]{return control<QPushButton>(window,"refresh")->isEnabled();}));
+  readStatus("Slot............... primary\nStatus............. paused\n"
+             "Engine............. Kangaroo\nBackend............ CUDA\nPuzzle............. 140\n");
+  assert(start->isEnabled() && start->text()=="Resume");
+  assert(stop->isEnabled() && !safeStop->isEnabled() && !pauseKangaroo->isEnabled());
+  assert(statusBadge->text()=="Paused");
+  readStatus("Status............. idle\nExecution.......... none\n");
+  auto* pauseMode=control<QComboBox>(window,"executionMode");
+  pauseMode->setCurrentIndex(pauseMode->findData(static_cast<int>(RunMode::BitCrackCuda)));
   readStatus("Slot............... cuda-0\nStatus............. running\n"
              "Assignment......... known-worker\n");
   assert(statusBadge->text() == "Running");

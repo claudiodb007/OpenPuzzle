@@ -33,5 +33,26 @@ int main(){try{
   {Fixture f;f.pending=true;auto d=f.deps();d.sync=[&](const auto&){++f.attempts;Result r;r.hasState=true;r.identityUnavailable=true;return r;};d.sleep=[&](auto){throw std::runtime_error("end-fixture");};
     try{ClientRuntime(d).run("fixture","assignment","client","workspace");require(false,"Unknown identity did not wait");}catch(const std::runtime_error& e){require(std::string(e.what())=="end-fixture","Unexpected monitor failure");}
     require(f.pending&&f.clears==0&&f.finalized==0&&f.attempts==1,"Unknown identity was finalized or discarded");}
+  // An explicit pause must bypass both durable cancellation and its HTTP upload.
+  for (bool saves : {false, true}) {
+    Fixture f; f.pending=true; f.stop=true;
+    int cancellations=0, forcedStops=0, pauses=0;
+    auto d=f.deps();
+    d.sync=[](const auto&){Result r;r.hasState=true;r.running=true;return r;};
+    d.pauseRequested=[] {return true;};
+    d.pauseExecution=[&](const auto&){++pauses;return saves;};
+    d.prepareCancellation=[&](const auto&){++cancellations;return true;};
+    d.stopExecution=[&](const auto&){++forcedStops;return true;};
+    require(ClientRuntime(d).run("fixture","assignment","client","workspace")== (saves?130:1) &&
+      f.pending && f.clears==0 && f.finalized==0 && cancellations==0 && forcedStops==0 && pauses==1,
+      "Explicit pause entered the ordinary cancellation/forced stop path");
+  }
+  { Fixture f;f.pending=true;f.stop=true;int cancellations=0;
+    auto d=f.deps();d.sync=[](const auto&){Result r;r.hasState=true;r.running=true;return r;};
+    d.pauseRequested=[] {return false;};
+    d.prepareCancellation=[&](const auto&){++cancellations;return true;};
+    ClientRuntime(d).run("fixture","assignment","client","workspace");
+    require(cancellations==1&&f.finalized==1,"Ordinary Stop lost cancellation");
+  }
   std::cout<<"ClientRuntimeLoopTests passed: shared continuous/monitor loops, wake, acknowledgement, retries and preservation\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

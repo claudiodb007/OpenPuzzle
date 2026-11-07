@@ -1,3 +1,4 @@
+#include "openpuzzle/runtime/KangarooPause.hpp"
 #include "openpuzzle/runtime/KangarooCheckpointRecoveryCoordinator.hpp"
 
 #include "openpuzzle/client/ClientStateStore.hpp"
@@ -80,6 +81,10 @@ KangarooCheckpointRecoveryCoordinator::resume(
       plan.request.rangeId != previousState.rangeId ||
       plan.request.puzzleId != previousState.puzzle) {
     return failed("Kangaroo recovery plan does not match local state");
+  }
+
+  if (KangarooPause::present(previousState) && !KangarooPause::archiveExit(previousState)) {
+    return failed("Unable to preserve paused exit marker; no engine launched");
   }
 
   BackgroundExecutionLauncher launcher;

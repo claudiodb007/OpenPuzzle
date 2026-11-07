@@ -1,3 +1,5 @@
+#include "openpuzzle/tools/ToolManager.hpp"
+#include "openpuzzle/runtime/KangarooPause.hpp"
 #include "openpuzzle/runtime/ClientRuntime.hpp"
 
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
@@ -150,9 +152,28 @@ ClientRuntime::productionDependencies(
         ClientRuntimeControl::release();
       };
 
+  const auto pauseLatched = std::make_shared<bool>(false);
+  dependencies.pauseRequested = [pauseLatched] {
+    if (SignalHandler::stopRequested()) return false;
+    const auto state = client::ClientStateStore::load();
+    return *pauseLatched || (state && KangarooPause::requestedByThisRuntime(*state));
+  };
+  dependencies.pauseExecution = [](const std::string& workspace) {
+    const auto state = client::ClientStateStore::load();
+    const auto executable = ToolManager::kangarooPath();
+    const bool saved = state && state->workspace == workspace && executable &&
+        KangarooPause::stopAndSave(*state, *executable);
+    if (saved && SignalHandler::stopRequested())
+      return client::ExecutionSyncService::requestCancellation(*state);
+    return saved;
+  };
+
   dependencies.stopRequested =
-      [] {
-        return SignalHandler::stopRequested();
+      [pauseLatched] {
+        if (SignalHandler::stopRequested()) return true;
+        const auto state = client::ClientStateStore::load();
+        if (state && KangarooPause::requestedByThisRuntime(*state)) *pauseLatched = true;
+        return *pauseLatched;
       };
 
   dependencies.safeStopRequested =

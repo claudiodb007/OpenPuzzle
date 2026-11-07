@@ -15,6 +15,11 @@ inline constexpr UiLanguage uiLanguageFromCode(std::string_view code){
 }
 struct UiTranslation {std::string_view key;std::array<std::string_view,4> text;};
 inline constexpr UiTranslation uiTranslations[]{
+ {"kangaroo_pause", {"Pause", "Pausar", "Mettre en pause", "Pausar"}},
+ {"kangaroo_resume", {"Resume", "Retomar", "Reprendre", "Reanudar"}},
+ {"kangaroo_paused", {"Paused", "Em pausa", "En pause", "En pausa"}},
+ {"kangaroo_pause_hint", {"Save the checkpoint and pause this assignment. Wait for confirmation.", "Guardar o checkpoint e pausar esta atribuição. Aguarda a confirmação.", "Enregistrer le checkpoint et suspendre cette attribution. Attendez la confirmation.", "Guardar el checkpoint y pausar esta asignación. Espera la confirmación."}},
+ {"kangaroo_paused_hint", {"Checkpoint saved. Resume checks the server lease; paused work may expire.", "Checkpoint guardado. Retomar verifica a validade da atribuição no servidor; a pausa não impede a expiração.", "Checkpoint enregistré. Reprendre vérifie la validité de l’attribution ; la pause n’empêche pas son expiration.", "Checkpoint guardado. Reanudar comprueba la asignación; la pausa no evita su caducidad."}},
  {"last_search_speed", {"LAST SEARCH SPEED", "ÚLTIMA VELOCIDADE", "DERNIÈRE VITESSE", "ÚLTIMA VELOCIDAD"}},
  {"gpu_write_busy", {"A GPU change is in progress. Wait for driver readback before closing.", "Está em curso uma alteração na GPU. Aguarda a confirmação do driver antes de fechar.", "Une modification GPU est en cours. Attendez la confirmation du pilote avant de fermer.", "Hay un cambio de GPU en curso. Espera la confirmación del controlador antes de cerrar."}},
  {"gpu_not_supported", {"This GPU driver does not support the requested control.", "O driver desta GPU não suporta o controlo pedido.", "Le pilote de ce GPU ne prend pas en charge ce contrôle.", "El controlador de esta GPU no admite el control solicitado."}},
@@ -171,7 +176,7 @@ inline constexpr UiTranslation uiTranslations[]{
  {"install_title", {"Install Kangaroo", "Instalar Kangaroo", "Installer Kangaroo", "Instalar Kangaroo"}},
  {"install_question", {"Download and build the pinned Kangaroo engine now?", "Descarregar e compilar agora o motor Kangaroo fixado?", "Télécharger et compiler maintenant le moteur Kangaroo épinglé ?", "¿Descargar y compilar ahora el motor Kangaroo fijado?"}},
  {"safe_stop_hint", {"Finish the current bounded range and block the next one.", "Termina o range limitado atual e bloqueia o seguinte.", "Termine la plage limitée actuelle et bloque la suivante.", "Termina el rango limitado actual y bloquea el siguiente."}},
- {"kangaroo_stop_hint", {"Kangaroo has no bounded completion point; use Stop now.", "Kangaroo não tem um ponto de conclusão limitado; utilize Parar agora.", "Kangaroo n’a pas de point de fin limité ; utilisez Arrêter maintenant.", "Kangaroo no tiene un punto de finalización limitado; use Detener ahora."}},
+ {"kangaroo_stop_hint", {"Use Pause to save and resume Kangaroo, or Stop to cancel the assignment.", "Usa Pausar para guardar e retomar o Kangaroo, ou Parar para cancelar a atribuição.", "Utilisez Pause pour enregistrer et reprendre Kangaroo, ou Arrêter pour annuler l’attribution.", "Usa Pausar para guardar y reanudar Kangaroo, o Detener para cancelar la asignación."}},
  {"busy_active", {"Unavailable while an execution is active.", "Indisponível durante uma execução ativa.", "Indisponible pendant une exécution active.", "No disponible durante una ejecución activa."}},
  {"windows_subtitle", {"Distributed search · Windows panel", "Pesquisa distribuída · painel Windows", "Recherche distribuée · panneau Windows", "Búsqueda distribuida · panel Windows"}},
  {"profile_label", {"Engine / GPU — measured profile", "Motor / GPU — perfil medido", "Moteur / GPU — profil mesuré", "Motor / GPU — perfil medido"}},

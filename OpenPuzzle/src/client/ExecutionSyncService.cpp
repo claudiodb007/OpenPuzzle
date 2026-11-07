@@ -19,6 +19,7 @@
 #include "openpuzzle/database/Database.hpp"
 #include "openpuzzle/performance/AdaptiveProfileUpdater.hpp"
 #include "openpuzzle/runtime/LinuxProcessIdentity.hpp"
+#include "openpuzzle/runtime/KangarooPause.hpp"
 #endif
 
 #include <boost/multiprecision/cpp_int.hpp>
@@ -81,7 +82,7 @@ ExecutionSyncService::ExecutionSyncService()
 
 #ifndef _WIN32
 bool ExecutionSyncService::cancellationRequested(const ClientExecutionState& state) {
-  if (state.engine != "Vanity") return false;
+  if (state.engine != "Vanity" && !KangarooPause::supported(state)) return false;
   const auto path=std::filesystem::path(state.workspace)/"cancel-requested.txt";
   const int fd=::open(path.c_str(),O_RDONLY|O_NONBLOCK|O_NOFOLLOW);
   if(fd<0) {
@@ -97,7 +98,7 @@ bool ExecutionSyncService::cancellationRequested(const ClientExecutionState& sta
   return true;
 }
 bool ExecutionSyncService::requestCancellation(const ClientExecutionState& state) {
-  if(state.engine!="Vanity")return true;
+  if(state.engine!="Vanity" && !KangarooPause::supported(state))return true;
   try {
     if(cancellationRequested(state))return true;
     return writePrivateFileAtomically(std::filesystem::path(state.workspace)/"cancel-requested.txt",
@@ -993,6 +994,13 @@ ExecutionSyncService::tick(
   explicitlyCancelled = cancellationRequested(*state);
   if(explicitlyCancelled) {
     exitCode=-2;result.exitCode=exitCode;result.interrupted=true;
+  }
+#endif
+#ifndef _WIN32
+  if (KangarooPause::present(*state) && !explicitlyCancelled) {
+    result.checkpointPreserved = true;
+    result.completionError = "Kangaroo pause preserved; resume or cancel explicitly";
+    return result;
   }
 #endif
   const bool completed = exitCode == 0;

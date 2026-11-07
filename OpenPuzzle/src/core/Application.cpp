@@ -113,6 +113,7 @@ static void printApplicationHelp() {
       << "  openpuzzle run [puzzle] [run options]\n"
       << "  openpuzzle status\n"
       << "  openpuzzle stop\n"
+      << "  openpuzzle pause (Kangaroo checkpoint pause)\n"
       << "  openpuzzle safestop\n"
       << "  openpuzzle doctor [--offline]\n"
       << "  openpuzzle thermal [--enable|--disable] [thresholds]\n"
@@ -342,6 +343,8 @@ int Application::run(int argc, char **argv) {
     if (cmd == "stop") {
       return RangeCommand().run({"stop"});
     }
+
+    if (cmd == "pause") return RangeCommand().run({"pause"});
 
     if (cmd == "safestop") {
       return RangeCommand().run({"safestop"});

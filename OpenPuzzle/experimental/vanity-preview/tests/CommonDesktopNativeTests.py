@@ -23,14 +23,18 @@ class Tests(unittest.TestCase):
    self.f.tearDown()
  def server(self,port=0):
   self.peer=CommonAcceptanceServer(self.root,cli=CLI,adapter=ADAPTER,engine=self.f.engine,count=self.f.count,grid=128,target=self.f.target,planning=2500,gpu_uuid=self.f.uuid,client_id=self.f.client,assignment_id=self.f.assignment,port=port,journal=self.journal,identity=self.identity)
-  self.f.env.update(OPENPUZZLE_SERVER_URL=self.peer.url,OPENPUZZLE_CLI=str(CLI),OPV_ACCEPTANCE_WORKSPACE=str(self.f.workspace),QT_QPA_PLATFORM='offscreen')
+  self.f.env.update(OPENPUZZLE_SERVER_URL=self.peer.url,OPENPUZZLE_CLI=str(CLI),OPV_ACCEPTANCE_WORKSPACE=str(self.f.workspace),QT_QPA_PLATFORM='offscreen',
+                    OPENPUZZLE_TARGET_DURATION_MINUTES='1')
  def gui(self,phase):
   result=subprocess.run([str(GUI),phase],env=self.f.env,capture_output=True,text=True,timeout=45)
   log=self.f.home/'.local/share/OpenPuzzle/ui-runtime.log';details=log.read_text()[-5000:] if log.exists() else ''
-  self.assertEqual(result.returncode,0,result.stdout+result.stderr+details)
- def test_real_main_window_stop_close_restart_peer_reopen_resume_safe_stop(self):
+  self.assertEqual(result.returncode,0,result.stdout+result.stderr+details+f'\nPeer errors: {self.peer.errors}')
+ def test_real_main_window_interrupt_close_restart_peer_reopen_resume_safe_stop(self):
   self.server();port=self.peer.server.server_port;self.gui('pause')
   self.assertEqual(self.peer.review()['claims'],1);self.assertEqual(self.peer.review()['completions'],0);self.assertTrue(self.f.state.exists())
+  claim=next(request['payload'] for request in self.peer.requests if request['path']=='/api/range/claim')
+  self.assertEqual(claim['target_duration_minutes'],1)
+  self.assertEqual(claim['requested_keys'],150_000_000_000)
   before={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in self.f.workspace.glob('vanity-native/attempt-*/engine.log')}
   self.assertTrue(before);self.peer.close();self.peer=None;self.server(port);self.gui('resume-safe')
   self.assertEqual(self.peer.review()['claim_requests'],1);self.assertEqual(self.peer.review()['claims'],1);self.assertEqual(self.peer.review()['completions'],1);self.assertEqual(self.peer.errors,[])

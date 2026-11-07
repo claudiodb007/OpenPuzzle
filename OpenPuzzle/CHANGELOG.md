@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.57 — Kangaroo pause and resume in Linux controls
+
+- Save a checkpoint cooperatively before confirming an explicit pause.
+- Preserve the assignment locally and validate its lease on Resume.
+- Block replacement claims after a refused paused resume or pending cancellation.
+- Retain ordinary Stop cancellation and the existing native checkpoint format.
+
 ## 1.0.56 — Compact PSCKangaroo checkpoints on Linux
 
 - Write compact checkpoints with block and metadata checksums.

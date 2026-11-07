@@ -1,3 +1,4 @@
+#include "openpuzzle/runtime/KangarooPause.hpp"
 #include "openpuzzle/core/CliInteger.hpp"
 #include "openpuzzle/runtime/RunSession.hpp"
 #include "openpuzzle/client/SolutionExporter.hpp"
@@ -943,7 +944,8 @@ int showStatus(const std::vector<std::string> &args) {
                      : (
                            result.running
                                ? "running"
-                               : (result.identityUnavailable ? "identity unavailable" : "stopped")))
+                               : (result.identityUnavailable ? "identity unavailable" :
+                                  (KangarooPause::paused(state) ? "paused" : "stopped"))))
           << '\n'
           << "Assignment......... "
           << state.assignmentId
@@ -1078,7 +1080,8 @@ int showStatus(const std::vector<std::string> &args) {
                        : (
                              result.running
                                  ? "running"
-                                 : (result.identityUnavailable ? "identity unavailable" : "stopped")))
+                                 : (result.identityUnavailable ? "identity unavailable" :
+                                  (KangarooPause::paused(state) ? "paused" : "stopped"))))
             << '\n'
             << "Assignment......... " << state.assignmentId << '\n'
             << "Puzzle............. " << state.puzzle << '\n'
@@ -1144,6 +1147,23 @@ int showStatus(const std::vector<std::string> &args) {
   std::cout
       << "Synchronization.... pending supervisor\n";
 
+  return 0;
+}
+
+int pauseExecution() {
+  bool requested = false;
+  for (const auto& slot : ClientRuntimeControl::executionSlots()) {
+    const auto state = client::ClientStateStore::load(slot);
+    if (!state || !KangarooPause::supported(*state)) continue;
+    if (KangarooPause::paused(*state)) { requested = true; continue; }
+    if (!KangarooPause::request(*state, slot)) {
+      std::cerr << "Unable to request Kangaroo pause for " << slot << "; state preserved.\n";
+      return 1;
+    }
+    requested = true;
+    std::cout << "Pause requested.... " << slot << "\nCheckpoint......... saving; wait for paused status\n";
+  }
+  if (!requested) { std::cerr << "No active Kangaroo runtime to pause.\n"; return 1; }
   return 0;
 }
 
@@ -1243,7 +1263,7 @@ int stopExecution() {
   }
 
   if (!processIdentityMatches(*state)) {
-    if(state->engine=="Vanity") {
+    if(state->engine=="Vanity" || KangarooPause::present(*state)) {
       if(client::ExecutionSyncService().inspect().identityUnavailable || !client::ExecutionSyncService::requestCancellation(*state)) {
         std::cerr << "Vanity cancellation identity/intent unavailable; state preserved.\n";return 1;
       }
@@ -2557,6 +2577,8 @@ ClientIterationResult RunSession::runOnce(
     return stopExecution();
   }
 
+  if (subcommand == "pause") return pauseExecution();
+
   if (subcommand == "safestop") {
     return safeStopExecution();
   }
@@ -2596,6 +2618,15 @@ ClientIterationResult RunSession::runOnce(
    */
   if (subcommand == "run") {
     const auto existing = client::ClientStateStore::load();
+    if (hasArgument(args, "--resume-paused") && (!existing || !KangarooPause::paused(*existing))) {
+      std::cerr << "No confirmed paused Kangaroo assignment; no new assignment requested.\n";
+      return 1;
+    }
+    if (existing && KangarooPause::present(*existing) &&
+        client::ExecutionSyncService::cancellationRequested(*existing)) {
+      std::cerr << "Kangaroo cancellation pending; retry Stop before requesting work.\n";
+      return 1;
+    }
     bool rejectedKangarooRecovery = false;
     if(existing && existing->engine=="Vanity") {
       if(!vanityProfile) throw std::runtime_error("Explicit Vanity profile required for recovery");
@@ -2717,6 +2748,10 @@ ClientIterationResult RunSession::runOnce(
     if (existing &&
         (existingEngine == "kangaroo" ||
          existingEngine == "psckangaroo")) {
+    if (existing && KangarooPause::present(*existing) && !KangarooPause::paused(*existing)) {
+      std::cerr << "Kangaroo pause was not confirmed; preserve files and review before resuming.\n";
+      return 1;
+    }
       std::cout
           << "Recovering interrupted Kangaroo execution...\n"
           << "Assignment......... "
@@ -2744,6 +2779,10 @@ ClientIterationResult RunSession::runOnce(
 
       switch (recovery.status) {
       case KangarooCheckpointRecoveryFlowStatus::Resumed: {
+        if (KangarooPause::present(*existing) && !KangarooPause::clear(*existing)) {
+          std::cerr << "Unable to clear confirmed pause; resumed state preserved.\n";
+          return 1;
+        }
         std::cout
             << "Kangaroo recovery.. resumed\n"
             << "PID................ "
@@ -2767,6 +2806,11 @@ ClientIterationResult RunSession::runOnce(
                 : recovery.error);
 
       case KangarooCheckpointRecoveryFlowStatus::Rejected:
+        if (KangarooPause::present(*existing)) {
+          std::cerr << "Paused assignment lease expired/refused; checkpoint and state preserved.\n"
+                    << "No new assignment requested. Use Stop to cancel before starting new work.\n";
+          return 1;
+        }
         if (!client::ClientStateStore::remove()) {
           return ClientIterationResult::retry(
               "Unable to remove rejected Kangaroo execution state");

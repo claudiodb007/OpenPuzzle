@@ -432,6 +432,25 @@ int ClientRuntime::run(
 
       std::cout << "Stopping search engine...\n";
 
+      if (dependencies_.pauseRequested && dependencies_.pauseRequested()) {
+        const bool saved = dependencies_.pauseExecution && dependencies_.pauseExecution(workspace);
+        // A solution written while stopping still takes priority over a pause.
+        const auto pausedSync = dependencies_.sync(serverUrl);
+        if (pausedSync.solutionFound) {
+          exportDetectedSolution(pausedSync);
+          reportDetectedSolution();
+          return SolutionFoundExitCode;
+        }
+        if (pausedSync.completionUploaded && pausedSync.stateRemoved) return 0;
+        if (!saved) {
+          std::cerr << "Pause could not be confirmed; checkpoint and local state preserved for review.\n";
+          return 1;
+        }
+        std::cout << "Checkpoint......... saved\nAssignment......... paused\n"
+                  << "Resume............. run again while the server lease remains valid\n";
+        return 130;
+      }
+
       if (dependencies_.prepareCancellation && !dependencies_.prepareCancellation(workspace)) {
         dependencies_.stopExecution(workspace);
         std::cerr << "Cancellation intent could not be saved; engine stop requested and local state preserved.\n";
