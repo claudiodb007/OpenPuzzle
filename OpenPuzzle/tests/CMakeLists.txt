@@ -1,3 +1,5 @@
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
 # Automated tests use assert() as their
 # validation mechanism.
 #
@@ -457,8 +459,6 @@ if(TARGET OpenPuzzleUi)
                 ${CMAKE_CURRENT_SOURCE_DIR}/cmake/DesktopUiInstallTests.cmake
     )
 endif()
-
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_test(
     NAME PuzzleCatalogIntegrityTests
@@ -1704,7 +1704,6 @@ target_compile_options(VanityCancellationIntentTests PRIVATE -UNDEBUG)
 add_test(NAME VanityCancellationIntentTests COMMAND VanityCancellationIntentTests)
 add_executable(VanityCancellationSyncDriver client/VanityCancellationSyncDriver.cpp)
 target_link_libraries(VanityCancellationSyncDriver PRIVATE OpenPuzzleCore)
-find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_test(NAME VanityCancellationSyncTests COMMAND ${Python3_EXECUTABLE} -B
     ${CMAKE_CURRENT_SOURCE_DIR}/client/VanityCancellationSyncTests.py $<TARGET_FILE:VanityCancellationSyncDriver>)
 

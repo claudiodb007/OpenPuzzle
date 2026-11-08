@@ -1404,14 +1404,22 @@ void MainWindow::updateStatusSummary() {
 
 void MainWindow::updateStatusBadge() {
   statusBadge_->setToolTip({});
-  statusBadge_->setText(
-      !statusAvailable_
-          ? t(statusIssueKey_ == "consulting" ? "status_pending" : "status_unavailable")
-          : (identityUnavailable_
-                 ? t("identity_unavailable")
-                 : (kangarooPaused_ ? t("kangaroo_paused") : (active_ ? t("running") : t("stopped")))));
+  const char* statusKey = active_ ? "running" : "stopped";
+  if (!statusAvailable_) {
+    statusKey = statusIssueKey_ == "consulting" ? "status_pending" : "status_unavailable";
+  } else if (identityUnavailable_) {
+    statusKey = "identity_unavailable";
+  } else if (solutionFound_) {
+    statusKey = "solution_found";
+  } else if (kangarooPaused_) {
+    statusKey = "kangaroo_paused";
+  }
+  statusBadge_->setText(t(statusKey));
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
-  if(vanitySelected()&&!active_&&!identityUnavailable_&&statusAvailable_){statusBadge_->setText("Vanity / CUDA");statusBadge_->setToolTip(vanity_->caption(0));}
+  if (vanitySelected() && statusAvailable_ && !active_ && !identityUnavailable_ && !solutionFound_) {
+    statusBadge_->setText("Vanity / CUDA");
+    statusBadge_->setToolTip(vanity_->caption(0));
+  }
 #endif
   statusBadge_->setProperty("active", active_||vanityBusy());
   statusBadge_->setProperty("identityUnavailable", identityUnavailable_);

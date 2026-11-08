@@ -803,7 +803,7 @@ int main(int argc, char* argv[]) {
       "not displayed or uploaded"));
   assert(!messagesOutput->toPlainText().contains(
       "/private/workspace/found.txt"));
-  assert(statusBadge->text() == "Stopped");
+  assert(statusBadge->text() == "Solution found");
   assert(!statusBadge->property("active").toBool());
   assert(!start->isEnabled());
 
