@@ -58,10 +58,18 @@ int main(int argc, char** argv) {
         assert(reader.LoadCheckpoint(old.c_str()) && reader.same(legacy));
         assert(reader.LoadCheckpoint(holes.c_str()) && reader.same(sparse));
         assert(reader.LoadCheckpoint(file.c_str()) && reader.same(compact));
+        const auto converted = base + ".converted";
+        assert(CompactStore::CompactLegacyCheckpoint(holes.c_str(), converted.c_str()));
+        assert(reader.LoadCheckpoint(converted.c_str()) && reader.same(sparse));
+        assert(!CompactStore::CompactLegacyCheckpoint(old.c_str(), converted.c_str()));
+        assert(reader.LoadCheckpoint(converted.c_str()) && reader.same(sparse));
         if (two) {
             FILE* legacy_b = fopen(old.c_str(), "r+b");
             assert(legacy_b && fwrite("RCKDT5B", 1, 7, legacy_b) == 7 && fclose(legacy_b) == 0);
             assert(reader.LoadCheckpoint(old.c_str()) && reader.same(legacy));
+            const auto convertedB = base + ".converted-b";
+            assert(CompactStore::CompactLegacyCheckpoint(old.c_str(), convertedB.c_str()));
+            assert(reader.LoadCheckpoint(convertedB.c_str()) && reader.same(legacy));
             CompactStore single(false);
             assert(single.LoadCheckpoint(file.c_str()) && single.same(compact));
             CompactStore preload(true);
@@ -76,6 +84,18 @@ int main(int argc, char** argv) {
     writer.fill(false);
     const auto live = (root / "live").string();
     assert(writer.SaveCheckpoint(live.c_str()));
+    const auto rejected = (root / "rejected").string();
+    const auto truncated = (root / "truncated").string();
+    std::filesystem::copy_file(root / "0.old", truncated);
+    std::filesystem::resize_file(truncated, std::filesystem::file_size(truncated) - 1);
+    assert(!CompactStore::CompactLegacyCheckpoint(truncated.c_str(), rejected.c_str()));
+    assert(!CompactStore::CompactLegacyCheckpoint(live.c_str(), rejected.c_str()));
+    bad_sync = true;
+    assert(!CompactStore::CompactLegacyCheckpoint((root / "0.old").c_str(), rejected.c_str()));
+    bad_sync = false;
+    assert(!std::filesystem::exists(rejected));
+    for (const auto& item : std::filesystem::directory_iterator(root))
+        assert(item.path().filename().string().find("rejected.tmp.") == std::string::npos);
     for (int fault = 0; fault < 2; ++fault) {
         bad_sync = fault == 0;
         bad_write = fault == 1;
@@ -104,7 +124,7 @@ int main(int argc, char** argv) {
         bool error = false;
         assert(reader.LoadWildsFromCheckpoint(damaged.c_str(), error) == 0 && error);
     }
-    puts("PASS: legacy v3, sparse v3, compact v4, preload, table metadata, truncation, CRC, write and fsync failures");
+    puts("PASS: legacy and sparse conversion, compact v4, preload, metadata, truncation, CRC, write and fsync failures");
 }
 '''
 

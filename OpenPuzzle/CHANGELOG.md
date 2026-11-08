@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.58 — Offline Kangaroo checkpoint conversion
+
+- Convert legacy PSCKangaroo checkpoints into compact copies that preserve
+  table entries and bucket state.
+- Include the converter in the pinned Linux engine installer.
+- Show confirmed solutions in the Linux desktop status badge.
+
 ## 1.0.57 — Kangaroo pause and resume in Linux controls
 
 - Save a checkpoint cooperatively before confirming an explicit pause.

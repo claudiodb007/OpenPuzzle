@@ -94,3 +94,16 @@ Explicit resume aborts on a failed checkpoint load.
 The installer requires zlib development files (`zlib1g-dev` on Ubuntu). Use the
 same explicit local rebuild command above. OPZKCP1 checkpoints need the updated
 engine. Keep a legacy checkpoint if a rollback is required.
+
+An installed engine that supports offline conversion can write a compact copy
+of a stopped legacy RCKDT5B or RCKDT5C checkpoint.
+
+```sh
+"$HOME/.local/share/OpenPuzzle/engines/psckangaroo" --compact-checkpoint \
+  /path/to/kangaroo.checkpoint /path/to/kangaroo.compact.checkpoint
+```
+
+The converter uses bounded memory, preserves table slot positions and bucket
+state, and creates the destination only after writing and syncing the complete
+file. It keeps the source intact and requires a new destination filename.
+Use a stopped session to keep the source stable during conversion.

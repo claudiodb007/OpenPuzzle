@@ -1,18 +1,25 @@
 diff --git a/TameStore.h b/TameStore.h
 --- a/TameStore.h
 +++ b/TameStore.h
-@@ -38,6 +38,122 @@
+@@ -38,6 +38,129 @@
  #endif
  #include "defs.h"
  
 +#include <algorithm>
 +#include <array>
++#include <cerrno>
 +#include <cstddef>
 +#include <cstdint>
 +#include <cstdio>
 +#include <cstring>
++#include <memory>
++#include <string>
 +#include <type_traits>
 +#include <zlib.h>
++#ifndef _WIN32
++#include <fcntl.h>
++#include <sys/stat.h>
++#endif
 +
 +namespace checkpoint_bitmap {
 +
@@ -124,7 +131,7 @@ diff --git a/TameStore.h b/TameStore.h
  // ============================================================================
  // PORTABILITY: 64-bit fseek/ftell
  // ============================================================================
-@@ -1221,7 +1337,7 @@
+@@ -1221,7 +1344,7 @@ public:
      }
      
      // Load wilds from checkpoint file (RCKDT43 format) - loads only table[1] data
@@ -133,7 +140,7 @@ diff --git a/TameStore.h b/TameStore.h
          if (!initialized || !wild_table[1]) return 0;
          
          FILE* fp = fopen(filename, "rb");
-@@ -1233,6 +1349,15 @@
+@@ -1233,6 +1356,15 @@ public:
          CheckpointHeader header;
          if (fread(&header, sizeof(header), 1, fp) != 1) { fclose(fp); return false; }
          
@@ -149,7 +156,7 @@ diff --git a/TameStore.h b/TameStore.h
          if (memcmp(header.magic, "RCKDT5C", 7) != 0) {
              if (memcmp(header.magic, "RCKDT5B", 7) == 0) {
                  header.tables_present = 3;  // v56C always wrote both
-@@ -1311,10 +1436,40 @@
+@@ -1311,10 +1443,121 @@ public:
      };
  #pragma pack(pop)
      
@@ -183,6 +190,87 @@ diff --git a/TameStore.h b/TameStore.h
 +               expected == crc && fgetc(fp) == EOF && !ferror(fp);
 +    }
 +
++#ifndef _WIN32
++    static bool CompactLegacyCheckpoint(const char* source, const char* destination) {
++        const int input_fd = open(source, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
++        if (input_fd < 0) return false;
++        const auto close_input = [](FILE* stream) { fclose(stream); };
++        std::unique_ptr<FILE, decltype(close_input)> input(fdopen(input_fd, "rb"), close_input);
++        if (!input) {
++            close(input_fd);
++            return false;
++        }
++        struct stat original{}, existing{};
++        CheckpointHeader header{};
++        if (lstat(destination, &existing) == 0 || errno != ENOENT ||
++            fstat(input_fd, &original) != 0 || !S_ISREG(original.st_mode) ||
++            fread(&header, sizeof(header), 1, input.get()) != 1) return false;
++
++        if (memcmp(header.magic, "RCKDT5B", 8) == 0) {
++            header.tables_present = 3;
++        } else if (memcmp(header.magic, "RCKDT5C", 8) != 0 || header.version != 3) {
++            return false;
++        }
++        if ((header.tables_present != 1 && header.tables_present != 3) ||
++            header.circular_mode_w1 > 1 || header.circular_mode_w2 > 1 ||
++            header.wild_table_size == 0 || header.wild_count_w1 > header.wild_table_size ||
++            header.wild_count_w2 > header.wild_table_size) return false;
++
++        const int table_count = header.tables_present == 3 ? 2 : 1;
++        const auto metadata_size = sizeof(header) + SPATIAL_BUCKETS * 2 * sizeof(u64);
++        const auto slot_bytes = sizeof(WildEntryCompact) * table_count;
++        if (original.st_size < 0 || static_cast<u64>(original.st_size) < metadata_size) return false;
++        const auto table_bytes = static_cast<u64>(original.st_size) - metadata_size;
++        if (table_bytes % slot_bytes != 0 || table_bytes / slot_bytes != header.wild_table_size)
++            return false;
++
++        std::string temporary = std::string(destination) + ".tmp.XXXXXX";
++        const int output_fd = mkstemp(temporary.data());
++        if (output_fd < 0) return false;
++        FILE* output = fdopen(output_fd, "wb");
++        if (!output) {
++            close(output_fd);
++            unlink(temporary.c_str());
++            return false;
++        }
++        const auto convert = [&]() {
++            memcpy(header.magic, "OPZKCP1", 8);
++            header.version = 4;
++            if (fwrite(&header, sizeof(header), 1, output) != 1) return false;
++            std::array<WildEntryCompact, checkpoint_bitmap::entries_per_block> block;
++            for (int t = 0; t < table_count; ++t) {
++                for (u64 remaining = header.wild_table_size; remaining != 0;) {
++                    const auto slots = std::min<u64>(remaining, block.size());
++                    if (fread(block.data(), sizeof(WildEntryCompact), slots, input.get()) != slots ||
++                        !checkpoint_bitmap::writeTable(output, block.data(), slots)) return false;
++                    remaining -= slots;
++                }
++            }
++            u32 crc = crc32(0, reinterpret_cast<const Bytef*>(&header), sizeof(header));
++            for (u32 i = 0; i < SPATIAL_BUCKETS; ++i) {
++                u64 state[2];
++                if (fread(state, sizeof(state), 1, input.get()) != 1 ||
++                    fwrite(state, sizeof(state), 1, output) != 1) return false;
++                crc = crc32(crc, reinterpret_cast<const Bytef*>(state), sizeof(state));
++            }
++            struct stat after{};
++            return fgetc(input.get()) == EOF && !ferror(input.get()) &&
++                   fstat(input_fd, &after) == 0 && after.st_size == original.st_size &&
++                   after.st_mtim.tv_sec == original.st_mtim.tv_sec &&
++                   after.st_mtim.tv_nsec == original.st_mtim.tv_nsec &&
++                   after.st_ctim.tv_sec == original.st_ctim.tv_sec &&
++                   after.st_ctim.tv_nsec == original.st_ctim.tv_nsec &&
++                   fwrite(&crc, sizeof(crc), 1, output) == 1 && FSYNC_FILE(output) == 0;
++        };
++        const bool converted = convert();
++        const bool closed = fclose(output) == 0;
++        // Publish the complete copy without replacing an existing destination.
++        const bool published = converted && closed && link(temporary.c_str(), destination) == 0;
++        unlink(temporary.c_str());
++        return published;
++    }
++#endif
++
      bool SaveCheckpoint(const char* filename) {
          if (!initialized || !wild_table[0]) return false;
          
@@ -191,7 +279,7 @@ diff --git a/TameStore.h b/TameStore.h
          
          // v61: Atomic write pattern — write to temp, fsync, rename.
          // Protects against crash/power-loss/disk-full mid-write leaving
-@@ -1339,8 +1494,8 @@
+@@ -1339,8 +1582,8 @@ public:
          
          CheckpointHeader header;
          memset(&header, 0, sizeof(header));
@@ -202,7 +290,7 @@ diff --git a/TameStore.h b/TameStore.h
          header.wild_table_size = wild_table_size;
          header.wild_count_w1 = wild_count[0].load();
          header.wild_count_w2 = wild_count[1].load();
-@@ -1356,23 +1511,25 @@
+@@ -1356,23 +1599,25 @@ public:
          // v56C: Only write tables that are allocated (skip NULL → saves ~117GB in ALL-TAME)
          for (int t = 0; t < 2; t++) {
              if (wild_table[t]) {
@@ -227,10 +315,9 @@ diff --git a/TameStore.h b/TameStore.h
 +            if (fwrite(state, sizeof(u64), 2, fp) != 2)
                  return abort_save("failed to write spatial bucket state");
 -            }
--        }
--        
 +            metadata_crc = crc32(metadata_crc, reinterpret_cast<const Bytef*>(state), sizeof(state));
-+        }
+         }
+-        
 +        if (fwrite(&metadata_crc, sizeof(metadata_crc), 1, fp) != 1)
 +            return abort_save("failed to write checkpoint metadata checksum");
 +        const auto checkpoint_bytes = ftello(fp);
@@ -239,7 +326,7 @@ diff --git a/TameStore.h b/TameStore.h
          // v61: Force data to physical storage BEFORE rename. Without this,
          // the rename publishes a file whose contents may still be in the
          // kernel page cache — a crash here would leave a "valid" filename
-@@ -1396,7 +1553,7 @@
+@@ -1396,7 +1641,7 @@ public:
          
          // Show actual size saved
          size_t tables_written = (wild_table[0] ? 1 : 0) + (wild_table[1] ? 1 : 0);
@@ -248,7 +335,7 @@ diff --git a/TameStore.h b/TameStore.h
          printf("*** CHECKPOINT SAVED (W1/TAMEs: %lluM, W2: %lluM, tables: %zu, %.1f GB) ***\n",
                 (unsigned long long)(header.wild_count_w1 / 1000000),
                 (unsigned long long)(header.wild_count_w2 / 1000000),
-@@ -1412,59 +1569,68 @@
+@@ -1412,59 +1657,68 @@ public:
          CheckpointHeader header;
          if (fread(&header, sizeof(header), 1, fp) != 1) { fclose(fp); return false; }
          
@@ -299,7 +386,7 @@ diff --git a/TameStore.h b/TameStore.h
 -            } else if (in_file && !wild_table[t]) {
 -                // Table in file but NOT allocated → skip
 -                FSEEK64(fp, (int64_t)wild_table_size * (int64_t)sizeof(WildEntryCompact), SEEK_CUR);
--            }
+             }
 -            // If not in file: nothing to read, table stays zeroed
 -        }
 -        
@@ -309,7 +396,6 @@ diff --git a/TameStore.h b/TameStore.h
 -            // v61: validate both reads to catch silent truncation
 -            if (fread(&wi, sizeof(u64), 1, fp) != 1 || fread(&fc, sizeof(u64), 1, fp) != 1) {
 -                printf("ERROR: Incomplete read of spatial bucket %u state\n", i);
-+            }
 +
 +            if (header.wild_table_size != wild_table_size) {
 +                printf("ERROR: Table size mismatch (file: %llu, current: %llu)\n",
@@ -320,8 +406,6 @@ diff --git a/TameStore.h b/TameStore.h
              }
 -            spatial_buckets[i].write_index.store(wi);
 -            spatial_buckets[i].fill_count.store(fc);
--        }
--        
 +
 +            // v56C: Only read tables that were saved (tables_present bitmask)
 +            for (int t = 0; t < 2; t++) {
@@ -356,7 +440,8 @@ diff --git a/TameStore.h b/TameStore.h
 +                spatial_buckets[i].fill_count.store(fc);
 +            }
 +
-+        }
+         }
+-        
 +
          fclose(fp);
          
@@ -372,7 +457,7 @@ diff --git a/RCKangaroo_hunt_v2.cpp b/RCKangaroo_hunt_v2.cpp
  #include <condition_variable>
  #include <algorithm>
  #include <deque>
-@@ -130,6 +131,15 @@
+@@ -130,6 +131,15 @@ std::atomic<u64> gFalsePositives{0};  // v40.1: Silent FP counter
  std::mutex gCollisionResolveMutex;
  std::atomic<bool> gCollisionBeingResolved{false};
  
@@ -388,7 +473,7 @@ diff --git a/RCKangaroo_hunt_v2.cpp b/RCKangaroo_hunt_v2.cpp
  // Worker thread function - processes TRAP and HUNT
  void WorkerThread(int thread_id) {
      while (gWorkersRunning.load()) {
-@@ -150,6 +160,7 @@
+@@ -150,6 +160,7 @@ void WorkerThread(int thread_id) {
          }
          
          if (hasWork && chunk.data) {
@@ -396,7 +481,7 @@ diff --git a/RCKangaroo_hunt_v2.cpp b/RCKangaroo_hunt_v2.cpp
              for (int i = chunk.start; i < chunk.end && !gSolved; i++) {
                  u8* p = chunk.data + i * GPU_DP_SIZE;
                  u8 x_bytes[16];
-@@ -1408,6 +1419,7 @@
+@@ -1408,6 +1419,7 @@ void CheckNewPoints()
          // v51.1: No free() — localBuffer is pre-allocated pPntList2
      }
      else {
@@ -404,7 +489,7 @@ diff --git a/RCKangaroo_hunt_v2.cpp b/RCKangaroo_hunt_v2.cpp
          // Fallback single-threaded (uses local buffer)
          for (int i = 0; i < cnt && !gSolved; i++)
          {
-@@ -1702,6 +1714,8 @@
+@@ -1702,6 +1714,8 @@ void ShowStats(u64 tm_start, double exp_ops, double dp_val)
      }
  }
  
@@ -413,7 +498,7 @@ diff --git a/RCKangaroo_hunt_v2.cpp b/RCKangaroo_hunt_v2.cpp
  bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
  {
      if ((Range < 32) || (Range > 180))
-@@ -1757,7 +1771,9 @@
+@@ -1757,7 +1771,9 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
              }
              printf("\r\n");
          } else {
@@ -424,7 +509,7 @@ diff --git a/RCKangaroo_hunt_v2.cpp b/RCKangaroo_hunt_v2.cpp
          }
      }
      
-@@ -2112,7 +2128,14 @@
+@@ -2112,7 +2128,14 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
                  if (gPreloadWildsFile[0] != 0) {
                      u64 preloaded = 0;
                      if (gPreloadIsCheckpoint) {
@@ -440,7 +525,7 @@ diff --git a/RCKangaroo_hunt_v2.cpp b/RCKangaroo_hunt_v2.cpp
                      } else {
                          preloaded = gTameStore.LoadWildsFromDescartados(gPreloadWildsFile);
                      }
-@@ -2222,7 +2245,7 @@
+@@ -2222,7 +2245,7 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
              if (elapsed_hours >= gCheckpointIntervalHours) {
                  printf("\n*** AUTO-CHECKPOINT (every %d hours) [%s phase] ***\n", 
                         gCheckpointIntervalHours, gTrapPhase ? "TRAP" : "HUNT");
@@ -449,7 +534,7 @@ diff --git a/RCKangaroo_hunt_v2.cpp b/RCKangaroo_hunt_v2.cpp
                      gLastCheckpointTime = current_time;
                  }
                  // v45: Also flush savedps to disk for safety
-@@ -2267,7 +2290,7 @@
+@@ -2267,7 +2290,7 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
                             table_size > 0 ? (double)tame_count / table_size * 100.0 : 0.0);
                      printf("  These will be reloaded on next run (resume TRAP or start HUNT).\n");
                  }
@@ -458,7 +543,28 @@ diff --git a/RCKangaroo_hunt_v2.cpp b/RCKangaroo_hunt_v2.cpp
                      printf("Checkpoint saved successfully.\n");
                  } else {
                      printf("WARNING: Checkpoint save failed.\n");
-@@ -2536,7 +2559,7 @@
+@@ -2519,6 +2542,20 @@ bool ParseCommandLine(int argc, char* argv[])
+ 
+ int main(int argc, char* argv[])
+ {
++#ifndef _WIN32
++    if (argc > 1 && strcmp(argv[1], "--compact-checkpoint") == 0) {
++        if (argc != 4) {
++            fprintf(stderr, "Usage: psckangaroo --compact-checkpoint SOURCE DESTINATION\n");
++            return 2;
++        }
++        if (!TameStore::CompactLegacyCheckpoint(argv[2], argv[3])) {
++            fprintf(stderr, "Cannot compact legacy checkpoint; source preserved.\n");
++            return 1;
++        }
++        printf("Compact checkpoint written to %s\n", argv[3]);
++        return 0;
++    }
++#endif
+     printf("\n");
+     printf("================================================================================\n");
+     printf("\n");
+@@ -2536,7 +2573,7 @@ int main(int argc, char* argv[])
      printf("                   Ultra-compact 16-byte DPs | Async BSGS resolver\n");
      printf("                   Dual hash table | Table freeze | Uniform jumps\n");
      printf("  Modes:           ALL-TAME (recommended 130+ bits) | ALL-WILD | TRAP/HUNT\n");
@@ -467,7 +573,7 @@ diff --git a/RCKangaroo_hunt_v2.cpp b/RCKangaroo_hunt_v2.cpp
      printf("\n");
  
  #ifdef _WIN32
-@@ -2671,5 +2694,5 @@
+@@ -2671,5 +2708,5 @@ int main(int argc, char* argv[])
      free(pPntList2);
      free(pPntList);
      
