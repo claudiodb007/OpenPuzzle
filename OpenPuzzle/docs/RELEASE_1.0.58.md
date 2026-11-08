@@ -25,3 +25,7 @@ resume paths also read the converted file.
 
 The Linux desktop status badge now shows when the server has confirmed a
 solution for the selected puzzle.
+
+The Linux x86_64 package is `OpenPuzzle-1.0.58-Linux-x86_64.deb`.
+The portable updater package uses `OpenPuzzle-1.0.58-portable-XXXXXXXX.deb`,
+where `XXXXXXXX` is the first eight characters of the Debian package SHA-256.
