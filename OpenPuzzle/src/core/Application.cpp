@@ -135,6 +135,10 @@ static void printApplicationHelp() {
       << "  --backend NAME   Select cuda, opencl or cpu\n"
       << "  --device N       Select the primary GPU device\n"
       << "  --devices LIST   Select CUDA/OpenCL devices: all or 0,1,2,...\n"
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+      << "  --recover-expired  Archive a retired Vanity lease and request new work\n"
+      << "  --recover-assignment ID  Require this initial Vanity assignment in the current slot\n"
+#endif
       << "  --with-opencl    Run CUDA and OpenCL together\n"
       << "  --opencl-device N\n"
       << "                   Select the OpenCL device\n"

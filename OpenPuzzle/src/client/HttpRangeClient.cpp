@@ -1151,8 +1151,11 @@ bool HttpRangeClient::progress(const std::string &assignmentId,
   }
 
   if (!WIFEXITED(result) || WEXITSTATUS(result) != 0) {
-    lastErrorCode_ =
-        parseErrorCode(response);
+    // curl returns 22 for an HTTP error response with --fail-with-body.
+    // A failed transfer may have left a partial body.
+    if (WIFEXITED(result) && WEXITSTATUS(result) == 22) {
+      lastErrorCode_ = parseErrorCode(response);
+    }
 
     lastError_ = response.empty() ? "HTTP request failed" : response;
 

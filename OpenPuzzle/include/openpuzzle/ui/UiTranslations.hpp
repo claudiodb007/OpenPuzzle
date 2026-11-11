@@ -15,6 +15,17 @@ inline constexpr UiLanguage uiLanguageFromCode(std::string_view code){
 }
 struct UiTranslation {std::string_view key;std::array<std::string_view,4> text;};
 inline constexpr UiTranslation uiTranslations[]{
+ {"stop_reason", {"Stop reason", "Motivo da paragem", "Motif de l’arrêt", "Motivo de la parada"}},
+ {"stopped_at", {"Stopped at", "Parou em", "Arrêté le", "Se detuvo el"}},
+ {"checkpoint", {"Checkpoint", "Checkpoint", "Point de reprise", "Punto de control"}},
+ {"checkpoint_verified", {"Verified locally · %1 keys checked", "Validado localmente · %1 chaves verificadas", "Vérifié localement · %1 clés vérifiées", "Validado localmente · %1 claves verificadas"}},
+ {"checkpoint_review", {"Review required", "Revisão necessária", "Vérification nécessaire", "Revisión necesaria"}},
+ {"vanity_interrupted", {"Interrupted", "Interrompido", "Interrompu", "Interrumpido"}},
+ {"vanity_exit_success", {"Engine exited successfully", "Motor terminou com sucesso", "Moteur terminé avec succès", "Motor finalizado correctamente"}},
+ {"vanity_exit_error", {"Engine exited with error", "Motor terminou com erro", "Moteur arrêté avec une erreur", "Motor finalizado con error"}},
+ {"vanity_exit_missing", {"Exit record unavailable", "Registo de saída indisponível", "Enregistrement de sortie indisponible", "Registro de salida no disponible"}},
+ {"vanity_recover_hint", {"Recover this slot using its verified checkpoint and assignment server.", "Recuperar este slot com o checkpoint validado e o servidor da atribuição.", "Récupérer cet emplacement avec son point de reprise vérifié et le serveur d’attribution.", "Recuperar este slot con el punto de control validado y el servidor de la asignación."}},
+ {"vanity_recover_question", {"Recover Puzzle %1 in slot %2? If the server reports an expired or missing assignment, its state will be archived and new work requested.", "Recuperar o Puzzle %1 no slot %2? Se o servidor indicar que a atribuição expirou ou já não existe, o estado será arquivado e será pedido novo trabalho.", "Récupérer le Puzzle %1 dans l’emplacement %2 ? Si le serveur signale une attribution expirée ou absente, son état sera archivé et un nouveau travail sera demandé.", "¿Recuperar el Puzzle %1 en el slot %2? Si el servidor indica que la asignación caducó o ya no existe, su estado se archivará y se solicitará nuevo trabajo."}},
  {"kangaroo_pause", {"Pause", "Pausar", "Mettre en pause", "Pausar"}},
  {"kangaroo_resume", {"Resume", "Retomar", "Reprendre", "Reanudar"}},
  {"kangaroo_paused", {"Paused", "Em pausa", "En pause", "En pausa"}},

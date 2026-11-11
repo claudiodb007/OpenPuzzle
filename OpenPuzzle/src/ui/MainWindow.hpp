@@ -14,6 +14,7 @@ class QComboBox;
 class QCheckBox;
 class QDoubleSpinBox;
 class QFrame;
+class QGridLayout;
 class QHBoxLayout;
 class QLabel;
 class QPlainTextEdit;
@@ -70,6 +71,14 @@ private:
   void refreshThermalHistory();
   void confirmClearThermalHistory();
   void startExecution();
+  void recoverVanitySlot(
+      const QString& slot,
+      const QString& assignment,
+      int puzzle,
+      int device);
+  void launchExecution(
+      const QStringList& arguments,
+      const QString& executionSlot = QString());
   void runCommand(
       const QString& titleKey,
       const QStringList& arguments);
@@ -105,7 +114,7 @@ private:
   QLabel* openclDeviceName_ = nullptr;
   QLabel* cpuThreadsName_ = nullptr;
   QWidget* slotsHost_ = nullptr;
-  QHBoxLayout* slotsLayout_ = nullptr;
+  QGridLayout* slotsLayout_ = nullptr;
   QSpinBox* puzzle_ = nullptr;
   QComboBox* kangarooPuzzle_ = nullptr;
   QComboBox* mode_ = nullptr;

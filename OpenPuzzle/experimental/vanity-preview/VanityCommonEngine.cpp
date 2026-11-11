@@ -66,10 +66,17 @@ uint64_t coverage(const fs::path& root,const Binding& b,bool terminal){
   for(const auto& item:fs::directory_iterator(root)){
     if(!item.path().filename().string().starts_with("attempt-"))continue;
     need(fs::is_directory(item.symlink_status())&&fs::canonical(item.path())==item.path(),"Unsafe Vanity attempt");
-    need(read(item.path()/"solutions.txt").empty(),"Vanity solution requires private export/review");
+    const auto solutions = item.path() / "solutions.txt";
+    const bool hasSolutionFile = fs::exists(fs::symlink_status(solutions));
+    if (hasSolutionFile) {
+      need(read(solutions).empty(), "Vanity solution requires private export/review");
+    }
     std::istringstream log(read(item.path()/"engine.log"));std::string line;std::vector<std::string> records;
     while(std::getline(log,line))if(line.starts_with("OPV1 "))records.push_back(line);
-    need(!records.empty(),"Missing Vanity native interval proof");
+    // The native engine creates the results file before BEGIN and before any GPU work.
+    // An attempt interrupted during startup contributes no coverage.
+    if (records.empty()) continue;
+    need(hasSolutionFile, "Missing Vanity native results file after BEGIN");
     std::istringstream begin(records.front());std::string kind,first,n,batch;
     need(bool(begin>>magic>>kind>>first>>n>>batch)&&!(begin>>extra)&&magic=="OPV1"&&kind=="BEGIN","Missing Vanity native BEGIN");
     Plan sub(first,decimal(n),b.grid);need(sub.start>=plan.start&&sub.end<=plan.end,"Vanity attempt escaped assignment");

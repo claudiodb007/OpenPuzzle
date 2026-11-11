@@ -9,10 +9,12 @@ class Tests(unittest.TestCase):
  def setUp(self):
   os.umask(0o077);self.tmp=tempfile.TemporaryDirectory(prefix="opv ordinary ç ' $() ");self.root=Path(self.tmp.name);self.home=self.root/'home';self.home.mkdir()
   self.bin=self.root/'bin';self.bin.mkdir();self.calls=[];self.reject=False;self.bad_range=False;self.complete_fail=False;self.cancel_fail=False;self.processes=[];self.checked=0
+  self.progress_error=None;self.replacement=None;self.truncate_progress=False
   shutil.copytree(Path(__file__).parent/'support',self.root/'support');self.engine=self.root/'FakeTargetEngine.py'
   self.engine.write_text((Path(__file__).parent/'FakeTargetEngine.py').read_text());self.engine.chmod(0o700)
   self.engine_name='vanity';self.uuid='GPU-12345678-1234-1234-1234-123456789abc';self.assignment=str(uuid.uuid4());self.client=str(uuid.uuid4());self.count=2**30;self.first=s.BASE;self.target=s.address(s.key_hash(s.BASE-2))
   self.evidence=self.root/'measured-proof';self.evidence.write_text('fixture measurement pin\n')
+  self.adapter=ADAPTER
   self.profile=self.root/'run-profile';self.write_profile()
   self.puzzles=self.root/'puzzles';self.puzzles.mkdir();self.write_puzzle()
   smi=self.bin/'nvidia-smi';smi.write_text('''#!/usr/bin/env python3
@@ -31,12 +33,19 @@ else:sys.exit(1)
     q=json.loads(self.rfile.read(int(self.headers['Content-Length'])));test.calls.append((self.path,q));code=200
     if self.path=='/api/range/claim':
      test.assertEqual(q['client_id'],test.client);test.assertEqual(q['puzzle'],69);test.assertEqual(q['backend'],'cuda');test.assertEqual(q['requested_keys'],300000000000)
+     if test.replacement:
+      test.assignment=test.replacement
+      test.first+=test.count
+      test.checked=0
+      test.progress_error=None
+      test.replacement=None
      result=dict(assignment_id=test.assignment,puzzle=69,range_id=37,target=test.target,start=f'{test.first:x}',end=f'{test.first+test.count-1:x}',search_mode='linear')
      if test.bad_range:result['end']=f'{test.first+100000000000000000:x}'
     elif self.path=='/api/range/progress':
      test.assertEqual(q['assignment_id'],test.assignment);test.assertEqual(q['client_id'],test.client);test.assertGreaterEqual(int(q['keys_checked']),test.checked);test.checked=int(q['keys_checked'])
      result=dict(success=True,status='running')
      if test.reject:result=dict(error='assignment_lease_expired',message='Lease expired');code=409
+     if test.progress_error:code,result=test.progress_error
     elif self.path=='/api/range/complete':
      test.assertEqual(q['assignment_id'],test.assignment)
      if q['status']=='cancelled':
@@ -47,7 +56,10 @@ else:sys.exit(1)
      if test.complete_fail:result=dict(error='temporary_unavailable');code=503
     elif self.path in ('/api/client/register','/api/client/heartbeat'):result=dict(success=True)
     else:result=dict(error='unexpected_endpoint');code=404
-    data=json.dumps(result).encode();self.send_response(code);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
+    data=json.dumps(result).encode()
+    length=len(data)
+    if self.path=='/api/range/progress' and test.truncate_progress:length+=100
+    self.send_response(code);self.send_header('Content-Length',str(length));self.end_headers();self.wfile.write(data)
   self.server=ThreadingHTTPServer(('127.0.0.1',0),Handler);self.server.daemon_threads=True;self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start();self.url=f'http://127.0.0.1:{self.server.server_port}'
   self.env={k:v for k,v in os.environ.items() if not k.startswith(('OPENPUZZLE_','OPV_','CUDA_','GIT_'))};self.env.update(HOME=str(self.home),XDG_CONFIG_HOME=str(self.home/'.config'),XDG_DATA_HOME=str(self.home/'.local/share'),OPENPUZZLE_VANITY_COMMON_PROFILE=str(self.profile),OPENPUZZLE_SERVER_URL=self.url,OPENPUZZLE_PUZZLE_DIR=str(self.puzzles),PYTHONDONTWRITEBYTECODE='1',PATH=str(self.bin)+':'+os.environ['PATH'])
   config=self.home/'.config/OpenPuzzle';config.mkdir(parents=True);(config/'client.id').write_text(self.client+'\n')
@@ -61,7 +73,7 @@ else:sys.exit(1)
  def write_profile(self):
   def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
   quote=lambda x:'"'+str(x).replace('\\','\\\\').replace('"','\\"')+'"'
-  self.profile.write_text('OPV-RUN-PROFILE-1\n'+sha(CLI)+' local-only\n'+quote(self.engine)+' '+quote(ADAPTER)+' '+sha(self.engine)+' '+sha(ADAPTER)+'\n'+quote(self.uuid)+' "Fixture GPU" "fixture-driver" 128 2500 220\n1\n'+quote(self.evidence)+' '+sha(self.evidence)+'\n');self.profile.chmod(0o600)
+  self.profile.write_text('OPV-RUN-PROFILE-1\n'+sha(CLI)+' local-only\n'+quote(self.engine)+' '+quote(self.adapter)+' '+sha(self.engine)+' '+sha(self.adapter)+'\n'+quote(self.uuid)+' "Fixture GPU" "fixture-driver" 128 2500 220\n1\n'+quote(self.evidence)+' '+sha(self.evidence)+'\n');self.profile.chmod(0o600)
  def write_puzzle(self):
   (self.puzzles/'69.json').write_text(json.dumps(dict(number=69,address=self.target,keyspace=f'{self.first:x}:{2**69-1:x}',search_mode='linear')))
  def args(self,*extra):return ['run','69','--engine',self.engine_name,'--backend','cuda','--device','0','--duration-minutes','2',*extra]
@@ -73,7 +85,9 @@ else:sys.exit(1)
  @property
  def workspace(self):return self.home/'.local/share/OpenPuzzle/assignments'/self.assignment
  @property
- def state(self):return self.home/'.local/share/OpenPuzzle/client.state'
+ def state(self):
+  slot=self.env.get('OPENPUZZLE_EXECUTION_SLOT')
+  return self.home/'.local/share/OpenPuzzle'/('client.state' if not slot else f'client-{slot}.state')
  def wait_progress(self):
   deadline=time.monotonic()+12
   while time.monotonic()<deadline:
@@ -106,9 +120,72 @@ else:sys.exit(1)
   (self.workspace/'vanity-controls/cancel').unlink()
   self.assertEqual(sum(x=='/api/range/complete' for x,_ in self.calls),0);self.assertTrue(self.state.exists());self.assertIn('stopped',self.command(['status']).stdout)
  def test_native_interruption_reopens_same_assignment_and_preserves_attempts(self):
-  self.pause();before=self.snapshot();p=self.start('--once');self.wait(p);self.assertEqual(sum(x=='/api/range/claim' for x,_ in self.calls),1)
+  self.env['OPENPUZZLE_EXECUTION_SLOT']='cuda-0'
+  self.pause()
+  # An interrupted CUDA startup can leave an engine log without a results file.
+  failed_attempt=self.workspace/'vanity-native/attempt-startup'
+  failed_attempt.mkdir()
+  (failed_attempt/'engine.log').write_text('GPU startup interrupted\n')
+  status=self.command(['status']).stdout
+  self.assertIn('Slot............... cuda-0',status)
+  self.assertIn('Device............. 0',status)
+  self.assertIn('Stop reason........ interrupted',status)
+  self.assertRegex(status,r'Stopped at\.+ [0-9-]+ [0-9:]+ UTC')
+  self.assertIn('Checkpoint......... verified locally',status)
+  before=self.snapshot()
+  p=self.start('--once','--recover-expired','--recover-assignment',self.assignment);self.wait(p)
+  self.assertEqual(sum(x=='/api/range/claim' for x,_ in self.calls),1)
+  self.assertFalse((self.workspace/'vanity-retired-client.state').exists())
   for name,digest in before.items():self.assertEqual(hashlib.sha256((self.workspace/name).read_bytes()).hexdigest(),digest)
   self.assertEqual(sum(x=='/api/range/complete' for x,_ in self.calls),1)
+ def test_resume_never_uploads_previous_log_while_adapter_initializes(self):
+  self.adapter=self.root/'DelayedAdapter.py'
+  self.adapter.write_text('#!/usr/bin/env python3\nimport os,sys,time\ntime.sleep(.5)\nos.execv('+repr(str(ADAPTER))+', ['+repr(str(ADAPTER))+', *sys.argv[1:]])\n')
+  self.adapter.chmod(0o700)
+  self.write_profile()
+  self.pause()
+  checked=int((self.workspace/'vanity-native/checkpoint.txt').read_text().split()[6])
+  stale=('OPV_CLIENT BEGIN total='+str(self.count)+' resumed=0\n'
+         'OPV_CLIENT PROGRESS 1 elapsed_us=1\n')
+  (self.workspace/'vanity.log').write_text(stale)
+  calls=len(self.calls)
+  self.command(self.args('--once','--recover-assignment',self.assignment))
+  progress=[int(q['keys_checked']) for path,q in self.calls[calls:] if path=='/api/range/progress']
+  self.assertTrue(progress)
+  self.assertTrue(all(value>=checked for value in progress),progress)
+  self.assertTrue(any(p.read_text()==stale for p in self.workspace.glob('vanity-before-resume-*.log')))
+ def test_guarded_recovery_checks_initial_state_before_http(self):
+  self.command(self.args('--once','--recover-assignment',self.assignment),1)
+  self.assertEqual(self.calls,[])
+  self.pause()
+  state=self.state.read_bytes()
+  calls=len(self.calls)
+  for extra in [('--recover-assignment',str(uuid.uuid4())),
+                ('--recover-assignment',self.assignment,'--device','1'),
+                ('--recover-assignment',self.assignment,'--devices','0')]:
+   self.command(self.args('--once',*extra),1)
+   self.assertEqual(len(self.calls),calls)
+   self.assertEqual(self.state.read_bytes(),state)
+  archived=self.state.with_suffix('.saved')
+  self.state.rename(archived)
+  self.command(self.args('--once','--recover-assignment',self.assignment),1)
+  self.assertEqual(len(self.calls),calls)
+  self.assertFalse(self.state.exists())
+ def test_guarded_recovery_keeps_continuous_execution_after_initial_assignment(self):
+  self.pause()
+  prior=self.assignment
+  self.replacement=str(uuid.uuid4())
+  p=self.start('--recover-assignment',prior)
+  deadline=time.monotonic()+15
+  while sum(path=='/api/range/claim' for path,_ in self.calls)<2 and time.monotonic()<deadline:
+   if p.poll() is not None:self.fail(self.diagnostic())
+   time.sleep(.02)
+  self.assertNotEqual(self.assignment,prior,self.diagnostic())
+  self.wait_progress()
+  self.command(['safestop'])
+  self.wait(p)
+  self.assertEqual(sum(path=='/api/range/claim' for path,_ in self.calls),2)
+  self.assertEqual(sum(path=='/api/range/complete' for path,_ in self.calls),2)
  def test_user_stop_cancels_existing_assignment_and_removes_active_state(self):
   p=self.start('--once');self.wait_progress();self.command(['stop']);self.wait(p)
   self.wait_native_stopped();self.assertFalse(self.state.exists());self.assertTrue((self.workspace/'cancel-requested.txt').is_file())
@@ -127,6 +204,61 @@ else:sys.exit(1)
   p=self.start();self.wait_progress();self.command(['safestop']);self.wait(p);self.assertEqual(sum(x=='/api/range/claim' for x,_ in self.calls),1);self.assertEqual(sum(x=='/api/range/complete' for x,_ in self.calls),1)
  def test_refused_lease_keeps_checkpoint_no_claim_no_launch(self):
   self.pause();before=self.snapshot();self.reject=True;self.command(self.args('--once'),1);self.assertEqual(before,self.snapshot());self.assertTrue(self.state.exists());self.assertEqual(sum(x=='/api/range/claim' for x,_ in self.calls),1)
+ def test_explicit_retired_lease_archives_only_slot_state_and_claims_replacement(self):
+  self.env['OPENPUZZLE_EXECUTION_SLOT']='cuda-0'
+  self.pause()
+  self.assertIn('Slot............... cuda-0',self.command(['status']).stdout)
+  old_workspace=self.workspace
+  state=self.state.read_bytes()
+  archive=old_workspace/'vanity-retired-client.state'
+  checkpoint=old_workspace/'vanity-native/checkpoint.txt'
+  checked=checkpoint.read_bytes()
+  before=self.snapshot()
+  self.progress_error=(409,dict(error='assignment_lease_expired'))
+  self.replacement=str(uuid.uuid4())
+  archive.write_bytes(b'previous archive')
+  blocked=self.command(self.args('--once','--recover-expired'),1)
+  self.assertIn('Cannot archive Vanity state',blocked.stderr)
+  self.assertEqual(archive.read_bytes(),b'previous archive')
+  self.assertEqual(self.state.read_bytes(),state)
+  self.assertEqual(sum(path=='/api/range/claim' for path,_ in self.calls),1)
+  archive.unlink()
+  self.progress_error=(404,dict(error='assignment_not_found'))
+  replacement=self.replacement
+  env={key:value for key,value in self.env.items() if key!='OPENPUZZLE_EXECUTION_SLOT'}
+  result=self.command(['run','69','--engine','vanity','--backend','cuda','--devices','0',
+                       '--duration-minutes','2','--once','--recover-expired'],env=env)
+  self.assertIn('Vanity lease retired (assignment_not_found)',result.stdout)
+  self.assertEqual(self.assignment,replacement)
+  self.assertEqual(archive.read_bytes(),state)
+  self.assertEqual(checkpoint.read_bytes(),checked)
+  for name,digest in before.items():
+   self.assertEqual(hashlib.sha256((old_workspace/name).read_bytes()).hexdigest(),digest)
+  self.assertEqual(sum(path=='/api/range/claim' for path,_ in self.calls),2)
+  self.assertEqual([q['assignment_id'] for path,q in self.calls if path=='/api/range/complete'],[replacement])
+ def test_explicit_recovery_retains_state_on_ambiguous_or_temporary_failure(self):
+  self.pause()
+  state=self.state.read_bytes()
+  before=self.snapshot()
+  for http,error,exit_code in [(503,'temporary_unavailable',0),
+                               (200,'assignment_lease_expired',0),
+                               (409,'invalid_assignment_state',1)]:
+   self.progress_error=(http,dict(error=error))
+   self.truncate_progress=http==200
+   self.command(self.args('--once','--recover-expired'),exit_code)
+   self.assertEqual(self.state.read_bytes(),state)
+   self.assertEqual(before,self.snapshot())
+   self.assertFalse((self.workspace/'vanity-retired-client.state').exists())
+  self.assertEqual(sum(path=='/api/range/claim' for path,_ in self.calls),1)
+ def test_missing_results_after_native_begin_blocks_explicit_recovery(self):
+  self.pause()
+  next((self.workspace/'vanity-native').glob('attempt-*/solutions.txt')).unlink()
+  self.assertIn('Checkpoint......... review required',self.command(['status']).stdout)
+  calls=len(self.calls)
+  self.reject=True
+  self.command(self.args('--once','--recover-expired'),1)
+  self.assertEqual(len(self.calls),calls)
+  self.assertTrue(self.state.exists())
  def test_recovery_dryrun_does_not_launch_or_contact_server(self):
   self.pause();before=self.snapshot();calls=len(self.calls);self.command(self.args('--dry-run'));self.assertEqual(before,self.snapshot());self.assertEqual(calls,len(self.calls));self.assertTrue(self.state.exists())
  def test_profile_changed_during_pause_blocks_before_http(self):

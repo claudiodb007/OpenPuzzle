@@ -29,6 +29,7 @@
 #include <QPlainTextEdit>
 #include <QPixmap>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSaveFile>
@@ -500,7 +501,7 @@ void MainWindow::buildInterface() {
 
   slotsHost_ = new QWidget;
   slotsHost_->setObjectName("StatusSlots");
-  slotsLayout_ = new QHBoxLayout(slotsHost_);
+  slotsLayout_ = new QGridLayout(slotsHost_);
   slotsLayout_->setContentsMargins(0, 0, 0, 0);
   slotsLayout_->setSpacing(10);
   slotsHost_->setVisible(false);
@@ -1173,6 +1174,14 @@ void MainWindow::updateActionAvailability() {
 #endif
   // Apply the final state once. A transient disable during a mouse press makes
   // QAbstractButton discard the click when the user releases the mouse.
+  for (auto* button : slotsHost_->findChildren<QPushButton*>()) {
+    if (button->property("controlId").toString() != "recoverVanitySlot") continue;
+    const bool primary = button->property("executionSlot").toString() == "primary";
+    button->setEnabled(ready && statusAvailable_ && !identityUnavailable_ &&
+                       !solutionFound_ && !(primary && active_) &&
+                       !(gpuControls_ && gpuControls_->applying()) &&
+                       button->property("recoveryVerified").toBool());
+  }
   start_->setEnabled(canStart);start_->setText(startText);
   safeStop_->setEnabled(canSafe);safeStop_->setToolTip(safeHint);
   stop_->setEnabled(canStop || (ready && kangarooPaused_));stop_->setText(stopText);
@@ -1322,7 +1331,7 @@ void MainWindow::handleStatusResult(int exitCode, bool normalExit) {
     const bool slotUnknown = slotIdentityUnavailable(slot);
     if(slot.fields.value("Engine").compare("Vanity",Qt::CaseInsensitive)==0 && !slotRunning && !slotUnknown &&
         slot.fields.value("Status").compare("stopped",Qt::CaseInsensitive)==0) {
-      vanityPaused_=true;
+      vanityPaused_ = vanityPaused_ || slot.fields.value("Slot", "primary") == "primary";
       auto index=mode_->findData(static_cast<int>(RunMode::VanityCuda));
       if(index>=0){mode_->setCurrentIndex(index);puzzle_->setValue(slot.fields.value("Puzzle").toInt());}
     }
@@ -1659,15 +1668,14 @@ void MainWindow::rebuildSlotCards(
     delete item;
   }
 
-  if (!active_ && !identityUnavailable_) {
-    slotsHost_->setVisible(false);
-    return;
-  }
-
   const auto runtimeSlots = parseRuntimeSlots(statusOutput);
   for (const auto& slot : runtimeSlots) {
     const bool identityUnavailable = slotIdentityUnavailable(slot);
-    if (!slotActive(slot) && !identityUnavailable) {
+    const bool stoppedVanity =
+        slot.fields.value("Engine").compare("Vanity", Qt::CaseInsensitive) == 0 &&
+        slot.fields.value("Backend").compare("CUDA", Qt::CaseInsensitive) == 0 &&
+        slot.fields.value("Status").compare("stopped", Qt::CaseInsensitive) == 0;
+    if (!slotActive(slot) && !identityUnavailable && !stoppedVanity) {
       continue;
     }
 
@@ -1751,6 +1759,53 @@ void MainWindow::rebuildSlotCards(
     metrics->addWidget(
         createMetric(t("backend"), statusField(slot, "Backend")),
         1, 1);
+    if (stoppedVanity) {
+      const QString reason = slot.fields.value("Stop reason");
+      static const QHash<QString, QString> reasonKeys = {
+          {"interrupted", "vanity_interrupted"},
+          {"engine exited successfully", "vanity_exit_success"},
+          {"engine exited with error", "vanity_exit_error"},
+          {"exit record unavailable", "vanity_exit_missing"}};
+      metrics->addWidget(
+          createMetric(t("stop_reason"), reasonKeys.contains(reason)
+              ? t(reasonKeys.value(reason)) : statusField(slot, "Stop reason")), 2, 0);
+      const QString stoppedAt = slot.fields.value("Stopped at");
+      metrics->addWidget(
+          createMetric(t("stopped_at"), stoppedAt == "unknown"
+              ? t("unknown") : statusField(slot, "Stopped at")), 2, 1);
+      static const QRegularExpression checkedPattern(
+          R"(^verified locally \(([0-9]+) keys checked\)$)");
+      const auto checked = checkedPattern.match(slot.fields.value("Checkpoint"));
+      metrics->addWidget(
+          createMetric(t("checkpoint"), checked.hasMatch()
+              ? t("checkpoint_verified").arg(checked.captured(1))
+              : t("checkpoint_review")), 3, 0, 1, 2);
+
+      auto* recover = new QPushButton(t("recover"));
+      recover->setObjectName("SecondaryButton");
+      recover->setProperty("controlId", "recoverVanitySlot");
+      const QString executionSlot = slot.fields.value("Slot", "primary");
+      const QString assignmentId = slot.fields.value("Assignment");
+      bool validPuzzle = false, validDevice = false;
+      const int puzzle = slot.fields.value("Puzzle").toInt(&validPuzzle);
+      const int device = slot.fields.value("Device").toInt(&validDevice);
+      const bool validSlot = executionSlot == "primary" ||
+          executionSlot == QString("cuda-%1").arg(device);
+      recover->setProperty("executionSlot", executionSlot);
+      recover->setProperty("recoveryVerified",
+          checked.hasMatch() && !identityUnavailable && validSlot &&
+          validPuzzle && puzzle >= 65 && puzzle <= 80 &&
+          validDevice && device >= 0 && !assignmentId.isEmpty());
+      recover->setToolTip(t("vanity_recover_hint"));
+      connect(recover, &QPushButton::clicked, this,
+          [this, executionSlot, assignmentId, puzzle, device] {
+            recoverVanitySlot(executionSlot, assignmentId, puzzle, device);
+          });
+      cardLayout->addLayout(metrics);
+      cardLayout->addWidget(recover);
+      slotsLayout_->addWidget(card, slotsLayout_->count() / 2, slotsLayout_->count() % 2);
+      continue;
+    }
     metrics->addWidget(
         createMetric(t("speed"), statusField(slot, "Speed")),
         2, 0);
@@ -1776,10 +1831,13 @@ void MainWindow::rebuildSlotCards(
     }
 
     cardLayout->addLayout(metrics);
-    slotsLayout_->addWidget(card, 1);
+    slotsLayout_->addWidget(card, slotsLayout_->count() / 2, slotsLayout_->count() % 2);
   }
 
+  slotsLayout_->setColumnStretch(0, 1);
+  slotsLayout_->setColumnStretch(1, slotsLayout_->count() > 1 ? 1 : 0);
   slotsHost_->setVisible(slotsLayout_->count() > 0);
+  updateActionAvailability();
 }
 
 void MainWindow::updateThermalAlerts(
@@ -1969,15 +2027,6 @@ void MainWindow::startExecution() {
     return;
   }
 
-  const QString executable = cliExecutable();
-  if (executable.isEmpty()) {
-    QMessageBox::critical(
-        this,
-        "OpenPuzzle",
-        t("cli_missing"));
-    return;
-  }
-
   RunSelection selection;
   selection.mode = selectedRunMode();
   selection.puzzle =
@@ -2007,6 +2056,35 @@ void MainWindow::startExecution() {
   }
 
   if (kangarooPaused_) arguments.push_back("--resume-paused");
+  launchExecution(arguments);
+}
+
+void MainWindow::recoverVanitySlot(
+    const QString& slot,
+    const QString& assignment,
+    int puzzle,
+    int device) {
+  if (!statusAvailable_ || identityUnavailable_ || solutionFound_ ||
+      launchPending_ || commandProcess_ || vanityBusy() ||
+      (gpuControls_ && gpuControls_->applying())) return;
+  if (QMessageBox::question(this, t("recover"),
+          t("vanity_recover_question").arg(puzzle).arg(slot),
+          QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
+  launchExecution({"run", QString::number(puzzle), "--engine", "vanity",
+                   "--backend", "cuda", "--device", QString::number(device),
+                   "--recover-assignment", assignment, "--recover-expired"}, slot);
+}
+
+void MainWindow::launchExecution(
+    const QStringList& arguments,
+    const QString& executionSlot) {
+  if (!statusAvailable_ || identityUnavailable_ || solutionFound_ ||
+      launchPending_ || commandProcess_ || vanityBusy()) return;
+  const QString executable = cliExecutable();
+  if (executable.isEmpty()) {
+    QMessageBox::critical(this, "OpenPuzzle", t("cli_missing"));
+    return;
+  }
 
   const QString logPath = runtimeLogPath();
   if (!QDir().mkpath(
@@ -2021,7 +2099,7 @@ void MainWindow::startExecution() {
   QFile logFile(logPath);
   if (!logFile.open(
           QIODevice::WriteOnly |
-          QIODevice::Truncate) ||
+          (executionSlot.isEmpty() ? QIODevice::Truncate : QIODevice::Append)) ||
       !logFile.setPermissions(
           QFileDevice::ReadOwner |
           QFileDevice::WriteOwner)) {
@@ -2036,6 +2114,11 @@ void MainWindow::startExecution() {
   QProcess launcher;
   launcher.setProgram(executable);
   launcher.setArguments(arguments);
+  if (!executionSlot.isEmpty()) {
+    auto environment = QProcessEnvironment::systemEnvironment();
+    environment.insert("OPENPUZZLE_EXECUTION_SLOT", executionSlot);
+    launcher.setProcessEnvironment(environment);
+  }
   launcher.setProcessChannelMode(
       QProcess::MergedChannels);
   launcher.setStandardInputFile(

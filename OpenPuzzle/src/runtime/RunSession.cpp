@@ -18,6 +18,9 @@
 #include "openpuzzle/core/commands/BenchmarkCommand.hpp"
 #include "openpuzzle/engines/EngineManager.hpp"
 #include "openpuzzle/engines/VanityRunProfile.hpp"
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+#include "VanityCommonEngine.hpp"
+#endif
 #include "openpuzzle/core/AtomicFile.hpp"
 #include "openpuzzle/hardware/GpuManager.hpp"
 #include "openpuzzle/hardware/GpuTelemetry.hpp"
@@ -50,6 +53,8 @@
 #include <cmath>
 #include <csignal>
 #include <cstdlib>
+#include <ctime>
+#include <fcntl.h>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -62,6 +67,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <system_error>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
@@ -746,6 +753,24 @@ std::filesystem::path assignmentWorkspace(const std::string &assignmentId) {
          assignmentId;
 }
 
+constexpr auto kRetiredVanityState = "vanity-retired-client.state";
+
+std::filesystem::path archiveRetiredVanityState(
+    const std::filesystem::path& workspace) {
+  const auto source = client::ClientStateStore::path();
+  const auto destination = workspace / kRetiredVanityState;
+  struct stat state {};
+  if (lstat(source.c_str(), &state) != 0 || !S_ISREG(state.st_mode) ||
+      state.st_uid != getuid() || (state.st_mode & 0077) != 0) {
+    throw std::runtime_error("Unsafe Vanity state file; recovery blocked");
+  }
+  if (renameat2(AT_FDCWD, source.c_str(), AT_FDCWD, destination.c_str(),
+                RENAME_NOREPLACE) != 0) {
+    throw std::system_error(errno, std::generic_category(), "Cannot archive Vanity state");
+  }
+  return destination;
+}
+
 bool processExists(int pid) {
   if (pid <= 0) {
     return false;
@@ -809,6 +834,49 @@ void printAssignment(const client::RangeAssignment &assignment) {
             << "Target............. " << assignment.target << '\n'
             << "Start.............. " << assignment.start << '\n'
             << "End................ " << assignment.end << '\n';
+}
+
+void printVanityStopStatus(const client::ExecutionSyncResult& result) {
+#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+  if (result.state.engine != "Vanity" || result.identityUnavailable) {
+    return;
+  }
+  const auto workspace = std::filesystem::path(result.state.workspace);
+  if (result.hasExitCode) {
+    std::cout << "Stop reason........ "
+              << (result.exitCode == 130 ? "interrupted" :
+                  result.exitCode == 0 ? "engine exited successfully" : "engine exited with error")
+              << '\n';
+  } else {
+    std::cout << "Stop reason........ exit record unavailable\n";
+  }
+
+  struct stat marker {};
+  std::tm utc {};
+  if (result.hasExitCode &&
+      lstat((workspace / "exit.code").c_str(), &marker) == 0 &&
+      S_ISREG(marker.st_mode) && marker.st_uid == getuid() &&
+      gmtime_r(&marker.st_mtime, &utc)) {
+    std::cout << "Stopped at......... "
+              << std::put_time(&utc, "%Y-%m-%d %H:%M:%S UTC") << '\n';
+  } else {
+    std::cout << "Stopped at......... unknown\n";
+  }
+
+  std::error_code error;
+  const auto checkpoint = std::filesystem::symlink_status(
+      workspace / "vanity-native" / "checkpoint.txt", error);
+  const auto checked = std::filesystem::is_regular_file(checkpoint)
+      ? vanityCommonCheckedCoverage(result.state.workspace) : std::nullopt;
+  std::cout << "Checkpoint......... ";
+  if (checked) {
+    std::cout << "verified locally (" << *checked << " keys checked)\n";
+  } else {
+    std::cout << "review required\n";
+  }
+#else
+  (void)result;
+#endif
 }
 
 int showStatus(const std::vector<std::string> &args) {
@@ -965,6 +1033,9 @@ int showStatus(const std::vector<std::string> &args) {
           << "Backend............ "
           << state.backend
           << '\n'
+          << "Device............. "
+          << state.device
+          << '\n'
           << "Start.............. "
           << state.start
           << '\n'
@@ -1030,14 +1101,13 @@ int showStatus(const std::vector<std::string> &args) {
         continue;
       }
 
+      if (result.hasExitCode) {
+        std::cout << "Exit code.......... " << result.exitCode << '\n';
+      }
+      printVanityStopStatus(result);
       if (!result.hasExitCode) {
         continue;
       }
-
-      std::cout
-          << "Exit code.......... "
-          << result.exitCode
-          << '\n';
 
       std::cout
           << "Synchronization.... pending supervisor\n";
@@ -1089,6 +1159,7 @@ int showStatus(const std::vector<std::string> &args) {
             << "PID................ " << state.pid << '\n'
             << "Engine............. " << state.engine << '\n'
             << "Backend............ " << state.backend << '\n'
+            << "Device............. " << state.device << '\n'
             << "Start.............. " << state.start << '\n'
             << "End................ " << state.end << '\n'
             << "Workspace.......... " << state.workspace << '\n';
@@ -1138,11 +1209,13 @@ int showStatus(const std::vector<std::string> &args) {
     return 0;
   }
 
+  if (result.hasExitCode) {
+    std::cout << "Exit code.......... " << result.exitCode << '\n';
+  }
+  printVanityStopStatus(result);
   if (!result.hasExitCode) {
     return 0;
   }
-
-  std::cout << "Exit code.......... " << result.exitCode << '\n';
 
   std::cout
       << "Synchronization.... pending supervisor\n";
@@ -2449,6 +2522,23 @@ int RunSession::runOrdinary(
       return 1;
     }
   }
+  if (hasArgument(args, "--recover-expired") &&
+      (!commonVanity || args.front() != "run" ||
+       std::count(args.begin(), args.end(), "--recover-expired") != 1)) {
+    std::cerr << "--recover-expired requires a Vanity CUDA run.\n";
+    return 1;
+  }
+
+  if (hasArgument(args, "--recover-assignment") &&
+      (!commonVanity || args.front() != "run" ||
+       hasArgument(args, "--devices") || hasArgument(args, "--with-cpu") ||
+       hasArgument(args, "--with-opencl") ||
+       std::count(args.begin(), args.end(), "--recover-assignment") != 1 ||
+       getArgument(args, "--recover-assignment").empty())) {
+    std::cerr << "--recover-assignment requires a Vanity run in one execution slot.\n";
+    return 1;
+  }
+
   if (!args.empty() &&
       args.front() == "run" &&
       hasArgument(args, "--devices")) {
@@ -2601,6 +2691,18 @@ ClientIterationResult RunSession::runOnce(
   const std::string server =
       serverUrl(args);
 
+  // Check the UI observation once, while the runtime owns this slot.
+  // Subsequent iterations keep that ownership throughout continuous execution.
+  if (initializeClient && hasArgument(args, "--recover-assignment")) {
+    const auto existing = client::ClientStateStore::load();
+    if (!existing || existing->engine != "Vanity" ||
+        existing->assignmentId != getArgument(args, "--recover-assignment") ||
+        existing->puzzle != selectedPuzzle(args) ||
+        existing->device != getIntegerArgument(args, "--device", existing->device)) {
+      throw std::runtime_error("Vanity recovery assignment changed; refresh status before retrying");
+    }
+  }
+
   std::optional<VanityRunProfile> vanityProfile;
   auto requestedCommonEngine=getArgument(args,"--engine");
   std::transform(requestedCommonEngine.begin(),requestedCommonEngine.end(),requestedCommonEngine.begin(),[](unsigned char c){return std::tolower(c);});
@@ -2617,7 +2719,7 @@ ClientIterationResult RunSession::runOnce(
    * pertencente a uma sessão anterior.
    */
   if (subcommand == "run") {
-    const auto existing = client::ClientStateStore::load();
+    auto existing = client::ClientStateStore::load();
     if (hasArgument(args, "--resume-paused") && (!existing || !KangarooPause::paused(*existing))) {
       std::cerr << "No confirmed paused Kangaroo assignment; no new assignment requested.\n";
       return 1;
@@ -2655,37 +2757,68 @@ ClientIterationResult RunSession::runOnce(
         client::HttpRangeClient lease(server);
         // A lost completion response may mean the server already finalized the lease.
         // Its existing idempotent complete endpoint is the authority for this case.
-        if(!complete && !lease.progress(existing->assignmentId,existing->clientId,vanityProfile->planningMKeys,std::to_string(checked))) {
-          auto status=client::ExecutionSyncService::classifyProgressError(lease.lastErrorCode());
-          if(status==client::AssignmentUploadStatus::TemporaryFailure) return ClientIterationResult::retry(lease.lastError());
-          std::cerr << "Vanity lease refused; checkpoint and state preserved: " << lease.lastError() << '\n';return 1;
-        }
-        if(complete) {
-          if(!writePrivateFileAtomically(std::filesystem::path(existing->workspace)/"exit.code","0\n"))
-            throw std::runtime_error("Cannot adopt native Vanity completion");
+        if (!complete && !lease.progress(existing->assignmentId, existing->clientId,
+                                         vanityProfile->planningMKeys, std::to_string(checked))) {
+          const auto code = lease.lastErrorCode();
+          const bool retired = code == "assignment_lease_expired" || code == "assignment_not_found";
+          if (retired && hasArgument(args, "--recover-expired")) {
+            const auto archived = archiveRetiredVanityState(existing->workspace);
+            std::cout << "Vanity lease retired (" << code << ").\n"
+                      << "Archived state..... " << archived.string() << '\n';
+            existing.reset();
+          } else {
+            const auto status = client::ExecutionSyncService::classifyProgressError(code);
+            if (status == client::AssignmentUploadStatus::TemporaryFailure) {
+              return ClientIterationResult::retry(lease.lastError());
+            }
+            std::cerr << "Vanity lease refused; checkpoint and state preserved: "
+                      << lease.lastError() << '\n';
+            if (retired) {
+              std::cerr << "Use --recover-expired to archive this state and request a new lease.\n";
+            }
+            return 1;
+          }
         } else {
-          vanityProfile->validateHardware(existing->device,true);
-          EngineLaunchRequest launch;launch.engine="Vanity";launch.backend="CUDA";launch.device=0;
-          launch.blocks=vanityProfile->grid;launch.threads=256;launch.points=1024;launch.workspace=existing->workspace;
-          launch.startKey=existing->start;launch.endKey=existing->end;launch.targets={existing->target};
-          EngineManager manager(vanityProfile->executables);
-          auto engine=manager.create("vanity",vanityProfile->executables.engine);
-          if(!engine) throw std::runtime_error("Common Vanity engine unavailable");
-          StartExecutionRequest request;request.workspace=existing->workspace;request.command=engine->buildCommand(launch);
-          auto marker=std::filesystem::path(existing->workspace)/"exit.code";
-          if(std::filesystem::exists(marker)) {
-            auto archive=std::filesystem::path(existing->workspace)/("exit-before-resume-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-            std::filesystem::rename(marker,archive);
+          if(complete) {
+            if(!writePrivateFileAtomically(std::filesystem::path(existing->workspace)/"exit.code","0\n"))
+              throw std::runtime_error("Cannot adopt native Vanity completion");
+          } else {
+            vanityProfile->validateHardware(existing->device,true);
+            EngineLaunchRequest launch;launch.engine="Vanity";launch.backend="CUDA";launch.device=0;
+            launch.blocks=vanityProfile->grid;launch.threads=256;launch.points=1024;launch.workspace=existing->workspace;
+            launch.startKey=existing->start;launch.endKey=existing->end;launch.targets={existing->target};
+            EngineManager manager(vanityProfile->executables);
+            auto engine=manager.create("vanity",vanityProfile->executables.engine);
+            if(!engine) throw std::runtime_error("Common Vanity engine unavailable");
+            StartExecutionRequest request;request.workspace=existing->workspace;request.command=engine->buildCommand(launch);
+            // The first monitor poll can run before the adapter initializes its log.
+            // Move the previous log aside so it cannot publish an older sample.
+            const auto log = std::filesystem::path(existing->workspace) / "vanity.log";
+            const auto logStatus = std::filesystem::symlink_status(log);
+            if (std::filesystem::exists(logStatus)) {
+              if (!std::filesystem::is_regular_file(logStatus)) {
+                throw std::runtime_error("Unsafe Vanity progress log; recovery blocked");
+              }
+              const auto archive = std::filesystem::path(existing->workspace) /
+                  ("vanity-before-resume-" +
+                   std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".log");
+              std::filesystem::rename(log, archive);
+            }
+            auto marker=std::filesystem::path(existing->workspace)/"exit.code";
+            if(std::filesystem::exists(marker)) {
+              auto archive=std::filesystem::path(existing->workspace)/("exit-before-resume-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+              std::filesystem::rename(marker,archive);
+            }
+            auto handle=BackgroundExecutionLauncher().start(request);auto state=*existing;
+            state.pid=handle.pid;state.bootId=client::ClientStateStore::currentBootId();state.command=request.command;
+            state.processStartTime=LinuxProcessIdentity::startTime(handle.pid).value_or(0);
+            if(state.bootId.empty() || !state.processStartTime || !client::ClientStateStore::save(state)) {
+              ExecutionStopper().stop(handle.workspace);throw std::runtime_error("Cannot persist resumed Vanity identity");
+            }
           }
-          auto handle=BackgroundExecutionLauncher().start(request);auto state=*existing;
-          state.pid=handle.pid;state.bootId=client::ClientStateStore::currentBootId();state.command=request.command;
-          state.processStartTime=LinuxProcessIdentity::startTime(handle.pid).value_or(0);
-          if(state.bootId.empty() || !state.processStartTime || !client::ClientStateStore::save(state)) {
-            ExecutionStopper().stop(handle.workspace);throw std::runtime_error("Cannot persist resumed Vanity identity");
-          }
+          std::cout << "Resuming same Vanity assignment: " << existing->assignmentId << " checked=" << checked << '\n';
+          return monitoredResult(ClientRuntime().run(server,existing->assignmentId,existing->clientId,existing->workspace));
         }
-        std::cout << "Resuming same Vanity assignment: " << existing->assignmentId << " checked=" << checked << '\n';
-        return monitoredResult(ClientRuntime().run(server,existing->assignmentId,existing->clientId,existing->workspace));
       }
     }
 
@@ -3847,6 +3980,10 @@ ClientIterationResult RunSession::runOnce(
   capability.available = true;
 
   const auto workspace = assignmentWorkspace(assignment->assignmentId);
+  if (vanityWorkload &&
+      std::filesystem::exists(std::filesystem::symlink_status(workspace / kRetiredVanityState))) {
+    throw std::runtime_error("Server returned a retired Vanity assignment");
+  }
 
   WorkspaceSecurity::prepare(
       workspace);

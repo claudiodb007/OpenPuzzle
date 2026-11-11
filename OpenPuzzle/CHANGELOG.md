@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.59 — Vanity recovery on Linux
+
+- Show the recorded stop reason, time and local checkpoint verification in status.
+- Recover verified Vanity slots from the desktop with an assignment check at launch.
+- Preserve retired Vanity state and request a new lease with `--recover-expired`.
+- Recover checkpoints after a native startup interruption with zero coverage.
+- Archive the previous progress log before resuming to prevent decreasing uploads.
+
 ## 1.0.58 — Offline Kangaroo checkpoint conversion
 
 - Convert legacy PSCKangaroo checkpoints into compact copies that preserve
