@@ -11,6 +11,7 @@
 #include <wincrypt.h>
 #include "openpuzzle/performance/WindowsAutoBenchmark.hpp"
 #include "openpuzzle/engines/WindowsGpuProfileBinding.hpp"
+#include "openpuzzle/engines/WindowsEngineDeviceList.hpp"
 #include <boost/property_tree/json_parser.hpp>
 #include <algorithm>
 #include <array>
@@ -85,7 +86,8 @@ std::string deviceIdentity(const fs::path& exe,const WindowsEngineCheckOptions& 
 void selftest(const fs::path& exe,const WindowsEngineCheckOptions& o,const fs::path& dir){
  for(int key=1;key<=2;++key){const auto work=subdirectory(dir,"key-"+std::to_string(key));write(work/"targets.txt",std::string(key==1?address1:address2)+"\n");
   const auto result=launch(exe,searchArguments(o,work,std::to_string(key),std::to_string(key)),work,120);
-  require(!result.timedOut&&result.exit==0,"Bounded synthetic engine search failed");
+  require(!result.timedOut&&result.exit==0,"Bounded synthetic engine search failed (exit "+std::to_string(result.exit)+
+   (result.timedOut?", timeout":"")+"). Driver output: "+result.log.substr(result.log.size()>2048?result.log.size()-2048:0));
   const auto found=text(work/(o.backend=="cpu"?"KEYFOUNDKEYFOUND.txt":"found.txt"),4096);
   if(o.backend=="cpu"){
     std::smatch match;require(std::regex_search(found,match,std::regex("Private Key: ([0-9a-fA-F]+)"))&&
@@ -166,6 +168,37 @@ std::string WindowsEngineDiagnostics::inspectDevice(const fs::path& exe,const st
  const auto work=localPaths::dataDirectory()/"engine-preflight"/pathFromUtf8(std::to_string(GetCurrentProcessId())+'-'+std::to_string(GetTickCount64())+'-'+std::to_string(next++));
  WorkspaceSecurity::prepare(work);return deviceIdentity(exe,o,work);
 }
+int WindowsEngineDiagnostics::listDevices(const std::string& backend,std::ostream& out)const{
+ require(backend=="cuda"||backend=="opencl","Engine device listing requires CUDA or OpenCL");
+ require(static_cast<bool>(discovery_),"Driver discovery unavailable");
+ // Do not launch a CUDA engine on an AMD-only system, or an engine whose
+ // driver is absent. Driver evidence comes first; retain the actual reason.
+ const auto inventory=discovery_();const auto& driver=backend=="cuda"?inventory.cuda:inventory.opencl;
+ require(driver.state==GpuDiscoveryState::Available,"Selected "+backend+" backend unavailable: "+driver.detail);
+ const auto exe=folder_/filename(backend);const auto fingerprint=executableSha256(exe);
+ static std::atomic<unsigned long long> sequence{0};
+ const auto work=localPaths::dataDirectory()/"engine-preflight"/pathFromUtf8("devices-"+std::to_string(GetCurrentProcessId())+'-'+std::to_string(GetTickCount64())+'-'+std::to_string(sequence++));
+ WorkspaceSecurity::prepare(work);
+ const auto protocol=launch(exe,{"--openpuzzle-engine-version"},subdirectory(work,"identity"),30);
+ const auto expected=backend=="cuda"?"OpenPuzzle-BitCrack 1.0.0 CUDA protocol 2":"OpenPuzzle-BitCrack 1.0.0 OpenCL protocol 2";
+ require(protocol.exit==0&&!protocol.timedOut&&protocol.log.find(expected)!=std::string::npos,"Engine identity/protocol mismatch");
+ const auto listed=launch(exe,{"--openpuzzle-device-list"},subdirectory(work,"inventory"),30);
+ require(listed.exit==0&&!listed.timedOut,"Engine GPU enumeration failed (exit "+std::to_string(listed.exit)+
+   (listed.timedOut?", timeout":"")+"). Driver output: "+listed.log.substr(listed.log.size()>2048?listed.log.size()-2048:0));
+ const auto devices=parseWindowsEngineDevices(listed.log);
+ std::vector<WindowsEngineDevice> usable;
+ for(const auto& d:devices){unsigned matches=0;bool available=false;auto candidate=d;
+  for(const auto& native:driver.devices)if(native.nativeDeviceIndex==d.native&&(backend=="cuda"?d.platform==0:native.platformIndex==d.platform)){
+   ++matches;available=native.available&&(backend=="cuda"||native.compilerAvailable)&&native.name==d.name&&native.memoryMiB==d.memoryBytes/1048576;
+   candidate.displayName=native.displayName;
+  }
+  require(matches==1,"Engine device does not uniquely match driver inventory");if(available)usable.push_back(std::move(candidate));
+ }
+ require(!usable.empty()||devices.empty(),"GPU devices detected, but none are available"+
+   std::string(backend=="opencl"?" with an OpenCL compiler":""));
+ require(executableSha256(exe)==fingerprint,"Engine changed during device enumeration");
+ out<<formatWindowsEngineDevices(usable)<<'\n';return 0;
+}
 int WindowsEngineDiagnostics::run(const std::vector<std::string>& arguments,std::ostream& out)const {
  fs::path report;
  try{auto o=WindowsEngineCheckOptions::parse(arguments);const auto exe=folder_/filename(o.backend);
@@ -220,6 +253,7 @@ int WindowsEngineDiagnostics::run(const std::vector<std::string>& arguments,std:
       });
     const auto confirmed=capabilities();
     require(confirmed.computeUnits==gpu.computeUnits&&confirmed.memoryMiB==gpu.memoryMiB&&confirmed.uuid==gpu.uuid&&confirmed.pciBusId==gpu.pciBusId&&
+     (!gpu.uuid.empty()||!gpu.pciBusId.empty()||confirmed.windowsDeviceInstanceId==gpu.windowsDeviceInstanceId)&&
       deviceIdentity(exe,o,subdirectory(report,"final-identity"))==device,"GPU changed during automatic benchmark; result not published");
     o.blocks=tuned->validated.configuration.blocks;o.threads=tuned->validated.configuration.threads;o.points=tuned->validated.configuration.points;o.seconds=60;
     Measurement m;m.speed=tuned->planningSpeed;m.average=tuned->validated.averageSpeed;m.minimum=tuned->validated.minimumSpeed;m.maximum=tuned->validated.maximumSpeed;m.samples=tuned->validated.samples;measured=m;

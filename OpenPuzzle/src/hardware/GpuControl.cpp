@@ -46,6 +46,17 @@ public:
 #endif
 };
 }
+std::string gpuControlBuildInfo(){
+#ifdef _WIN32
+#ifdef OPENPUZZLE_WITH_ADLX
+ return "{\"platform\":\"windows\",\"nvidia_nvml\":true,\"amd_adlx\":true,\"amd_sysfs\":false}\n";
+#else
+ return "{\"platform\":\"windows\",\"nvidia_nvml\":true,\"amd_adlx\":false,\"amd_sysfs\":false}\n";
+#endif
+#else
+ return "{\"platform\":\"linux\",\"nvidia_nvml\":true,\"amd_adlx\":false,\"amd_sysfs\":true}\n";
+#endif
+}
 std::vector<GpuControlDevice> inspectGpuControls(){return Combined().inspect();}
 void applyGpuControl(const GpuControlRequest& request){WriteLock lock;Combined backend;applyGpuControlChecked(backend,request);}
 }

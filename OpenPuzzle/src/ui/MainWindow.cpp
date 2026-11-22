@@ -2,6 +2,7 @@
 #include "VanityPanel.hpp"
 #endif
 #include "MainWindow.hpp"
+#include <QApplication>
 #include "GpuControlPanel.hpp"
 #include <QCloseEvent>
 
@@ -30,6 +31,10 @@
 #include <QPixmap>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QStandardItemModel>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSaveFile>
@@ -51,10 +56,31 @@
 #include <QWidget>
 
 #include <exception>
+#ifdef _WIN32
+#include "openpuzzle/core/LocalPaths.hpp"
+#include "openpuzzle/core/WindowsPrivateFile.hpp"
+#include "openpuzzle/runtime/WorkspaceSecurity.hpp"
+#endif
 
 namespace openpuzzle::ui {
 
 namespace {
+void hideDesktopConsole(QProcess* process){
+#ifdef _WIN32
+ process->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* args){args->flags|=CREATE_NO_WINDOW;});
+#else
+ Q_UNUSED(process);
+#endif
+}
+
+#ifdef _WIN32
+bool protectDesktopLog(const QString& path){
+ try{const auto native=std::filesystem::path(path.toStdWString());WorkspaceSecurity::prepare(native.parent_path());
+  windowsFile::Security security;windowsFile::Handle file(CreateFileW(native.c_str(),GENERIC_WRITE|READ_CONTROL|WRITE_DAC,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_ALWAYS,FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+  return file.valid()&&security.protect(file.get());
+ }catch(...){return false;}
+}
+#endif
 
 struct RuntimeSlotStatus {
   QHash<QString, QString> fields;
@@ -234,6 +260,9 @@ MainWindow::MainWindow(QWidget* parent)
       statusProcess_(new QProcess(this)),
       refreshTimer_(new QTimer(this)),
       statusTimeout_(new QTimer(this)) {
+  initializeDesktopAppearance();
+  hideDesktopConsole(statusProcess_);
+  setFont(QApplication::font());
   QSettings settings;
   currentLanguage_ = languageFromCode(
       settings.value("ui/language", "en").toString());
@@ -251,7 +280,13 @@ MainWindow::MainWindow(QWidget* parent)
   if (savedModeIndex >= 0) {
     mode_->setCurrentIndex(savedModeIndex);
   }
-  puzzle_->setValue(settings.value("run/puzzle", 71).toInt());
+  puzzle_->setValue(settings.value("run/puzzle",
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+      0
+#else
+      71
+#endif
+      ).toInt());
   const int savedKangarooPuzzle = settings.value(
       "run/kangaroo_puzzle", 140).toInt();
   const int savedKangarooIndex =
@@ -274,6 +309,18 @@ MainWindow::MainWindow(QWidget* parent)
         settings.value("run/auto_start", false).toBool());
   }
   updateSelectionRules();
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  if(selectedRunMode()!=RunMode::BitCrackCuda&&selectedRunMode()!=RunMode::BitCrackOpencl&&selectedRunMode()!=RunMode::KeyHuntCpu)
+    mode_->setCurrentIndex(mode_->findData(static_cast<int>(RunMode::BitCrackCuda)));
+  {const QSignalBlocker blocker(autoStart_);autoStart_->setChecked(false);}
+  auto* items=qobject_cast<QStandardItemModel*>(mode_->model());
+  if(items)for(int i=0;i<mode_->count();++i){const auto m=static_cast<RunMode>(mode_->itemData(i).toInt());
+    if(m!=RunMode::BitCrackCuda&&m!=RunMode::BitCrackOpencl&&m!=RunMode::KeyHuntCpu){items->item(i)->setEnabled(false);items->item(i)->setToolTip(t("windows_unavailable"));}}
+  const auto changed=[this]{desktopProfileReady_=false;updateActionAvailability();QTimer::singleShot(0,this,&MainWindow::refreshStatus);};
+  connect(mode_,qOverload<int>(&QComboBox::currentIndexChanged),this,changed);
+  for(auto* spin:{device_,cpuThreads_})connect(spin,qOverload<int>(&QSpinBox::valueChanged),this,changed);
+  discoverDesktopDevices(!settings.contains("run/mode"));
+#endif
 
   statusProcess_->setProcessChannelMode(
       QProcess::MergedChannels);
@@ -522,6 +569,9 @@ void MainWindow::buildInterface() {
   puzzle_ = new QSpinBox;
   puzzle_->setProperty("controlId", "puzzle");
   puzzle_->setRange(1, 256);
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  puzzle_->setMinimum(0);
+#endif
   puzzle_->setValue(71);
 
   kangarooPuzzle_ = new QComboBox;
@@ -548,6 +598,9 @@ void MainWindow::buildInterface() {
   device_ = new QSpinBox;
   device_->setProperty("controlId", "cudaDevice");
   device_->setRange(0, 31);
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  device_->setMaximum(255);
+#endif
   device_->setValue(0);
 
   openclDevice_ = new QSpinBox;
@@ -560,7 +613,13 @@ void MainWindow::buildInterface() {
   cpuThreads_->setProperty("controlId", "cpuThreads");
   const int logicalCpuCount =
       qMax(1, QThread::idealThreadCount());
-  cpuThreads_->setRange(1, logicalCpuCount);
+  cpuThreads_->setRange(1,
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+      qMin(logicalCpuCount,256)
+#else
+      logicalCpuCount
+#endif
+  );
   cpuThreads_->setValue(qMax(1, logicalCpuCount - 1));
 
   rusticlRadeonsi_ = new QCheckBox;
@@ -804,7 +863,11 @@ void MainWindow::buildInterface() {
       refresh_,
       &QPushButton::clicked,
       this,
-      &MainWindow::refreshStatus);
+      [this]{refreshStatus();
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+        discoverDesktopDevices(false);
+#endif
+      });
   connect(
       start_,
       &QPushButton::clicked,
@@ -1001,6 +1064,66 @@ RunMode MainWindow::selectedRunMode() const {
   return static_cast<RunMode>(
       mode_->currentData().toInt());
 }
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+QString MainWindow::desktopBackend()const{
+ return selectedRunMode()==RunMode::KeyHuntCpu?"cpu":selectedRunMode()==RunMode::BitCrackOpencl?"opencl":"cuda";
+}
+QString MainWindow::desktopSelectionKey()const{
+ const auto b=desktopBackend();return b+":"+QString::number(b=="cpu"?0:device_->value())+":"+QString::number(b=="cpu"?cpuThreads_->value():0);
+}
+void MainWindow::discoverDesktopDevices(bool chooseDefault){
+ if(desktopDiscoveryRunning_)return;
+ const auto executable=cliExecutable();if(executable.isEmpty())return;
+ desktopDiscoveryRunning_=true;updateActionAvailability();
+ auto* process=new QProcess(this);hideDesktopConsole(process);process->setObjectName("desktopDeviceDiscovery");process->setProcessChannelMode(QProcess::MergedChannels);
+ const auto selection=desktopSelectionKey();
+ const auto failed=[this](const QString& detail){
+  desktopDiscoveryRunning_=false;desktopDeviceNames_.clear();
+  if(gpuControls_)gpuControls_->setDetectedGpus({});
+  for(const auto& b:{QString("cuda"),QString("opencl")})desktopDiscoveryIssues_.insert(b,detail);
+  showOutput(t("gpu_discovery_diagnostics"),detail);updateActionAvailability();
+ };
+ connect(process,&QProcess::errorOccurred,this,[this,process,failed](QProcess::ProcessError error){
+  if(error!=QProcess::FailedToStart)return;
+  failed(process->errorString());process->deleteLater();
+ });
+ connect(process,&QProcess::finished,this,[this,process,chooseDefault,selection,failed](int code,QProcess::ExitStatus status){
+  const auto bytes=process->readAll();process->deleteLater();
+  if(code!=0||status!=QProcess::NormalExit){failed(QString::fromUtf8(bytes).left(8192));return;}
+  QJsonParseError error;const auto json=QJsonDocument::fromJson(bytes,&error);
+  if(error.error!=QJsonParseError::NoError||!json.isObject()){failed(t("gpu_discovery_invalid"));return;}
+  desktopDiscoveryRunning_=false;desktopDeviceNames_.clear();desktopDiscoveryIssues_.clear();
+  const auto object=json.object();const auto diagnostics=object.value("diagnostics").toObject();
+  QString preferred,report;int preferredDevice=0;
+  for(const auto& backend:{QString("cuda"),QString("opencl")}){
+   const auto diagnostic=diagnostics.value(backend).toObject();
+   if(diagnostic.value("code").toInt()!=0){
+    const auto detail=diagnostic.value("message").toString(t("gpu_discovery_invalid"));
+    desktopDiscoveryIssues_.insert(backend,detail);report+=backend.toUpper()+": "+detail+"\n";
+   }
+   for(const auto& value:object.value(backend).toArray()){
+    const auto device=value.toObject();const auto index=device.value("engine_index").toInt(-1);if(index<0||index>255)continue;
+    const auto name=device.value("display_name").toString(device.value("name").toString());
+    if(name.isEmpty())continue;
+    desktopDeviceNames_.insert(backend+":"+QString::number(index),name);
+    if(preferred.isEmpty()){preferred=backend;preferredDevice=index;}
+   }
+  }
+  const auto hardware=object.value("hardware_report").toString();if(!hardware.isEmpty())report+="\n"+hardware;
+  if(!report.isEmpty())showOutput(t("gpu_discovery_diagnostics"),report);
+  if(gpuControls_){auto names=desktopDeviceNames_.values();names.removeDuplicates();names.sort();gpuControls_->setDetectedGpus(names);}
+  const bool savedGpuUnavailable=desktopBackend()!="cpu"&&
+    !desktopDeviceNames_.contains(desktopBackend()+":"+QString::number(device_->value()));
+  if((chooseDefault||(savedGpuUnavailable&&!preferred.isEmpty()))&&selection==desktopSelectionKey()&&!commandProcess_&&!launchPending_&&!active_){
+   const auto mode=preferred=="cuda"?RunMode::BitCrackCuda:preferred=="opencl"?RunMode::BitCrackOpencl:RunMode::KeyHuntCpu;
+   mode_->setCurrentIndex(mode_->findData(static_cast<int>(mode)));if(mode!=RunMode::KeyHuntCpu)device_->setValue(preferredDevice);
+  }
+  updateActionAvailability();refreshStatus();
+ });
+ QTimer::singleShot(70000,process,[process]{if(process->state()!=QProcess::NotRunning)process->kill();});
+ process->start(executable,{"desktop-capabilities"});
+}
+#endif
 
 void MainWindow::loadThermalSettings() {
   const auto settings = ThermalSettingsStore::load();
@@ -1075,6 +1198,9 @@ void MainWindow::applyLanguage() {
   detailsTitle_->setText(t("details"));
 
   puzzleName_->setText(t("puzzle"));
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  puzzle_->setToolTip(t("puzzle_auto_hint"));
+#endif
   modeName_->setText(t("execution_mode"));
   openclDeviceName_->setText(t("opencl_device"));
   cpuThreadsName_->setText(t("cpu_threads"));
@@ -1200,10 +1326,35 @@ void MainWindow::updateActionAvailability() {
   device_->setEnabled(idle && !local && !kangarooPaused_);openclDevice_->setEnabled(idle && !kangarooPaused_);
   cpuThreads_->setEnabled(idle);rusticlRadeonsi_->setEnabled(idle);
   autoStart_->setEnabled(idle && !local && selectedRunMode()!=RunMode::VanityCuda);
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  const auto selectedGpu=desktopDeviceNames_.value(desktopBackend()+":"+QString::number(device_->value()));
+  const bool knownSelection=desktopBackend()=="cpu"||(!desktopDiscoveryRunning_&&!selectedGpu.isEmpty());
+  start_->setEnabled(canStart&&desktopProfileReady_&&!desktopPreserved_&&knownSelection);
+  benchmark_->setEnabled(canBenchmark&&knownSelection);
+  for(auto* button:{updates_,audit_,installKangaroo_}){button->setEnabled(false);button->setToolTip(t("windows_unavailable"));}
+  for(auto* box:{autoStart_,rusticlRadeonsi_}){box->setEnabled(false);box->setToolTip(t("windows_unavailable"));}
+  if(!desktopProfileReady_&&!active_)start_->setToolTip(t("desktop_benchmark_required"));else start_->setToolTip(QString());
+  const auto gpuIssue=desktopDiscoveryIssues_.value(desktopBackend(),t("gpu_discovery_unavailable"));
+  device_->setToolTip(selectedGpu.isEmpty()?gpuIssue:selectedGpu);
+  deviceName_->setText((desktopBackend()=="opencl"?t("opencl_device"):t("cuda_device"))+"\n"+
+    (selectedGpu.isEmpty()?t("gpu_discovery_unavailable"):selectedGpu));
+  deviceName_->setWordWrap(true);
+  if(!knownSelection){start_->setToolTip(gpuIssue);benchmark_->setToolTip(gpuIssue);}
+  for(auto* button:slotsHost_->findChildren<QPushButton*>())if(button->property("controlId").toString()=="recoverWindowsSlot")
+    button->setEnabled(ready&&statusAvailable_&&!identityUnavailable_&&!solutionFound_&&!active_);
+#endif
   updateThermalControlState();
   const QString busyHint = !statusAvailable_ ? t("status_unavailable_hint")
       : identityUnavailable_ ? t("identity_unavailable_message") : active_ ? t("busy_active") : QString();
-  benchmark_->setToolTip(busyHint);selfTest_->setToolTip(busyHint);installKangaroo_->setToolTip(busyHint);
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  benchmark_->setToolTip(!knownSelection?gpuIssue:busyHint);
+#else
+  benchmark_->setToolTip(busyHint);
+#endif
+  selfTest_->setToolTip(busyHint);
+#ifndef OPENPUZZLE_DESKTOP_WINDOWS
+  installKangaroo_->setToolTip(busyHint);
+#endif
 }
 
 void MainWindow::updateSelectionRules() {
@@ -1248,13 +1399,23 @@ QString MainWindow::cliExecutable() const {
 
   const QString bundled =
       QDir(QCoreApplication::applicationDirPath())
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+          .filePath("openpuzzle-desktop.exe");
+#else
           .filePath("openpuzzle");
+#endif
   const QFileInfo bundledInfo(bundled);
   if (bundledInfo.isFile() && bundledInfo.isExecutable()) {
     return bundledInfo.absoluteFilePath();
   }
 
-  return QStandardPaths::findExecutable("openpuzzle");
+  return QStandardPaths::findExecutable(
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+      "openpuzzle-desktop.exe"
+#else
+      "openpuzzle"
+#endif
+      );
 }
 
 void MainWindow::refreshStatus() {
@@ -1276,9 +1437,14 @@ void MainWindow::refreshStatus() {
   statusProcessError_ = false;
   updateActionAvailability();
   statusTimeout_->start();
+  QStringList statusArguments{QStringLiteral("status")};
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  desktopStatusSelection_=desktopSelectionKey();
+  statusArguments<<"--backend"<<desktopBackend()<<"--device"<<QString::number(selectedRunMode()==RunMode::KeyHuntCpu?0:device_->value())<<"--threads"<<QString::number(cpuThreads_->value());
+#endif
   statusProcess_->start(
       executable,
-      QStringList{QStringLiteral("status")});
+      statusArguments);
 }
 
 void MainWindow::handleStatusResult(int exitCode, bool normalExit) {
@@ -1314,6 +1480,12 @@ void MainWindow::handleStatusResult(int exitCode, bool normalExit) {
   }
 
   statusAvailable_ = true;
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  if(desktopStatusSelection_!=desktopSelectionKey()){desktopProfileReady_=false;QTimer::singleShot(0,this,&MainWindow::refreshStatus);return;}
+  static const QRegularExpression profileReadyPattern(R"((?:^|\n)Desktop profile\.{2,}\s+ready(?:\n|$))");
+  desktopProfileReady_=profileReadyPattern.match(result).hasMatch();
+  desktopPreserved_=result.contains("pending supervisor");
+#endif
   statusIssueKey_.clear();
 
   setTextPreservingScroll(statusOutput_, result);
@@ -1483,6 +1655,9 @@ QString MainWindow::automaticStartUnitPath() const {
 }
 
 QString MainWindow::runtimeLogPath() const {
+#ifdef _WIN32
+  return QString::fromStdWString((localPaths::dataDirectory()/"ui-runtime.log").wstring());
+#endif
   const QString overridePath =
       qEnvironmentVariable(
           "OPENPUZZLE_UI_RUNTIME_LOG");
@@ -1616,6 +1791,9 @@ bool MainWindow::writeAutomaticStartUnit(
 }
 
 void MainWindow::configureAutomaticStart(bool enabled) {
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  Q_UNUSED(enabled);const QSignalBlocker blocker(autoStart_);autoStart_->setChecked(false);return;
+#endif
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
   if(vanitySelected()){return;}
 #endif
@@ -1675,7 +1853,11 @@ void MainWindow::rebuildSlotCards(
         slot.fields.value("Engine").compare("Vanity", Qt::CaseInsensitive) == 0 &&
         slot.fields.value("Backend").compare("CUDA", Qt::CaseInsensitive) == 0 &&
         slot.fields.value("Status").compare("stopped", Qt::CaseInsensitive) == 0;
-    if (!slotActive(slot) && !identityUnavailable && !stoppedVanity) {
+    bool stoppedDesktop=false;
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+    stoppedDesktop=slot.fields.value("Synchronization")=="pending supervisor";
+#endif
+    if (!slotActive(slot) && !identityUnavailable && !stoppedVanity&&!stoppedDesktop) {
       continue;
     }
 
@@ -1831,6 +2013,10 @@ void MainWindow::rebuildSlotCards(
     }
 
     cardLayout->addLayout(metrics);
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+    if(stoppedDesktop){auto* recover=new QPushButton(t("recover"));recover->setProperty("controlId","recoverWindowsSlot");
+      const auto executionSlot=slot.fields.value("Slot");connect(recover,&QPushButton::clicked,this,[this,executionSlot]{runCommand("recover",{"recover","--slot",executionSlot});});cardLayout->addWidget(recover);}
+#endif
     slotsLayout_->addWidget(card, slotsLayout_->count() / 2, slotsLayout_->count() % 2);
   }
 
@@ -2043,7 +2229,13 @@ void MainWindow::startExecution() {
 
   try {
     for (const auto& argument :
-         RunCommandBuilder::build(selection)) {
+         RunCommandBuilder::build(selection,
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+             true
+#else
+             false
+#endif
+             )) {
       arguments.push_back(
           QString::fromStdString(argument));
     }
@@ -2097,6 +2289,9 @@ void MainWindow::launchExecution(
   }
 
   QFile logFile(logPath);
+#ifdef _WIN32
+  if(!protectDesktopLog(logPath)){QMessageBox::critical(this,"OpenPuzzle",t("runtime_log_failed"));return;}
+#endif
   if (!logFile.open(
           QIODevice::WriteOnly |
           (executionSlot.isEmpty() ? QIODevice::Truncate : QIODevice::Append)) ||
@@ -2112,6 +2307,9 @@ void MainWindow::launchExecution(
   logFile.close();
 
   QProcess launcher;
+#ifdef _WIN32
+  launcher.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* p){p->flags|=CREATE_NO_WINDOW;});
+#endif
   launcher.setProgram(executable);
   launcher.setArguments(arguments);
   if (!executionSlot.isEmpty()) {
@@ -2170,6 +2368,7 @@ void MainWindow::runCommand(
   }
 
   auto* process = new QProcess(this);
+  hideDesktopConsole(process);
   commandProcess_ = process;
   updateActionAvailability();
   process->setProcessChannelMode(
@@ -2228,14 +2427,24 @@ void MainWindow::runBenchmark() {
   auto* backend = new QComboBox(&dialog);
   backend->setObjectName("benchmarkBackend");
   backend->addItem("CUDA", "cuda");
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  backend->addItem("CPU", "cpu");
+#endif
   const bool vanityBenchmark = selectedRunMode() == RunMode::VanityCuda;
   if (!vanityBenchmark) backend->addItem("OpenCL", "opencl");
   backend->setCurrentIndex(
-      !vanityBenchmark && selectedRunMode() == RunMode::BitCrackOpencl ? 1 : 0);
+      backend->findData(selectedRunMode()==RunMode::BitCrackOpencl?"opencl":
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+          selectedRunMode()==RunMode::KeyHuntCpu?"cpu":
+#endif
+          "cuda"));
   backend->setEnabled(!vanityBenchmark);
   auto* device = new QSpinBox(&dialog);
   device->setObjectName("benchmarkDevice");
   device->setRange(0, 31);
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  device->setMaximum(255);
+#endif
   device->setValue(device_->value());
   auto* rusticl = new QCheckBox(t("linux_benchmark_rusticl"), &dialog);
   rusticl->setObjectName("benchmarkRusticl");
@@ -2246,8 +2455,20 @@ void MainWindow::runBenchmark() {
   layout->addRow(hint);
   layout->addRow(t("backend"), backend);
   layout->addRow(t("linux_benchmark_device"), device);
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  auto* threads=new QSpinBox(&dialog);threads->setObjectName("benchmarkThreads");threads->setRange(cpuThreads_->minimum(),cpuThreads_->maximum());threads->setValue(cpuThreads_->value());
+  layout->addRow(t("cpu_threads"),threads);
+#endif
   layout->addRow(rusticl);
-  auto updateBackend = [backend, rusticl] { rusticl->setVisible(backend->currentData() == "opencl"); };
+  auto updateBackend = [backend, rusticl
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+      ,device,threads
+#endif
+      ] { rusticl->setVisible(backend->currentData() == "opencl");
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+   rusticl->setEnabled(false);device->setEnabled(backend->currentData()!="cpu");threads->setVisible(backend->currentData()=="cpu");
+#endif
+  };
   connect(backend, qOverload<int>(&QComboBox::currentIndexChanged), &dialog, [this, backend, device, updateBackend](int) {
     if (selectedRunMode() == RunMode::BitCrackCudaOpencl)
       device->setValue(backend->currentData() == "opencl" ? openclDevice_->value() : device_->value());
@@ -2274,8 +2495,18 @@ void MainWindow::runBenchmark() {
   if (vanityBenchmark) arguments << "--engine" << "vanity";
   if (backend->currentData() == "opencl" && rusticl->isChecked())
     arguments << "--rusticl-enable" << "radeonsi";
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  if(backend->currentData()=="cpu")arguments={"benchmark","--backend","cpu","--threads",QString::number(threads->value()),"--real","--require-idle"};
+#endif
+  const QString measuredBackend=backend->currentData().toString();const int measuredDevice=device->value();
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  const int measuredThreads=threads->value();
+#else
+  const int measuredThreads=0;
+#endif
 
   auto* process = new QProcess(this);
+  hideDesktopConsole(process);
   process->setObjectName("ownedBenchmarkProcess");
   commandProcess_ = process;
   benchmarkRunning_ = true;
@@ -2293,17 +2524,23 @@ void MainWindow::runBenchmark() {
   };
   connect(process, &QProcess::readyReadStandardOutput, this, append);
   connect(process, &QProcess::finished, this,
-          [this, process, append](int code, QProcess::ExitStatus status) {
+          [this, process, append,measuredBackend,measuredDevice,measuredThreads](int code, QProcess::ExitStatus status) {
     append();
     const auto key = status == QProcess::NormalExit && code == 0
         ? "linux_benchmark_saved"
-        : (status == QProcess::NormalExit && code == 130
+        : ((benchmarkCancelRequested_||(status == QProcess::NormalExit && code == 130))
               ? "linux_benchmark_cancelled" : "linux_benchmark_failed");
     output_->appendPlainText("\n" + t(key));
     benchmarkRunning_ = false;
     benchmarkCancelRequested_ = false;
     releaseCommand(process);
     process->deleteLater();
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+    if(status==QProcess::NormalExit&&code==0){const auto mode=measuredBackend=="cpu"?RunMode::KeyHuntCpu:measuredBackend=="opencl"?RunMode::BitCrackOpencl:RunMode::BitCrackCuda;
+      mode_->setCurrentIndex(mode_->findData(static_cast<int>(mode)));if(mode!=RunMode::KeyHuntCpu)device_->setValue(measuredDevice);else cpuThreads_->setValue(measuredThreads);}
+#else
+    Q_UNUSED(measuredBackend);Q_UNUSED(measuredDevice);Q_UNUSED(measuredThreads);
+#endif
     QTimer::singleShot(0, this, &MainWindow::refreshStatus);
   });
   connect(process, &QProcess::errorOccurred, this, [this, process](QProcess::ProcessError error) {
@@ -2327,6 +2564,11 @@ void MainWindow::cancelBenchmark() {
   // SIGTERM is handled cooperatively by BenchmarkCommand; its process runner
   // stops the owned engine group and the CLI refuses to publish partial data.
   if (commandProcess_->state() == QProcess::Running) commandProcess_->terminate();
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  // Windows console processes do not receive a cooperative SIGTERM. The
+  // owned engine Job Object terminates descendants when this process exits.
+  if(commandProcess_->state()==QProcess::Running)commandProcess_->kill();
+#endif
   updateActionAvailability();
 }
 

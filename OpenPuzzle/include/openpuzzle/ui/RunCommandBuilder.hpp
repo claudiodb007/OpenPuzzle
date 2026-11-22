@@ -30,7 +30,7 @@ public:
       int puzzle);
 
   static std::vector<std::string> build(
-      const RunSelection& selection);
+      const RunSelection& selection,bool allowAutomaticPuzzle=false);
 };
 
 } // namespace openpuzzle::ui

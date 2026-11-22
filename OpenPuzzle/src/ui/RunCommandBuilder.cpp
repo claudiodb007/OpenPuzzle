@@ -36,7 +36,7 @@ bool RunCommandBuilder::supportsPuzzle(
 }
 
 std::vector<std::string> RunCommandBuilder::build(
-    const RunSelection& selection) {
+    const RunSelection& selection,bool allowAutomaticPuzzle) {
   switch (selection.mode) {
   case RunMode::BitCrackCuda:
   case RunMode::BitCrackOpencl:
@@ -50,7 +50,8 @@ std::vector<std::string> RunCommandBuilder::build(
         "Unsupported execution mode");
   }
 
-  if (!supportsPuzzle(selection.mode, selection.puzzle)) {
+  const bool automatic=allowAutomaticPuzzle&&selection.puzzle==0&&selection.mode!=RunMode::KangarooCuda&&selection.mode!=RunMode::VanityCuda;
+  if (!automatic&&!supportsPuzzle(selection.mode, selection.puzzle)) {
     throw std::invalid_argument(
         selection.mode == RunMode::KangarooCuda
             ? "Kangaroo supports puzzles 140, 145, 150, 155 and 160"
@@ -59,8 +60,8 @@ std::vector<std::string> RunCommandBuilder::build(
 
   std::vector<std::string> arguments = {
       "run",
-      std::to_string(selection.puzzle),
   };
+  if(!automatic)arguments.push_back(std::to_string(selection.puzzle));
 
   if (selection.mode == RunMode::KeyHuntCpu) {
     if (selection.cpuThreads <= 0) {

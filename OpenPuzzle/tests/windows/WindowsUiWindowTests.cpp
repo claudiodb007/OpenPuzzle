@@ -39,10 +39,13 @@ int wmain(int argc,wchar_t** argv){try{
  // saved profile without measuring again. Both use the synthetic CLI fixture.
  const auto failedMarker=openpuzzle::localPaths::dataDirectory()/"ui-benchmark-fail";
  openpuzzle::WorkspaceSecurity::prepare(failedMarker.parent_path());
+ const auto noGpu=openpuzzle::localPaths::dataDirectory()/"ui-no-gpu";
+ if(!openpuzzle::writePrivateFileAtomically(noGpu,"CPU-only fixture"))throw std::runtime_error("Cannot prepare CPU-only fixture");
  if(!openpuzzle::writePrivateFileAtomically(failedMarker,"expected failure"))throw std::runtime_error("Cannot prepare failure fixture");
  if(openpuzzle::ui::runWindowsUi(std::filesystem::absolute(argv[1]),true,registry.key,{})==0||std::filesystem::exists(openpuzzle::localPaths::dataDirectory()/"ui-profiles-fixture"/"profiles"/"cpu"/"result.json"))throw std::runtime_error("Failed measurement produced a selected/saved profile");
  std::filesystem::remove(failedMarker);
  for(int pass=0;pass<2;++pass)if(openpuzzle::ui::runWindowsUi(std::filesystem::absolute(argv[1]),true,registry.key,{})!=0)throw std::runtime_error("First-profile create/reopen fixture failed");
+ std::filesystem::remove(noGpu);
  const auto saved=openpuzzle::localPaths::dataDirectory()/"ui-profiles-fixture"/"profiles"/"cpu"/"result.json";
  bool absent=false;const auto savedBefore=openpuzzle::windowsFile::readPrivate(saved,absent,16384);
  if(!savedBefore||openpuzzle::WindowsRunProfile::parse(*savedBefore).speed!=2.0)throw std::runtime_error("First profile was not persisted");
@@ -69,6 +72,8 @@ int wmain(int argc,wchar_t** argv){try{
  // Complete GPU UI route: automatic arguments, finalist provenance, physical
  // binding, versioned persistence, reopening and failed-run preservation.
  for(const auto backend:{"cuda","opencl"}){
+  const auto noCuda=openpuzzle::localPaths::dataDirectory()/"ui-no-cuda";
+  if(std::string(backend)=="opencl"&&!openpuzzle::writePrivateFileAtomically(noCuda,"AMD-only fixture"))throw std::runtime_error("Cannot prepare AMD-only fixture");
   const auto store=openpuzzle::localPaths::dataDirectory()/openpuzzle::pathFromUtf8(std::string("ui-profiles-fixture-")+backend);
   for(const auto marker:{"ui-auto-finalist-fail","ui-auto-unvalidated"}){
    const auto path=openpuzzle::localPaths::dataDirectory()/marker;
@@ -78,13 +83,16 @@ int wmain(int argc,wchar_t** argv){try{
   }
   for(int pass=0;pass<2;++pass)if(openpuzzle::ui::runWindowsUi(std::filesystem::absolute(argv[1]),true,registry.key,{},backend)!=0)throw std::runtime_error("Automatic GPU create/reopen fixture failed");
   const auto first=openpuzzle::ui::loadWindowsUiAutomaticProfile(store,backend);if(!first)throw std::runtime_error("Automatic selection missing");
+  {bool missing=false;const auto p=openpuzzle::windowsFile::readPrivate(*first,missing,16384);if(!p||openpuzzle::WindowsRunProfile::parse(*p).device!=7)throw std::runtime_error("GPU picker used the dropdown ordinal instead of engine index 7");}
   const auto bytes=openpuzzle::windowsFile::readPrivate(*first,absent,16384);if(!bytes)throw std::runtime_error("Cannot read automatic selection");
+  if(std::string(backend)=="opencl"){const auto p=openpuzzle::WindowsRunProfile::parse(*bytes);if(p.windowsDeviceInstanceId.empty()||!p.gpuUuid.empty()||!p.pciBusId.empty())throw std::runtime_error("Legacy AMD profile did not reopen using only the Windows identity");}
   const auto second=openpuzzle::ui::storeWindowsUiAutomaticProfile(store,*first);
   if(second==*first||openpuzzle::windowsFile::readPrivate(*first,absent,16384)!=bytes||openpuzzle::ui::loadWindowsUiAutomaticProfile(store,backend)!=second)throw std::runtime_error("Automatic remeasurement overwrote the previous profile");
   const auto pointer=store/"profiles"/backend/"automatic-selected.txt";
   if(!openpuzzle::writePrivateFileAtomically(pointer,"unknown-existing-content"))throw std::runtime_error("Cannot prepare damaged automatic selection");
   bool blocked=false;try{openpuzzle::ui::storeWindowsUiAutomaticProfile(store,second);}catch(...){blocked=true;}
   if(!blocked||openpuzzle::windowsFile::readPrivate(pointer,absent,256)!=std::optional<std::string>("unknown-existing-content"))throw std::runtime_error("Damaged automatic selection was replaced");
+  std::filesystem::remove(noCuda);
  }
  const auto result=openpuzzle::ui::runWindowsUi(std::filesystem::absolute(argv[1]),true,registry.key,fixtureProfile);
  std::ifstream profileInput(fixtureProfile);const std::string profileAfter{std::istreambuf_iterator<char>(profileInput),{}};if(profileAfter!=measured)return 1;

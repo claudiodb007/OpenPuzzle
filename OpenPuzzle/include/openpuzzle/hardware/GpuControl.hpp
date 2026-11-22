@@ -55,6 +55,7 @@ public:
  virtual void apply(const GpuControlDevice&,const GpuControlRequest&)=0;
 };
 std::vector<GpuControlDevice> inspectGpuControls();
+std::string gpuControlBuildInfo();
 void applyGpuControl(const GpuControlRequest&);
 // Narrow injected boundary permits zero-write/identity/permission tests.
 inline GpuControlDevice applyGpuControlChecked(GpuControlBackend& backend,const GpuControlRequest& request){
@@ -104,6 +105,7 @@ inline double gpuControlNumber(const std::string& text){
 inline int gpuControlCommand(const std::vector<std::string>& args,std::ostream& out,
  const std::function<std::vector<GpuControlDevice>()>& inspect=inspectGpuControls,
  const std::function<void(const GpuControlRequest&)>& apply=applyGpuControl){
+ if(args.size()==1&&args[0]=="capabilities"){out<<gpuControlBuildInfo();return 0;}
  if(args.empty()||(args.size()==1&&args[0]=="list")){out<<formatGpuControls(inspect());return 0;}
  if(args.front()!="apply"||args.size()<6)throw std::invalid_argument("gpu-control list | apply --vendor nvidia|amd --pci DDDDDDDD:BB:DD.F [--uuid UUID] --power VALUE | --power-default | --fan auto|30..100");
  GpuControlRequest r;bool operation=false;std::vector<std::string> seen;

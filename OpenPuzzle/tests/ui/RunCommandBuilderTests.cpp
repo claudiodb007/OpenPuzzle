@@ -110,5 +110,7 @@ int main() {
   assert(RunCommandBuilder::build({69,RunMode::VanityCuda,2})==std::vector<std::string>({"run","69","--engine","vanity","--backend","cuda","--device","2"}));
   assert(rejected({64,RunMode::VanityCuda}));assert(rejected({81,RunMode::VanityCuda}));
   assert(rejected({69,RunMode::VanityCuda,-1}));
+  assert(RunCommandBuilder::build({0,RunMode::BitCrackCuda,7},true)==std::vector<std::string>({"run","--engine","bitcrack","--backend","cuda","--device","7"}));
+  assert(RunCommandBuilder::build({0,RunMode::KeyHuntCpu,0,0,8},true)==std::vector<std::string>({"run","--engine","keyhunt","--backend","cpu","--threads","8"}));
   return 0;
 }

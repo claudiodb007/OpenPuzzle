@@ -17,7 +17,7 @@ inline std::optional<std::filesystem::path> loadWindowsUiAutomaticProfile(const 
  const auto selected=directory/pathFromUtf8(*name);const auto record=windowsFile::readPrivate(selected,missing,16384);
  if(!record)throw std::runtime_error("Saved automatic profile missing; selection preserved");
  const auto profile=WindowsRunProfile::parse(*record);
- if(profile.backend!=backend||!profile.autoTuned||(profile.gpuUuid.empty()&&profile.pciBusId.empty()))throw std::runtime_error("Saved automatic profile is not validated and physically bound");
+ if(profile.backend!=backend||!profile.autoTuned||!profile.hasPhysicalBinding())throw std::runtime_error("Saved automatic profile is not validated and physically bound");
  return selected;
 }
 // A remeasurement gets a new private file. Only the owned selection pointer is
@@ -26,7 +26,7 @@ inline std::filesystem::path storeWindowsUiAutomaticProfile(const std::filesyste
  bool missing=false;const auto contents=windowsFile::readPrivate(source,missing,16384);
  if(!contents)throw std::runtime_error("Automatic profile missing; report preserved");
  const auto profile=WindowsRunProfile::parse(*contents);
- if(!profile.autoTuned||profile.backend=="cpu"||(profile.gpuUuid.empty()&&profile.pciBusId.empty()))throw std::runtime_error("Automatic GPU profile requires validation and physical binding");
+ if(!profile.autoTuned||profile.backend=="cpu"||!profile.hasPhysicalBinding())throw std::runtime_error("Automatic GPU profile requires validation and physical binding");
  const auto directory=root/"profiles"/profile.backend;WorkspaceSecurity::prepare(directory);
  const auto pointer=directory/"automatic-selected.txt";windowsFile::Lock lock(pointer.wstring()+L".lock");
  if(!lock.locked())throw std::runtime_error("Automatic profile publication busy; report preserved");
@@ -46,7 +46,7 @@ inline std::filesystem::path storeFirstWindowsUiProfile(const std::filesystem::p
  bool missing=false;const auto contents=windowsFile::readPrivate(source,missing,16384);
  if(!contents)throw std::runtime_error("Measured profile unavailable; diagnostic report preserved");
  const auto profile=WindowsRunProfile::parse(*contents);
- if(profile.backend!="cpu"&&profile.gpuUuid.empty()&&profile.pciBusId.empty())throw std::runtime_error("Measured GPU profile is not physically bound");
+ if(profile.backend!="cpu"&&!profile.hasPhysicalBinding())throw std::runtime_error("Measured GPU profile is not physically bound");
  const auto target=root/"profiles"/profile.backend/"result.json";
  if(!windowsFile::safePath(target))throw std::runtime_error("Unsafe profile destination; measured result preserved");
  const auto attrs=GetFileAttributesW(target.c_str());

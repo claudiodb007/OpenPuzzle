@@ -1,6 +1,10 @@
 #pragma once
 #include "openpuzzle/client/ClientHeartbeat.hpp"
 #include "openpuzzle/hardware/GpuThermalPolicy.hpp"
+#include "openpuzzle/hardware/WindowsAdapterIdentity.hpp"
+#include <set>
+#include <optional>
+#include <cmath>
 #include <chrono>
 #include <charconv>
 #include <iomanip>
@@ -41,11 +45,42 @@ struct WindowsTelemetryReading {
  std::string name;
  client::ClientGpuTelemetry values;
  std::string uuid; // Native device UUID; separate from backend/ordinal IDs.
+ std::string windowsDeviceInstanceId; // Internal sensor binding; not sent to the server.
 };
 struct WindowsTelemetryReport {
  bool complete=false;
- std::string detail="NVIDIA telemetry unavailable";
+ std::string detail="GPU telemetry unavailable";
  std::vector<WindowsTelemetryReading> readings;
+ // Match physical proofs, never a vendor ordinal or a board-name guess.
+ const WindowsTelemetryReading* find(const std::string& requestedUuid,const std::string& requestedPci,
+     const std::string& requestedInstance,const std::string& requestedName={})const {
+  const auto uuid=canonicalGpuUuid(requestedUuid),pci=canonicalGpuPciBusId(requestedPci),instance=canonicalWindowsGpuInstanceId(requestedInstance);
+  if((!requestedUuid.empty()&&uuid.empty())||(!requestedPci.empty()&&pci.empty())||(!requestedInstance.empty()&&instance.empty()))return nullptr;
+  const bool hasPhysical=!uuid.empty()||!pci.empty()||!instance.empty();const WindowsTelemetryReading* found=nullptr;
+  for(const auto& r:readings){
+   const auto ruuid=canonicalGpuUuid(r.uuid),rpci=canonicalGpuPciBusId(r.values.pciBusId),rinstance=canonicalWindowsGpuInstanceId(r.windowsDeviceInstanceId);
+   const bool pnpMatch=!instance.empty()&&rinstance==instance;
+   const bool related=(!uuid.empty()&&ruuid==uuid)||(!pci.empty()&&rpci==pci)||pnpMatch||
+    (!hasPhysical&&!requestedName.empty()&&r.name==requestedName);
+   if(!related)continue;
+   if((!r.uuid.empty()&&ruuid.empty())||(!r.values.pciBusId.empty()&&rpci.empty())||(!r.windowsDeviceInstanceId.empty()&&rinstance.empty())||
+      (!uuid.empty()&&!ruuid.empty()&&uuid!=ruuid)||(!pci.empty()&&!rpci.empty()&&pci!=rpci)||
+      (!instance.empty()&&!rinstance.empty()&&instance!=rinstance)||(!requestedName.empty()&&!pnpMatch&&!(hasPhysical&&r.values.vendor=="AMD")&&r.name!=requestedName)||found)return nullptr;
+   found=&r;
+  }return found;
+ }
+ bool related(const std::string& requestedUuid,const std::string& requestedPci,const std::string& requestedInstance)const {
+  const auto uuid=canonicalGpuUuid(requestedUuid),pci=canonicalGpuPciBusId(requestedPci),instance=canonicalWindowsGpuInstanceId(requestedInstance);
+  for(const auto& r:readings)if((!uuid.empty()&&canonicalGpuUuid(r.uuid)==uuid)||(!pci.empty()&&canonicalGpuPciBusId(r.values.pciBusId)==pci)||
+    (!instance.empty()&&canonicalWindowsGpuInstanceId(r.windowsDeviceInstanceId)==instance))return true;
+  return false;
+ }
+ bool bindDevice(const std::string& backend,int device,const std::string& uuid,const std::string& pci,const std::string& instance) {
+  if(!complete||(backend!="cuda"&&backend!="opencl")||device<0||device>255)return false;
+  const auto* selected=find(uuid,pci,instance);if(!selected||!selected->values.valid())return false;
+  auto& v=readings[static_cast<std::size_t>(selected-readings.data())].values;
+  v.device=device;v.deviceId=backend+'-'+std::to_string(device);return true;
+ }
  void bindCudaOrdinals(const std::vector<std::pair<std::string,int>>& devices) {
   for(auto& r:readings){
    unsigned matches=0;int ordinal=-1;
@@ -61,6 +96,49 @@ struct WindowsTelemetryReport {
   if(complete)for(const auto& r:readings)if(r.values.valid())h.gpuTelemetry.push_back(r.values);
  }
 };
+struct WindowsAmdTelemetryDevice {
+ int index=0;std::string name,windowsDeviceInstanceId;
+ bool operator==(const WindowsAmdTelemetryDevice&)const=default;
+};
+struct WindowsAmdTelemetryApi {
+ // This boundary contains only reads. Device identity is re-enumerated after
+ // sampling; failures never reuse the last sample or invent a temperature.
+ std::function<std::vector<WindowsAmdTelemetryDevice>()> devices;
+ std::function<std::optional<double>(const std::string&)> temperature;
+ std::function<std::optional<double>(const std::string&)> power; // Optional, measured watts only.
+};
+inline WindowsTelemetryReport queryWindowsAmdTelemetry(const WindowsAmdTelemetryApi& api) {
+ WindowsTelemetryReport result;result.detail="AMD ADLX telemetry unavailable";
+ try{
+  if(!api.devices||!api.temperature)throw std::runtime_error("AMD read-only sensor API incomplete");
+  const auto before=api.devices();if(before.size()>256)throw std::runtime_error("AMD inventory exceeds limit");
+  std::set<int> indexes;std::set<std::string> instances;
+  for(const auto& d:before){
+   const auto id=canonicalWindowsGpuInstanceId(d.windowsDeviceInstanceId);
+   if(d.index<0||d.index>255||!indexes.insert(d.index).second||id.empty()||!id.starts_with("PCI\\VEN_1002&")||!instances.insert(id).second||
+      d.name.empty()||d.name.size()>512||std::any_of(d.name.begin(),d.name.end(),[](unsigned char c){return c<32||c==127;}))throw std::runtime_error("Invalid or duplicated AMD sensor identity");
+   auto value=api.temperature(id);auto power=api.power?api.power(id):std::optional<double>{};
+   if(value&&(!std::isfinite(*value)||*value<0||*value>200))value.reset();
+   if(power&&(!std::isfinite(*power)||*power<0||*power>10000))power.reset();
+   if(!value&&!power)continue;
+   WindowsTelemetryReading r;r.name=d.name;r.windowsDeviceInstanceId=id;r.values.vendor="AMD";
+   r.values.device=d.index;r.values.deviceId="amd-"+std::to_string(d.index);r.values.temperatureLabel="GPU";r.values.temperatureC=value;r.values.powerDrawW=power;
+   // Manual power tuning is a percentage, never a watt limit or temperature.
+   result.readings.push_back(std::move(r));
+  }
+  if(api.devices()!=before)throw std::runtime_error("AMD sensor inventory changed during sampling");
+  result.complete=true;result.detail="Read-only AMD ADLX GPU metrics";
+ }catch(const std::exception& e){result.complete=false;result.readings.clear();result.detail=e.what();}return result;
+}
+inline WindowsTelemetryReport mergeWindowsTelemetryReports(const WindowsTelemetryReport& nvidia,const WindowsTelemetryReport& amd,
+    bool nvidiaExpected,bool amdExpected) {
+ WindowsTelemetryReport result;const bool nv=nvidiaExpected||!nvidia.readings.empty(),am=amdExpected||!amd.readings.empty();
+ result.complete=(nv||am)?(!nv||nvidia.complete)&&(!am||amd.complete):(nvidia.complete||amd.complete);
+ result.detail="NVIDIA: "+nvidia.detail+"; AMD: "+amd.detail;
+ if(nvidia.complete)result.readings=nvidia.readings;
+ if(amd.complete)result.readings.insert(result.readings.end(),amd.readings.begin(),amd.readings.end());
+ return result;
+}
 enum class WindowsThermalStatus {Disabled,Normal,Warning,Critical,Unavailable};
 struct WindowsRuntimeThermalSettings {
  using Reader=std::function<WindowsTelemetryReport()>;
@@ -68,7 +146,7 @@ struct WindowsRuntimeThermalSettings {
  std::string deviceName;
  Reader reader;
  std::chrono::milliseconds interval{5000};
- std::string devicePciBusId,deviceUuid;
+ std::string devicePciBusId,deviceUuid,deviceWindowsInstanceId;
 };
 class WindowsThermalMonitor {
  WindowsRuntimeThermalSettings settings_;
@@ -84,22 +162,15 @@ public:
   next_=now+settings_.interval;
   try{report_=settings_.reader?settings_.reader():WindowsTelemetryReport{};}catch(...){report_={};}
   if(!hasSelection()||!settings_.policy.enabled){state_=WindowsThermalStatus::Disabled;return;}
-  const auto uuid=canonicalGpuUuid(settings_.deviceUuid),bus=canonicalGpuPciBusId(settings_.devicePciBusId);
-  if((!settings_.deviceUuid.empty()&&uuid.empty())||(!settings_.devicePciBusId.empty()&&bus.empty())){state_=WindowsThermalStatus::Unavailable;return;}
-  const WindowsTelemetryReading* selected=nullptr;unsigned matches=0;
-  if(report_.complete)for(const auto& r:report_.readings){
-   const bool identity=!uuid.empty()?canonicalGpuUuid(r.uuid)==uuid:!bus.empty()?canonicalGpuPciBusId(r.values.pciBusId)==bus:r.name==settings_.deviceName;
-   if(identity){selected=&r;++matches;}
-  }
-  if(matches==1&&((!settings_.deviceName.empty()&&selected->name!=settings_.deviceName)||
-    (!bus.empty()&&canonicalGpuPciBusId(selected->values.pciBusId)!=bus))){state_=WindowsThermalStatus::Unavailable;return;}
-  if(matches!=1||!selected->values.valid()||!selected->values.temperatureC){state_=WindowsThermalStatus::Unavailable;return;}
+  const auto* selected=report_.complete?report_.find(settings_.deviceUuid,settings_.devicePciBusId,
+    settings_.deviceWindowsInstanceId,settings_.deviceName):nullptr;
+  if(!selected||!selected->values.valid()||!selected->values.temperatureC){state_=WindowsThermalStatus::Unavailable;return;}
   const auto t=*selected->values.temperatureC;
   if(t>=settings_.policy.criticalC)state_=WindowsThermalStatus::Critical;
   else if(t>=settings_.policy.warningC || (state_==WindowsThermalStatus::Warning&&t>=settings_.policy.warningC-2))state_=WindowsThermalStatus::Warning;
   else state_=WindowsThermalStatus::Normal;
  }
- bool hasSelection()const{return !settings_.deviceName.empty()||!settings_.devicePciBusId.empty()||!settings_.deviceUuid.empty();}
+ bool hasSelection()const{return !settings_.deviceName.empty()||!settings_.devicePciBusId.empty()||!settings_.deviceUuid.empty()||!settings_.deviceWindowsInstanceId.empty();}
  bool mustStop()const {return settings_.policy.enabled&&settings_.policy.stopOnCritical&&hasSelection()&&
   (state_==WindowsThermalStatus::Critical||state_==WindowsThermalStatus::Unavailable);}
  WindowsThermalStatus status()const{return state_;}

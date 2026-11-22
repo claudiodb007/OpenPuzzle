@@ -10,6 +10,8 @@
 #include <QMessageBox>
 #include <QSignalBlocker>
 #include <QFileInfo>
+#include <QDir>
+#include <QCoreApplication>
 #ifndef _WIN32
 #include <unistd.h>
 #endif
@@ -28,22 +30,33 @@ GpuControlPanel::GpuControlPanel(const QString& cli,QWidget* parent):QFrame(pare
  hint_=new QLabel;hint_->setObjectName("HintText");hint_->setWordWrap(true);layout->addWidget(hint_,5,0,1,5);
  result_=new QLabel;result_->setWordWrap(true);result_->setTextInteractionFlags(Qt::TextSelectableByMouse);layout->addWidget(result_,6,0,1,5);
  reader_=new QProcess(this);writer_=new QProcess(this);timer_=new QTimer(this);readTimeout_=new QTimer(this);readTimeout_->setSingleShot(true);
+#ifdef _WIN32
+ for(auto* process:{reader_,writer_})process->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* args){args->flags|=CREATE_NO_WINDOW;});
+#endif
  connect(readTimeout_,&QTimer::timeout,this,[this]{if(reader_->state()!=QProcess::NotRunning)reader_->kill();});
  connect(reader_,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),this,[this](int code,QProcess::ExitStatus status){
   readTimeout_->stop();const auto text=reader_->readAllStandardOutput();
-  if(code!=0||status!=QProcess::NormalExit){devices_.clear();info_->setText(t("gpu_failed"));result_->setText(QString::fromUtf8(reader_->readAllStandardError()));updateControls();return;}
+  if(code!=0||status!=QProcess::NormalExit){devices_.clear();info_->setText(detectedPrefix()+t("gpu_failed"));result_->setText(QString::fromUtf8(reader_->readAllStandardError()));updateControls();return;}
   const auto* prior=selected();const auto pci=prior?prior->pci:std::string();
   try{
    auto devices=parseGpuControls(text.toStdString());const QSignalBlocker blocker(gpu_);gpu_->clear();devices_=std::move(devices);int index=0;
    for(std::size_t i=0;i<devices_.size();++i){const auto& d=devices_[i];gpu_->addItem(q(d.name+" / "+d.pci));if(d.pci==pci)index=static_cast<int>(i);}
    gpu_->setCurrentIndex(devices_.empty()?-1:index);render(pci.empty());
-  }catch(const std::exception& e){devices_.clear();info_->setText(t("gpu_failed"));result_->setText(q(e.what()));}updateControls();
+  }catch(const std::exception& e){devices_.clear();info_->setText(detectedPrefix()+t("gpu_failed"));result_->setText(q(e.what()));}updateControls();
  });
- connect(reader_,&QProcess::errorOccurred,this,[this](QProcess::ProcessError error){if(error==QProcess::FailedToStart){devices_.clear();info_->setText(t("gpu_failed"));result_->setText(reader_->errorString());updateControls();}});
+ connect(reader_,&QProcess::errorOccurred,this,[this](QProcess::ProcessError error){if(error==QProcess::FailedToStart){devices_.clear();info_->setText(detectedPrefix()+t("gpu_failed"));result_->setText(reader_->errorString());updateControls();}});
  connect(writer_,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),this,[this](int code,QProcess::ExitStatus status){
   result_->setText(t(code==0&&status==QProcess::NormalExit?"gpu_applied":"gpu_failed")+"\n"+QString::fromUtf8(writer_->readAllStandardError())+(code?QString::fromUtf8(writer_->readAllStandardOutput()):QString()));refresh();updateControls();
  });
  connect(writer_,&QProcess::errorOccurred,this,[this](QProcess::ProcessError error){if(error==QProcess::FailedToStart){result_->setText(t("gpu_failed")+"\n"+writer_->errorString());updateControls();}});
+#ifdef _WIN32
+ auto* elevatedTimer=new QTimer(this);elevatedTimer->setInterval(200);
+ connect(elevatedTimer,&QTimer::timeout,this,[this]{
+  if(!elevatedWriter_.busy())return;
+  const auto update=elevatedWriter_.poll();
+  if(update.finished){result_->setText(t(update.exitCode==0?"gpu_applied":"gpu_failed")+(update.exitCode==0?QString():"\nExit: "+QString::number(update.exitCode)));refresh();updateControls();}
+ });elevatedTimer->start();
+#endif
  connect(gpu_,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{render(true);});
  connect(mode_,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{updateControls();});
  connect(refresh_,&QPushButton::clicked,this,[this]{refresh();});
@@ -52,13 +65,22 @@ GpuControlPanel::GpuControlPanel(const QString& cli,QWidget* parent):QFrame(pare
  connect(fanApply_,&QPushButton::clicked,this,[this]{apply(mode_->currentIndex()==1?GpuControlAction::FanManual:GpuControlAction::FanAuto);});
  connect(timer_,&QTimer::timeout,this,[this]{refresh();});timer_->start(10000);setLanguage(language_);QTimer::singleShot(0,this,[this]{refresh();});
 }
+QString GpuControlPanel::detectedPrefix()const{return detectedGpus_.isEmpty()?QString():t("gpu_detected_search")+": "+detectedGpus_.join(", ")+"\n";}
 QString GpuControlPanel::t(const char* key)const{return translated(language_,QString::fromLatin1(key));}
-bool GpuControlPanel::applying()const{return writer_->state()!=QProcess::NotRunning;}
+bool GpuControlPanel::applying()const{
+#ifdef _WIN32
+ if(elevatedWriter_.busy())return true;
+#endif
+ return writer_->state()!=QProcess::NotRunning;
+}
 const GpuControlDevice* GpuControlPanel::selected()const{const auto i=gpu_->currentIndex();return i>=0&&static_cast<std::size_t>(i)<devices_.size()?&devices_[i]:nullptr;}
 void GpuControlPanel::setLanguage(UiLanguage language){
  language_=language;title_->setText(t("gpu_controls"));hint_->setText(t("gpu_controls_hint"));powerLabel_->setText(t("gpu_power_limit"));fanLabel_->setText(t("gpu_fan_mode"));
  refresh_->setText(t("refresh"));powerApply_->setText(t("gpu_apply"));powerDefault_->setText(t("gpu_default"));fanApply_->setText(t("gpu_apply"));
  const QSignalBlocker blocker(mode_);const auto index=mode_->currentIndex();mode_->clear();mode_->addItem(t("gpu_fan_auto"));mode_->addItem(t("gpu_fan_manual"));mode_->setCurrentIndex(index==1?1:0);render(false);
+}
+void GpuControlPanel::setDetectedGpus(const QStringList& names){
+ detectedGpus_=names;if(!selected())render(false);
 }
 void GpuControlPanel::updateControls(){
  const bool ready=reader_->state()==QProcess::NotRunning&&!applying();const auto* d=selected();
@@ -67,7 +89,8 @@ void GpuControlPanel::updateControls(){
  mode_->setEnabled(ready&&d&&d->automatic);const bool manual=mode_->currentIndex()==1;fan_->setEnabled(ready&&d&&d->fan&&manual);fanApply_->setEnabled(ready&&d&&d->automatic&&(!manual||(d->fan&&gpuControlRange(d->temperature,0,79.999))));
 }
 void GpuControlPanel::render(bool inputs){
- const auto* d=selected();if(!d){info_->setText(t("gpu_no_controls"));updateControls();return;}
+ const auto* d=selected();if(!d){info_->setText(detectedPrefix()+t("gpu_no_controls"));updateControls();return;}
+ powerLabel_->setText(t(d->powerUnit=="%"?"gpu_power_offset":"gpu_power_limit"));
  const auto power=d->power?QString::number(d->powerNow)+" "+q(d->powerUnit)+" ("+t("gpu_range")+": "+QString::number(d->powerMin)+"–"+QString::number(d->powerMax)+" "+q(d->powerUnit)+")":t("unavailable");
  info_->setText(q(d->pci+"  "+d->uuid)+"\n"+t("gpu_current")+": "+power+" | "+t("gpu_fan_mode")+": "+t(d->fanMode=="auto"?"gpu_fan_auto":d->fanMode=="manual"?"gpu_fan_manual":"gpu_mixed")+" "+QString::number(d->fanNow,'f',0)+"% | "+(d->temperature>=0?QString::number(d->temperature)+" °C":t("unavailable"))+"\n"+t("gpu_permission"));
  if(inputs){power_->setRange(d->powerMin,d->powerMax);power_->setSingleStep((std::max)(1.0,d->powerStep));power_->setSuffix(" "+q(d->powerUnit));power_->setValue(d->powerNow);fan_->setRange(static_cast<int>(d->fanMin),static_cast<int>(d->fanMax));fan_->setValue(static_cast<int>(std::round(d->fanNow)));mode_->setCurrentIndex(d->fanMode=="manual"?1:0);}updateControls();
@@ -83,7 +106,12 @@ void GpuControlPanel::apply(GpuControlAction action){
   const auto setting=action==GpuControlAction::Power?t("gpu_power_limit")+": "+QString::number(value)+" "+q(d->powerUnit):action==GpuControlAction::PowerDefault?t("gpu_default")+": "+QString::number(d->powerDefault)+" "+q(d->powerUnit):action==GpuControlAction::FanAuto?t("gpu_fan_auto"):t("gpu_fan_manual")+" "+QString::number(value)+"%";
   if(QMessageBox::question(this,t("gpu_controls"),t("gpu_apply_confirm")+"\n\n"+q(d->name)+"\nPCI: "+q(d->pci)+"\n"+setting,QMessageBox::Yes|QMessageBox::No,QMessageBox::No)!=QMessageBox::Yes)return;
   result_->clear();
-#ifndef _WIN32
+#ifdef _WIN32
+  const auto helper=QDir(QCoreApplication::applicationDirPath()).absoluteFilePath("openpuzzle-gpu-control.exe");
+  if(!QFileInfo(helper).isFile())throw std::runtime_error("The dedicated Windows GPU helper is missing; no setting changed");
+  std::vector<std::string> elevated;for(const auto& arg:args.mid(1))elevated.push_back(arg.toStdString());
+  elevatedWriter_.startGpuControlElevated(reinterpret_cast<HWND>(winId()),std::filesystem::path(helper.toStdWString()),elevated);
+#else
   if(geteuid()!=0){
    const QFileInfo helper(QStringLiteral("/usr/libexec/openpuzzle-gpu-control"));
    const QFileInfo directory(QStringLiteral("/usr/libexec"));
@@ -94,8 +122,9 @@ void GpuControlPanel::apply(GpuControlAction action){
    }
    writer_->start(pkexec.absoluteFilePath(),QStringList{helper.absoluteFilePath()}+args.mid(1));
   }else
+  writer_->start(cli_,args);
 #endif
-  writer_->start(cli_,args);updateControls();
+  updateControls();
  }catch(const std::exception& e){result_->setText(t("gpu_failed")+"\n"+q(e.what()));}
 }
 }

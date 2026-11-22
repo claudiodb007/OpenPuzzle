@@ -8,25 +8,27 @@ namespace openpuzzle {
 namespace fs=std::filesystem;
 namespace {
 WindowsPhysicalGpuBinding snapshot(const WindowsRunProfile& p,const WindowsGpuInventoryReader& discovery,
- const WindowsRuntimeThermalSettings::Reader& telemetry) {
- if(!discovery||!telemetry)throw std::runtime_error("Physical GPU discovery provider unavailable");
+ const WindowsRuntimeThermalSettings::Reader& telemetry,bool requireTelemetry) {
+ if(!discovery)throw std::runtime_error("Physical GPU discovery provider unavailable");
  const auto inventory=discovery();const auto& backend=p.backend=="cuda"?inventory.cuda:inventory.opencl;
  if(backend.state!=GpuDiscoveryState::Available)throw std::runtime_error("Selected backend driver inventory unavailable");
  std::vector<WindowsProfileGpuDevice> devices;
  for(const auto& d:backend.devices)devices.push_back({p.backend=="cuda"?0:d.platformIndex,d.nativeDeviceIndex,
-  d.name,d.vendor,d.pciBusId,d.uuid,d.memoryMiB,d.available});
- return resolveWindowsGpuProfileBinding(p,devices,telemetry());
+  d.name,d.vendor,d.pciBusId,d.uuid,d.memoryMiB,d.available,d.windowsDeviceInstanceId,d.displayName});
+ WindowsTelemetryReport report;
+ try{if(telemetry)report=telemetry();}catch(...){if(requireTelemetry)throw;}
+ return resolveWindowsGpuProfileBinding(p,devices,report,requireTelemetry);
 }
-bool same(const WindowsPhysicalGpuBinding& a,const WindowsPhysicalGpuBinding& b){return a.name==b.name&&a.uuid==b.uuid&&a.pciBusId==b.pciBusId;}
+bool same(const WindowsPhysicalGpuBinding& a,const WindowsPhysicalGpuBinding& b){return a.name==b.name&&a.uuid==b.uuid&&a.pciBusId==b.pciBusId&&a.windowsDeviceInstanceId==b.windowsDeviceInstanceId;}
 }
 WindowsPhysicalGpuBinding inspectWindowsProfileGpuBinding(const WindowsRunProfile& profile,const fs::path& executable,
- const WindowsGpuInventoryReader& discovery,const WindowsRuntimeThermalSettings::Reader& telemetry) {
+ const WindowsGpuInventoryReader& discovery,const WindowsRuntimeThermalSettings::Reader& telemetry,bool requireTelemetry) {
  if(WindowsEngineDiagnostics::executableSha256(executable)!=profile.sha256)throw std::runtime_error("Profile engine fingerprint changed");
  const auto engine=WindowsEngineDiagnostics::inspectDevice(executable,profile.backend,profile.device,profile.threads);
  if(engine!=profile.deviceIdentity)throw std::runtime_error("Measured engine mapping changed; profile preserved");
- const auto first=snapshot(profile,discovery,telemetry);
+ const auto first=snapshot(profile,discovery,telemetry,requireTelemetry);
  if(WindowsEngineDiagnostics::inspectDevice(executable,profile.backend,profile.device,profile.threads)!=engine||
-    !same(first,snapshot(profile,discovery,telemetry))||WindowsEngineDiagnostics::executableSha256(executable)!=profile.sha256)
+    !same(first,snapshot(profile,discovery,telemetry,requireTelemetry))||WindowsEngineDiagnostics::executableSha256(executable)!=profile.sha256)
   throw std::runtime_error("Physical device inventory changed during verification; retry required");
  return first;
 }
@@ -47,7 +49,7 @@ int bindWindowsGpuProfile(const std::vector<std::string>& args,const fs::path& e
  if(!contents)throw std::runtime_error("Measured profile is missing or unreadable; preserved");
  const auto profile=WindowsRunProfile::parse(*contents);
  if(profile.backend=="cpu")throw std::invalid_argument("KeyHunt CPU profiles have no physical GPU binding");
- if(!profile.gpuUuid.empty()||!profile.pciBusId.empty())throw std::invalid_argument("Profile is already physically bound; preserved");
+ if(profile.hasPhysicalBinding())throw std::invalid_argument("Profile is already physically bound; preserved");
  const auto folder=engineFolder.empty()?WindowsEngineDiagnostics::defaultFolder():engineFolder;
  const auto executable=folder/(profile.backend=="cuda"?"cuBitCrack.exe":"clBitCrack.exe");
  const auto binding=inspectWindowsProfileGpuBinding(profile,executable,discovery,telemetry);
@@ -62,6 +64,7 @@ int bindWindowsGpuProfile(const std::vector<std::string>& args,const fs::path& e
  if(!writePrivateFileAtomically(output,record))throw std::runtime_error("Bound profile could not be published");
  out<<"Physical GPU profile: bound\nGPU: "<<binding.name<<"\nGPU UUID: "<<(binding.uuid.empty()?"unavailable":binding.uuid)
     <<"\nPCI: "<<(binding.pciBusId.empty()?"unavailable":binding.pciBusId)<<"\nOutput profile: "<<pathUtf8(output)
+    <<"\nWindows device: "<<(binding.windowsDeviceInstanceId.empty()?"unavailable":binding.windowsDeviceInstanceId)
     <<"\nMeasured speed and parameters: preserved\nOriginal profile: preserved\nNo benchmark or production request performed\n";return 0;
 }
 }

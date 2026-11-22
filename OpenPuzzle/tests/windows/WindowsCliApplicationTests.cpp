@@ -1,4 +1,6 @@
 #include "openpuzzle/core/WindowsCliApplication.hpp"
+#include "openpuzzle/core/WindowsVersion.hpp"
+#include <string_view>
 #include "openpuzzle/core/LocalPaths.hpp"
 #include "openpuzzle/core/AtomicFile.hpp"
 #include "openpuzzle/config/ConfigurationManager.hpp"
@@ -16,6 +18,8 @@ using namespace openpuzzle;namespace fs=std::filesystem;using Control=ClientRunt
 void require(bool ok,const char* message){if(!ok)throw std::runtime_error(message);}
 std::string read(const fs::path& p){std::ifstream input(p);std::ostringstream out;out<<input.rdbuf();return out.str();}
 bool publish(const fs::path& p,const std::string& contents){WorkspaceSecurity::prepare(p.parent_path());return writePrivateFileAtomically(p,contents);}
+static_assert(std::string_view(windowsClientVersion) == OPENPUZZLE_RELEASE_VERSION,
+ "Windows and Linux must identify the same source release");
 int wmain(int argc,wchar_t** argv){try{
  require(argc==3,"Native CLI and engine fixture paths required");
  const auto root=fs::temp_directory_path()/pathFromUtf8("OpenPuzzle-cli ç 中文-"+std::to_string(GetCurrentProcessId())+'-'+std::to_string(GetTickCount64()));
@@ -40,7 +44,7 @@ int wmain(int argc,wchar_t** argv){try{
   const bool unavailableHardware=args.front()=="doctor"&&*exit==2&&text.find("HARDWARE DIAGNOSTIC UNAVAILABLE")!=std::string::npos;
   if((*exit!=code&&!unavailableHardware)||text.find(expected)==std::string::npos)throw std::runtime_error("Native CLI result differs: exit="+std::to_string(*exit)+"; expected="+std::to_string(code)+"; output="+text);
  };
- execute({"version"},0,"OpenPuzzle 1.0.46 Windows CLI preview");
+ execute({"version"},0,std::string("OpenPuzzle ")+windowsClientVersion+" Windows");
  execute({"paths","--slot","cuda-2"},0,"client-cuda-2.state");
  execute({"doctor","--offline"},0,"Server connection: SKIPPED");
  execute({"status","--all"},0,"Runtime: idle");

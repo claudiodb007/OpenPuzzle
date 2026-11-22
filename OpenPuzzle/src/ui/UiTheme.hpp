@@ -12,5 +12,6 @@ enum class UiTheme {
 QString themeCode(UiTheme theme);
 UiTheme themeFromCode(const QString& code);
 QString themeStyleSheet(UiTheme theme);
+void initializeDesktopAppearance();
 
 } // namespace openpuzzle::ui

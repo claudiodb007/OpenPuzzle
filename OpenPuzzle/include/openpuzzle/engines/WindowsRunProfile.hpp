@@ -2,6 +2,7 @@
 #include "openpuzzle/runtime/RunCommandOptions.hpp"
 #include "openpuzzle/core/CliInteger.hpp"
 #include "openpuzzle/hardware/WindowsTelemetryModel.hpp"
+#include "openpuzzle/hardware/WindowsAdapterIdentity.hpp"
 #include <boost/property_tree/json_parser.hpp>
 #include <charconv>
 #include <cmath>
@@ -13,7 +14,8 @@ struct WindowsRunProfile {
  int device=0,threads=0,blocks=0,points=0;
  double speed=0;
  bool autoTuned=false;
- std::string pciBusId,gpuUuid;
+ std::string pciBusId,gpuUuid,windowsDeviceInstanceId;
+ bool hasPhysicalBinding()const{return !pciBusId.empty()||!gpuUuid.empty()||!windowsDeviceInstanceId.empty();}
  static WindowsRunProfile parse(const std::string& json) {
   if(json.empty()||json.size()>16384)throw std::invalid_argument("Invalid benchmark profile size");
   boost::property_tree::ptree p;std::istringstream input(json);boost::property_tree::read_json(input,p);
@@ -35,6 +37,10 @@ struct WindowsRunProfile {
   if(const auto uuid=p.get_optional<std::string>("gpu_uuid")){
    result.gpuUuid=canonicalGpuUuid(*uuid);
    if(result.gpuUuid.empty()||result.backend=="cpu")throw std::invalid_argument("Invalid GPU profile UUID");
+  }
+  if(const auto id=p.get_optional<std::string>("windows_device_instance_id")){
+   result.windowsDeviceInstanceId=canonicalWindowsGpuInstanceId(*id);
+   if(result.windowsDeviceInstanceId.empty()||result.backend=="cpu")throw std::invalid_argument("Invalid Windows GPU device instance");
   }
   if(p.get_optional<std::string>("autotuned")){
    if(p.get<std::string>("autotuned")!="true"||p.get<std::string>("finalist_validated","")!="true"||result.backend=="cpu"||duration!=60)throw std::invalid_argument("Invalid automatic benchmark validation");

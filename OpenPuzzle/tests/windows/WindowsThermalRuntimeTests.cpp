@@ -13,6 +13,30 @@ int wmain(int argc,wchar_t** argv){try{
  require(argc==2,"Engine fixture required");Winsock sockets;const auto engine=fs::absolute(argv[1]);
  const auto root=fs::temp_directory_path()/pathFromUtf8("op-thermal-runtime-"+std::to_string(GetCurrentProcessId())+'-'+std::to_string(GetTickCount64()));fs::create_directory(root);
  require(SetEnvironmentVariableW(L"LOCALAPPDATA",root.c_str())&&SetEnvironmentVariableA("OPENPUZZLE_EXECUTION_SLOT","cuda-7"),"Thermal environment failed");
+
+ // AMD-only host: no NVIDIA library or watt-limit reading is required. The
+ // normal runtime must publish temperature even with critical stopping off.
+ for(bool withPower:{false,true}){
+  const std::string pnp="PCI\\VEN_1002&DEV_731F\\RIG-A";
+  WindowsAmdTelemetryApi api;api.devices=[&]{return std::vector<WindowsAmdTelemetryDevice>{{4,"AMD Radeon RX 5700 XT",pnp}};};
+  api.temperature=[](const auto&){return std::optional<double>{63.5};};
+  if(withPower)api.power=[](const auto&){return std::optional<double>{142.75};};
+  WindowsRuntimeThermalSettings amd;amd.policy.enabled=false;amd.deviceName="gfx1010:xnack-";amd.deviceWindowsInstanceId=pnp;
+  amd.reader=[&]{auto r=mergeWindowsTelemetryReports({false,"NVML missing",{}},queryWindowsAmdTelemetry(api),false,true);
+   require(r.bindDevice("opencl",0,"","",pnp),"AMD sensor did not bind to OpenCL index");return r;};
+  auto h=capabilities();h.gpus={{"opencl","AMD Radeon RX 5700 XT",8176}};h.engines={{"BitCrack","opencl",true,true}};
+  int heartbeats=0,prepared=0;
+  RunServer server([&](const auto& r){
+   require(endpoint(r,"/api/client/heartbeat"),"AMD read-only fixture sent unrelated request");++heartbeats;
+   require(r.find("\"temperature_c\":63.50")!=std::string::npos&&r.find("\"vendor\":\"AMD\"")!=std::string::npos&&
+    r.find("\"device_id\":\"opencl-0\"")!=std::string::npos,"AMD temperature missing from heartbeat");
+   require(r.find("\"power_limit_w\":null")!=std::string::npos&&r.find(withPower?"\"power_draw_w\":142.75":"\"power_draw_w\":null")!=std::string::npos,"AMD fixture invented watts");
+   require(r.find("RIG-A")==std::string::npos,"Internal PNP identity leaked into heartbeat");return std::string("{}");
+  });
+  WindowsRuntimeSession session(server.url(),h,[]{return true;},amd);
+  require(session.runContinuous([&](auto&){++prepared;return ClientIterationResult{};},true)==0,"AMD telemetry blocked unprotected execution");
+  server.finish();require(heartbeats>=1&&prepared==1,"AMD runtime did not publish temperature");
+ }
  WindowsRuntimeThermalSettings settings;settings.policy={true,true,75,85};settings.deviceName="fixture GPU";settings.interval=std::chrono::milliseconds(1);settings.reader=[]{return readings(88);};
  {int requested=0;RunServer server([](const auto&){throw std::runtime_error("Hot startup must not contact server");return std::string{};});
   WindowsRuntimeSession hot(server.url(),capabilities(),[]{return true;},settings);

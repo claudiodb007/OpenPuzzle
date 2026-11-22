@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include "openpuzzle/hardware/WindowsAdapterIdentity.hpp"
 
 namespace openpuzzle {
 
@@ -22,8 +23,9 @@ struct WindowsGpuDevice {
   unsigned int computeUnits = 0;
   bool available = false;
   bool compilerAvailable = false; // OpenCL online compiler; not a kernel test.
-  std::string pciBusId; // Optional CUDA PCI proof; never inferred from ordinals.
+  std::string pciBusId; // Optional driver PCI proof; never inferred from ordinals.
   std::string uuid;
+  std::string windowsDeviceInstanceId,displayName;
 };
 
 struct WindowsGpuBackend {
@@ -37,6 +39,7 @@ struct WindowsGpuInventory {
   std::uint64_t systemMemoryMiB = 0;
   bool nativeCpuAvailable = false;
   WindowsGpuBackend cuda, opencl;
+  std::vector<WindowsAdapterIdentity> windowsAdapters;
 };
 
 // Small, documented x64 driver ABI. No SDK, import library, CUDA context or
@@ -64,7 +67,8 @@ class WindowsGpuDiscovery {
 public:
   static WindowsGpuInventory inspect();
   static WindowsGpuBackend queryCuda(const WindowsCudaDiscoveryApi& api);
-  static WindowsGpuBackend queryOpenCl(const WindowsOpenClDiscoveryApi& api);
+  static WindowsGpuBackend queryOpenCl(const WindowsOpenClDiscoveryApi& api,
+    const std::vector<WindowsAdapterIdentity>& adapters={});
   static std::wstring systemLibraryPath(const std::wstring& name);
 };
 

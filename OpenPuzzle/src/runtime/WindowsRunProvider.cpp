@@ -3,6 +3,7 @@
 #include "openpuzzle/engines/WindowsEngineDiagnostics.hpp"
 #include "openpuzzle/core/WindowsPrivateFile.hpp"
 #include "openpuzzle/core/LocalPaths.hpp"
+#include "openpuzzle/core/WindowsVersion.hpp"
 #include "openpuzzle/services/PuzzleMetadataCatalog.hpp"
 #include "openpuzzle/hardware/WindowsGpuTelemetry.hpp"
 #include "openpuzzle/config/ConfigurationManager.hpp"
@@ -26,28 +27,35 @@ WindowsPreparedRun prepareWindowsRun(RunCommandOptions options,const fs::path& e
  d.thermal.policy=config->gpu.thermal;d.thermal.reader=WindowsGpuTelemetry::inspect;
  if(profile.backend!="cpu")d.thermal.deviceName=profile.deviceIdentity.substr(0,profile.deviceIdentity.find(';'));
  std::optional<WindowsPhysicalGpuBinding> physical;
- if(profile.backend!="cpu"&&(!profile.gpuUuid.empty()||!profile.pciBusId.empty()||
+ const bool requireTelemetry=d.thermal.policy.enabled&&d.thermal.policy.stopOnCritical;
+ if(profile.backend!="cpu"&&(profile.hasPhysicalBinding()||
     (d.thermal.policy.enabled&&d.thermal.policy.stopOnCritical))){
-  physical=inspectWindowsProfileGpuBinding(profile,exe);
-  d.thermal.deviceName=physical->name;d.thermal.devicePciBusId=physical->pciBusId;d.thermal.deviceUuid=physical->uuid;
+  physical=inspectWindowsProfileGpuBinding(profile,exe,WindowsGpuDiscovery::inspect,WindowsGpuTelemetry::inspect,requireTelemetry);
+  d.thermal.deviceName=physical->name;d.thermal.devicePciBusId=physical->pciBusId;d.thermal.deviceUuid=physical->uuid;d.thermal.deviceWindowsInstanceId=physical->windowsDeviceInstanceId;
+  d.thermal.reader=[binding=*physical,backend=profile.backend,device=profile.device]{
+   auto report=WindowsGpuTelemetry::inspect();
+   if(report.complete&&!report.bindDevice(backend,device,binding.uuid,binding.pciBusId,binding.windowsDeviceInstanceId)){
+    report.complete=false;report.detail="Temperature cannot be associated with the active physical GPU";
+   }return report;
+  };
  }
  d.engines={{options.engine,profile.backend,exe,profile.backend=="cpu"?std::vector<int>{}:std::vector<int>{profile.device},profile.speed,true}};
- d.preflight=[profile,exe,physical](const RunCommandOptions& o,const WindowsRunEngine& e){try{
+ d.preflight=[profile,exe,physical,requireTelemetry](const RunCommandOptions& o,const WindowsRunEngine& e){try{
    const auto bound=profile.apply(o);
    if(e.executable!=exe||e.speedMKeys!=profile.speed||e.backend!=profile.backend||!e.verified||
       WindowsEngineDiagnostics::executableSha256(exe)!=profile.sha256)return false;
    if(WindowsEngineDiagnostics::inspectDevice(exe,profile.backend,bound.device,bound.threads)!=profile.deviceIdentity)return false;
-   if(physical){const auto current=inspectWindowsProfileGpuBinding(profile,exe);
-    if(current.name!=physical->name||current.uuid!=physical->uuid||current.pciBusId!=physical->pciBusId)return false;}
+   if(physical){const auto current=inspectWindowsProfileGpuBinding(profile,exe,WindowsGpuDiscovery::inspect,WindowsGpuTelemetry::inspect,requireTelemetry);
+    if(current.name!=physical->name||current.uuid!=physical->uuid||current.pciBusId!=physical->pciBusId||current.windowsDeviceInstanceId!=physical->windowsDeviceInstanceId)return false;}
    return true;
   }catch(...){return false;}};
- d.capabilities=[profile,count](const std::string& id){client::ClientHeartbeat h;
-   h.clientId=id;h.version="1.0.46";h.platform="windows";h.cpu={"Windows native x64",static_cast<int>(count),static_cast<int>(count)};
+ d.capabilities=[profile,count,physical](const std::string& id){client::ClientHeartbeat h;
+   h.clientId=id;h.version=windowsClientVersion;h.platform="windows";h.cpu={"Windows native x64",static_cast<int>(count),static_cast<int>(count)};
    h.engines={{profile.backend=="cpu"?"KeyHunt":"BitCrack",profile.backend,true,true}};
    if(profile.backend!="cpu"){
     const auto separator=profile.deviceIdentity.find(';');const auto at=profile.deviceIdentity.rfind("memory=");
     std::uint64_t bytes=0;if(at!=std::string::npos){const auto value=profile.deviceIdentity.substr(at+7);const auto parsed=std::from_chars(value.data(),value.data()+value.size(),bytes);if(parsed.ec!=std::errc{}||parsed.ptr!=value.data()+value.size())bytes=0;}
-    h.gpus={{profile.backend,profile.deviceIdentity.substr(0,separator),bytes/1048576}};
+    h.gpus={{profile.backend,physical&&!physical->displayName.empty()?physical->displayName:profile.deviceIdentity.substr(0,separator),bytes/1048576}};
    }return h;};
  d.metadata=[folder](int number)->std::optional<PuzzleExecutionMetadata>{
    bool missing=false;const auto text=windowsFile::readPrivate(folder.parent_path()/"puzzles"/(std::to_string(number)+".json"),missing,16384);

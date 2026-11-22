@@ -11,6 +11,7 @@
 #include "openpuzzle/core/AtomicFile.hpp"
 #include "openpuzzle/core/JsonString.hpp"
 #include "openpuzzle/core/WindowsCommandLine.hpp"
+#include "openpuzzle/core/WindowsVersion.hpp"
 #include <algorithm>
 #include <cctype>
 #include <sstream>
@@ -41,7 +42,7 @@ int WindowsRunSession::run(const std::vector<std::string>& arguments,std::ostrea
 int WindowsRunSession::runPrepared(RunCommandOptions options,std::ostream& output) {
  try {
   if(options.command=="help") {output<<"Windows run controls: run [puzzle] [--once|--dry-run|--preflight-only] [--engine bitcrack|keyhunt] [--backend cuda|opencl|cpu] [--device N] [--threads N] [--duration-minutes 1..360] [--server URL]\nstatus | stop | safestop | version\n";return 0;}
-  if(options.command=="version"){output<<"OpenPuzzle Windows run foundation (Linux source release 1.0.46)\n";return 0;}
+  if(options.command=="version"){output<<"OpenPuzzle "<<windowsClientVersion<<" Windows\n";return 0;}
   const auto slot=Store::executionSlot();const auto pending=pendingClaimPath(slot);
   if(options.command=="status") {
     const auto identity=Control::runtimeIdentityStatus(slot);const auto state=client::ExecutionSyncService().inspect(slot);

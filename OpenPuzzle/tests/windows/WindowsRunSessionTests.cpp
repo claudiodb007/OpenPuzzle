@@ -35,7 +35,9 @@ int wmain(int argc,wchar_t** argv){try{
   require(Control::release(),"Local control fixture release failed");}
  {auto d=deps(fixture,"http://127.0.0.1:1");int called=0;d.preflight=[&](const auto&,const auto&){++called;return true;};WindowsRunSession session(d);
   require(session.run({"run","--device","2x"},output)==1&&called==0&&!fs::exists(localPaths::configDirectory()/"client.id"),"Argument failure changed identity or reached preflight");
-  require(session.run({"run","71","--dry-run","--device","2"},output)==0&&called==1&&!fs::exists(localPaths::configDirectory()/"client.id")&&!Control::running("cuda-7"),"Dry-run registered/acquired a runtime or created identity");
+  const auto dryCode=session.run({"run","71","--dry-run","--device","2"},output);
+  if(dryCode!=0||called!=1)std::cerr<<output.str();
+  require(dryCode==0&&called==1&&!fs::exists(localPaths::configDirectory()/"client.id")&&!Control::running("cuda-7"),"Dry-run registered/acquired a runtime or created identity");
   require(session.run({"run","71","--once","--device","3"},output)==1&&called==1,"Missing device reached hardware preflight");
   require(session.run({"run","72","--once"},output)==1&&called==1,"Unavailable puzzle reached preflight");}
  {auto d=deps(fixture,"http://127.0.0.1:1");d.engines.erase(d.engines.begin());int called=0;d.preflight=[&](const auto&,const auto&){++called;return true;};

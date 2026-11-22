@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(OpenPuzzle VERSION 1.0.59 LANGUAGES CXX)
+project(OpenPuzzle VERSION 1.0.60 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -497,57 +497,8 @@ if(OPENPUZZLE_BUILD_UI)
                 -Wall -Wextra -Wpedantic
         )
 
-        add_executable(OpenPuzzleUi
-            src/ui/main.cpp
-            src/ui/MainWindow.cpp
-            src/ui/MainWindow.hpp
-            src/ui/GpuControlPanel.cpp
-            src/ui/GpuControlPanel.hpp
-            src/ui/ThermalAlerts.cpp
-            src/ui/ThermalAlerts.hpp
-            src/ui/ThermalHistory.cpp
-            src/ui/ThermalHistory.hpp
-            src/ui/RunCommandBuilder.cpp
-            src/ui/UiLanguage.cpp
-            src/ui/UiLanguage.hpp
-            src/ui/UiTheme.cpp
-            src/ui/UiTheme.hpp
-            resources/openpuzzle-ui.qrc
-        )
-
-        set_target_properties(OpenPuzzleUi
-            PROPERTIES
-                OUTPUT_NAME openpuzzle-ui
-                AUTOMOC ON
-                AUTORCC ON
-        )
-
-        target_include_directories(OpenPuzzleUi
-            PRIVATE
-                include
-                src/ui
-        )
-
-        target_link_libraries(OpenPuzzleUi
-            PRIVATE
-                OpenPuzzleUiSettings
-                Qt6::Widgets
-        )
-
-        target_compile_definitions(OpenPuzzleUi
-            PRIVATE
-                OPENPUZZLE_VERSION="${PROJECT_VERSION}"
-        )
-
-        target_compile_options(OpenPuzzleUi
-            PRIVATE
-                -Wall -Wextra -Wpedantic
-        )
-
-        if(OPENPUZZLE_ENABLE_VANITY)
-            target_sources(OpenPuzzleUi PRIVATE src/ui/VanityPanel.cpp)
-            target_compile_definitions(OpenPuzzleUi PRIVATE OPENPUZZLE_ENABLE_VANITY_PREVIEW=1)
-        endif()
+        include(cmake/QtDesktop.cmake)
+        openpuzzle_add_qt_panel(OpenPuzzleUi OpenPuzzleUiSettings)
         message(STATUS "OpenPuzzle desktop UI: enabled")
     else()
         message(STATUS
@@ -734,6 +685,7 @@ install(
         docs/RELEASE_1.0.57.md
         docs/RELEASE_1.0.58.md
         docs/RELEASE_1.0.59.md
+        docs/RELEASE_1.0.60.md
         docs/SYSTEMD_SERVICE.md
     DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
 )

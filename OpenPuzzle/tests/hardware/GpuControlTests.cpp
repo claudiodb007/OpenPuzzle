@@ -18,6 +18,9 @@ int main(){try{
  GpuControlDevice d;d.vendor="nvidia";d.pci="00000000:08:00.0";d.uuid="GPU-example";d.name="quoted \"GPU\" ç";d.power=d.fan=d.automatic=true;d.powerNow=333;d.powerMin=100;d.powerMax=351.5;d.powerDefault=333;d.powerStep=.001;d.fanNow=40;d.temperature=67;d.fanMode="auto";
  Fake f;f.devices={d};GpuControlRequest r{d.vendor,d.pci,d.uuid,GpuControlAction::Power,300};
  auto formatted=formatGpuControls(f.inspect());require(parseGpuControls(formatted).at(0).name==d.name,"Protocol Unicode/quoting failed");
+ std::ostringstream built;bool touched=false;
+ gpuControlCommand({"capabilities"},built,[&]{touched=true;return f.inspect();},[&](auto){touched=true;});
+ require(!touched&&built.str().find("amd_adlx")!=std::string::npos,"Build capability query touched a GPU or omitted AMD support");
  std::ostringstream out;gpuControlCommand({"list"},out,[&]{return f.inspect();},[&](auto request){applyGpuControlChecked(f,request);});require(f.writes==0,"Read-only command wrote settings");
  applyGpuControlChecked(f,r);require(f.writes==1&&f.devices[0].powerNow==300,"Power control failed");
  r.value=1000;refuses([&]{applyGpuControlChecked(f,r);});require(f.writes==1,"Invalid power wrote settings");
@@ -33,6 +36,14 @@ int main(){try{
  const auto writer=[&](auto request){applyGpuControlChecked(f,request);};const auto reader=[&]{return f.inspect();};
  for(const auto bad:std::vector<std::vector<std::string>>{{"apply","--vendor","nvidia","--pci",d.pci,"--power","nan"},{"apply","--vendor","nvidia","--pci",d.pci,"--fan","auto","--power","300"},{"apply","--vendor","nvidia","--pci",d.pci,"--power","300","--power","250"},{"apply","--vendor","nvidia","--pci","0","--fan","auto"}})refuses([&]{gpuControlCommand(bad,out,reader,writer);});
  gpuControlCommand({"apply","--vendor",d.vendor,"--pci",d.pci,"--uuid",d.uuid,"--power-default"},out,reader,writer);require(f.devices[0].powerNow==333,"Default power failed");
+ // AMD legacy ADLX: percent power is still usable when the optional factory
+ // default getter is absent. The out-of-range sentinel disables only Default.
+ Fake amd;auto legacy=d;legacy.vendor="amd";legacy.uuid="PCI\\VEN_1002&DEV_731F\\RX5700XT";legacy.powerUnit="%";
+ legacy.powerMin=-50;legacy.powerMax=50;legacy.powerStep=1;legacy.powerNow=0;legacy.powerDefault=51;amd.devices={legacy};
+ require(parseGpuControls(formatGpuControls(amd.devices)).front().power,"Missing AMD default disabled all power controls");
+ GpuControlRequest a{legacy.vendor,legacy.pci,legacy.uuid,GpuControlAction::Power,-10};
+ applyGpuControlChecked(amd,a);require(amd.writes==1&&amd.devices[0].powerNow==-10,"AMD percent power failed");
+ a.action=GpuControlAction::PowerDefault;refuses([&]{applyGpuControlChecked(amd,a);});require(amd.writes==1,"Unavailable AMD default wrote settings");
  refuses([&]{parseGpuControls(formatted+formatted);});refuses([&]{parseGpuControls(formatted+formatted.substr(formatted.find('\n')+1));});
  std::cout<<"GpuControlTests passed: physical identity, zero-write reads, bounded values, permission failure, readback, auto/manual and literal UI commands\n";
  return 0;

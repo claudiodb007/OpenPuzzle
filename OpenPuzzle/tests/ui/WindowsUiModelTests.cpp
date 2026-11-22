@@ -1,4 +1,5 @@
 #include "openpuzzle/ui/WindowsUiModel.hpp"
+#include "openpuzzle/engines/WindowsEngineDeviceList.hpp"
 #include "openpuzzle/core/WindowsCommandLine.hpp"
 #include "openpuzzle/services/PuzzleMetadataCatalog.hpp"
 #include <iostream>
@@ -6,8 +7,16 @@
 using namespace openpuzzle;using namespace openpuzzle::ui;
 void check(bool b){if(!b)throw std::runtime_error("Windows UI model contract failed");}
 int main(int argc,char** argv){try{
+ const auto mixed=parseWindowsEngineDevices(R"([{"engine_index":0,"gpu":false},{"engine_index":1,"platform_index":0,"native_index":1,"gpu":true,"name":"AMD Radeon","memory_bytes":8589934592},{"engine_index":7,"platform_index":1,"native_index":0,"gpu":true,"name":"NVIDIA GeForce RTX 5070","memory_bytes":12884901888}])");
+ check(mixed.size()==2&&mixed[0].index==1&&mixed[1].index==7&&mixed[1].platform==1&&mixed[1].native==0);
+ check(parseWindowsEngineDevices(formatWindowsEngineDevices(mixed))[1].identity()==mixed[1].identity());
+ auto named=mixed;named[0].displayName="AMD Radeon RX 5700";
+ check(parseWindowsEngineDevices(formatWindowsEngineDevices(named))[0].displayName=="AMD Radeon RX 5700");
+ for(const auto& bad:{R"({})",R"([{"engine_index":0,"gpu":false},{"engine_index":0,"gpu":false}])",R"([{"engine_index":0,"gpu":"perhaps"}])",R"([{"engine_index":256,"gpu":false}])"}){
+  bool refused=false;try{parseWindowsEngineDevices(bad);}catch(...){refused=true;}check(refused);
+ }
  check(std::string(windowsUiServer)=="https://claudiodb.com");
- WindowsUiSelection s;s.server="http://127.0.0.1:1";s.profilePath="C:\\Perfis com espaços & dados\\result.json";
+ WindowsUiSelection s;check(s.puzzle==0);s.puzzle=71;s.server="http://127.0.0.1:1";s.profilePath="C:\\Perfis com espaços & dados\\result.json";
  WindowsRunProfile p;p.backend="cuda";p.device=3;p.threads=256;p.blocks=256;p.points=1024;p.gpuUuid="1f78bee1-b3b1-e9d5-78a7-00cdaa490619";s.profile=p;s.slot="cuda-3";
  for(const auto& backend:{"cpu","cuda","opencl"}){
   auto measured=p;measured.backend=backend;measured.device=measured.backend=="cpu"?0:3;measured.threads=measured.backend=="cpu"?1:256;s.profile=measured;
@@ -47,6 +56,8 @@ int main(int argc,char** argv){try{
  auto args=windowsUiCommand(UiAction::Start,s);std::vector<std::string> runArgs;
  for(std::size_t i=0;i<args.size();++i){if(args[i]=="--slot"){++i;continue;}runArgs.push_back(args[i]);}
  auto parsed=RunCommandOptions::parse(runArgs);check(parsed.profile==s.profilePath&&parsed.server==s.server&&parsed.puzzle==71&&!parsed.dryRun&&!parsed.once);
+ s.puzzle=0;const auto automaticPuzzle=windowsUiCommand(UiAction::Start,s);
+ check(automaticPuzzle[1]=="--profile"&&std::find(automaticPuzzle.begin(),automaticPuzzle.end(),"71")==automaticPuzzle.end());s.puzzle=71;
  auto preflight=windowsUiCommand(UiAction::Preflight,s);check(preflight.back()=="--dry-run"&&preflight[1]=="--profile");
  runArgs.clear();for(std::size_t i=0;i<preflight.size();++i){if(preflight[i]=="--slot"){++i;continue;}runArgs.push_back(preflight[i]);}
  parsed=RunCommandOptions::parse(runArgs);check(parsed.puzzle==0&&parsed.dryRun&&parsed.profile==s.profilePath);

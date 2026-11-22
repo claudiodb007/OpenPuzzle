@@ -4,4 +4,16 @@
     <file alias="openpuzzle-logo.png">branding/openpuzzle-logo.png</file>
     <file alias="openpuzzle-logo-header.png">branding/openpuzzle-logo-header.png</file>
   </qresource>
+  <qresource prefix="/fonts">
+    <file alias="DejaVuSans.ttf">fonts/DejaVuSans.ttf</file>
+    <file alias="DejaVuSans-Bold.ttf">fonts/DejaVuSans-Bold.ttf</file>
+    <file alias="DejaVuSansMono.ttf">fonts/DejaVuSansMono.ttf</file>
+  </qresource>
+  <qresource prefix="/controls">
+    <file alias="up.xpm">controls/up.xpm</file>
+    <file alias="down.xpm">controls/down.xpm</file>
+    <file alias="up-dark.xpm">controls/up-dark.xpm</file>
+    <file alias="down-dark.xpm">controls/down-dark.xpm</file>
+    <file alias="check.xpm">controls/check.xpm</file>
+  </qresource>
 </RCC>

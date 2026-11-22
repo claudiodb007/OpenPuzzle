@@ -21,6 +21,7 @@ public:
     std::function<WindowsGpuInventory()> discovery=WindowsGpuDiscovery::inspect);
   int run(const std::vector<std::string>& arguments,std::ostream& output) const;
   void describe(std::ostream& output) const;
+  int listDevices(const std::string& backend,std::ostream& output) const;
   static std::filesystem::path defaultFolder();
   static std::string executableSha256(const std::filesystem::path& executable);
   static std::string inspectDevice(const std::filesystem::path& executable,

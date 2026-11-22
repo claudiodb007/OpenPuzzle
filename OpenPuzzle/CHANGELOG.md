@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.60 — Shared desktop and Windows GPU support
+
+- Improve the visibility of buttons, checkboxes and field arrows in both themes.
+- Use the shared Qt desktop on Windows with BitCrack CUDA/OpenCL and KeyHunt CPU.
+- Show Windows GPU telemetry and hardware controls where the driver supports them.
+
 ## 1.0.59 — Vanity recovery on Linux
 
 - Show the recorded stop reason, time and local checkpoint verification in status.

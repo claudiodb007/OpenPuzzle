@@ -15,6 +15,9 @@ int wmain(int argc,wchar_t** argv){
    std::cout<<(cpu?"OpenPuzzle-KeyHunt CPU windows-range protocol 1":cuda?"OpenPuzzle-BitCrack 1.0.0 CUDA protocol 2":"OpenPuzzle-BitCrack 1.0.0 OpenCL protocol 2")<<std::endl;return 0;
   }
   if(argc==2&&std::wstring(argv[1])==L"--openpuzzle-device-list"){
+   if(mode=="amd-5700xt"){
+    std::cout<<"[{\"engine_index\":0,\"platform_index\":0,\"native_index\":0,\"gpu\":true,\"name\":\"gfx1010:xnack-\",\"memory_bytes\":"<<(8176ULL*1048576)<<"}]";return 0;
+   }
    if(mode=="bad-json"){std::cout<<"not-json";return 0;}
    std::cout<<"[{\"engine_index\":0,\"platform_index\":0,\"native_index\":2,\"gpu\":true,\"name\":\"fixture GPU\",\"memory_bytes\":10737418240}]";return 0;
   }

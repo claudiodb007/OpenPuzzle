@@ -11,6 +11,14 @@
 #include <vector>
 int wmain(int argc,wchar_t** argv){
  const std::wstring command=argc>1?argv[1]:L"";
+ if(command==L"engine-devices"){
+  if(argc!=4||std::wstring(argv[2])!=L"--backend"||(std::wstring(argv[3])!=L"cuda"&&std::wstring(argv[3])!=L"opencl"))return 8;
+  if(std::filesystem::exists(openpuzzle::localPaths::dataDirectory()/"ui-no-gpu")){std::cout<<"No compute GPU in CPU-only fixture\n";return 2;}
+  if(std::wstring(argv[3])==L"cuda"&&std::filesystem::exists(openpuzzle::localPaths::dataDirectory()/"ui-no-cuda")){std::cout<<"CUDA unavailable in AMD-only fixture\n";return 2;}
+  std::cout<<"[{\"engine_index\":7,\"platform_index\":0,\"native_index\":2,\"gpu\":true,\"name\":\"fixture GPU\",\"memory_bytes\":10737418240";
+  if(std::filesystem::exists(openpuzzle::localPaths::dataDirectory()/"ui-no-cuda"))std::cout<<",\"display_name\":\"AMD Radeon RX 5700\"";
+  std::cout<<"}]\n";return 0;
+ }
  if(command==L"gpu-control"){
   using namespace openpuzzle;
   struct Fake:GpuControlBackend {
@@ -46,18 +54,21 @@ int wmain(int argc,wchar_t** argv){
  if(command==L"bind-profile"){
   if(argc!=6||std::wstring(argv[2])!=L"--profile"||std::wstring(argv[4])!=L"--output")return 8;
   bool missing=false;const auto source=openpuzzle::windowsFile::readPrivate(argv[3],missing,16384);if(!source)return 8;
-  const auto record=openpuzzle::appendWindowsGpuProfileBinding(*source,{"GPU fixture","00000000:08:00.0","1f78bee1-b3b1-e9d5-78a7-00cdaa490619"});
+  const auto binding=openpuzzle::WindowsRunProfile::parse(*source).backend=="opencl"?
+   openpuzzle::WindowsPhysicalGpuBinding{"GPU fixture","","","PCI\\VEN_1002&DEV_731F\\RIG-A"}:
+   openpuzzle::WindowsPhysicalGpuBinding{"GPU fixture","00000000:08:00.0","1f78bee1-b3b1-e9d5-78a7-00cdaa490619"};
+  const auto record=openpuzzle::appendWindowsGpuProfileBinding(*source,binding);
   if(!openpuzzle::writePrivateFileAtomically(argv[5],record))return 8;std::cout<<"GPU binding fixture finished\n";return 0;
  }
  if(command==L"benchmark"&&argc>=4&&std::wstring(argv[3])!=L"cpu"){
   const std::wstring backend=argv[3];if(backend!=L"cuda"&&backend!=L"opencl")return 8;
-  std::vector<std::wstring> expected{L"benchmark",L"--backend",backend,L"--device",L"0",L"--auto",L"--seconds",L"30"};
+  std::vector<std::wstring> expected{L"benchmark",L"--backend",backend,L"--device",L"7",L"--auto",L"--seconds",L"30"};
   const bool real=std::wstring(argv[argc-1])==L"--real";if(real)expected.push_back(L"--real");
   if(argc!=static_cast<int>(expected.size()+1))return 8;for(int i=1;i<argc;++i)if(argv[i]!=expected[i-1])return 8;
   if(!real){std::cout<<"automatic-preview-fixture\n";return 0;}
   if(std::filesystem::exists(openpuzzle::localPaths::dataDirectory()/"ui-auto-finalist-fail"))return 9;
   const auto report=openpuzzle::localPaths::dataDirectory()/"engine-diagnostics"/("auto-"+openpuzzle::pathUtf8(std::filesystem::path(backend))+"-"+std::to_string(GetTickCount64()));openpuzzle::WorkspaceSecurity::prepare(report);
-  std::string record="{\"version\":1,\"backend\":\""+openpuzzle::pathUtf8(std::filesystem::path(backend))+"\",\"engine_sha256\":\""+std::string(64,'a')+"\",\"device\":0,\"device_identity\":\"GPU fixture; platform=0; native=0; memory=10737418240\",\"selftest_passed\":true,\"threads\":128,\"blocks\":204,\"points\":512,\"speed_mkeys\":3.88,\"samples\":12,\"duration_seconds\":60";
+  std::string record="{\"version\":1,\"backend\":\""+openpuzzle::pathUtf8(std::filesystem::path(backend))+"\",\"engine_sha256\":\""+std::string(64,'a')+"\",\"device\":7,\"device_identity\":\"GPU fixture; platform=0; native=2; memory=10737418240\",\"selftest_passed\":true,\"threads\":128,\"blocks\":204,\"points\":512,\"speed_mkeys\":3.88,\"samples\":12,\"duration_seconds\":60";
   if(!std::filesystem::exists(openpuzzle::localPaths::dataDirectory()/"ui-auto-unvalidated"))record+=",\"autotuned\":true,\"finalist_validated\":true,\"candidates_tested\":22";
   record+="}\n";Sleep(300);if(!openpuzzle::writePrivateFileAtomically(report/"result.json",record))return 8;
   std::cout<<"Report: "<<openpuzzle::pathUtf8(report)<<"\nbenchmark-fixture-finished\n";return 0;

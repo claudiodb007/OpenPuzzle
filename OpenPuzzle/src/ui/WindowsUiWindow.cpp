@@ -2,6 +2,7 @@
 #include "openpuzzle/ui/WindowsUiProcess.hpp"
 #include "openpuzzle/ui/WindowsUiModel.hpp"
 #include "openpuzzle/ui/WindowsUiProfileStore.hpp"
+#include "openpuzzle/engines/WindowsEngineDeviceList.hpp"
 #include "openpuzzle/ui/GpuControlUiModel.hpp"
 #include "openpuzzle/ui/WindowsUiTheme.hpp"
 #include "openpuzzle/ui/WindowsUiLanguageStore.hpp"
@@ -40,7 +41,8 @@ struct Panel {
  std::set<int> checkboxIds;std::map<int,bool> checks;std::map<int,RECT> cards;int scroll=0,wheelRemainder=0,contentLeft=0,contentWidth=0,pageHeight=1598;
  ULONG_PTR gdiplus=0;std::unique_ptr<Gdiplus::Image> logo;
  std::vector<ProfileEntry> profiles;std::optional<ProfileEntry> selected;std::optional<WindowsUiSelection> benchmarkRequest;
- WindowsUiProcess runtime,control,monitor,sensors,gpuReader,gpuWriter;
+ WindowsUiProcess runtime,control,monitor,sensors,gpuReader,gpuWriter,deviceReader;
+ std::vector<WindowsEngineDevice> benchmarkDevices;std::string deviceOutput;int benchmarkDeviceSource=-1;bool automaticBackend=true;
  std::vector<GpuControlDevice> gpuDevices;std::string gpuOutput,gpuWriteOutput;std::optional<GpuControlRequest> gpuPending;bool gpuVerify=false;int gpuSmokeStep=0;ULONGLONG nextGpuRefresh=0;UiAction controlAction=UiAction::ThermalRead;
  WindowsUiStatus status;std::string firstBackend="cpu",monitorSlot="primary",activeSlot,monitorOutput,controlOutput,sensorOutput,log;
  ULONGLONG nextRefresh=0,opened=GetTickCount64();bool smoke=false,statusProved=false,sensorProved=false,thermalLoaded=false,speedProved=false;int result=0,smokeStage=0;
@@ -58,7 +60,7 @@ struct Panel {
   if(!h)throw std::runtime_error("Controlo Windows indisponível");controls[id]=h;SetWindowTheme(h,L"",L"");SendMessageW(h,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);return h;
  }
  void label(int id,const wchar_t* title){make(id,L"STATIC",title,SS_LEFT);}
- void set(int id,const std::string& value){const bool editable=id==Slot||id==Puzzle||id==Duration||id==Warning||id==Critical||id==GpuPowerValue||id==GpuFanValue;
+ void set(int id,const std::string& value){const bool editable=id==Slot||id==Puzzle||id==Duration||id==Warning||id==Critical||id==GpuPowerValue||id==GpuFanValue||id==BenchmarkThreads;
   if(!editable){auto it=textCache.find(id);if(it!=textCache.end()&&it->second==value)return;}SetWindowTextW(controls.at(id),wide(value).c_str());textCache[id]=value;}
  std::string get(int id){const auto h=controls.at(id);const int length=GetWindowTextLengthW(h);std::wstring value(length+1,L'\0');GetWindowTextW(h,value.data(),length+1);value.resize(length);return utf8(value);}
  bool checked(int id){return checks[id];}
@@ -70,6 +72,10 @@ struct Panel {
    metadataCache=value?PuzzleMetadataCatalog::parse(number,*value):std::nullopt;return metadataCache;
   }catch(...){return {};}
  }
+ bool puzzleReady(bool fresh=false){
+  try{if(cliIntegerArgument({"--puzzle",get(Puzzle)},{"--puzzle"},-1)==0)return true;}catch(...){return false;}
+  const auto metadata=puzzleMetadata(fresh);return metadata&&metadata->searchMode=="linear";
+ }
  void append(const std::string& value){if(value.empty())return;log+=value;if(log.size()>196608)log.erase(0,log.size()-131072);
   renderLog();
  }
@@ -79,7 +85,7 @@ struct Panel {
  void addProfile(const std::filesystem::path& path){
   if(!path.is_absolute()||!windowsFile::safePath(path))throw std::invalid_argument("Caminho de perfil inválido");
   bool missing=false;auto contents=windowsFile::readPrivate(path,missing,16384);if(!contents)throw std::runtime_error("Perfil ausente ou ilegível");
-  auto profile=WindowsRunProfile::parse(*contents);if(profile.backend!="cpu"&&profile.gpuUuid.empty()&&profile.pciBusId.empty())throw std::invalid_argument("Seleciona uma cópia GPU com UUID/PCI associado");
+  auto profile=WindowsRunProfile::parse(*contents);if(profile.backend!="cpu"&&!profile.hasPhysicalBinding())throw std::invalid_argument("Seleciona um perfil associado à gráfica");
   for(std::size_t i=0;i<profiles.size();++i)if(profiles[i].path==path){profiles[i]={path,profile,*contents};SendMessageW(controls[Profile],CB_SETCURSEL,i,0);chooseProfile();return;}
   const auto title=profile.backend+" / "+profileSlot(profile)+" / "+pathUtf8(path.filename());
   SendMessageW(controls[Profile],CB_ADDSTRING,0,reinterpret_cast<LPARAM>(wide(title).c_str()));profiles.push_back({path,profile,*contents});
@@ -88,15 +94,27 @@ struct Panel {
  void chooseProfile(){
   const auto index=SendMessageW(controls[Profile],CB_GETCURSEL,0,0);if(index==CB_ERR||static_cast<std::size_t>(index)>=profiles.size()){selected.reset();return;}
   selected=profiles[static_cast<std::size_t>(index)];set(Slot,profileSlot(selected->profile));
-  SendMessageW(controls[BenchmarkSource],CB_SETCURSEL,0,0);benchmarkInputs();
+  automaticBackend=false;
+  SendMessageW(controls[BenchmarkSource],CB_SETCURSEL,0,0);benchmarkInputs(true);
   profileIdentity();
   status={};nextRefresh=0;sensorMetrics();update();
  }
  std::filesystem::path profileRoot()const{return smoke?localPaths::dataDirectory()/pathFromUtf8(firstBackend=="cpu"?"ui-profiles-fixture":"ui-profiles-fixture-"+firstBackend):cli.parent_path();}
- void benchmarkInputs(){
+ void benchmarkInputs(bool fresh=false){
   const auto choice=SendMessageW(controls[BenchmarkSource],CB_GETCURSEL,0,0);
-  if(choice==0&&selected){set(BenchmarkDevice,std::to_string(selected->profile.device));set(BenchmarkThreads,selected->profile.backend=="cpu"?std::to_string(selected->profile.threads):t("benchmark_automatic"));}
-  else {set(BenchmarkDevice,"0");set(BenchmarkThreads,choice==1?"1":t("benchmark_automatic"));}
+  if(!fresh&&choice==benchmarkDeviceSource){update();return;}
+  benchmarkDeviceSource=static_cast<int>(choice);
+  benchmarkDevices.clear();SendMessageW(controls[BenchmarkDevice],CB_RESETCONTENT,0,0);
+  if(choice==0&&selected){
+   SendMessageW(controls[BenchmarkDevice],CB_ADDSTRING,0,reinterpret_cast<LPARAM>(wide(selected->profile.deviceIdentity.substr(0,selected->profile.deviceIdentity.find(';'))).c_str()));
+   SendMessageW(controls[BenchmarkDevice],CB_SETCURSEL,0,0);
+   set(BenchmarkThreads,selected->profile.backend=="cpu"?std::to_string(selected->profile.threads):t("benchmark_automatic"));
+  }else{
+   set(BenchmarkThreads,choice==1?"1":t("benchmark_automatic"));
+   if(choice>1&&!deviceReader.busy()){
+    deviceOutput.clear();deviceReader.start(cli,{"engine-devices","--backend",choice==2?"cuda":"opencl"},false,90000);
+   }
+  }
   update();
  }
  WindowsUiSelection benchmarkSelection(){
@@ -108,7 +126,12 @@ struct Panel {
   }else{
    if(choice<1||choice>3)throw std::runtime_error(t("benchmark_choose_backend"));
    WindowsUiBenchmarkParameters b;b.backend=choice==1?"cpu":choice==2?"cuda":"opencl";
-   b.device=b.backend=="cpu"?0:cliIntegerArgument({"--device",get(BenchmarkDevice)},{"--device"},-1);
+   b.device=0;
+   if(b.backend!="cpu"){
+    const auto index=SendMessageW(controls[BenchmarkDevice],CB_GETCURSEL,0,0);
+    if(deviceReader.busy()||index<0||static_cast<std::size_t>(index)>=benchmarkDevices.size())throw std::runtime_error(t("benchmark_choose_backend"));
+    b.device=benchmarkDevices[static_cast<std::size_t>(index)].index;
+   }
    b.automatic=b.backend!="cpu";
    b.threads=b.automatic?256:cliIntegerArgument({"--threads",get(BenchmarkThreads)},{"--threads"},0);
    s.benchmark=b;s.profile.reset();s.profilePath.clear();
@@ -116,14 +139,13 @@ struct Panel {
   (void)windowsUiCommand(UiAction::BenchmarkPreview,s);
   s.slot=windowsUiBenchmarkSlot(windowsUiBenchmarkParameters(s));return s;
  }
- void profileIdentity(){if(!selected){set(Identity,t("benchmark_choose_backend"));return;}const auto& p=selected->profile;set(Identity,p.deviceIdentity+"\nUUID: "+(p.gpuUuid.empty()?"—":p.gpuUuid)+"   PCI: "+(p.pciBusId.empty()?"—":p.pciBusId)+"\n"+t("profile")+": "+pathUtf8(selected->path));}
+ void profileIdentity(){if(!selected){set(Identity,t("benchmark_choose_backend"));return;}const auto& p=selected->profile;const auto physical=p.gpuUuid.empty()&&p.pciBusId.empty()&&!p.windowsDeviceInstanceId.empty()?t("gpu_identified_windows"):"UUID: "+(p.gpuUuid.empty()?"—":p.gpuUuid)+"   PCI: "+(p.pciBusId.empty()?"—":p.pciBusId);set(Identity,p.deviceIdentity+"\n"+physical+"\n"+t("profile")+": "+pathUtf8(selected->path));}
  void applyLanguage(){
-  for(const auto& [id,key]:std::vector<std::pair<int,std::string_view>>{{2,"windows_subtitle"},{14,"theme"},{15,"language"},{30,"current_state"},{31,"new_execution"},{32,"thermal_safety"},{33,"tools"},{34,"details"},{3,"profile_label"},{OpenProfile,"open_profile"},{5,"slot"},{6,"puzzle"},{7,"duration_minutes"},{Once,"one_assignment"},{Preflight,"preflight"},{Start,"start"},{Stop,"stop"},{SafeStop,"safe_stop"},{Benchmark,"benchmark"},{Recover,"recover"},{Refresh,"refresh"},{Doctor,"offline_doctor"},{Enabled,"thermal_enable_short"},{CriticalStop,"critical_stop_short"},{8,"warning_c"},{9,"critical_c"},{SaveThermal,"save_limits"},{16,"last_search_speed"},{10,"gpu_temperature"},{12,"power_upper"},{13,"power_limit_upper"}})set(id,t(key));
+  for(const auto& [id,key]:std::vector<std::pair<int,std::string_view>>{{2,"windows_subtitle"},{14,"theme"},{15,"language"},{30,"current_state"},{31,"new_execution"},{32,"thermal_safety"},{33,"tools"},{34,"details"},{3,"profile_label"},{OpenProfile,"open_profile"},{5,"slot"},{6,"puzzle_auto_hint"},{7,"duration_minutes"},{Once,"one_assignment"},{Preflight,"preflight"},{Start,"start"},{Stop,"stop"},{SafeStop,"safe_stop"},{Benchmark,"benchmark"},{Recover,"recover"},{Refresh,"refresh"},{Doctor,"offline_doctor"},{Enabled,"thermal_enable_short"},{CriticalStop,"critical_stop_short"},{8,"warning_c"},{9,"critical_c"},{SaveThermal,"save_limits"},{16,"last_search_speed"},{10,"gpu_temperature"},{12,"power_upper"},{13,"power_limit_upper"}})set(id,t(key));
   for(const auto& [id,key]:std::vector<std::pair<int,std::string_view>>{{BenchmarkSourceLabel,"backend"},{BenchmarkDeviceLabel,"device"},{BenchmarkThreadsLabel,"benchmark_threads"},{35,"gpu_controls"},{GpuRefresh,"refresh"},{GpuPowerLabel,"gpu_power_limit"},{GpuPowerApply,"gpu_apply"},{GpuPowerDefault,"gpu_default"},{GpuFanLabel,"gpu_fan_mode"},{GpuFanApply,"gpu_apply"},{GpuHint,"gpu_controls_hint"}})set(id,t(key));
   const auto sourceChoice=SendMessageW(controls[BenchmarkSource],CB_GETCURSEL,0,0);SendMessageW(controls[BenchmarkSource],CB_RESETCONTENT,0,0);
   for(const auto name:{t("benchmark_from_profile"),std::string("CPU"),std::string("CUDA"),std::string("OpenCL")})SendMessageW(controls[BenchmarkSource],CB_ADDSTRING,0,reinterpret_cast<LPARAM>(wide(name).c_str()));
   SendMessageW(controls[BenchmarkSource],CB_SETCURSEL,sourceChoice>=0?sourceChoice:selected?0:2,0);
-  if(sourceChoice<0&&selected){set(BenchmarkDevice,std::to_string(selected->profile.device));set(BenchmarkThreads,selected->profile.backend=="cpu"?std::to_string(selected->profile.threads):t("benchmark_automatic"));}
   const auto fanChoice=SendMessageW(controls[GpuFanMode],CB_GETCURSEL,0,0);SendMessageW(controls[GpuFanMode],CB_RESETCONTENT,0,0);
   for(const auto key:{"gpu_fan_auto","gpu_fan_manual"})SendMessageW(controls[GpuFanMode],CB_ADDSTRING,0,reinterpret_cast<LPARAM>(wide(t(key)).c_str()));
   SendMessageW(controls[GpuFanMode],CB_SETCURSEL,fanChoice==1?1:0,0);renderGpu(false);
@@ -142,19 +164,20 @@ struct Panel {
   s.once=checked(Once);return s;
  }
  void update(){
-  const bool lock=runtime.busy()||control.busy();for(int id:{Profile,OpenProfile,Slot,Puzzle,Duration,Once})EnableWindow(controls[id],!lock);
+  const bool lock=runtime.busy()||control.busy()||deviceReader.busy();for(int id:{Profile,OpenProfile,Slot,Puzzle,Duration,Once})EnableWindow(controls[id],!lock);
   updateGpu();
-  const auto metadata=puzzleMetadata();
-  EnableWindow(controls[Start],!lock&&selected.has_value()&&status.canStart()&&metadata&&metadata->searchMode=="linear");EnableWindow(controls[Preflight],!lock&&selected.has_value());
-  EnableWindow(controls[Benchmark],!lock&&status.canStart());
+  const bool availablePuzzle=puzzleReady();
+  EnableWindow(controls[Start],!lock&&selected.has_value()&&status.canStart()&&availablePuzzle);EnableWindow(controls[Preflight],!lock&&selected.has_value());
   const auto benchmarkChoice=SendMessageW(controls[BenchmarkSource],CB_GETCURSEL,0,0);
-  EnableWindow(controls[BenchmarkSource],!lock);
-  EnableWindow(controls[BenchmarkDevice],!lock&&benchmarkChoice>1);
+  const bool benchmarkReady=benchmarkChoice==0?selected.has_value():benchmarkChoice==1||(!deviceReader.busy()&&!benchmarkDevices.empty());
+  EnableWindow(controls[Benchmark],!lock&&status.canStart()&&benchmarkReady);
+  EnableWindow(controls[BenchmarkSource],!lock&&!deviceReader.busy());
+  EnableWindow(controls[BenchmarkDevice],!lock&&!deviceReader.busy()&&benchmarkChoice>1&&!benchmarkDevices.empty());
   EnableWindow(controls[BenchmarkThreads],!lock&&benchmarkChoice==1);
   EnableWindow(controls[Stop],(control.busy()&&controlAction==UiAction::Benchmark)||(!control.busy()&&(runtime.busy()||status.running)));EnableWindow(controls[SafeStop],!control.busy()&&(runtime.busy()||status.running));
   EnableWindow(controls[Recover],!lock&&status.known&&!status.running&&status.preserved);
   for(int id:{Enabled,CriticalStop,Warning,Critical,SaveThermal})EnableWindow(controls[id],!lock&&thermalLoaded);
-  set(State,t(control.busy()&&(controlAction==UiAction::BenchmarkPreflight||controlAction==UiAction::BenchmarkStatus)?"preflight":control.busy()&&controlAction==UiAction::Benchmark?"benchmark_running":control.busy()&&controlAction==UiAction::BenchmarkBind?"benchmark_binding":runtime.busy()?"state_searching":!status.known?"state_unknown":status.running?"state_slot_active":status.preserved?"state_preserved":!metadata?"state_no_puzzle":"state_ready"));
+  set(State,t(control.busy()&&(controlAction==UiAction::BenchmarkPreflight||controlAction==UiAction::BenchmarkStatus)?"preflight":control.busy()&&controlAction==UiAction::Benchmark?"benchmark_running":control.busy()&&controlAction==UiAction::BenchmarkBind?"benchmark_binding":runtime.busy()?"state_searching":!status.known?"state_unknown":status.running?"state_slot_active":status.preserved?"state_preserved":!availablePuzzle?"state_no_puzzle":"state_ready"));
   set(SpeedMetric,status.progress.display());
   set(Badge,t(runtime.busy()||status.running?"badge_running":!status.known?"badge_checking":status.preserved?"badge_preserved":"badge_stopped"));
  }
@@ -175,9 +198,9 @@ struct Panel {
   }
   if(which==UiAction::Start){
    if(runtime.busy()||!status.canStart())throw std::runtime_error("É necessário confirmar que o slot está livre");
-   const auto metadata=puzzleMetadata(true);if(!metadata||metadata->searchMode!="linear")throw std::runtime_error("Puzzle não disponível neste painel");
+   if(!puzzleReady(true))throw std::runtime_error("Puzzle não disponível neste painel");
    const auto args=windowsUiStartCommand(s);
-   if(!smoke&&MessageBoxW(window,wide(uiFormat(language,"start_question",std::to_string(s.puzzle),s.slot)).c_str(),wide(t("start_title")).c_str(),MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2)!=IDYES)return;
+   if(!smoke&&MessageBoxW(window,wide(uiFormat(language,"start_question",s.puzzle?std::to_string(s.puzzle):t("benchmark_automatic"),s.slot)).c_str(),wide(t("start_title")).c_str(),MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2)!=IDYES)return;
    runtime.start(cli,args,true);activeSlot=s.slot;append("\nA iniciar pesquisa; aguarda a confirmação da CLI.\n");
   }else{
    if(which==UiAction::Recover&&(!status.known||status.running))throw std::runtime_error("Recuperação bloqueada enquanto o estado não for confirmado");
@@ -260,6 +283,22 @@ struct Panel {
   if(smoke)gpuWriter.start(cli,args,false,20000);else gpuWriter.startGpuControlElevated(window,cli.parent_path()/"openpuzzle-gpu-control.exe",{args.begin()+1,args.end()});updateGpu();
  }
  void tick(){
+  const auto devices=deviceReader.poll();if(deviceOutput.size()<262144)deviceOutput+=devices.output;
+  if(devices.finished){
+   benchmarkDevices.clear();SendMessageW(controls[BenchmarkDevice],CB_RESETCONTENT,0,0);
+   if(devices.exitCode==0){try{
+    benchmarkDevices=parseWindowsEngineDevices(deviceOutput);
+    for(const auto& d:benchmarkDevices){const auto title=(d.displayName.empty()?d.name:d.displayName)+" / "+std::to_string(d.memoryBytes/1048576)+" MiB / #"+std::to_string(d.index);
+     SendMessageW(controls[BenchmarkDevice],CB_ADDSTRING,0,reinterpret_cast<LPARAM>(wide(title).c_str()));}
+    if(!benchmarkDevices.empty())SendMessageW(controls[BenchmarkDevice],CB_SETCURSEL,0,0);
+   }catch(const std::exception& e){append(std::string(e.what())+"\n");}}
+   else append("\nGPU: "+deviceOutput+"\n");
+   if(automaticBackend&&!selected){
+    if(!benchmarkDevices.empty())automaticBackend=false;
+    else {const auto choice=SendMessageW(controls[BenchmarkSource],CB_GETCURSEL,0,0);
+     if(choice==2||choice==3){SendMessageW(controls[BenchmarkSource],CB_SETCURSEL,choice==2?3:1,0);benchmarkInputs(true);if(choice==3)automaticBackend=false;}}
+   }
+  }
   auto gr=gpuReader.poll();if(gpuOutput.size()<65536)gpuOutput+=gr.output;
   if(gr.finished){if(gr.exitCode==0){try{const auto* prior=selectedGpu();const auto pci=prior?prior->pci:std::string();gpuDevices=parseGpuControls(gpuOutput);SendMessageW(controls[GpuPick],CB_RESETCONTENT,0,0);int index=0;
     for(std::size_t i=0;i<gpuDevices.size();++i){const auto& d=gpuDevices[i];const auto title=d.name+" / "+d.pci;SendMessageW(controls[GpuPick],CB_ADDSTRING,0,reinterpret_cast<LPARAM>(wide(title).c_str()));if(d.pci==pci)index=static_cast<int>(i);}
@@ -303,6 +342,7 @@ struct Panel {
   if(GetTickCount64()>=nextRefresh)refresh();update();
   if(smoke&&smokeStage==1&&status.running&&get(SpeedMetric)=="1379.58 MKey/s")speedProved=true;
   if(smoke&&fixtureProfile.empty()){
+   if(deviceReader.busy())return;
    if(GetTickCount64()-opened>20000)throw std::runtime_error("First-profile fixture timeout");
    if(statusProved&&sensorProved&&thermalLoaded&&smokeStage==0){
     if(selected){
@@ -310,8 +350,12 @@ struct Panel {
      result=0;DestroyWindow(window);return;
     }
     if(!IsWindowEnabled(controls[Benchmark])||IsWindowEnabled(controls[Start]))throw std::runtime_error("Empty-profile benchmark/start gating failed");
+    if(std::filesystem::exists(localPaths::dataDirectory()/"ui-no-cuda")&&firstBackend=="opencl"&&SendMessageW(controls[BenchmarkSource],CB_GETCURSEL,0,0)!=3)throw std::runtime_error("AMD-only startup did not automatically select OpenCL");
+    if(std::filesystem::exists(localPaths::dataDirectory()/"ui-no-cuda")&&firstBackend=="opencl"&&get(BenchmarkDevice).find("AMD Radeon RX 5700")==std::string::npos)throw std::runtime_error("AMD picker did not display the Windows board name");
+    if(std::filesystem::exists(localPaths::dataDirectory()/"ui-no-gpu")&&firstBackend=="cpu"&&SendMessageW(controls[BenchmarkSource],CB_GETCURSEL,0,0)!=1)throw std::runtime_error("CPU-only startup did not select CPU");
     SendMessageW(controls[BenchmarkSource],CB_SETCURSEL,firstBackend=="cpu"?1:firstBackend=="cuda"?2:3,0);benchmarkInputs();
     if(firstBackend!="cpu"&&(IsWindowEnabled(controls[BenchmarkThreads])||get(BenchmarkThreads)!=t("benchmark_automatic")))throw std::runtime_error("GPU thread count was not automatic");
+    if(deviceReader.busy())return;
     benchmark();smokeStage=1;
     if(IsWindowEnabled(controls[Start])||IsWindowEnabled(controls[BenchmarkSource]))throw std::runtime_error("First benchmark did not lock conflicting controls");
    }else if(smokeStage==1&&!control.busy()){
@@ -413,7 +457,7 @@ struct Panel {
  void sensorMetrics(){
   std::string section=sensorOutput;
   if(selected&&selected->profile.backend!="cpu"){
-   const auto& profile=selected->profile;const auto key=profile.gpuUuid.empty()?profile.pciBusId:profile.gpuUuid;const auto found=section.find(key);
+   const auto& profile=selected->profile;const auto key=profile.gpuUuid.empty()?profile.pciBusId:profile.gpuUuid;const auto found=key.empty()?std::string::npos:section.find(key);
    if(found==std::string::npos)section.clear();else {const auto begin=section.rfind("Device: ",found),end=section.find("Device: ",found);section=section.substr(begin==std::string::npos?0:begin,end==std::string::npos?std::string::npos:end-(begin==std::string::npos?0:begin));}
   }
   for(const auto& value:std::vector<std::tuple<int,std::string,std::string>>{{TemperatureMetric,"Temperature C: "," °C"},{PowerMetric,"Power W: "," W"},{LimitMetric,"Power limit W: "," W"}}){const auto at=section.find(std::get<1>(value));const auto start=at==std::string::npos?at:at+std::get<1>(value).size();const auto end=section.find_first_of("\r\n",start);set(std::get<0>(value),at==std::string::npos?"—":section.substr(start,end-start)+std::get<2>(value));}
@@ -435,11 +479,11 @@ struct Panel {
   label(30,L"Estado atual");label(31,L"Nova execução");label(32,L"Proteção térmica");label(33,L"Ferramentas");label(34,L"Detalhes");
   label(3,L"Motor / GPU — perfil medido");make(Profile,L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL);make(OpenProfile,L"BUTTON",L"Abrir perfil…");label(Identity,L"Seleciona um perfil medido.");
   label(5,L"Slot");make(Slot,L"EDIT",L"primary",ES_AUTOHSCROLL);
-  label(6,L"Puzzle");make(Puzzle,L"EDIT",L"71",ES_NUMBER);label(7,L"Duração (min)");make(Duration,L"EDIT",L"60",ES_NUMBER);make(Once,L"BUTTON",L"Uma atribuição",BS_AUTOCHECKBOX);
+  label(6,L"Puzzle");make(Puzzle,L"EDIT",L"0",ES_NUMBER);label(7,L"Duração (min)");make(Duration,L"EDIT",L"60",ES_NUMBER);make(Once,L"BUTTON",L"Uma atribuição",BS_AUTOCHECKBOX);
   label(BenchmarkSourceLabel,L"");make(BenchmarkSource,L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL);
-  label(BenchmarkDeviceLabel,L"");make(BenchmarkDevice,L"EDIT",L"0",ES_NUMBER);
+  label(BenchmarkDeviceLabel,L"");make(BenchmarkDevice,L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL);
   label(BenchmarkThreadsLabel,L"");make(BenchmarkThreads,L"EDIT",L"256",ES_NUMBER);
-  for(int id:{BenchmarkDevice,BenchmarkThreads})SendMessageW(controls[id],EM_SETLIMITTEXT,4,0);
+  SendMessageW(controls[BenchmarkThreads],EM_SETLIMITTEXT,4,0);
   make(Benchmark,L"BUTTON",L"Benchmark");make(Preflight,L"BUTTON",L"Verificar perfil");make(Start,L"BUTTON",L"Iniciar");make(Stop,L"BUTTON",L"Parar");make(SafeStop,L"BUTTON",L"Safe Stop");make(Recover,L"BUTTON",L"Recuperar");make(Refresh,L"BUTTON",L"Atualizar");make(Doctor,L"BUTTON",L"Diagnóstico offline");label(State,L"A verificar estado…");
   make(Enabled,L"BUTTON",L"Ativar proteção térmica",BS_AUTOCHECKBOX);make(CriticalStop,L"BUTTON",L"Parar no limite crítico",BS_AUTOCHECKBOX);label(8,L"Aviso °C");make(Warning,L"EDIT",L"",ES_AUTOHSCROLL);label(9,L"Crítico °C");make(Critical,L"EDIT",L"",ES_AUTOHSCROLL);make(SaveThermal,L"BUTTON",L"Guardar limites");
   label(16,L"");label(SpeedMetric,L"—");
@@ -455,7 +499,7 @@ struct Panel {
   if(!smoke||fixtureProfile.empty()){for(const auto backend:{"cpu","cuda","opencl"}){const auto path=profileRoot()/"profiles"/backend/"result.json";if(std::filesystem::exists(path)){try{addProfile(path);}catch(const std::exception& e){append(std::string("Perfil: ")+e.what()+"\n");}}}}
   if(!smoke||fixtureProfile.empty())for(const auto backend:{"cuda","opencl"})try{const auto path=loadWindowsUiAutomaticProfile(profileRoot(),backend);if(path)addProfile(*path);}catch(const std::exception& e){append(std::string("Perfil: ")+e.what()+"\n");}
   controlAction=UiAction::ThermalRead;try{control.start(cli,{"thermal"});}catch(const std::exception& e){append(e.what());}
-  applyLanguage();applyTheme();SetTimer(window,1,150,nullptr);readGpu();update();
+  applyLanguage();benchmarkInputs();applyTheme();SetTimer(window,1,150,nullptr);readGpu();update();
  }
  void layout(){
   RECT r{};GetClientRect(window,&r);const int width=r.right,height=r.bottom;contentWidth=(std::min)(1240,width-40);contentLeft=(width-contentWidth)/2;
@@ -469,16 +513,16 @@ struct Panel {
   const int cell=(full-36)/4;for(const auto [label,value,index]:std::vector<std::tuple<int,int,int>>{{16,SpeedMetric,0},{10,TemperatureMetric,1},{12,PowerMetric,2},{13,LimitMetric,3}}){move(label,left+index*(cell+12)+14,220,cell-28,18);move(value,left+index*(cell+12)+14,242,cell-28,28);}
   move(31,left,324,full);move(3,left,360,full);move(Profile,left,382,full-146,320);move(OpenProfile,right-132,382,132,34);move(Identity,left,427,full,56);
   move(5,right-196,490,196);move(Slot,right-196,512,196,32);
-  move(6,left,490,85,18);move(Puzzle,left,512,85,30);move(7,left+104,490,120,18);move(Duration,left+104,512,120,30);move(Once,left+246,512,205,30);
+  move(6,left,490,185,18);move(Puzzle,left,512,85,30);move(7,left+204,490,120,18);move(Duration,left+204,512,120,30);move(Once,left+342,512,170,30);
   move(Start,left,554,115,34);move(SafeStop,right-287,554,177,34);move(Stop,right-98,554,98,34);
   move(32,left,638,full);move(Enabled,left,676,225);move(CriticalStop,left,722,240);move(8,left+268,674,82,18);move(Warning,left+268,696,85,32);move(9,left+370,674,85,18);move(Critical,left+370,696,85,32);move(SaveThermal,right-150,720,150,34);
   cards[35]={contentLeft,794-scroll,contentLeft+contentWidth,1138-scroll};cards[33]={contentLeft,1154-scroll,contentLeft+contentWidth,1310-scroll};cards[34]={contentLeft,1328-scroll,contentLeft+contentWidth,1578-scroll};
   move(35,left,810,full);move(GpuPick,left,844,full-146,300);move(GpuRefresh,right-132,844,132,32);move(GpuInfo,left,888,full,66);
   move(GpuPowerLabel,left,964,180,22);move(GpuPowerValue,left,990,120,32);move(GpuPowerApply,left+132,990,100,32);move(GpuPowerDefault,left+244,990,180,32);
   move(GpuFanLabel,left,1034,100,24);move(GpuFanMode,left+108,1030,165,250);move(GpuFanValue,left+285,1030,70,32);move(GpuFanApply,left+367,1030,100,32);move(GpuHint,left,1074,full,52);
-  move(33,left,1172,full);move(BenchmarkSourceLabel,left,1196,250,18);move(BenchmarkSource,left,1218,260,250);
-  move(BenchmarkDeviceLabel,left+278,1196,100,18);move(BenchmarkDevice,left+278,1218,100,32);
-  move(BenchmarkThreadsLabel,left+396,1196,110,18);move(BenchmarkThreads,left+396,1218,110,32);
+  move(33,left,1172,full);move(BenchmarkSourceLabel,left,1196,200,18);move(BenchmarkSource,left,1218,200,250);
+  move(BenchmarkDeviceLabel,left+218,1196,full-346,18);move(BenchmarkDevice,left+218,1218,full-346,250);
+  move(BenchmarkThreadsLabel,left+full-110,1196,110,18);move(BenchmarkThreads,left+full-110,1218,110,32);
   move(Benchmark,left,1262,125,32);move(Preflight,left+137,1262,145,32);move(Doctor,left+294,1262,174,32);move(Recover,left+480,1262,126,32);
   move(34,left,1346,full-270);move(Details,right-250,1342,250,300);move(Log,left,1386,full,172);move(Telemetry,left,1386,full,172);
   if(!positions||!EndDeferWindowPos(positions))throw std::runtime_error("Window layout update failed");
@@ -493,7 +537,7 @@ struct Panel {
   if(id==Theme&&notification==CBN_SELCHANGE){dark=SendMessageW(controls[Theme],CB_GETCURSEL,0,0)==1;applyTheme();return;}
   if(id==Details&&notification==CBN_SELCHANGE){const bool telemetry=SendMessageW(controls[Details],CB_GETCURSEL,0,0)==1;ShowWindow(controls[Telemetry],telemetry?SW_SHOW:SW_HIDE);ShowWindow(controls[Log],telemetry?SW_HIDE:SW_SHOW);return;}
   if(id==Puzzle&&notification==EN_CHANGE){if(controls.count(Badge)&&controls.count(Log))update();return;}
-  if(id==BenchmarkSource&&notification==CBN_SELCHANGE){benchmarkInputs();return;}
+  if(id==BenchmarkSource&&notification==CBN_SELCHANGE){automaticBackend=false;benchmarkInputs();return;}
   if(id==GpuPick&&notification==CBN_SELCHANGE){renderGpu(true);return;}
   if(id==GpuFanMode&&notification==CBN_SELCHANGE){updateGpu();return;}
   if(id==Profile&&notification==CBN_SELCHANGE){chooseProfile();return;}
@@ -505,7 +549,7 @@ struct Panel {
   if(id==GpuPowerApply||id==GpuPowerDefault||id==GpuFanApply){applyGpu(id);return;}
   if(id==Benchmark){benchmark();return;}
   if(id==Stop&&control.busy()&&controlAction==UiAction::Benchmark){if(!control.cancelOwnedCommand())throw std::runtime_error(t("benchmark_cancel_failed"));append("\n"+t("benchmark_cancelled")+"\n");return;}
-  if(id==Preflight)action(UiAction::Preflight);if(id==Start)action(UiAction::Start);if(id==Stop)action(UiAction::Stop);if(id==SafeStop)action(UiAction::SafeStop);if(id==Recover)action(UiAction::Recover);if(id==Refresh){metadataLoaded=false;nextRefresh=0;}if(id==Doctor&&!control.busy()){controlOutput.clear();controlAction=UiAction::Status;control.start(cli,{"doctor","--offline"});}if(id==SaveThermal&&!control.busy()&&!runtime.busy())saveThermal();update();
+  if(id==Preflight)action(UiAction::Preflight);if(id==Start)action(UiAction::Start);if(id==Stop)action(UiAction::Stop);if(id==SafeStop)action(UiAction::SafeStop);if(id==Recover)action(UiAction::Recover);if(id==Refresh){metadataLoaded=false;nextRefresh=0;if(!runtime.busy()&&!control.busy()&&!deviceReader.busy())benchmarkInputs(true);}if(id==Doctor&&!control.busy()){controlOutput.clear();controlAction=UiAction::Status;control.start(cli,{"doctor","--offline"});}if(id==SaveThermal&&!control.busy()&&!runtime.busy())saveThermal();update();
  }
 };
 LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM w,LPARAM l){

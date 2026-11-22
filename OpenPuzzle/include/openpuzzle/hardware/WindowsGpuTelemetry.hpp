@@ -27,6 +27,7 @@ struct WindowsNvmlApi {
 class WindowsGpuTelemetry {
 public:
  static WindowsTelemetryReport inspect();
+ static WindowsTelemetryReport inspectAmd();
  static WindowsTelemetryReport query(const WindowsNvmlApi& api);
  static std::wstring systemNvmlPath();
 };

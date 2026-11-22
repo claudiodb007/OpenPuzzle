@@ -9,6 +9,7 @@
 #include <QMainWindow>
 #include <QStringList>
 #include <QStringDecoder>
+#include <QHash>
 
 class QComboBox;
 class QCheckBox;
@@ -92,6 +93,14 @@ private:
   void showOutput(const QString& title, const QString& output);
   QString t(const QString& key) const;
   RunMode selectedRunMode() const;
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  QString desktopBackend() const;
+  QString desktopSelectionKey() const;
+  void discoverDesktopDevices(bool chooseDefault);
+  bool desktopProfileReady_=false,desktopPreserved_=false,desktopDiscoveryRunning_=false;
+  QString desktopStatusSelection_;
+  QHash<QString,QString> desktopDeviceNames_,desktopDiscoveryIssues_;
+#endif
 
   QLabel* subtitle_ = nullptr;
   QLabel* version_ = nullptr;

@@ -60,19 +60,30 @@ WindowsTelemetryReport WindowsGpuTelemetry::query(const WindowsNvmlApi& a){
   out.complete=true;out.detail=count?"Read-only NVIDIA NVML telemetry":"NVML reports no NVIDIA GPU";
  }catch(const std::exception& e){out.complete=false;out.readings.clear();out.detail=e.what();}return out;
 }
-WindowsTelemetryReport WindowsGpuTelemetry::inspect(){
+static WindowsTelemetryReport inspectNvidia(){
  try{
   // DCH driver path. No PATH/current-directory search and no settings writes.
-  Module module(systemNvmlPath());if(!module.valid())return {false,"System NVML unavailable (Windows code "+std::to_string(GetLastError())+")",{}};
+  Module module(WindowsGpuTelemetry::systemNvmlPath());if(!module.valid())return {false,"System NVML unavailable (Windows code "+std::to_string(GetLastError())+")",{}};
   WindowsNvmlApi a;
   a.init=module.function<decltype(a.init)>("nvmlInit_v2");a.shutdown=module.function<decltype(a.shutdown)>("nvmlShutdown");
   a.count=module.function<decltype(a.count)>("nvmlDeviceGetCount_v2");a.handle=module.function<decltype(a.handle)>("nvmlDeviceGetHandleByIndex_v2");
   a.name=module.function<decltype(a.name)>("nvmlDeviceGetName");a.pci=module.function<decltype(a.pci)>("nvmlDeviceGetPciInfo_v3");
   a.temperature=module.function<decltype(a.temperature)>("nvmlDeviceGetTemperature");a.power=module.function<decltype(a.power)>("nvmlDeviceGetPowerUsage");a.limit=module.function<decltype(a.limit)>("nvmlDeviceGetPowerManagementLimit");
   a.uuid=module.function<decltype(a.uuid)>("nvmlDeviceGetUUID");
-  auto report=query(a);
-  // CUDA ordinals are resolved by physical PCI identity, not NVML enumeration.
+  return WindowsGpuTelemetry::query(a);
+ }catch(const std::exception& e){return {false,e.what(),{}};}
+}
+WindowsTelemetryReport WindowsGpuTelemetry::inspect(){
+ try{
   const auto inventory=WindowsGpuDiscovery::inspect();
+  bool nvidiaExpected=!inventory.cuda.devices.empty();
+  for(const auto& adapter:inventory.windowsAdapters)
+   nvidiaExpected=nvidiaExpected||adapter.vendor==0x10de;
+  for(const auto& device:inventory.opencl.devices)
+   nvidiaExpected=nvidiaExpected||device.vendor=="NVIDIA Corporation"||device.vendor=="NVIDIA";
+  // This distribution has no AMD sensor provider. On mixed systems, continue
+  // using the NVIDIA readings without claiming to have measured AMD devices.
+  auto report=mergeWindowsTelemetryReports(inspectNvidia(),inspectAmd(),nvidiaExpected,false);
   if(inventory.cuda.state==GpuDiscoveryState::Available){
    std::vector<std::pair<std::string,int>> devices;
    for(const auto& d:inventory.cuda.devices)devices.emplace_back(d.pciBusId,d.nativeDeviceIndex);

@@ -27,5 +27,51 @@ int main(){try{
  client::ClientHeartbeat heartbeat;current=report(55);current.heartbeat(heartbeat);require(heartbeat.gpuTelemetryReported&&heartbeat.gpuTelemetry.size()==1&&heartbeat.gpuTelemetry[0].powerDrawW==123.456);
  current.complete=false;current.heartbeat(heartbeat);require(!heartbeat.gpuTelemetryReported&&heartbeat.gpuTelemetry.empty());
  current={true,"none",{}};current.heartbeat(heartbeat);require(heartbeat.gpuTelemetryReported&&heartbeat.gpuTelemetry.empty());
+
+ // The OpenCL chip name can differ from ADLX's marketing name. Only the
+ // persistent physical identity may connect that sensor to engine index 7.
+ const std::string pnp="PCI\\VEN_1002&DEV_731F\\RIG-A";
+ std::vector<WindowsAmdTelemetryDevice> amdDevices={{2,"AMD Radeon RX 5700 XT",pnp}};
+ int enumerations=0,temperatureReads=0;
+ WindowsAmdTelemetryApi amdApi;
+ amdApi.devices=[&]{++enumerations;return amdDevices;};
+ std::optional<double> temperature=64.25;
+ amdApi.temperature=[&](const std::string& id){require(id==pnp);++temperatureReads;return temperature;};
+ auto amd=queryWindowsAmdTelemetry(amdApi);
+ require(amd.complete&&enumerations==2&&temperatureReads==1&&amd.readings.size()==1);
+ require(amd.readings[0].values.temperatureC==64.25&&!amd.readings[0].values.powerDrawW&&!amd.readings[0].values.powerLimitW);
+ require(amd.bindDevice("opencl",7,"","",pnp));
+ amd.heartbeat(heartbeat);require(heartbeat.gpuTelemetryReported&&heartbeat.gpuTelemetry.size()==1&&
+  heartbeat.gpuTelemetry[0].deviceId=="opencl-7"&&heartbeat.gpuTelemetry[0].device==7);
+ require(!amd.bindDevice("opencl",0,"","","PCI\\VEN_1002&DEV_731F\\OTHER"));
+ WindowsRuntimeThermalSettings amdSettings;amdSettings.policy={true,true,75,85};
+ amdSettings.deviceName="gfx1010:xnack-";amdSettings.deviceWindowsInstanceId=pnp;amdSettings.reader=[&]{return amd;};
+ WindowsThermalMonitor amdMonitor(amdSettings);amdMonitor.sample(now);require(amdMonitor.status()==WindowsThermalStatus::Normal&&!amdMonitor.mustStop());
+ amd.readings[0].values.temperatureC=90;amdMonitor.sample(now+std::chrono::seconds(5));require(amdMonitor.mustStop());
+ amd.readings.push_back(amd.readings[0]);require(!amd.bindDevice("opencl",7,"","",pnp));
+ WindowsThermalMonitor duplicateAmd(amdSettings);duplicateAmd.sample(now);require(duplicateAmd.mustStop());
+ for(const auto value:{std::optional<double>{},std::optional<double>{-1},std::optional<double>{201},std::optional<double>{std::nan("")}}){
+  temperature=value;const auto unavailable=queryWindowsAmdTelemetry(amdApi);require(unavailable.complete&&unavailable.readings.empty());
+ }
+ // Measured power is independent of the optional temperature, and never
+ // becomes a fabricated watt limit from the AMD tuning percentage.
+ amdApi.power=[](const auto&){return std::optional<double>{142.75};};
+ temperature=64.25;auto powered=queryWindowsAmdTelemetry(amdApi);
+ require(powered.readings.size()==1&&powered.readings[0].values.powerDrawW==142.75&&!powered.readings[0].values.powerLimitW);
+ temperature.reset();powered=queryWindowsAmdTelemetry(amdApi);
+ require(powered.readings.size()==1&&!powered.readings[0].values.temperatureC&&powered.readings[0].values.powerDrawW==142.75);
+ for(const auto value:{-1.0,10001.0,std::nan("")}){amdApi.power=[value](const auto&){return std::optional<double>{value};};require(queryWindowsAmdTelemetry(amdApi).readings.empty());}
+ amdApi.power={};
+ temperature=64.25;amdDevices.push_back(amdDevices.front());require(!queryWindowsAmdTelemetry(amdApi).complete);amdDevices.pop_back();
+ amdApi.devices=[&]{auto result=amdDevices;if(++enumerations%2==0)result[0].windowsDeviceInstanceId="PCI\\VEN_1002&DEV_731F\\REPLACED";return result;};
+ require(!queryWindowsAmdTelemetry(amdApi).complete);
+ amdApi.devices=[&]{return amdDevices;};amdApi.temperature=[](const auto&)->std::optional<double>{throw std::runtime_error("driver failed");};
+ require(!queryWindowsAmdTelemetry(amdApi).complete);
+ amdApi.temperature=[&](const auto&){return temperature;};amd=queryWindowsAmdTelemetry(amdApi);
+ const WindowsTelemetryReport absentNv{false,"NVML absent",{}};
+ require(mergeWindowsTelemetryReports(absentNv,amd,false,true).complete);
+ require(!mergeWindowsTelemetryReports(absentNv,amd,true,true).complete);
+ require(mergeWindowsTelemetryReports(report(55),amd,true,true).readings.size()==2);
+ require(mergeWindowsTelemetryReports(report(55),{},true,false).complete);
  std::cout<<"WindowsTelemetryModelTests passed\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

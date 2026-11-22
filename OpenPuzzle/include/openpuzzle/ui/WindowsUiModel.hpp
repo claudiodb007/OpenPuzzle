@@ -17,7 +17,7 @@ struct WindowsUiBenchmarkParameters {
 };
 struct WindowsUiSelection {
  std::string profilePath,server,slot="primary";
- int puzzle=71,duration=60;
+ int puzzle=0,duration=60;
  bool once=false;
  std::optional<WindowsRunProfile> profile;
  std::optional<WindowsUiBenchmarkParameters> benchmark;
@@ -90,15 +90,15 @@ inline std::vector<std::string> windowsUiCommand(UiAction action,const WindowsUi
   if(!s.server.empty()){if(!client::HttpRequestPolicy::endpoint(s.server))throw std::invalid_argument("URL inválido");args.insert(args.end(),{"--server",s.server});}return args;
  }
  if(!s.profile||s.profilePath.empty()||s.profilePath.find('\0')!=std::string::npos)throw std::invalid_argument("Seleciona um perfil medido válido");
- if(s.profile->backend!="cpu"&&s.profile->gpuUuid.empty()&&s.profile->pciBusId.empty())throw std::invalid_argument("O perfil GPU requer associação física");
+ if(s.profile->backend!="cpu"&&!s.profile->hasPhysicalBinding())throw std::invalid_argument("O perfil GPU requer associação física");
  if(s.slot!=profileSlot(*s.profile))throw std::invalid_argument("O slot não corresponde ao perfil selecionado");
  if(action==UiAction::Preflight)return {"run","--profile",s.profilePath,"--server","http://127.0.0.1:1","--slot",s.slot,"--dry-run"};
  if(action==UiAction::Start&&!client::HttpRequestPolicy::endpoint(s.server))throw std::invalid_argument("Indica o URL do servidor");
- if(s.puzzle<1||s.duration<1||s.duration>360)throw std::invalid_argument("Puzzle ou duração inválidos");
+ if(s.puzzle<0||s.duration<1||s.duration>360)throw std::invalid_argument("Puzzle ou duração inválidos");
  std::vector<std::string> args{"run"};
  // Local device/profile verification must not require puzzle metadata, contact
  // a server or accidentally turn into a production launch.
- if(action==UiAction::Start)args.push_back(std::to_string(s.puzzle));
+ if(action==UiAction::Start&&s.puzzle>0)args.push_back(std::to_string(s.puzzle));
  args.insert(args.end(),{"--profile",s.profilePath,"--server",action==UiAction::Preflight?"http://127.0.0.1:1":s.server,
   "--duration-minutes",std::to_string(s.duration),"--slot",s.slot});
  if(s.once)args.push_back("--once");if(action==UiAction::Preflight)args.push_back("--dry-run");

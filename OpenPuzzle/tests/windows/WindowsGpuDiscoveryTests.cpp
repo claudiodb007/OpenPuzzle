@@ -28,7 +28,8 @@ struct ClFixture {
  unsigned int platformCount=2,deviceCount=2;
  bool changedPlatforms=false,changedDevices=false,duplicatePlatforms=false,nullDevice=false,duplicateDevice=false;
  bool badScalar=false,badString=false,invalidUtf8=false,missingTerminator=false,unavailable=false,cpuOnly=false;
- std::string extensions;bool badUuidSize=false;
+ std::string extensions;bool badUuidSize=false,badTopologySize=false,validLuid=false,zeroUuid=false;
+ unsigned topologyType=1,topologyBus=200,topologyDevice=3,topologyFunction=1;
 } cl;
 void* handle(std::uintptr_t n){return reinterpret_cast<void*>(n);}
 int WINAPI clPlatforms(unsigned int n,void** values,unsigned int* count){
@@ -47,9 +48,15 @@ int WINAPI clInfo(void* device,unsigned int field,std::size_t size,void* out,std
  const auto id=reinterpret_cast<std::uintptr_t>(device);
  if(field==0x1000)return put<std::uint64_t>(cl.cpuOnly||id==10?2:4,size,out,actual);
  if(field==0x1002)return put<unsigned int>(40,size,out,actual);
+ if(field==0x1001)return put<unsigned int>(id==11?0x1002:0x8086,size,out,actual);
  if(field==0x101F)return put<std::uint64_t>(8ULL*1024*1024*1024,size,out,actual);
  if(field==0x1027||field==0x1028)return put<unsigned int>(cl.unavailable?0:1,size,out,actual);
- if(field==0x106A){std::array<unsigned char,16> value{};value[0]=static_cast<unsigned char>(id);*actual=cl.badUuidSize?15:16;if(size<16)return -30;std::memcpy(out,value.data(),16);return 0;}
+ if(field==0x106A){std::array<unsigned char,16> value{};if(!cl.zeroUuid)value[0]=static_cast<unsigned char>(id);*actual=cl.badUuidSize?15:16;if(size<16)return -30;std::memcpy(out,value.data(),16);return 0;}
+ if(field==0x106C)return put<unsigned int>(cl.validLuid?1:0,size,out,actual);
+ if(field==0x106D){const std::array<unsigned char,8> value{static_cast<unsigned char>(id),1,2,3,4,5,6,7};return put(value,size,out,actual);}
+ if(field==0x4037){std::array<unsigned char,24> value{};std::memcpy(value.data(),&cl.topologyType,4);
+  value[21]=static_cast<unsigned char>(cl.topologyBus);value[22]=static_cast<unsigned char>(cl.topologyDevice);value[23]=static_cast<unsigned char>(cl.topologyFunction);
+  *actual=cl.badTopologySize?23:24;if(size<24)return -30;std::memcpy(out,value.data(),24);return 0;}
  if(field==0x410F){const std::array<unsigned int,4> value{0,static_cast<unsigned>(id),0,0};*actual=sizeof(value);if(size<sizeof(value))return -30;std::memcpy(out,value.data(),sizeof(value));return 0;}
  std::string s=field==0x102B?(id==11?"AMD Radeon RX 5700 XT":"NVIDIA future GPU"):field==0x102C?(id==11?"AMD":"NVIDIA"):"driver fixture";
  if(field==0x1030)s=cl.extensions;
@@ -98,6 +105,26 @@ int main(){try{
  require(o.devices[0].uuid=="0b000000-0000-0000-0000-000000000000"&&o.devices[0].pciBusId=="00000000:0B:00.0","OpenCL physical extensions were not queried");
  cl={};cl.extensions="not_cl_khr_device_uuid";o=WindowsGpuDiscovery::queryOpenCl(clApi());require(o.devices[0].uuid.empty(),"Extension substring treated as support");
  cl={};cl.extensions="cl_khr_device_uuid";cl.badUuidSize=true;o=WindowsGpuDiscovery::queryOpenCl(clApi());require(o.state==GpuDiscoveryState::Available&&o.devices[0].uuid.empty(),"Invalid optional UUID broke normal discovery");
+ const std::string amdId="PCI\\VEN_1002&DEV_731F\\RIG-A";
+ std::vector<WindowsAdapterIdentity> adapters={{amdId,"AMD Radeon RX 5700",0x1002,WindowsAdapterLocation{200,3,1},{}}};
+ cl={};cl.extensions="cl_amd_device_attribute_query";o=WindowsGpuDiscovery::queryOpenCl(clApi(),adapters);
+ require(o.devices[0].windowsDeviceInstanceId==amdId&&o.devices[0].displayName=="AMD Radeon RX 5700"&&o.devices[0].uuid.empty()&&o.devices[0].pciBusId.empty(),"Legacy AMD topology failed or fabricated a PCI segment");
+ auto duplicateAdapters=adapters;duplicateAdapters.push_back({"PCI\\VEN_1002&DEV_731F\\RIG-B","same GPU on another PCI segment",0x1002,WindowsAdapterLocation{200,3,1},{}});
+ require(WindowsGpuDiscovery::queryOpenCl(clApi(),duplicateAdapters).devices[0].windowsDeviceInstanceId.empty(),"Ambiguous AMD topology selected the first Windows adapter");
+ cl.badTopologySize=true;require(WindowsGpuDiscovery::queryOpenCl(clApi(),adapters).devices[0].windowsDeviceInstanceId.empty(),"Truncated AMD topology accepted");
+ cl.badTopologySize=false;cl.topologyDevice=32;require(WindowsGpuDiscovery::queryOpenCl(clApi(),adapters).devices[0].windowsDeviceInstanceId.empty(),"Invalid AMD PCI device accepted");
+ cl.topologyDevice=3;cl.topologyType=2;require(WindowsGpuDiscovery::queryOpenCl(clApi(),adapters).devices[0].windowsDeviceInstanceId.empty(),"Non-PCI AMD topology accepted");
+ // Standard OpenCL LUID mapping works independently of the GPU vendor and
+ // persists the Windows instance, never the boot-dependent LUID itself.
+ cl={};cl.extensions="cl_khr_device_uuid";cl.validLuid=true;cl.zeroUuid=true;
+ const std::array<unsigned char,8> intelLuid{20,1,2,3,4,5,6,7};
+ const std::string intelId="PCI\\VEN_8086&DEV_56A0\\ARC-A";
+ std::vector<WindowsAdapterIdentity> intel={{intelId,"Intel Arc GPU",0x8086,{},intelLuid}};
+ o=WindowsGpuDiscovery::queryOpenCl(clApi(),intel);
+ require(o.devices[1].windowsDeviceInstanceId==intelId&&o.devices[1].displayName=="Intel Arc GPU", "Standard OpenCL LUID failed to identify a non-AMD GPU");
+ auto contradictory=adapters;contradictory[0].luid=std::array<unsigned char,8>{99,1,2,3,4,5,6,7};
+ cl.extensions="cl_khr_device_uuid cl_amd_device_attribute_query";
+ require(WindowsGpuDiscovery::queryOpenCl(clApi(),contradictory).devices[0].windowsDeviceInstanceId.empty(),"Contradictory LUID and PCI mappings accepted");
  cl={};cl.unavailable=true;o=WindowsGpuDiscovery::queryOpenCl(clApi());require(o.devices.size()==3&&!o.devices[0].available&&!o.devices[0].compilerAvailable,"Unavailable OpenCL GPU was reported as usable");
  cl={};cl.cpuOnly=true;require(WindowsGpuDiscovery::queryOpenCl(clApi()).state==GpuDiscoveryState::Empty,"OpenCL CPU mistaken for GPU or KeyHunt readiness");
  cl={};cl.platformStatus=-1001;require(WindowsGpuDiscovery::queryOpenCl(clApi()).state==GpuDiscoveryState::Empty,"No OpenCL platforms treated as failure");

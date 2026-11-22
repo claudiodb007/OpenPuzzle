@@ -10,7 +10,8 @@ using WindowsGpuInventoryReader=std::function<WindowsGpuInventory()>;
 WindowsPhysicalGpuBinding inspectWindowsProfileGpuBinding(const WindowsRunProfile& profile,
  const std::filesystem::path& executable,
  const WindowsGpuInventoryReader& discovery=WindowsGpuDiscovery::inspect,
- const WindowsRuntimeThermalSettings::Reader& telemetry=WindowsGpuTelemetry::inspect);
+ const WindowsRuntimeThermalSettings::Reader& telemetry=WindowsGpuTelemetry::inspect,
+ bool requireTelemetry=false);
 int bindWindowsGpuProfile(const std::vector<std::string>& arguments,const std::filesystem::path& engineFolder,
  const WindowsGpuInventoryReader& discovery,const WindowsRuntimeThermalSettings::Reader& telemetry,std::ostream& output);
 }

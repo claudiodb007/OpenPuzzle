@@ -6,6 +6,7 @@
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <cstring>
 
 namespace openpuzzle {
 namespace {
@@ -17,11 +18,12 @@ constexpr unsigned int clType=0x1000, clUnits=0x1002, clMemory=0x101F,
   clAvailable=0x1027, clCompiler=0x1028, clName=0x102B,
   clVendor=0x102C, clDriver=0x102D;
 constexpr unsigned int clExtensions=0x1030,clUuid=0x106A,clPci=0x410F;
+constexpr unsigned int clVendorId=0x1001,clLuidValid=0x106C,clLuid=0x106D,clAmdTopology=0x4037;
 // cl_khr_device_uuid and cl_khr_pci_bus_info use their documented x64 ABI.
 bool extension(const std::string& extensions,const std::string& name){
  std::istringstream words(extensions);std::string token;while(words>>token)if(token==name)return true;return false;
 }
-void openClIdentity(const WindowsOpenClDiscoveryApi& api,void* device,WindowsGpuDevice& info);
+void openClIdentity(const WindowsOpenClDiscoveryApi& api,void* device,WindowsGpuDevice& info,const std::vector<WindowsAdapterIdentity>& adapters);
 WindowsGpuBackend failure(const std::string& message) {
   return {GpuDiscoveryState::Error,message,{}};
 }
@@ -49,21 +51,48 @@ std::string text(const WindowsOpenClDiscoveryApi& api,void* device,unsigned int 
   if(!validText(value))throw std::runtime_error("OpenCL string is invalid UTF-8 or contains controls");
   return value;
 }
-void openClIdentity(const WindowsOpenClDiscoveryApi& api,void* device,WindowsGpuDevice& info) {
+void openClIdentity(const WindowsOpenClDiscoveryApi& api,void* device,WindowsGpuDevice& info,const std::vector<WindowsAdapterIdentity>& adapters) {
  // Empty or unsupported optional extensions must not break normal inventory.
  std::size_t size=0;if(api.info(device,clExtensions,0,nullptr,&size)!=0||size<1||size>maxString)return;
  std::vector<char> bytes(size,1);std::size_t actual=0;
  if(api.info(device,clExtensions,size,bytes.data(),&actual)!=0||actual!=size||bytes.back()!=0||
     std::find(bytes.begin(),bytes.end()-1,0)!=bytes.end()-1)return;
  const std::string extensions(bytes.data(),size-1);
+ std::optional<WindowsAdapterLocation> location;
+ std::optional<std::array<unsigned char,8>> luid;
  if(extension(extensions,"cl_khr_device_uuid")){
   std::array<unsigned char,16> uuid{};actual=0;
   if(api.info(device,clUuid,uuid.size(),uuid.data(),&actual)==0&&actual==uuid.size())info.uuid=gpuUuidFromBytes(uuid);
+  unsigned valid=0;actual=0;
+  if(api.info(device,clLuidValid,sizeof valid,&valid,&actual)==0&&actual==sizeof valid&&valid==1){
+   std::array<unsigned char,8> value{};actual=0;
+   if(api.info(device,clLuid,value.size(),value.data(),&actual)==0&&actual==value.size()&&
+      std::any_of(value.begin(),value.end(),[](auto b){return b!=0;}))luid=value;
+  }
  }
  if(extension(extensions,"cl_khr_pci_bus_info")){
   std::array<unsigned int,4> pci{};actual=0;
   if(api.info(device,clPci,sizeof(pci),pci.data(),&actual)==0&&actual==sizeof(pci)){
    std::ostringstream value;value<<std::hex<<pci[0]<<':'<<pci[1]<<':'<<pci[2]<<'.'<<pci[3];info.pciBusId=canonicalGpuPciBusId(value.str());
+   if(!info.pciBusId.empty())location=WindowsAdapterLocation{pci[1],pci[2],pci[3]};
+  }
+ }
+ if(!location&&extension(extensions,"cl_amd_device_attribute_query")){
+  // cl_device_topology_amd: 24 bytes, type at 0, unsigned B/D/F at 21/22/23.
+  // The extension supplies no PCI segment. Resolve a unique Windows device
+  // instance instead of inventing domain 0 or relying on the GPU's name.
+  std::array<unsigned char,24> topology{};actual=0;
+  if(api.info(device,clAmdTopology,topology.size(),topology.data(),&actual)==0&&actual==topology.size()){
+   unsigned type=0;std::memcpy(&type,topology.data(),sizeof type);
+   if(type==1&&topology[22]<=31&&topology[23]<=7)location=WindowsAdapterLocation{topology[21],topology[22],topology[23]};
+  }
+ }
+ if(!adapters.empty()&&(location||luid)){
+  unsigned vendor=0;actual=0;
+  if(api.info(device,clVendorId,sizeof vendor,&vendor,&actual)==0&&actual==sizeof vendor){
+   if(const auto* adapter=matchWindowsAdapter(adapters,vendor,location,luid)){
+    info.windowsDeviceInstanceId=canonicalWindowsGpuInstanceId(adapter->instanceId);info.displayName=adapter->name;
+   }
   }
  }
 }
@@ -141,7 +170,7 @@ WindowsGpuBackend WindowsGpuDiscovery::queryCuda(const WindowsCudaDiscoveryApi& 
     return result;
   }catch(const std::exception& e){return failure(e.what());}
 }
-WindowsGpuBackend WindowsGpuDiscovery::queryOpenCl(const WindowsOpenClDiscoveryApi& api) {
+WindowsGpuBackend WindowsGpuDiscovery::queryOpenCl(const WindowsOpenClDiscoveryApi& api,const std::vector<WindowsAdapterIdentity>& adapters) {
   try {
     if(!api.platforms||!api.devices||!api.info)throw std::runtime_error("OpenCL driver exports are incomplete");
     unsigned int count=0;const auto code=api.platforms(0,nullptr,&count);
@@ -173,7 +202,7 @@ WindowsGpuBackend WindowsGpuDiscovery::queryOpenCl(const WindowsOpenClDiscoveryA
         const auto available=scalar<unsigned int>(api,device,clAvailable),compiler=scalar<unsigned int>(api,device,clCompiler);
         if(memory<1048576||!info.computeUnits||available>1||compiler>1)throw std::runtime_error("OpenCL device capability is invalid");
         info.memoryMiB=memory/1048576;info.available=available!=0;info.compilerAvailable=compiler!=0;
-        openClIdentity(api,device,info);
+        openClIdentity(api,device,info,adapters);
         result.devices.push_back(std::move(info));
       }
     }
@@ -197,9 +226,11 @@ WindowsGpuInventory WindowsGpuDiscovery::inspect() {
     a.deviceAttribute=m.function<decltype(a.deviceAttribute)>("cuDeviceGetAttribute");a.devicePciBusId=m.function<decltype(a.devicePciBusId)>("cuDeviceGetPCIBusId");
     a.deviceUuid=m.function<decltype(a.deviceUuid)>("cuDeviceGetUuid_v2");if(!a.deviceUuid)a.deviceUuid=m.function<decltype(a.deviceUuid)>("cuDeviceGetUuid");return queryCuda(a);
   });
-  result.opencl=load(L"OpenCL.dll",[](const Module& m){
+  const auto adapters=inspectWindowsAdapterIdentities();
+  result.windowsAdapters=adapters;
+  result.opencl=load(L"OpenCL.dll",[&](const Module& m){
     WindowsOpenClDiscoveryApi a;a.platforms=m.function<decltype(a.platforms)>("clGetPlatformIDs");
-    a.devices=m.function<decltype(a.devices)>("clGetDeviceIDs");a.info=m.function<decltype(a.info)>("clGetDeviceInfo");return queryOpenCl(a);
+    a.devices=m.function<decltype(a.devices)>("clGetDeviceIDs");a.info=m.function<decltype(a.info)>("clGetDeviceInfo");return queryOpenCl(a,adapters);
   });return result;
 }
 bool windowsGpuDiscoveryHasError(const WindowsGpuInventory& inventory){return !inventory.nativeCpuAvailable||inventory.cuda.state==GpuDiscoveryState::Error||inventory.opencl.state==GpuDiscoveryState::Error;}
@@ -214,8 +245,11 @@ std::string formatWindowsGpuInventory(const WindowsGpuInventory& inventory) {
       <<"\nMemory MiB: "<<d.memoryMiB<<"\n"<<(d.platformIndex<0?"Multiprocessors: ":"Compute units: ")<<d.computeUnits
       <<"\nNative device index: "<<d.nativeDeviceIndex<<"\nDevice available: "<<(d.available?"yes":"no")<<'\n';
       if(d.platformIndex>=0)out<<"OpenCL platform: "<<d.platformIndex<<"\nOpenCL compiler: "<<(d.compilerAvailable?"yes":"no")<<'\n';}
-    for(const auto& d:backend.devices)out<<"Physical device "<<d.inventoryIndex<<": UUID "<<(d.uuid.empty()?"unavailable":d.uuid)<<"; PCI "<<(d.pciBusId.empty()?"unavailable":d.pciBusId)<<'\n';
+    for(const auto& d:backend.devices){out<<"Physical device "<<d.inventoryIndex<<": UUID "<<(d.uuid.empty()?"unavailable":d.uuid)<<"; PCI "<<(d.pciBusId.empty()?"unavailable":d.pciBusId)
+     <<"; Windows device "<<(d.windowsDeviceInstanceId.empty()?"unavailable":d.windowsDeviceInstanceId)<<'\n';if(!d.displayName.empty())out<<"Display name: "<<d.displayName<<'\n';}
   };show("CUDA",inventory.cuda);show("OpenCL",inventory.opencl);
+  out<<"Windows display adapters: "<<inventory.windowsAdapters.size()<<'\n';
+  for(const auto& a:inventory.windowsAdapters)out<<"Windows adapter: "<<a.name<<"\nWindows device: "<<a.instanceId<<'\n';
   out<<"GPU engine: BitCrack; Windows executables, kernel tests and benchmarks PENDING\n"
     <<"Search engines and benchmark profiles: PENDING\nInventory indexes require engine verification before launch.\n";return out.str();
 }

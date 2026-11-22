@@ -2,6 +2,8 @@
 #include <windows.h>
 #include <winhttp.h>
 #include "openpuzzle/client/WindowsHttpTransport.hpp"
+#include "openpuzzle/core/WindowsVersion.hpp"
+#include <string_view>
 #include <algorithm>
 #include <array>
 #include <optional>
@@ -34,7 +36,9 @@ static HttpResponse requestOnce(const std::string& method,const std::string& url
       (method!="POST"&&!body.empty())||body.size()>HttpRequestPolicy::maxRequest||!utf8(body)||
       timeoutMilliseconds==0||timeoutMilliseconds>120000){r.error="Invalid HTTP request parameters";return r;}
   const auto started=GetTickCount64();
-  InternetHandle session(WinHttpOpen(L"OpenPuzzle/1.0.46",
+  const std::string_view version(windowsClientVersion);
+  const auto userAgent=std::wstring(L"OpenPuzzle/")+std::wstring(version.begin(),version.end());
+  InternetHandle session(WinHttpOpen(userAgent.c_str(),
       endpoint->loopback()?WINHTTP_ACCESS_TYPE_NO_PROXY:WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
       WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
   if(!session)return failure(std::move(r),"session");

@@ -1,6 +1,15 @@
 #include "UiTheme.hpp"
+#include <QApplication>
+#include <QFontDatabase>
+#include <QStyleFactory>
 
 namespace openpuzzle::ui {
+void initializeDesktopAppearance(){
+ static bool initialized=false;if(initialized)return;initialized=true;
+ QApplication::setStyle(QStyleFactory::create("Fusion"));
+ for(const auto* file:{":/fonts/DejaVuSans.ttf",":/fonts/DejaVuSans-Bold.ttf",":/fonts/DejaVuSansMono.ttf"})QFontDatabase::addApplicationFont(QString::fromLatin1(file));
+ QApplication::setFont(QFont(QStringLiteral("DejaVu Sans"),10));
+}
 
 QString themeCode(UiTheme theme) {
   return theme == UiTheme::Dark ? "dark" : "light";
@@ -28,6 +37,8 @@ QString themeStyleSheet(UiTheme theme) {
   const QString secondary = dark ? "#222a36" : "#e9edf5";
   const QString danger = "#b91c1c";
   const QString dangerText = "#ffffff";
+  const QString controlBorder = dark ? "#728096" : "#68738a";
+  const QString controlHover = dark ? "#344155" : "#dbe3f0";
 
   return QString(R"(
     QMainWindow {
@@ -36,6 +47,7 @@ QString themeStyleSheet(UiTheme theme) {
       font-size: 15px;
     }
     QWidget {
+      font-family: "DejaVu Sans";
       background: transparent;
       color: %2;
       font-size: 15px;
@@ -197,6 +209,72 @@ QString themeStyleSheet(UiTheme theme) {
       padding: 8px;
       selection-background-color: %11;
     }
+    QCheckBox { spacing: 8px; }
+    QCheckBox:disabled { color: %4; }
+    QCheckBox::indicator {
+      width: 17px;
+      height: 17px;
+      border: 1px solid %16;
+      border-radius: 3px;
+      background: %10;
+    }
+    QCheckBox::indicator:hover,
+    QCheckBox:focus::indicator { border-color: %11; }
+    QCheckBox::indicator:checked {
+      background: %11;
+      border-color: %16;
+      image: url(:/controls/check.xpm);
+    }
+    QCheckBox::indicator:disabled { background: %5; }
+    QCheckBox::indicator:checked:disabled { background: #cda85a; }
+    QComboBox, QSpinBox, QDoubleSpinBox { padding-right: 31px; }
+    QComboBox::drop-down {
+      subcontrol-origin: border;
+      subcontrol-position: top right;
+      width: 25px;
+      border: 0;
+      border-left: 1px solid %16;
+      border-top-right-radius: 7px;
+      border-bottom-right-radius: 7px;
+      background: %5;
+    }
+    QComboBox::down-arrow {
+      image: url(:/controls/down%18.xpm);
+      width: 9px;
+      height: 5px;
+    }
+    QSpinBox::up-button, QDoubleSpinBox::up-button,
+    QSpinBox::down-button, QDoubleSpinBox::down-button {
+      subcontrol-origin: border;
+      width: 25px;
+      border: 0;
+      border-left: 1px solid %16;
+      background: %5;
+    }
+    QSpinBox::up-button, QDoubleSpinBox::up-button {
+      subcontrol-position: top right;
+      border-bottom: 1px solid %3;
+      border-top-right-radius: 7px;
+    }
+    QSpinBox::down-button, QDoubleSpinBox::down-button {
+      subcontrol-position: bottom right;
+      border-bottom-right-radius: 7px;
+    }
+    QComboBox::drop-down:hover,
+    QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+    QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
+      background: %17;
+    }
+    QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+      image: url(:/controls/up%18.xpm);
+      width: 9px;
+      height: 5px;
+    }
+    QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+      image: url(:/controls/down%18.xpm);
+      width: 9px;
+      height: 5px;
+    }
     QComboBox QAbstractItemView {
       background: %8;
       color: %2;
@@ -206,10 +284,19 @@ QString themeStyleSheet(UiTheme theme) {
       border: 1px solid %11;
     }
     QPushButton {
-      border: 0;
+      background: %5;
+      color: %2;
+      border: 1px solid %16;
       border-radius: 8px;
       font-weight: 650;
       padding: 9px 16px;
+    }
+    QPushButton:hover:enabled { background: %17; }
+    QPushButton:focus:enabled { border-color: %11; }
+    QPushButton:disabled {
+      background: %5;
+      color: %4;
+      border-color: %3;
     }
     QPushButton#PrimaryButton {
       background: %11;
@@ -254,7 +341,7 @@ QString themeStyleSheet(UiTheme theme) {
       border-color: %3;
     }
     QPlainTextEdit {
-      font-family: monospace;
+      font-family: "DejaVu Sans Mono", monospace;
     }
     QTabWidget#DetailsTabs::pane {
       background: %8;
@@ -314,7 +401,10 @@ QString themeStyleSheet(UiTheme theme) {
       .arg(accentText)
       .arg(accentHover)
       .arg(danger)
-      .arg(dangerText);
+      .arg(dangerText)
+      .arg(controlBorder)
+      .arg(controlHover)
+      .arg(dark ? "-dark" : "");
 }
 
 } // namespace openpuzzle::ui

@@ -4,6 +4,9 @@
 #include <QImage>
 #include <QApplication>
 #include <QComboBox>
+#include <QCheckBox>
+#include <QStyleOptionButton>
+#include <QVBoxLayout>
 #include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QTemporaryDir>
@@ -16,6 +19,63 @@
 using namespace openpuzzle;using namespace openpuzzle::ui;
 void require(bool b,const char* why){if(!b)throw std::runtime_error(why);}
 template<class T>T* control(QWidget& widget,const char* name){for(auto* item:widget.findChildren<T*>())if(item->property("controlId").toString()==name)return item;throw std::runtime_error("Control missing");}
+bool hasColor(const QImage& image, const QRect& area, const QColor& color) {
+ const auto bounds = area.intersected(image.rect());
+ for(int y = bounds.top(); y <= bounds.bottom(); ++y) {
+  for(int x = bounds.left(); x <= bounds.right(); ++x) {
+   if(image.pixelColor(x, y) == color) return true;
+  }
+ }
+ return false;
+}
+void verifyControlRendering(GpuControlPanel& panel, QPushButton& apply,
+                            QComboBox& gpu, QDoubleSpinBox& power,
+                            UiTheme theme) {
+ const bool dark = theme == UiTheme::Dark;
+ const QColor arrow(dark ? "#d5deed" : "#68738a");
+ const QColor surface(dark ? "#222a36" : "#e9edf5");
+ const auto buttonImage = apply.grab().toImage();
+ require(buttonImage.pixelColor(5, buttonImage.height() / 2) == surface,
+         "Apply has no visible button surface");
+
+ const auto comboImage = gpu.grab().toImage();
+ require(hasColor(comboImage, QRect(comboImage.width() - 24, 3, 23,
+                                   comboImage.height() - 6), arrow),
+         "GPU selector arrow is invisible");
+ const auto spinImage = power.grab().toImage();
+ const auto middle = spinImage.height() / 2;
+ require(hasColor(spinImage, QRect(spinImage.width() - 23, 3, 22, middle - 4), arrow) &&
+         hasColor(spinImage, QRect(spinImage.width() - 23, middle + 1, 22, middle - 4), arrow),
+         "A numeric step arrow is invisible");
+
+ QWidget container;
+ auto* layout = new QVBoxLayout(&container);
+ auto* checkBox = new QCheckBox(QStringLiteral("Monitorização térmica"));
+ layout->addWidget(checkBox);
+ container.setStyleSheet(panel.styleSheet());
+ container.show();
+ QCoreApplication::processEvents();
+ QStyleOptionButton option;
+ option.initFrom(checkBox);
+ const QRect indicator = checkBox->style()->subElementRect(
+     QStyle::SE_CheckBoxIndicator, &option, checkBox);
+ auto image = checkBox->grab().toImage();
+ const QColor outline(dark ? "#728096" : "#68738a");
+ require(indicator.width() >= 17 && hasColor(image, indicator, outline),
+         "Unchecked checkbox has no visible outline");
+ for(bool enabled : {true, false}) {
+  checkBox->setChecked(true);
+  checkBox->setEnabled(enabled);
+  image = checkBox->grab().toImage();
+  require(hasColor(image, indicator.adjusted(2, 2, -2, -2), QColor("#182235")),
+          "Checked checkbox has no visible mark");
+ }
+ const auto captureDir = qEnvironmentVariable("OPENPUZZLE_DIALOG_CAPTURE_DIR");
+ if(!captureDir.isEmpty()) {
+  panel.grab().save(captureDir + "/gpu-controls-" + themeCode(theme) + ".png");
+  container.grab().save(captureDir + "/checkbox-" + themeCode(theme) + ".png");
+ }
+}
 int main(int argc,char** argv){QApplication app(argc,argv);try{
  QTemporaryDir dir;require(dir.isValid(),"Temporary fixture directory unavailable");GpuControlDevice n;n.vendor="nvidia";n.pci="00000000:08:00.0";n.uuid="GPU-fixture";n.name="NVIDIA fixture";n.power=n.fan=n.automatic=true;n.powerNow=n.powerDefault=300;n.powerMin=100;n.powerMax=333;n.powerStep=.001;n.fanMode="auto";n.fanNow=40;n.temperature=67;
  auto a=n;a.vendor="amd";a.uuid.clear();a.pci="00000000:09:00.0";a.name="AMD fixture";a.powerUnit="%";a.powerNow=-10;a.powerDefault=0;a.powerMin=-50;a.powerMax=20;a.powerStep=1;
@@ -29,6 +89,7 @@ int main(int argc,char** argv){QApplication app(argc,argv);try{
  panel.setLanguage(UiLanguage::Portuguese);QPushButton* apply=nullptr;for(auto* button:panel.findChildren<QPushButton*>())if(button->text()=="Aplicar"){apply=button;break;}require(apply&&apply->isEnabled(),"Translated Apply unavailable");
  for(const auto theme:{UiTheme::Light,UiTheme::Dark}){
   panel.setStyleSheet(themeStyleSheet(theme));
+  verifyControlRendering(panel, *apply, *gpu, *power, theme);
   const QColor expectedPanel(theme==UiTheme::Dark?"#10151d":"#ffffff");
   const QColor expectedButton(theme==UiTheme::Dark?"#222a36":"#e9edf5");
   const QColor expectedText(theme==UiTheme::Dark?"#f5f1e7":"#182235");

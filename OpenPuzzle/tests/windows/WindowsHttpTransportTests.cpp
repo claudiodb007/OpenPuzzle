@@ -4,6 +4,7 @@
 #include <windows.h>
 #include "openpuzzle/client/WindowsHttpTransport.hpp"
 #include "openpuzzle/client/HttpRangeClient.hpp"
+#include "openpuzzle/core/WindowsVersion.hpp"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -75,7 +76,7 @@ struct Comma:std::numpunct<char>{char do_decimal_point()const override{return ',
 struct LocaleGuard{std::locale old=std::locale();LocaleGuard(){std::locale::global(std::locale(std::locale::classic(),new Comma));}~LocaleGuard(){std::locale::global(old);}};
 int main(){try{
  Winsock sockets;
- {Server s;auto r=WindowsHttpTransport::request("POST",s.url()+"/a%20b?x=y","{\"word\":\"ç 中文 %PATH% & >\"}");require(r.success()&&r.status==200&&r.body=="{}","POST result failed");s.path("POST","/a%20b?x=y");require(s.body()=="{\"word\":\"ç 中文 %PATH% & >\"}","UTF-8 payload changed");require(lower(s.request).find("content-type: application/json; charset=utf-8")!=std::string::npos,"JSON header missing");}
+ {Server s;auto r=WindowsHttpTransport::request("POST",s.url()+"/a%20b?x=y","{\"word\":\"ç 中文 %PATH% & >\"}");require(r.success()&&r.status==200&&r.body=="{}","POST result failed");s.path("POST","/a%20b?x=y");require(s.request.find(std::string("OpenPuzzle/")+openpuzzle::windowsClientVersion)!=std::string::npos,"HTTP User-Agent uses a different client version");require(s.body()=="{\"word\":\"ç 中文 %PATH% & >\"}","UTF-8 payload changed");require(lower(s.request).find("content-type: application/json; charset=utf-8")!=std::string::npos,"JSON header missing");}
  {Server s("","204 No Content");auto r=WindowsHttpTransport::request("HEAD",s.url()+"/probe");require(r.success()&&r.body.empty(),"HEAD failed");s.path("HEAD","/probe");require(s.body().empty(),"HEAD sent body");}
  {const std::string binary("a\0bcd",5);Server s(binary);auto r=WindowsHttpTransport::request("GET",s.url());require(r.success()&&r.body==binary,"Binary response truncated");s.finish();}
  {std::string raw="HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n3\r\n"+std::string("a\0b",3)+"\r\n2\r\ncd\r\n0\r\n\r\n";Server s(raw,"","",0,false,true);auto r=WindowsHttpTransport::request("GET",s.url());require(r.success()&&r.body==std::string("a\0bcd",5),"Chunked response damaged");s.finish();}
