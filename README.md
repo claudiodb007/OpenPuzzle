@@ -2,28 +2,31 @@
 
 # OpenPuzzle
 
-OpenPuzzle is an open-source desktop and command-line client for the public Bitcoin Puzzle project. It asks the coordinator for a range, runs it with a search engine such as BitCrack, KeyHunt, Kangaroo or Vanity, and reports progress. You can monitor active work and, where supported, recover interrupted searches.
+OpenPuzzle coordinates distributed searches for the public Bitcoin Puzzle. The desktop and command-line clients request a range, run it with a compatible search engine and report progress to the coordinator.
 
-[Download for Linux](https://github.com/claudiodb007/OpenPuzzle/releases/latest) · [Public Windows preview](https://github.com/claudiodb007/OpenPuzzle/releases/tag/windows-test-20261021-1) · [Live dashboard](https://claudiodb.com/) · [Português](#guia-rápido-em-português)
+[Downloads](https://github.com/claudiodb007/OpenPuzzle/releases/latest) · [Project dashboard](https://claudiodb.com/) · [Português](#guia-rápido-em-português)
 
 ## Install on Linux
 
-Use the Debian package on **Ubuntu 24.04 or newer, x86-64**. For GPU use, install the driver and runtime required by your chosen CUDA or OpenCL engine.
+On **Ubuntu 26.04 x86-64**, download the [Linux DEB](https://github.com/claudiodb007/OpenPuzzle/releases/download/v1.0.60/OpenPuzzle-1.0.60-Linux-x86_64.deb). From your downloads directory, run:
 
-1. Open [Releases](https://github.com/claudiodb007/OpenPuzzle/releases/latest) and expand **Assets**. Download the file named `OpenPuzzle-<version>-Linux-x86_64.deb`.
-2. In the directory containing the download, install it with APT. For version 1.0.59:
+```bash
+sudo apt install ./OpenPuzzle-1.0.60-Linux-x86_64.deb
+```
 
-   ```bash
-   sudo apt install ./OpenPuzzle-1.0.59-Linux-x86_64.deb
-   ```
+Open **OpenPuzzle** from the applications menu or run `openpuzzle-ui`. Install the driver for your GPU before using a CUDA or OpenCL engine.
 
-3. Open **OpenPuzzle** from your applications menu, or run `openpuzzle-ui`.
+## Install on Windows
+
+Run the [Windows x64 installer](https://github.com/claudiodb007/OpenPuzzle/releases/download/v1.0.60/OpenPuzzle-1.0.60-Windows-x86_64-Setup.exe), then open **OpenPuzzle 1.0.60** from the Start menu. For the [portable ZIP](https://github.com/claudiodb007/OpenPuzzle/releases/download/v1.0.60/OpenPuzzle-1.0.60-Windows-x86_64.zip), extract everything and open `Start.cmd`.
 
 ## Start a search
 
-In the desktop app, choose an execution mode and a device. Leave the puzzle at **0** to select the first unsolved puzzle automatically. Run **Benchmark** if the GPU setup needs a measured profile, then click **Start**. The status panel shows the range, speed and progress. **Safe Stop** finishes the current work before exiting.
+1. Pick a mode and a device. On Windows, use **BitCrack / CUDA** for NVIDIA, **BitCrack / OpenCL** for a compatible GPU, or **KeyHunt / CPU**.
+2. Run **Benchmark** to create a measured profile if prompted. Use puzzle **0** to choose the first unsolved puzzle, or enter a puzzle number.
+3. Click **Start**. The status card shows the active range, speed and telemetry available from the driver. Open **GPU power and fans** to view supported controls.
 
-On Linux you can also use the terminal:
+Use **Safe Stop** to finish the current range before the app takes another. Wait for it to finish before upgrading. On Linux, Vanity is available with a supported CUDA GPU.
 
 ```bash
 openpuzzle run          # First unsolved puzzle
@@ -32,24 +35,16 @@ openpuzzle status       # Show local execution status
 openpuzzle safestop     # Finish active work and stop taking new ranges
 ```
 
-## Try the Windows preview
-
-The [public Windows test release](https://github.com/claudiodb007/OpenPuzzle/releases/tag/windows-test-20261021-1) has a Windows x64 installer under **Assets**. Open **OpenPuzzle Test - Auto Benchmark** after installing, choose a backend and device under **Tools**, then run **Benchmark** if you have no measured profile for that setup.
-
 ## Guia rápido em português
 
-O OpenPuzzle coordena a pesquisa distribuída do Bitcoin Puzzle. Pede intervalos ao servidor, acompanha o progresso e usa motores externos para fazer a pesquisa.
+1. Em **Ubuntu 26.04 x86-64**, descarrega `OpenPuzzle-1.0.60-Linux-x86_64.deb` e instala com `sudo apt install ./OpenPuzzle-1.0.60-Linux-x86_64.deb`. Abre **OpenPuzzle** pelo menu de aplicações.
+2. Em **Windows x64**, usa o instalador e abre **OpenPuzzle 1.0.60** no menu Iniciar. Se preferires a versão portátil, extrai o ZIP completo e abre `Start.cmd`.
+3. Escolhe o modo e o dispositivo. Em Windows, usa **BitCrack / CUDA** para NVIDIA ou **BitCrack / OpenCL** para uma GPU compatível. Corre **Benchmark** se for pedido, usa o puzzle **0** para selecionar o primeiro por resolver e carrega em **Iniciar**.
+4. Usa **Safe Stop** para terminar o range atual antes de parar. Em **Potência e ventoinhas das GPUs**, podes ver os controlos que o driver disponibiliza.
 
-1. Em **Linux**, descarrega o ficheiro `.deb` em [Releases → Assets](https://github.com/claudiodb007/OpenPuzzle/releases/latest). Na pasta da transferência, instala com `sudo apt install ./OpenPuzzle-1.0.59-Linux-x86_64.deb`, ajustando o nome à versão descarregada.
-2. Abre **OpenPuzzle**, escolhe o modo e o dispositivo. O puzzle **0** seleciona automaticamente o primeiro por resolver.
-3. Se a GPU precisar de um perfil, corre o **Benchmark** e carrega em **Iniciar**. **Safe Stop** acaba o trabalho em curso antes de sair.
+## Documentation
 
-Para **Windows**, existe um [instalador x64 de teste](https://github.com/claudiodb007/OpenPuzzle/releases/tag/windows-test-20261021-1). Podes acompanhar o progresso no [painel do projeto](https://claudiodb.com/).
-
-## Documentation and source
-
-- [Source for the Linux 1.0.59 release](https://github.com/claudiodb007/OpenPuzzle/tree/v1.0.59)
-- [Continuous execution and recovery](https://github.com/claudiodb007/OpenPuzzle/blob/v1.0.59/OpenPuzzle/docs/CLIENT_RUNTIME.md)
-- [GPU controls](https://github.com/claudiodb007/OpenPuzzle/blob/v1.0.59/OpenPuzzle/docs/GPU_CONTROLS.md)
+- [Windows quick start in Portuguese](https://github.com/claudiodb007/OpenPuzzle/blob/v1.0.60/OpenPuzzle/docs/WINDOWS_QUICK_START_PT.md)
+- [Continuous execution and recovery](https://github.com/claudiodb007/OpenPuzzle/blob/v1.0.60/OpenPuzzle/docs/CLIENT_RUNTIME.md)
 - [Report a problem or suggest an improvement](https://github.com/claudiodb007/OpenPuzzle/issues)
-- [MIT license](LICENSE)
+- [MIT license](https://github.com/claudiodb007/OpenPuzzle/blob/main/LICENSE)
