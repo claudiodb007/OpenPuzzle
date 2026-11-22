@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage an internal Windows Qt build without changing a client installation.
+"""Stage the Windows Qt distribution.
 
 Use the build's matching Qt/MinGW SDK. Existing destinations are never replaced.
 The engine ZIP is an explicitly selected, previously distributed OpenPuzzle ZIP;
@@ -22,16 +22,15 @@ def main():
     parser.add_argument('--qt-licenses', type=Path, required=True)
     parser.add_argument('--gpu-control-build-info', type=Path, required=True)
     parser.add_argument('--adlx-license', type=Path, required=True)
-    parser.add_argument('--test-plan', type=Path)
-    parser.add_argument('--context', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     source = Path(__file__).resolve().parents[1]
     controls = json.loads(args.gpu_control_build_info.read_text(encoding='utf-8-sig'))
-    if controls.get('platform') != 'windows' or controls.get('amd_adlx') is not True:
-        parser.error('This all-vendor candidate requires the compiled AMD ADLX backend')
+    if (controls.get('platform') != 'windows' or controls.get('amd_adlx') is not True
+            or controls.get('nvidia_nvml') is not True):
+        parser.error('The Windows distribution requires both AMD ADLX and NVIDIA NVML support')
     if not args.adlx_license.is_file():
-        parser.error('The AMD SDK license notice is required for this private internal build')
+        parser.error('The AMD SDK license notice is required')
     if args.output.exists():
         parser.error('Destination already exists; preserve it and choose a new name')
     required = [args.build / 'platform' / n for n in
@@ -40,7 +39,7 @@ def main():
     required += [args.qt / 'plugins/platforms/qwindows.dll']
     required += [args.qt_licenses / n for n in ('LGPL-3.0-only.txt', 'GPL-3.0-only.txt', 'Qt-GPL-exception-1.0.txt')]
     if not (args.qt / 'sbom/qtbase-6.8.3.spdx.json').is_file():
-        parser.error('This candidate packager requires the verified Qt 6.8.3 SDK')
+        parser.error('The packager requires the verified Qt 6.8.3 SDK')
     if not any((p / 'COPYRIGHT.txt').is_file() for p in args.compiler_runtime):
         parser.error('The compiler runtime copyright notice is required')
     for path in required:
@@ -64,10 +63,6 @@ def main():
         copy(path, path.name)
     copy(required[7], 'platforms/qwindows.dll')
     copy(source / 'resources/windows/Diagnostico-GPU.cmd', 'Diagnostico-GPU.cmd')
-    if args.test_plan:
-        copy(args.test_plan, 'TESTAR-AMANHA.txt')
-    if args.context:
-        copy(args.context, 'CONTEXTO-PARA-GPT.txt')
     copy(args.gpu_control_build_info, 'gpu-control-build-info.json')
     copy(args.adlx_license, 'licenses/amd-adlx/ADLX SDK License Agreement.pdf')
     for name, path in runtime.items():

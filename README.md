@@ -8,7 +8,7 @@ OpenPuzzle coordinates distributed searches for the public Bitcoin Puzzle. The d
 
 ## Install on Linux
 
-On **Ubuntu 26.04 x86-64**, download `OpenPuzzle-1.0.60-Linux-x86_64.deb` from **Assets** in the 1.0.60 release. From your downloads directory, run:
+On **Ubuntu 26.04 x86-64**, download the [Linux DEB](https://github.com/claudiodb007/OpenPuzzle/releases/download/v1.0.60/OpenPuzzle-1.0.60-Linux-x86_64.deb). From your downloads directory, run:
 
 ```bash
 sudo apt install ./OpenPuzzle-1.0.60-Linux-x86_64.deb
@@ -18,7 +18,7 @@ Open **OpenPuzzle** from the applications menu or run `openpuzzle-ui`. Install t
 
 ## Install on Windows
 
-Download the Windows x86-64 installer from the 1.0.60 release and open **OpenPuzzle 1.0.60** from the Start menu after installation. For the portable ZIP, extract every file and run `Start.cmd` in the extracted folder.
+Run the [Windows x64 installer](https://github.com/claudiodb007/OpenPuzzle/releases/download/v1.0.60/OpenPuzzle-1.0.60-Windows-x86_64-Setup.exe), then open **OpenPuzzle 1.0.60** from the Start menu. For the [portable ZIP](https://github.com/claudiodb007/OpenPuzzle/releases/download/v1.0.60/OpenPuzzle-1.0.60-Windows-x86_64.zip), extract everything and open `Start.cmd`.
 
 ## Start a search
 
@@ -44,7 +44,8 @@ openpuzzle safestop     # Finish active work and stop taking new ranges
 
 ## Documentation
 
-- [Continuous execution and recovery](https://github.com/claudiodb007/OpenPuzzle/blob/v1.0.59/OpenPuzzle/docs/CLIENT_RUNTIME.md)
+- [Windows quick start in Portuguese](https://github.com/claudiodb007/OpenPuzzle/blob/v1.0.60/OpenPuzzle/docs/WINDOWS_QUICK_START_PT.md)
+- [Continuous execution and recovery](https://github.com/claudiodb007/OpenPuzzle/blob/v1.0.60/OpenPuzzle/docs/CLIENT_RUNTIME.md)
 - [Report a problem or suggest an improvement](https://github.com/claudiodb007/OpenPuzzle/issues)
 - [MIT license](https://github.com/claudiodb007/OpenPuzzle/blob/main/LICENSE)
 

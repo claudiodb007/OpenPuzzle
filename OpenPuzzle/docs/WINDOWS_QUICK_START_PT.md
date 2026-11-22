@@ -1,7 +1,6 @@
 # OpenPuzzle 1.0.60 para Windows
 
-Compilação interna para Windows x64. Inclui o componente AMD ADLX para testes
-internos, sujeito à licença em `licenses/amd-adlx`.
+Para Windows x64. Instala primeiro o driver AMD ou NVIDIA da tua placa.
 
 ## Instalar ou abrir
 
@@ -36,3 +35,5 @@ Vanity para Windows fica previsto para uma versão posterior aos testes.
 
 As bibliotecas dinâmicas Qt 6.8.3 são do SDK oficial. As licenças, avisos,
 SBOM e informação sobre o código correspondente estão em `licenses/qt`.
+O aviso do SDK AMD ADLX está em `licenses/amd-adlx`. A aplicação carrega o
+ADLX e o NVML a partir dos drivers instalados.
