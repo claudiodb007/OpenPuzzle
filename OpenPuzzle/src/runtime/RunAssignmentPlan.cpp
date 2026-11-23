@@ -1,5 +1,6 @@
 #include "openpuzzle/runtime/RunAssignmentPlan.hpp"
 #include "openpuzzle/runtime/WindowsEngineRange.hpp"
+#include "openpuzzle/runtime/WindowsVanityRun.hpp"
 #include "openpuzzle/core/LocalPaths.hpp"
 #include <algorithm>
 #include <regex>
@@ -31,7 +32,10 @@ RunAssignmentPlan RunAssignmentPlan::build(const RunCommandOptions& o,const clie
  if(!std::regex_match(a.target,address))throw std::invalid_argument("Invalid assignment target address");
  const auto start=hex(a.start),end=hex(a.end);if(before(end,start))throw std::invalid_argument("Descending assignment range");
  if(a.searchMode!="linear"||o.engine=="kangaroo")throw std::invalid_argument("Windows Kangaroo planning/checkpoint recovery is not integrated in this stage");
- if((o.engine!="bitcrack"|| (o.backend!="cuda"&&o.backend!="opencl")) && (o.engine!="keyhunt"||o.backend!="cpu"))throw std::invalid_argument("Invalid engine/backend routing");
+ const bool vanity = o.engine == "vanity" && o.backend == "cuda";
+ if(!vanity && (o.engine!="bitcrack"|| (o.backend!="cuda"&&o.backend!="opencl")) && (o.engine!="keyhunt"||o.backend!="cpu"))throw std::invalid_argument("Invalid engine/backend routing");
+ if(vanity && (!metadata || metadata->address.empty() || metadata->keyspace.empty()))
+   throw std::invalid_argument("Vanity requires explicit puzzle metadata with target and keyspace");
  if(o.backend=="cpu"&&(o.device!=0||o.gpuOptionsSpecified))throw std::invalid_argument("GPU options cannot be ignored by CPU planning");
  if(!a.requiredBackend.empty()&&a.requiredBackend!=o.backend)throw std::invalid_argument("Assignment backend differs from preflight");
  if(metadata){
@@ -43,9 +47,12 @@ RunAssignmentPlan RunAssignmentPlan::build(const RunCommandOptions& o,const clie
    }
  }
  RunAssignmentPlan plan;auto& s=plan.state;s.active=true;s.assignmentId=a.assignmentId;s.clientId=clientId;s.puzzle=a.puzzle;s.rangeId=a.rangeId;
- s.target=a.target;s.start=start;s.end=end;s.engine=o.engine=="bitcrack"?"BitCrack":"KeyHunt";s.backend=o.backend;s.device=o.device;
+ s.target=a.target;s.start=start;s.end=end;s.engine=vanity?"Vanity":o.engine=="bitcrack"?"BitCrack":"KeyHunt";s.backend=o.backend;s.device=o.device;
  s.blocks=o.backend=="cpu"?0:o.blocks;s.threads=o.threads;s.points=o.backend=="cpu"?0:o.points;s.workspace=pathUtf8(workspace);
- if(o.engine=="bitcrack")plan.arguments={a.target,"--keyspace",start+":"+end,"--out",pathUtf8(workspace/"found.txt"),"-d",std::to_string(o.device),"-b",std::to_string(o.blocks),"-t",std::to_string(o.threads),"-p",std::to_string(o.points)};
+ if(vanity){
+   (void)windowsVanityPlan(s);
+   plan.targetFileContent="OPV-TARGETS-1\np2pkh "+a.target+"\n";
+ } else if(o.engine=="bitcrack")plan.arguments={a.target,"--keyspace",start+":"+end,"--out",pathUtf8(workspace/"found.txt"),"-d",std::to_string(o.device),"-b",std::to_string(o.blocks),"-t",std::to_string(o.threads),"-p",std::to_string(o.points)};
  else {
 #ifdef _WIN32
  const auto cpuEnd=WindowsEngineRange::keyhuntExclusiveEnd(start,end);

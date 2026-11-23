@@ -69,6 +69,16 @@ else
   RELEASE_FILES=("$DEB" "$TGZ" "$PORTABLE")
 fi
 
+WINDOWS_ZIP="$DIST/OpenPuzzle-$VERSION-Windows-x86_64.zip"
+WINDOWS_SETUP="$DIST/OpenPuzzle-$VERSION-Windows-x86_64-Setup.exe"
+if [[ -e "$WINDOWS_ZIP" || -L "$WINDOWS_ZIP" || -e "$WINDOWS_SETUP" || -L "$WINDOWS_SETUP" ]]; then
+  [[ -f "$WINDOWS_ZIP" && ! -L "$WINDOWS_ZIP" && -f "$WINDOWS_SETUP" && ! -L "$WINDOWS_SETUP" ]] || {
+    echo "The Windows ZIP and installer must be supplied together" >&2
+    exit 1
+  }
+  RELEASE_FILES+=("$WINDOWS_ZIP" "$WINDOWS_SETUP")
+fi
+
 for f in "${RELEASE_FILES[@]}"; do
   printf '%s  %s\n' \
     "$(sha256sum "$f" | awk '{print $1}')" \

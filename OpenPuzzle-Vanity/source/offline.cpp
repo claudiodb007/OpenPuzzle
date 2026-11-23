@@ -10,11 +10,10 @@
 #include <set>
 #include <sstream>
 #include <thread>
-#include <fcntl.h>
-#include <sys/prctl.h>
-#include <unistd.h>
+#include <vector>
 #include "SECP256k1.h"
 #include "TargetInput.hpp"
+#include "NativeRunFiles.hpp"
 #include "GPU/GPUEngine.h"
 #include <cuda_runtime.h>
 #include "client/openpuzzle/runtime/VanityRangeProtocol.hpp"
@@ -26,10 +25,6 @@ static Int number(const std::string& s) { std::string v=canonical(s);Int n;n.Set
 static std::string hex(const unsigned char* p,size_t n) {
   std::ostringstream s;for(size_t i=0;i<n;++i)s<<std::hex<<std::setfill('0')<<std::setw(2)<<unsigned(p[i]);return s.str();
 }
-static void writeAll(int fd,const std::string& s) {
-  size_t n=0;while(n<s.size()) {ssize_t k=write(fd,s.data()+n,s.size()-n);if(k<0&&errno==EINTR)continue;if(k<=0)throw std::runtime_error("Solution write failed");n+=k;}
-  if(fsync(fd))throw std::runtime_error("Solution fsync failed");
-}
 static void configureBlockingSynchronization() {
   unsigned int flags=0;
   if(cudaGetDeviceFlags(&flags)!=cudaSuccess ||
@@ -40,14 +35,14 @@ static void configureBlockingSynchronization() {
   std::cout<<"OPV-CPU-WAIT-1 blocking\n"<<std::flush;
 }
 
-int main(int argc,char** argv) {
-  int solutionFd=-1;
+static int run(const std::vector<std::string>& argv) {
+  const auto argc=argv.size();
   try {
     if(argc==2 && std::string(argv[1])=="--identity") {
       std::cout<<"OpenPuzzle-VanityRange 0.2.0 CUDA target protocol 1\n";return 0;
     }
     if(argc==3 && std::string(argv[1])=="--target-info") {
-      auto targets=opvTargets::load(argv[2]);
+      auto targets=opvTargets::load(std::filesystem::u8path(argv[2]));
       for(const auto& pair:targets)std::cout<<pair.first<<" "<<pair.second.address<<"\n";return 0;
     }
     Secp256K1 secp;secp.Init();
@@ -64,10 +59,10 @@ int main(int argc,char** argv) {
     std::string mode=argv[7];if(mode!="exhaust" && mode!="stop")throw std::runtime_error("Invalid target mode");
     uint64_t owner=decimal(argv[8]);if(owner<2 || owner>uint64_t(INT32_MAX))throw std::runtime_error("Invalid owner PID");
     signal(SIGTERM,stop);signal(SIGINT,stop);
-    if(prctl(PR_SET_PDEATHSIG,SIGTERM)!=0 || getppid()!=pid_t(owner))throw std::runtime_error("Owner changed");
+    const opvNative::Owner supervisor(static_cast<std::uint32_t>(owner));
     int devices=0;if(cudaGetDeviceCount(&devices)!=cudaSuccess || devices!=1)throw std::runtime_error("Exactly one visible CUDA GPU required");
     configureBlockingSynchronization();
-    auto targets=opvTargets::load(argv[5]);
+    auto targets=opvTargets::load(std::filesystem::u8path(argv[5]));
     std::map<uint16_t,std::set<uint32_t>> buckets;
     for(const auto& pair:targets) {
       const auto& h=pair.second.hash;uint16_t a;uint32_t b;
@@ -87,14 +82,14 @@ int main(int argc,char** argv) {
       for(uint64_t tid=w;tid<threads;tid+=parallel) {Int k=number(add(plan.start,tid*1024+512));points[tid]=secp.ComputePublicKey(&k);}
     });
     for(auto& t:workers)t.join();
-    solutionFd=open(argv[6],O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC,0600);
-    if(solutionFd<0)throw std::runtime_error("Occupied/unsafe solution file");
+    opvNative::Results solutions(std::filesystem::u8path(argv[6]));
     std::cout<<"OPV1 BEGIN "<<plan.start<<" "<<plan.count<<" "<<plan.batch<<"\n"<<std::flush;
-    if(stopping) {std::cout<<"OPV1 STOPPED 0\n"<<std::flush;close(solutionFd);return 130;}
+    if(stopping||!supervisor.alive()) {std::cout<<"OPV1 STOPPED 0\n"<<std::flush;return 130;}
     if(!gpu.SetKeys(points.data()))throw std::runtime_error("Kernel start failed");
     std::vector<ITEM> hits;std::set<std::string> recovered;uint64_t checked=0;
     while(checked<plan.count) {
       if(!gpu.Launch(hits,true,false))throw std::runtime_error("GPU result or overflow failure");
+      if(!supervisor.alive())throw std::runtime_error("Owner exited during CUDA work");
       bool matched=false;
       for(const ITEM& hit:hits) {
         if(hit.thId>=threads || hit.incr<0 || hit.incr>=1024 || hit.endo || !hit.mode)throw std::runtime_error("Invalid result coordinates");
@@ -103,23 +98,42 @@ int main(int argc,char** argv) {
         std::string h=hex(hit.hash,20);if(!targets.count(h))continue;
         std::string key=add(plan.start,offset);Int k=number(key);Point p=secp.ComputePublicKey(&k);unsigned char reference[20];secp.GetHash160(P2PKH,true,p,reference);
         if(hex(reference,20)!=h || !recovered.insert(key).second)throw std::runtime_error("CPU verification or duplicate result failure");
-        writeAll(solutionFd,"MATCH "+key+" "+h+" "+targets.at(h).address+" "+secp.GetPrivAddress(true,k)+"\n");matched=true;
+        solutions.append("MATCH "+key+" "+h+" "+targets.at(h).address+" "+secp.GetPrivAddress(true,k)+"\n");matched=true;
       }
       checked+=std::min(plan.batch,plan.count-checked);
       // Only acknowledge a completed batch after its solutions are durable.
       gpu.VerifyTrace(checked);
       std::cout<<"OPV1 PROGRESS "<<checked<<"\n"<<std::flush;
       if(matched && mode=="stop") {
-        std::cout<<"OPV1 SOLUTION "<<checked<<"\n"<<std::flush;close(solutionFd);return 10;
+        std::cout<<"OPV1 SOLUTION "<<checked<<"\n"<<std::flush;return 10;
       }
-      if(stopping) {std::cout<<"OPV1 STOPPED "<<checked<<"\n"<<std::flush;close(solutionFd);return 130;}
+      if(stopping||!supervisor.alive()) {std::cout<<"OPV1 STOPPED "<<checked<<"\n"<<std::flush;return 130;}
       if(checked<plan.count && !gpu.QueueNext())throw std::runtime_error("Next kernel failed");
     }
     if(cudaDeviceSynchronize()!=cudaSuccess)throw std::runtime_error("Final GPU synchronization failed");
     if(trace)std::cout<<"OPV1 TRACE "<<checked<<"\n";
-    std::cout<<"OPV1 COMPLETE "<<checked<<"\n"<<std::flush;close(solutionFd);return 0;
+    std::cout<<"OPV1 COMPLETE "<<checked<<"\n"<<std::flush;return 0;
   } catch(const std::exception& e) {
-    if(solutionFd>=0)close(solutionFd);
     std::cerr<<"FAILED: "<<e.what()<<"\n";return 2;
   }
 }
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t** argv) {
+  try {
+    std::vector<std::string> arguments;
+    arguments.reserve(static_cast<std::size_t>(argc));
+    for (int i = 0; i < argc; ++i) {
+      arguments.push_back(std::filesystem::path(argv[i]).u8string());
+    }
+    return run(arguments);
+  } catch (const std::exception& error) {
+    std::cerr << "FAILED: " << error.what() << '\n';
+    return 2;
+  }
+}
+#else
+int main(int argc, char** argv) {
+  return run(std::vector<std::string>(argv, argv + argc));
+}
+#endif

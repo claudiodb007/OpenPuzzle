@@ -57,6 +57,9 @@ struct ClientExecutionState {
   std::string kangarooWalkSeed;
   std::uint64_t kangarooGeneration = 0;
 
+  // Coverage confirmed in a previous Windows Vanity process generation.
+  std::uint64_t vanityResumeOffset = 0;
+
   std::string start;
   std::string end;
 

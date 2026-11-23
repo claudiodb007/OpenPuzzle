@@ -6,6 +6,8 @@
 #include "openpuzzle/engines/WindowsEngineDeviceList.hpp"
 #include "openpuzzle/core/WindowsCliApplication.hpp"
 #include "openpuzzle/runtime/WindowsRunSession.hpp"
+#include "openpuzzle/runtime/WindowsExecutionState.hpp"
+#include "openpuzzle/runtime/WindowsVanityRun.hpp"
 #include "openpuzzle/client/ClientStateStore.hpp"
 #include "openpuzzle/client/ExecutionSyncService.hpp"
 #include "openpuzzle/runtime/ClientRuntimeControl.hpp"
@@ -126,7 +128,19 @@ int WindowsDesktopApplication::run(const std::vector<std::string>& args,std::ost
    const auto inspected=client::ExecutionSyncService().inspect(s.slot);
    if(inspected.identityUnavailable){s.status="identity unavailable";}
    else if(inspected.solutionFound&&inspected.hasState&&inspected.state.assignmentId==state->assignmentId){s.status="solution found";}
-   else if(s.status=="stopped")s.fields["Recovery"]="yes";
+   else if(s.status=="stopped"){
+    s.fields["Recovery"]="yes";
+    if (state->engine == "Vanity") {
+     s.fields["Device"] = std::to_string(state->device);
+     const auto record = windowsExecutionRecord(*state);
+     if (record) {
+      const auto generation = WindowsEngineProcess::generationPath(pathFromUtf8(state->workspace), *record);
+      const auto proof = readWindowsVanityEvidence(*state, generation);
+      if (proof && !proof->solution)
+       s.fields["Checkpoint"] = "verified locally (" + std::to_string(state->vanityResumeOffset + proof->checked) + " keys checked)";
+     }
+    }
+   }
   }const auto speed=s.fields.find("Speed MKey/s");if(speed!=s.fields.end()&&speed->second!="unavailable")s.fields["Speed"]=speed->second+" MKey/s";}
   std::optional<WindowsTelemetryReport> sensors;
   const auto number=[](double value,const char* unit){std::ostringstream text;text.imbue(std::locale::classic());text<<std::fixed<<std::setprecision(1)<<value<<unit;return text.str();};

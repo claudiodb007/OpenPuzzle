@@ -319,6 +319,9 @@ bool ClientStateStore::save(
       << state.kangarooGeneration
       << '\n';
 
+  if (state.vanityResumeOffset)
+    output << "vanity_resume_offset=" << state.vanityResumeOffset << '\n';
+
   writeField(
       output,
       "start",
@@ -514,6 +517,7 @@ ClientStateStore::load(
       parseUnsigned64(
           values,
           "kangaroo_generation");
+  state.vanityResumeOffset = parseUnsigned64(values, "vanity_resume_offset");
 
   state.start =
       valueOf(

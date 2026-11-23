@@ -5,6 +5,7 @@
 #include "openpuzzle/client/ClientIdentity.hpp"
 #include "openpuzzle/core/AtomicFile.hpp"
 #include "openpuzzle/core/LocalPaths.hpp"
+#include "openpuzzle/runtime/VanityRangeProtocol.hpp"
 #include <sstream>
 #include <fstream>
 #include <iostream>
@@ -76,5 +77,91 @@ int wmain(int argc,wchar_t** argv){try{
   require(WindowsRunSession(deps(fixture,server.url())).run({"run","--once"},output)==1,"Existing assignment workspace reused");server.finish();require(read(work/"preserved.txt")=="byte-for-byte"&&fs::exists(pending),"Workspace refusal discarded existing data or claim");fs::remove(pending);}
  {int claimed=0;RunServer server([&](const auto& request){if(endpoint(request,"/api/range/claim")){++claimed;return assigned("continuous-safe");}if(endpoint(request,"/api/range/complete"))require(Control::requestSafeStop("cuda-7"),"Native safe stop request failed");return std::string("{}");});
   require(WindowsRunSession(deps(fixture,server.url())).run({"run","71"},output)==0,"Continuous safe-stop run failed");server.finish();require(claimed==1&&!fs::exists(pending),"Safe stop allocated another range or lost final cleanup");}
+ {
+  using namespace vanityPreview;
+  constexpr uint64_t batch=256*1024;
+  const std::string begin="400000000000000000";
+  const auto finish=add(begin,2*batch-1);
+  const auto workspace=localPaths::dataDirectory()/"assignments"/"vanity-resume";
+  bool rejectLease=false;
+  bool resuming=false;
+  int claims=0,completions=0,runningHeartbeats=0,renewals=0;
+  RunServer server([&](const auto& request){
+    if(endpoint(request,"/api/range/claim")){
+      ++claims;
+      require(request.find("\"requested_keys\":")!=std::string::npos,"Vanity claim did not bound the engine's native range");
+      return assigned("vanity-resume",begin,finish);
+    }
+    if(endpoint(request,"/api/client/heartbeat")&&request.find("\"status\":\"running\"")!=std::string::npos){
+      ++runningHeartbeats;require(request.find("Vanity")!=std::string::npos,"Wrong engine in running heartbeat");
+      if(runningHeartbeats==1){
+        const auto argsFile=workspace/"fixture-vanity-args.txt";
+        const auto deadline=GetTickCount64()+5000;
+        while(!fs::exists(argsFile)&&GetTickCount64()<deadline)Sleep(10);
+        require(fs::exists(argsFile)&&Control::requestStop("cuda-7"),"Could not interrupt verified Vanity progress");
+      }else if(resuming&&!fs::exists(workspace/"fixture-vanity-finish")){
+        require(Control::requestSafeStop("cuda-7"),"Could not request Vanity Safe Stop");
+        publish(workspace/"fixture-vanity-finish","");
+      }
+    }
+    if(endpoint(request,"/api/range/progress")&&rejectLease){++renewals;return std::string("{\"error\":\"assignment_lease_expired\"}");}
+    if(endpoint(request,"/api/range/complete")){++completions;require(request.find("\"keys_checked\":\"524288\"")!=std::string::npos,"Resume lost prior verified coverage");}
+    return std::string("{}");
+  },[&](const auto& request){return rejectLease&&endpoint(request,"/api/range/progress")?"409 Conflict":"200 OK";});
+  auto d=deps(fixture,server.url());
+  d.engines={{"vanity","cuda",fixture,{2},12.5,true}};
+  d.metadata=[&](int number)->std::optional<PuzzleExecutionMetadata>{
+    auto metadata=deps(fixture,"").metadata(number);
+    if(metadata)metadata->keyspace=begin+":"+finish;
+    return metadata;
+  };
+  d.capabilities=[](const auto& id){auto capabilities=deps({},"").capabilities(id);capabilities.engines={{"Vanity","cuda",true,true}};return capabilities;};
+  const std::vector<std::string> args={"run","71","--engine","vanity","--device","2","--blocks","1","--once"};
+  const auto interrupted=WindowsRunSession(d).run(args,output);
+  require(interrupted==130&&Store::load("cuda-7").has_value()&&fs::exists(pending)&&completions==0,
+          "Interrupted Vanity lost its local checkpoint or reported cancellation");
+  auto resume=args;resume.push_back("--resume-vanity");
+  rejectLease=true;
+  require(WindowsRunSession(d).run(resume,output)==1&&Store::load("cuda-7").has_value()&&fs::exists(pending),
+          "Vanity resumed a rejected lease");
+  rejectLease=false;
+  resuming=true;
+  // Safe Stop raised during the resumed working heartbeat waits for completion.
+  // The fixture finishes its remaining batch without requesting another range.
+  require(WindowsRunSession(d).run(resume,output)==0,"Vanity could not resume the same lease");
+  server.finish();
+  require(claims==1&&renewals==1&&runningHeartbeats>=2&&completions==1&&!fs::exists(pending)&&
+      !Store::load("cuda-7")&&read(workspace/"fixture-vanity-args.txt")==add(begin,batch)+"\n"+std::to_string(batch),
+      "Vanity resume did not transfer exactly the unsearched suffix");
+  for(const bool proveCompletion:{true,false}){
+    const std::string id=proveCompletion?"vanity-safe-stop":"vanity-missing-proof";
+    const auto runWorkspace=workspace.parent_path()/id;
+    int nextClaims=0, acknowledgements=0;
+    RunServer next([&](const auto& request){
+      if(endpoint(request,"/api/range/claim")) {
+        require(++nextClaims==1,"Vanity Safe Stop requested a second range");
+        return assigned(id,begin,finish);
+      }
+      if(endpoint(request,"/api/client/heartbeat")&&request.find("\"status\":\"running\"")!=std::string::npos&&
+         !fs::exists(runWorkspace/"fixture-vanity-finish")){
+        require(Control::requestSafeStop("cuda-7"),"Could not request Safe Stop on a continuous Vanity run");
+        if(!proveCompletion)publish(runWorkspace/"fixture-invalid-proof","");
+        publish(runWorkspace/"fixture-vanity-finish","");
+      }
+      if(endpoint(request,"/api/range/complete"))++acknowledgements;
+      return std::string("{}");
+    });
+    d.serverUrl=next.url();
+    auto continuous=args;
+    continuous.pop_back();
+    const auto code=WindowsRunSession(d).run(continuous,output);
+    next.finish();
+    require(nextClaims==1&&acknowledgements==(proveCompletion?1:0),
+            "Unexpected completion acknowledgement for the native proof");
+    require(proveCompletion?(code==0&&!Store::load("cuda-7")&&!fs::exists(pending)):
+                            (Store::load("cuda-7").has_value()&&fs::exists(pending)),
+            "Safe Stop did not preserve the assignment according to its native proof");
+  }
+ }
  fs::remove_all(root);std::cout<<"WindowsRunSessionTests passed: registration order, linear CUDA/CPU planning, one-shot/continuous execution, local controls and preserved uncertain claims\n";return 0;
 }catch(const std::exception& error){Control::release();std::cerr<<error.what()<<'\n';return 1;}}

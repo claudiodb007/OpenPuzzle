@@ -10,6 +10,8 @@
 #include <stdexcept>
 #include <thread>
 #include <chrono>
+#include <algorithm>
+#include <cwchar>
 namespace openpuzzle {
 namespace {
 namespace fs=std::filesystem;
@@ -42,6 +44,31 @@ public:
   LPPROC_THREAD_ATTRIBUTE_LIST get()const{return ready_?list_:nullptr;}
 };
 fs::path lockPath(const fs::path& root){return root/L"engine.windows.lock";}
+std::wstring cudaEnvironment(int device) {
+  require(device >= 0 && device <= 255, "Invalid CUDA device index");
+  auto* block = GetEnvironmentStringsW();
+  require(block != nullptr, "Windows environment is unavailable");
+  const auto release = [](wchar_t* value) { FreeEnvironmentStringsW(value); };
+  const std::unique_ptr<wchar_t, decltype(release)> guard(block, release);
+  constexpr std::wstring_view name = L"CUDA_VISIBLE_DEVICES=";
+  std::vector<std::wstring> entries;
+  for (auto* next = block; *next; next += std::wcslen(next) + 1) {
+    if (_wcsnicmp(next, name.data(), name.size()) != 0) {
+      entries.emplace_back(next);
+    }
+  }
+  entries.emplace_back(std::wstring(name) + std::to_wstring(device));
+  std::sort(entries.begin(), entries.end(), [](const auto& first, const auto& second) {
+    return _wcsicmp(first.c_str(), second.c_str()) < 0;
+  });
+  std::wstring result;
+  for (const auto& entry : entries) {
+    result.append(entry);
+    result.push_back(L'\0');
+  }
+  result.push_back(L'\0');
+  return result;
+}
 bool jobEmpty(HANDLE job){
   JOBOBJECT_BASIC_ACCOUNTING_INFORMATION info{};
   return QueryInformationJobObject(job,JobObjectBasicAccountingInformation,&info,sizeof(info),nullptr)&&info.ActiveProcesses==0;
@@ -81,13 +108,15 @@ WindowsEngineProcess::Recovery WindowsEngineProcess::recover(const fs::path& wor
 }
 std::unique_ptr<WindowsEngineProcess> WindowsEngineProcess::start(const fs::path& executable,
     const std::vector<std::string>& arguments,const fs::path& workspace,
-    const std::function<bool(const WindowsEngineRecord&)>& publishState){
+    const std::function<bool(const WindowsEngineRecord&)>& publishState,
+    std::optional<int> visibleCudaDevice){
   require(executable.is_absolute()&&fs::is_regular_file(executable),"Windows engine executable must be an existing absolute file");
   require(workspace.is_absolute()&&windowsFile::safePath(workspace),"Windows engine workspace must be an absolute private path");
   auto command=wide(WindowsCommandLine::build(pathUtf8(executable),arguments));
   WorkspaceSecurity::prepare(workspace);
   windowsFile::Lock lock(lockPath(workspace));require(lock.locked(),"Could not lock Windows engine workspace");
-  require(recover(workspace).status==WindowsProcessIdentity::Status::Inactive,"Windows engine identity is active or unavailable; preserved");
+  const auto previous=recover(workspace);
+  require(previous.status==WindowsProcessIdentity::Status::Inactive,"Windows engine identity is active or unavailable; preserved");
   auto impl=std::make_unique<Impl>();impl->workspace=workspace;
   static std::atomic<unsigned long long> sequence{0};
   impl->record.generation=std::to_string(GetCurrentProcessId())+'-'+std::to_string(GetTickCount64())+'-'+std::to_string(sequence++);
@@ -109,8 +138,11 @@ std::unique_ptr<WindowsEngineProcess> WindowsEngineProcess::start(const fs::path
   STARTUPINFOEXW startup{};startup.StartupInfo.cb=sizeof(startup);startup.StartupInfo.dwFlags=STARTF_USESTDHANDLES;
   startup.StartupInfo.hStdInput=input.get();startup.StartupInfo.hStdOutput=impl->log->get();startup.StartupInfo.hStdError=impl->log->get();startup.lpAttributeList=attributes.get();
   PROCESS_INFORMATION created{};
+  auto environment = visibleCudaDevice ? cudaEnvironment(*visibleCudaDevice) : std::wstring{};
+  const DWORD environmentFlags = visibleCudaDevice ? CREATE_UNICODE_ENVIRONMENT : 0;
   require(CreateProcessW(executable.c_str(),command.data(),nullptr,nullptr,TRUE,
-      CREATE_SUSPENDED|CREATE_NO_WINDOW|EXTENDED_STARTUPINFO_PRESENT,nullptr,workspace.c_str(),&startup.StartupInfo,&created),"Could not create suspended Windows engine");
+      CREATE_SUSPENDED|CREATE_NO_WINDOW|EXTENDED_STARTUPINFO_PRESENT|environmentFlags,
+      environment.empty()?nullptr:environment.data(),workspace.c_str(),&startup.StartupInfo,&created),"Could not create suspended Windows engine");
   impl->process=std::make_unique<Handle>(created.hProcess);Handle thread(created.hThread);
   // A suspended child must also be terminated if job assignment fails.
   if(!AssignProcessToJobObject(impl->job->get(),impl->process->get())){
@@ -127,7 +159,11 @@ std::unique_ptr<WindowsEngineProcess> WindowsEngineProcess::start(const fs::path
   require(writePrivateFileAtomically(identityPath(workspace),impl->record.encode()),"Could not publish engine identity; previous marker preserved");
   // Persist the assignment while the contained child is still suspended.
   // Publication failure terminates that child without executing its first instruction.
-  if(publishState)require(publishState(impl->record),"Could not persist Windows assignment; engine was not resumed");
+  if(publishState && !publishState(impl->record)){
+    if(previous.record)require(writePrivateFileAtomically(identityPath(workspace),previous.record->encode()),
+        "Could not restore the previous Windows engine identity; engine was not resumed");
+    throw std::runtime_error("Could not persist Windows assignment; engine was not resumed");
+  }
   auto result=std::unique_ptr<WindowsEngineProcess>(new WindowsEngineProcess(std::move(impl)));
   if(ResumeThread(thread.get())==static_cast<DWORD>(-1)){
     result->stop(125);throw std::runtime_error("Could not resume contained Windows engine");

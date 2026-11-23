@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.61 — Vanity CUDA on Windows
+
+- Include the Vanity CUDA engine in the Windows installer and portable ZIP.
+- Request and complete Puzzle 71 ranges with progress, heartbeats and GPU telemetry.
+- Finish the current range with Safe Stop or resume an interrupted range while its lease is valid.
+
 ## 1.0.60 — Shared desktop and Windows GPU support
 
 - Improve the visibility of buttons, checkboxes and field arrows in both themes.

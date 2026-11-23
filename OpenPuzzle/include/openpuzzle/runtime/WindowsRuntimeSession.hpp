@@ -15,10 +15,11 @@ public:
   WindowsRuntimeSession(std::string serverUrl, client::ClientHeartbeat capabilities,
                         std::function<bool()> preflight, WindowsRuntimeThermalSettings thermal={});
   int runContinuous(const std::function<ClientIterationResult(WindowsRuntimeSession&)>& prepare, bool once=false,
-      const std::function<ClientIterationResult()>& initialize={});
+      const std::function<ClientIterationResult()>& initialize={}, bool resumeVanity=false);
   ClientIterationResult execute(const std::filesystem::path& executable,
                                const std::vector<std::string>& arguments,
-                               client::ClientExecutionState state);
+                               client::ClientExecutionState state,
+                               std::optional<WindowsEngineRecord> previous={});
   bool thermalReady(){return !pollThermal();}
   ~WindowsRuntimeSession();
   WindowsRuntimeSession(const WindowsRuntimeSession&)=delete;

@@ -20,7 +20,8 @@ public:
   };
   static std::unique_ptr<WindowsEngineProcess> start(const std::filesystem::path& executable,
       const std::vector<std::string>& arguments,const std::filesystem::path& workspace,
-      const std::function<bool(const WindowsEngineRecord&)>& publishState = {});
+      const std::function<bool(const WindowsEngineRecord&)>& publishState = {},
+      std::optional<int> visibleCudaDevice = {});
   static Recovery recover(const std::filesystem::path& workspace);
   const WindowsEngineRecord& identity()const;
   std::filesystem::path logPath()const;

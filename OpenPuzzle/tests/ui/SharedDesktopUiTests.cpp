@@ -9,6 +9,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -29,6 +30,13 @@ bool until(const std::function<bool()>& condition){QElapsedTimer timer;timer.sta
 void write(const QString& path,const QByteArray& bytes){QFile f(path);check(f.open(QIODevice::WriteOnly|QIODevice::Truncate),"Fixture write open");check(f.write(bytes)==bytes.size(),"Fixture write");}
 template<class T>T* control(MainWindow& w,const char* name){for(auto* p:w.findChildren<T*>())if(p->property("controlId").toString()==name)return p;throw std::runtime_error(std::string("Missing control: ")+name);}
 int fixture(const QStringList& a){const auto root=qEnvironmentVariable("OPENPUZZLE_QT_FIXTURE_ROOT");const auto command=a.value(1);
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+ if(QFileInfo(a.value(0)).fileName().compare("openpuzzle-vanity-cuda-test.exe",Qt::CaseInsensitive)==0){
+  write(root+"/vanity-device",command.toUtf8());
+  if(QFile::exists(root+"/fail-vanity")){std::cout<<"Synthetic CUDA failure\n";return 1;}
+  std::cout<<"PASS: Vanity CUDA verified 513 keys and found the synthetic target.\n";return 0;
+ }
+#endif
  if(command=="desktop-capabilities"){
   if(QFile::exists(root+"/amd-only")){std::cout<<"{\"cuda\":[],\"opencl\":[{\"engine_index\":0,\"platform_index\":0,\"native_index\":0,\"gpu\":true,\"name\":\"gfx1010:xnack-\",\"memory_bytes\":8573157376,\"display_name\":\"AMD Radeon RX 5700 XT\"}]}";return 0;}
   if(QFile::exists(root+"/fail-discovery")){std::cout<<"{\"cuda\":[],\"opencl\":[],\"diagnostics\":{\"opencl\":{\"code\":1,\"message\":\"AMD enumeration failed: synthetic driver error\"}},\"hardware_report\":\"Windows adapter: AMD Radeon RX 5700 XT\"}";return 0;}
@@ -60,6 +68,9 @@ int main(int argc,char** argv){try{
  MainWindow window;window.resize(1180,940);window.show();
  auto* start=control<QPushButton>(window,"start");auto* refresh=control<QPushButton>(window,"refresh");auto* benchmark=control<QPushButton>(window,"benchmark");
  auto* mode=control<QComboBox>(window,"executionMode");auto* device=control<QSpinBox>(window,"cudaDevice");auto* threads=control<QSpinBox>(window,"cpuThreads");
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+ check(mode->findData(static_cast<int>(RunMode::VanityCuda))<0,"Vanity test offered without bundled binaries");
+#endif
  check(until([&]{return benchmark->isEnabled()&&device->toolTip().contains("3080");}),"Initial desktop discovery/status");
  check(!start->isEnabled()&&control<QSpinBox>(window,"puzzle")->value()==0,"Unmeasured desktop started or nonautomatic puzzle");
  check(!control<QCheckBox>(window,"autoStart")->isEnabled()&&!control<QPushButton>(window,"installKangaroo")->isEnabled(),"Unsupported Windows action enabled");
@@ -107,6 +118,76 @@ int main(int argc,char** argv){try{
  check(!QFile::exists(temp.filePath("unexpected-command")),"Unexpected command / research claim");
  for(auto* p:window.findChildren<QProcess*>())if(p->state()!=QProcess::NotRunning){p->kill();p->waitForFinished(3000);}
  window.close();for(auto* timer:window.findChildren<QTimer*>())timer->stop();
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+ {
+  const QDir folder(QCoreApplication::applicationDirPath());
+  const auto launcher=folder.filePath("openpuzzle-vanity-cuda-test.exe");
+  const auto engine=folder.filePath("engines/vanity-offline.exe");
+  check(!QFile::exists(launcher)&&!QFile::exists(engine),"Vanity fixture needs an isolated test directory");
+  const struct RemoveFixtures {
+   QString launcher,engine;
+   ~RemoveFixtures(){QFile::remove(launcher);QFile::remove(engine);}
+  } removeFixtures{launcher,engine};
+  check(QDir().mkpath(QFileInfo(engine).absolutePath()),"Vanity fixture engine directory");
+  write(engine,"synthetic");
+  check(QFile::copy(QCoreApplication::applicationFilePath(),launcher),"Vanity launcher fixture");
+  QSettings().clear();
+  QFile::remove(temp.filePath("measured"));
+  QFile::remove(temp.filePath("run-argv"));
+  MainWindow vanity;vanity.show();
+  auto* vanityMode=control<QComboBox>(vanity,"executionMode");
+  auto* runTest=control<QPushButton>(vanity,"start");
+  auto* hint=control<QLabel>(vanity,"windowsVanityTestHint");
+  auto* messages=control<QPlainTextEdit>(vanity,"messagesOutput");
+  const int testMode=vanityMode->findData(static_cast<int>(RunMode::VanityCudaLocalTest));
+  check(testMode>=0&&vanityMode->model()->flags(vanityMode->model()->index(testMode,0)).testFlag(Qt::ItemIsEnabled),
+        "Bundled Vanity mode is unavailable");
+  vanityMode->setCurrentIndex(testMode);
+  check(until([&]{return runTest->isEnabled();}),"Local Vanity test requires a production profile");
+  check(hint->isVisible()&&!control<QSpinBox>(vanity,"puzzle")->isVisible()&&
+        !control<QPushButton>(vanity,"benchmark")->isEnabled(),"Local Vanity test shows production controls");
+  runTest->click();
+  check(until([&]{return runTest->isEnabled()&&hint->text().contains("passed");}),"Vanity success not shown");
+  QFile selectedDevice(temp.filePath("vanity-device"));
+  check(selectedDevice.open(QIODevice::ReadOnly)&&selectedDevice.readAll()=="0","Wrong CUDA device sent to Vanity");
+  check(!QFile::exists(temp.filePath("run-argv")),"Local Vanity test requested production work");
+  check(messages->toPlainText().contains("PASS"),"Vanity output missing");
+  write(temp.filePath("fail-vanity"),"yes");runTest->click();
+  check(until([&]{return hint->text().contains("failed")&&messages->toPlainText().contains("Synthetic CUDA failure");}),
+        "Vanity failure not shown");
+  vanity.close();
+  check(QFile::remove(launcher),"Could not remove the optional Vanity test launcher");
+  QSettings().clear();
+  MainWindow release;release.show();
+  auto* releaseMode=control<QComboBox>(release,"executionMode");
+  auto* startVanity=control<QPushButton>(release,"start");
+  const int coordinatedMode=releaseMode->findData(static_cast<int>(RunMode::VanityCuda));
+  check(coordinatedMode>=0,"Coordinated Vanity mode is unavailable");
+  check(releaseMode->findData(static_cast<int>(RunMode::VanityCudaLocalTest))<0,
+        "The optional Vanity test mode appeared without its launcher");
+  releaseMode->setCurrentIndex(coordinatedMode);
+  auto* cudaBenchmark=control<QPushButton>(release,"benchmark");
+  auto* vanityPuzzle=control<QSpinBox>(release,"puzzle");
+  check(until([&]{return cudaBenchmark->isEnabled()&&vanityPuzzle->isVisible()&&vanityPuzzle->value()==71;})&&
+        !startVanity->isEnabled(),"Coordinated Vanity ignored the missing CUDA profile or default puzzle");
+  QTimer::singleShot(0,[&]{
+    auto* dialog=release.findChild<QDialog*>("linuxBenchmarkDialog");
+    check(dialog&&dialog->findChild<QComboBox*>("benchmarkBackend")->currentData()=="cuda","Vanity benchmark is not using CUDA");
+    dialog->accept();
+  });
+  cudaBenchmark->click();
+  check(until([&]{return startVanity->isEnabled()&&releaseMode->currentIndex()==coordinatedMode;}),
+        "CUDA benchmark did not retain the selected Vanity mode");
+  startVanity->click();
+  check(until([&]{return QFile::exists(temp.filePath("run-argv"))&&control<QPushButton>(release,"safeStop")->isEnabled();}),
+        "Coordinated Vanity did not dispatch a run");
+  QFile coordinatedArgs(temp.filePath("run-argv"));
+  check(coordinatedArgs.open(QIODevice::ReadOnly)&&coordinatedArgs.readAll()=="run\n71\n--engine\nvanity\n--backend\ncuda\n--device\n0\n--duration-minutes\n5",
+        "Coordinated Vanity used the wrong client arguments");
+  control<QPushButton>(release,"safeStop")->click();
+  check(until([&]{return !QFile::exists(temp.filePath("active"));}),"Coordinated Vanity Safe Stop command was not dispatched");
+ }
+#endif
  write(temp.filePath("amd-only"),"yes");
  for(const int saved:{-1,static_cast<int>(RunMode::BitCrackCuda),static_cast<int>(RunMode::BitCrackOpencl),static_cast<int>(RunMode::KeyHuntCpu)}){
   QSettings settings;settings.clear();

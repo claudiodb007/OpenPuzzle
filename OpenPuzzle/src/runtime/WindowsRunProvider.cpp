@@ -8,6 +8,7 @@
 #include "openpuzzle/hardware/WindowsGpuTelemetry.hpp"
 #include "openpuzzle/config/ConfigurationManager.hpp"
 #include "openpuzzle/runtime/WindowsProfileGpuBinding.hpp"
+#include "openpuzzle/runtime/VanityRangeProtocol.hpp"
 namespace openpuzzle {
 namespace fs=std::filesystem;
 WindowsPreparedRun prepareWindowsRun(RunCommandOptions options,const fs::path& engineFolder) {
@@ -16,10 +17,27 @@ WindowsPreparedRun prepareWindowsRun(RunCommandOptions options,const fs::path& e
  if(!profilePath.is_absolute())throw std::invalid_argument("Use an absolute benchmark profile path");
  bool missing=false;const auto contents=windowsFile::readPrivate(profilePath,missing,16384);
  if(!contents)throw std::runtime_error("Benchmark profile is missing or unreadable; preserved");
- const auto profile=WindowsRunProfile::parse(*contents);options=profile.apply(std::move(options));
+ const auto profile=WindowsRunProfile::parse(*contents);
+ const bool vanity = options.engine == "vanity";
+ if (vanity) {
+   if (profile.backend != "cuda" || !profile.hasPhysicalBinding() || !options.puzzle ||
+       options.blocksSpecified || options.threadsSpecified || options.pointsSpecified)
+     throw std::invalid_argument("Vanity requires an explicit puzzle and a measured, physically bound CUDA profile");
+   options.engine = "bitcrack";
+ }
+ options=profile.apply(std::move(options));
  const auto folder=engineFolder.empty()?WindowsEngineDiagnostics::defaultFolder():engineFolder;
  const auto exe=folder/(profile.backend=="cpu"?"keyhunt.exe":profile.backend=="cuda"?"cuBitCrack.exe":"clBitCrack.exe");
  if(WindowsEngineDiagnostics::executableSha256(exe)!=profile.sha256)throw std::runtime_error("Engine differs from the benchmark; run local validation again");
+ const auto native = vanity ? folder / "vanity-offline.exe" : exe;
+ const auto nativeSha = vanity ? WindowsEngineDiagnostics::executableSha256(native) : profile.sha256;
+ if (nativeSha.size() != 64) throw std::runtime_error("Bundled Vanity executable is unavailable");
+ if (vanity) {
+   options.engine = "vanity";
+   options.blocks = 256;
+   options.threads = 256;
+   options.points = 1024;
+ }
  SYSTEM_INFO system{};GetNativeSystemInfo(&system);const auto count=GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
  if(system.wProcessorArchitecture!=PROCESSOR_ARCHITECTURE_AMD64||!count||count>INT_MAX)throw std::runtime_error("Native CPU inventory is unavailable");
  WindowsRunDependencies d;d.serverUrl=options.server;
@@ -39,19 +57,21 @@ WindowsPreparedRun prepareWindowsRun(RunCommandOptions options,const fs::path& e
    }return report;
   };
  }
- d.engines={{options.engine,profile.backend,exe,profile.backend=="cpu"?std::vector<int>{}:std::vector<int>{profile.device},profile.speed,true}};
- d.preflight=[profile,exe,physical,requireTelemetry](const RunCommandOptions& o,const WindowsRunEngine& e){try{
-   const auto bound=profile.apply(o);
-   if(e.executable!=exe||e.speedMKeys!=profile.speed||e.backend!=profile.backend||!e.verified||
+ d.engines={{options.engine,profile.backend,native,profile.backend=="cpu"?std::vector<int>{}:std::vector<int>{profile.device},profile.speed,true}};
+ d.preflight=[profile,exe,native,nativeSha,physical,requireTelemetry,vanity](const RunCommandOptions& o,const WindowsRunEngine& e){try{
+   if(vanity&&(o.engine!="vanity"||o.backend!="cuda"||o.device!=profile.device||o.blocks!=256||
+       o.threads!=256||o.points!=1024||WindowsEngineDiagnostics::executableSha256(native)!=nativeSha))return false;
+   const auto bound=vanity?o:profile.apply(o);
+   if(e.executable!=native||e.speedMKeys!=profile.speed||e.backend!=profile.backend||!e.verified||
       WindowsEngineDiagnostics::executableSha256(exe)!=profile.sha256)return false;
    if(WindowsEngineDiagnostics::inspectDevice(exe,profile.backend,bound.device,bound.threads)!=profile.deviceIdentity)return false;
    if(physical){const auto current=inspectWindowsProfileGpuBinding(profile,exe,WindowsGpuDiscovery::inspect,WindowsGpuTelemetry::inspect,requireTelemetry);
     if(current.name!=physical->name||current.uuid!=physical->uuid||current.pciBusId!=physical->pciBusId||current.windowsDeviceInstanceId!=physical->windowsDeviceInstanceId)return false;}
    return true;
   }catch(...){return false;}};
- d.capabilities=[profile,count,physical](const std::string& id){client::ClientHeartbeat h;
+ d.capabilities=[profile,count,physical,vanity](const std::string& id){client::ClientHeartbeat h;
    h.clientId=id;h.version=windowsClientVersion;h.platform="windows";h.cpu={"Windows native x64",static_cast<int>(count),static_cast<int>(count)};
-   h.engines={{profile.backend=="cpu"?"KeyHunt":"BitCrack",profile.backend,true,true}};
+   h.engines={{vanity?"Vanity":profile.backend=="cpu"?"KeyHunt":"BitCrack",profile.backend,true,true}};
    if(profile.backend!="cpu"){
     const auto separator=profile.deviceIdentity.find(';');const auto at=profile.deviceIdentity.rfind("memory=");
     std::uint64_t bytes=0;if(at!=std::string::npos){const auto value=profile.deviceIdentity.substr(at+7);const auto parsed=std::from_chars(value.data(),value.data()+value.size(),bytes);if(parsed.ec!=std::errc{}||parsed.ptr!=value.data()+value.size())bytes=0;}

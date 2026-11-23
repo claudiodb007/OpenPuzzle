@@ -94,12 +94,16 @@ private:
   QString t(const QString& key) const;
   RunMode selectedRunMode() const;
 #ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  bool windowsVanityTestSelected() const;
+  void startWindowsVanityTest();
   QString desktopBackend() const;
   QString desktopSelectionKey() const;
   void discoverDesktopDevices(bool chooseDefault);
   bool desktopProfileReady_=false,desktopPreserved_=false,desktopDiscoveryRunning_=false;
   QString desktopStatusSelection_;
   QHash<QString,QString> desktopDeviceNames_,desktopDiscoveryIssues_;
+  QLabel* windowsVanityTestHint_ = nullptr;
+  QString windowsVanityTestStatus_ = QStringLiteral("windows_vanity_test_help");
 #endif
 
   QLabel* subtitle_ = nullptr;

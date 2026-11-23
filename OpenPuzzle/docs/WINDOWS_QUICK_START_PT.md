@@ -1,16 +1,16 @@
-# OpenPuzzle 1.0.60 para Windows
+# OpenPuzzle 1.0.61 para Windows
 
 Para Windows x64. Instala primeiro o driver AMD ou NVIDIA da tua placa.
 
 ## Instalar ou abrir
 
-- **Instalador EXE:** executa o instalador e abre **OpenPuzzle 1.0.60** no menu
+- **Instalador EXE:** executa o instalador e abre **OpenPuzzle 1.0.61** no menu
   Iniciar. A instalação é feita para o utilizador atual.
 - **ZIP portátil:** extrai todos os ficheiros e abre `Start.cmd` ou
   `openpuzzle-ui.exe` na pasta extraída.
 
 Se estiveres a pesquisar com outra versão, usa **Safe Stop** e espera que o
-trabalho em curso termine antes de abrir a 1.0.60. As duas opções usam os
+trabalho em curso termine antes de abrir a 1.0.61. As duas opções usam os
 perfis e o estado existentes em `%LOCALAPPDATA%\OpenPuzzle`.
 
 ## Fazer uma pesquisa
@@ -28,8 +28,19 @@ O limite de potência AMD é um ajuste percentual. O consumo medido aparece
 em watts quando o driver o reporta. Aplicar alterações pode exigir elevação.
 
 **Safe Stop** acaba o range atual e encerra antes de pedir outro. O
-`Diagnostico-GPU.cmd` recolhe um relatório de leitura para diagnóstico. O
-Vanity para Windows fica previsto para uma versão posterior aos testes.
+`Diagnostico-GPU.cmd` recolhe um relatório de leitura para diagnóstico.
+
+## Pesquisar com Vanity numa NVIDIA
+
+1. Seleciona **Vanity / CUDA**, **Puzzle 71** e a GPU NVIDIA.
+2. Se necessário, corre **Benchmark** em CUDA para criar o perfil dessa GPU.
+3. Carrega em **Iniciar**. O Vanity verifica o range atribuído e pede outro
+   automaticamente depois de concluir o atual.
+
+Para interromper já, usa **Parar agora**. **Recuperar** no cartão do range
+retoma a partir do último progresso verificado enquanto a atribuição estiver
+válida. Se a lease tiver expirado, o cliente preserva o checkpoint local e
+mostra o motivo em **Mensagens**.
 
 ## Licenças
 
@@ -37,3 +48,5 @@ As bibliotecas dinâmicas Qt 6.8.3 são do SDK oficial. As licenças, avisos,
 SBOM e informação sobre o código correspondente estão em `licenses/qt`.
 O aviso do SDK AMD ADLX está em `licenses/amd-adlx`. A aplicação carrega o
 ADLX e o NVML a partir dos drivers instalados.
+O motor Vanity é distribuído separadamente sob GPL-3.0. A licença e a
+referência para o código correspondente estão em `licenses/vanity`.

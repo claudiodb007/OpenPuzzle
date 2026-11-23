@@ -13,6 +13,7 @@
 #include "openpuzzle/runtime/WindowsExecutionState.hpp"
 #include "openpuzzle/core/WindowsPrivateFile.hpp"
 #include "openpuzzle/runtime/WindowsEngineProcess.hpp"
+#include "openpuzzle/runtime/WindowsVanityRun.hpp"
 #else
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -72,6 +73,36 @@ void nativeExit(const ClientExecutionState& state, ExecutionSyncResult& result) 
 #else
   (void)state; (void)result;
 #endif
+}
+
+bool readStateProgress(const ClientExecutionState& state, ExecutionProgress& progress) {
+#ifdef _WIN32
+  if (state.engine == "Vanity") {
+    const auto evidence = readWindowsVanityEvidence(state, pathFromUtf8(artifacts(state)));
+    if (!evidence || !evidence->checked) return false;
+    FILETIME time{};
+    GetSystemTimeAsFileTime(&time);
+    const auto now = static_cast<std::uint64_t>(time.dwHighDateTime) << 32 | time.dwLowDateTime;
+    const auto elapsed = now > state.processStartTime ? now - state.processStartTime : 1;
+    progress.speedMKeys = static_cast<double>(evidence->checked) * 10.0 / static_cast<double>(elapsed);
+    progress.keysChecked = std::to_string(state.vanityResumeOffset + evidence->checked);
+    return true;
+  }
+#endif
+  const auto sample = ExecutionSyncService::latestProgress(artifacts(state), state.engine);
+  if (sample) progress = *sample;
+  return sample.has_value();
+}
+
+bool hasStateCompletionProof(const ClientExecutionState& state) {
+#ifdef _WIN32
+  if (state.engine == "Vanity") {
+    const auto evidence = readWindowsVanityEvidence(state, pathFromUtf8(artifacts(state)));
+    return evidence && evidence->completed(0);
+  }
+#endif
+  return ExecutionSyncService::hasCompletionProof(
+      artifacts(state), state.engine, ExecutionSyncService::assignedKeyCount(state.start,state.end).value_or(""));
 }
 }
 
@@ -801,10 +832,7 @@ ExecutionSyncService::inspect(
   if (result.running) {
     ExecutionProgress progress;
 
-    if (readLatestProgress(
-            artifacts(*state),
-            state->engine,
-            progress)) {
+    if (readStateProgress(*state, progress)) {
       result.hasProgress = true;
       result.progress = progress;
     }
@@ -904,10 +932,7 @@ ExecutionSyncService::tick(
   if (result.running) {
     ExecutionProgress progress;
 
-    if (!readLatestProgress(
-            artifacts(*state),
-            state->engine,
-            progress)) {
+    if (!readStateProgress(*state, progress)) {
       return result;
     }
 
@@ -984,10 +1009,8 @@ ExecutionSyncService::tick(
   result.hasExitCode = true;
   result.exitCode = exitCode;
 
-  const auto finalProgress =
-      latestProgress(
-          artifacts(*state),
-          state->engine);
+  ExecutionProgress finalProgress;
+  const bool hasFinalProgress = readStateProgress(*state, finalProgress);
 
   bool explicitlyCancelled = false;
 #ifndef _WIN32
@@ -1005,23 +1028,20 @@ ExecutionSyncService::tick(
 #endif
   const bool completed = exitCode == 0;
 
-  if (state->engine=="Vanity" && !explicitlyCancelled && (!completed || !hasCompletionProof(
-          artifacts(*state),state->engine,assignedKeyCount(state->start,state->end).value_or("")))) {
+  const bool completionProven = completed && hasStateCompletionProof(*state);
+  if (state->engine=="Vanity" && !explicitlyCancelled && !completionProven) {
     result.checkpointPreserved=true;
     result.completionError="Vanity checkpoint preserved for explicit resume/review";
     return result;
   }
 
   std::string finalKeysChecked =
-      finalProgress
-          ? finalProgress->keysChecked
+      hasFinalProgress
+          ? finalProgress.keysChecked
           : "";
 
   if (completed) {
-    if (!hasCompletionProof(
-            artifacts(*state),
-            state->engine,
-            assignedKeyCount(state->start,state->end).value_or(""))) {
+    if (!completionProven) {
       result.completionStatus =
           AssignmentUploadStatus::PermanentFailure;
 

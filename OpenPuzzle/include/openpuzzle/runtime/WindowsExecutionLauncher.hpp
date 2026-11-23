@@ -6,5 +6,5 @@ namespace openpuzzle {
 // it never claims another range and refuses any pending or unreadable local state.
 std::unique_ptr<WindowsEngineProcess> startWindowsExecution(
     const std::filesystem::path& executable, const std::vector<std::string>& arguments,
-    client::ClientExecutionState state);
+    client::ClientExecutionState state, std::optional<WindowsEngineRecord> previous = {});
 }

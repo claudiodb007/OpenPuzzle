@@ -61,7 +61,17 @@ cleanup() {
   [[ -z "$EXPECTED_SOURCE" ]] || rm -f -- "$EXPECTED_SOURCE"
 }
 trap cleanup EXIT
-for file in "$DEB" "$TGZ" "$SOURCE" "$RELEASE_MANIFEST" "$PORTABLE"; do
+RELEASE_FILES=("$DEB" "$TGZ" "$SOURCE" "$RELEASE_MANIFEST" "$PORTABLE")
+WINDOWS_ZIP="$DIST/OpenPuzzle-$VERSION-Windows-x86_64.zip"
+WINDOWS_SETUP="$DIST/OpenPuzzle-$VERSION-Windows-x86_64-Setup.exe"
+if [[ -e "$WINDOWS_ZIP" || -L "$WINDOWS_ZIP" || -e "$WINDOWS_SETUP" || -L "$WINDOWS_SETUP" ]]; then
+  [[ -f "$WINDOWS_ZIP" && ! -L "$WINDOWS_ZIP" && -f "$WINDOWS_SETUP" && ! -L "$WINDOWS_SETUP" ]] || {
+    echo "The Windows ZIP and installer must be supplied together" >&2
+    exit 1
+  }
+  RELEASE_FILES+=("$WINDOWS_ZIP" "$WINDOWS_SETUP")
+fi
+for file in "${RELEASE_FILES[@]}"; do
   printf '%s  %s\n' \
     "$(sha256sum "$file" | awk '{print $1}')" \
     "$(basename "$file")"
@@ -118,4 +128,4 @@ echo "Release artifacts validated."
 echo "Version............ $VERSION"
 echo "Source archive...... $(basename "$SOURCE")"
 echo "Portable package... $(basename "$PORTABLE")"
-echo "Required files..... 8/8"
+echo "Verified files..... ${#RELEASE_FILES[@]} packages and 3 checksum manifests"

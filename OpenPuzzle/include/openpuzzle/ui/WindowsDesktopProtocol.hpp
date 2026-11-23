@@ -31,6 +31,7 @@ inline std::string windowsDesktopStatus(const std::vector<WindowsDesktopSlot>& s
   field("Assignment","Assignment");field("Engine","Engine");field("Backend","Backend");field("Puzzle","Puzzle");field("Range","Assignment number");
   field("Temperature","Temperature");field("Power","Power");
   field("Speed","Speed");field("Keys checked","Keys checked");field("Workspace","Workspace");field("Recovery","Recovery available");
+  field("Device","Device");field("Checkpoint","Checkpoint");
   if(s.status=="stopped")out<<"Synchronization.... pending supervisor\n";out<<'\n';
  }out<<"Desktop profile.... "<<(profileReady?"ready":"missing")<<'\n';return out.str();
 }

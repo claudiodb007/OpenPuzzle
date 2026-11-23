@@ -12,6 +12,7 @@ enum class RunMode {
   KeyHuntCpu,
   KangarooCuda,
   VanityCuda,
+  VanityCudaLocalTest,
 };
 
 struct RunSelection {

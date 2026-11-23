@@ -20,6 +20,7 @@
 #include <stdio.h>
 #endif
 
+#include <cstdint>
 #include "GPUEngine.h"
 #include <stdexcept>
 #include <cuda.h>

@@ -9,11 +9,14 @@
 #include "openpuzzle/core/SignalHandler.hpp"
 #include "openpuzzle/core/LocalPaths.hpp"
 #include "openpuzzle/core/WindowsPrivateFile.hpp"
+#include "openpuzzle/core/AtomicFile.hpp"
+#include "openpuzzle/runtime/WindowsVanityRun.hpp"
 #include <algorithm>
 #include <cctype>
 #include <stdexcept>
 #include <thread>
 #include <iostream>
+#include <regex>
 namespace openpuzzle {
 using Store=client::ClientStateStore;
 using Control=ClientRuntimeControl;
@@ -53,7 +56,30 @@ bool WindowsRuntimeSession::pollThermal(){
   return thermalStop_;
 }
 void WindowsRuntimeSession::poll() {
-  if (engine_ && !completed_ && engine_->wait(0).has_value()) {completed_=true;wakePending_=true;}
+  if (!engine_ || completed_) return;
+  const auto exit = engine_->wait(0);
+  if (!exit) return;
+  completed_ = true;
+  wakePending_ = true;
+  if (*exit != 10 || state_.engine != "Vanity") return;
+  const auto proof = readWindowsVanityEvidence(state_, engine_->logPath().parent_path());
+  bool missing = false;
+  const auto result = windowsFile::readPrivate(windowsVanityResult(state_), missing, 4096);
+  if (!proof || !proof->solution || !result) return;
+  std::istringstream input(*result);
+  std::string kind, key, hash, address, wif, extra;
+  if (!(input >> kind >> key >> hash >> address >> wif) || (input >> extra) ||
+      kind != "MATCH" || address != state_.target || key.size() != 64 ||
+      key.find_first_not_of("0123456789abcdef") != std::string::npos ||
+      hash.size() != 40 || hash.find_first_not_of("0123456789abcdef") != std::string::npos ||
+      !proof->checked || key < proof->plan.start ||
+      key > vanityPreview::add(proof->plan.start, proof->checked - 1) ||
+      !std::regex_match(wif, std::regex("[KL][1-9A-HJ-NP-Za-km-z]{51}"))) return;
+  const auto destination = pathFromUtf8(state_.workspace) / "found.txt";
+  if (!std::filesystem::exists(destination)) {
+    (void)writePrivateFileAtomically(destination, "OPENPUZZLE_SOLUTION_V1\naddress=" + address +
+        "\nprivate_key_wif=" + wif + "\ncompression=compressed\n");
+  }
 }
 bool WindowsRuntimeSession::stopOwned(const std::string& workspace) {
   if (!engine_ || workspace!=state_.workspace || Store::executionSlot()!=slot_) return false;
@@ -88,6 +114,9 @@ ClientRuntimeDependencies WindowsRuntimeSession::dependencies() {
     client::HttpRangeClient http(url);result.success=http.heartbeat(result.heartbeat);result.error=http.lastError();return result;
   };
   d.stopExecution=[this](const std::string& workspace){return stopOwned(workspace);};
+  d.preserveCheckpoint=[this](const std::string& workspace){
+    return state_.engine == "Vanity" && workspace == state_.workspace;
+  };
   d.reportSolution=[this](const std::string& url,const std::string& assignment,const std::string& clientId,std::string& error){
     const auto local=Sync().inspect(slot_);
     if(!local.hasState || local.identityUnavailable || !local.solutionFound ||
@@ -146,11 +175,11 @@ ClientRuntimeDependencies WindowsRuntimeSession::dependencies() {
 }
 int WindowsRuntimeSession::runContinuous(
     const std::function<ClientIterationResult(WindowsRuntimeSession&)>& prepare, bool once,
-    const std::function<ClientIterationResult()>& initialize) {
+    const std::function<ClientIterationResult()>& initialize, bool resumeVanity) {
   if(!prepare || !preflight_())return 1;
   ClientRuntime runtime(dependencies());bool initialHeartbeat=true;
   const auto code=runtime.runContinuous(serverUrl_,[&]{
-    if(hasState())return failure("Pending or unreadable assignment preserved; synchronize it before requesting work");
+    if(hasState() && !resumeVanity)return failure("Pending or unreadable assignment preserved; synchronize it before requesting work");
     if(initialHeartbeat){
       if(initialize){const auto initialized=initialize();
         if(initialized.status!=ClientIterationStatus::Completed)
@@ -172,10 +201,11 @@ int WindowsRuntimeSession::runContinuous(
   return thermalStop_&&code==0?2:code;
 }
 ClientIterationResult WindowsRuntimeSession::execute(const std::filesystem::path& executable,
-    const std::vector<std::string>& arguments,client::ClientExecutionState state) {
+    const std::vector<std::string>& arguments,client::ClientExecutionState state,
+    std::optional<WindowsEngineRecord> previous) {
   if(pollThermal())return failure("Thermal protection refused engine launch; claimed assignment preserved");
   if(Store::executionSlot()!=slot_ || engine_ || stopped() || Control::safeStopRequested(slot_) ||
-      state.clientId!=capabilities_.clientId || hasState())return failure("Windows assignment launch blocked; existing state preserved");
+      state.clientId!=capabilities_.clientId || (hasState() && !previous))return failure("Windows assignment launch blocked; existing state preserved");
   const auto backend=canonical(state.backend),name=canonical(state.engine);
   const bool available=std::any_of(capabilities_.engines.begin(),capabilities_.engines.end(),[&](const auto& e){
     return e.installed && e.available && canonical(e.name)==name && canonical(e.backend)==backend;
@@ -183,7 +213,7 @@ ClientIterationResult WindowsRuntimeSession::execute(const std::filesystem::path
   if(!available || (backend!="cpu" && !std::any_of(capabilities_.gpus.begin(),capabilities_.gpus.end(),[&](const auto& g){return canonical(g.backend)==backend && g.valid();})))
     return failure("Assignment engine/backend is not among verified Windows capabilities");
   state_=state;completed_=false;wakePending_=false;solutionWakeConsumed_=false;
-  engine_=startWindowsExecution(executable,arguments,std::move(state));
+  engine_=startWindowsExecution(executable,arguments,std::move(state),previous);
   const int code=ClientRuntime(dependencies()).run(serverUrl_,state_.assignmentId,state_.clientId,state_.workspace);
   closeOwned();
   if(code==ClientRuntime::SolutionFoundExitCode)return ClientIterationResult::solutionFound();

@@ -9,7 +9,12 @@
 #include <map>
 #include <sstream>
 #include <stdexcept>
+#include <filesystem>
+#ifdef _WIN32
+#include "NativeRunFiles.hpp"
+#else
 #include <sys/stat.h>
+#endif
 namespace opvTargets {
 struct Target { std::array<unsigned char,20> hash; std::string address; };
 inline std::string hex(const unsigned char* p,size_t n) {
@@ -37,10 +42,20 @@ inline Target parse(const std::string& kind,const std::string& value) {
  if(kind=="p2pkh"&&t.address!=value)throw std::runtime_error("Noncanonical P2PKH target");
  return t;
 }
-inline std::map<std::string,Target> load(const std::string& path) {
+inline std::map<std::string,Target> load(const std::filesystem::path& path) {
+#ifdef _WIN32
+ std::istringstream f(opvNative::readTargets(path));
+#else
  struct stat st;
  if(lstat(path.c_str(),&st)||!S_ISREG(st.st_mode)||st.st_size>8192)throw std::runtime_error("Missing/unsafe/oversized target file");
- std::ifstream f(path);std::string line;if(!std::getline(f,line)||line!="OPV-TARGETS-1")throw std::runtime_error("Invalid target file header");
+ std::ifstream f(path);
+#endif
+ std::string line;
+ if(!std::getline(f,line))throw std::runtime_error("Invalid target file header");
+#ifdef _WIN32
+ if(!line.empty()&&line.back()=='\r')line.pop_back();
+#endif
+ if(line!="OPV-TARGETS-1")throw std::runtime_error("Invalid target file header");
  std::map<std::string,Target> targets;
  while(std::getline(f,line)) {
   std::istringstream in(line);std::string kind,value,extra;

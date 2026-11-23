@@ -22,6 +22,10 @@ def main():
     parser.add_argument('--qt-licenses', type=Path, required=True)
     parser.add_argument('--gpu-control-build-info', type=Path, required=True)
     parser.add_argument('--adlx-license', type=Path, required=True)
+    parser.add_argument('--vanity-engine', type=Path,
+                        help='Validated Windows x64 Vanity CUDA executable')
+    parser.add_argument('--vanity-source-reference', type=Path,
+                        help='Corresponding source and build information for the Vanity executable')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     source = Path(__file__).resolve().parents[1]
@@ -31,6 +35,12 @@ def main():
         parser.error('The Windows distribution requires both AMD ADLX and NVIDIA NVML support')
     if not args.adlx_license.is_file():
         parser.error('The AMD SDK license notice is required')
+    vanity_license = source.parent / 'OpenPuzzle-Vanity' / 'LICENSE'
+    if (args.vanity_engine is None) != (args.vanity_source_reference is None):
+        parser.error('Provide both the Vanity engine and its corresponding source reference')
+    if args.vanity_engine and not all(path.is_file() for path in
+                                     (args.vanity_engine, args.vanity_source_reference, vanity_license)):
+        parser.error('The Vanity executable, source reference and license must be existing files')
     if args.output.exists():
         parser.error('Destination already exists; preserve it and choose a new name')
     required = [args.build / 'platform' / n for n in
@@ -89,6 +99,15 @@ def main():
     for name in ('cuBitCrack.exe', 'clBitCrack.exe', 'keyhunt.exe'):
         if not (args.output / 'engines' / name).is_file():
             parser.error(f'Missing engine: {name}')
+    if args.vanity_engine:
+        for source_file, destination in (
+            (args.vanity_engine, 'engines/vanity-offline.exe'),
+            (vanity_license, 'licenses/vanity/LICENSE'),
+            (args.vanity_source_reference, 'licenses/vanity/SOURCE.txt'),
+        ):
+            if (args.output / destination).exists():
+                parser.error(f'Archive already contains {destination}')
+            copy(source_file, destination)
     (args.output / 'qt.conf').write_text('[Paths]\nPlugins=.\n', encoding='utf-8')
     (args.output / 'Start.cmd').write_bytes(b'@echo off\r\nstart "" "%~dp0openpuzzle-ui.exe"\r\n')
     copy(source / 'docs/WINDOWS_QUICK_START_PT.md', 'README-PT.md')

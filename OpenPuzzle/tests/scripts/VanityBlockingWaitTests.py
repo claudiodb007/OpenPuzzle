@@ -7,7 +7,7 @@ import tempfile
 
 source = Path(sys.argv[1]).read_text()
 start = source.index('static void configureBlockingSynchronization() {')
-end = source.index('\nint main(', start)
+end = source.index('\n}', start) + 2
 helper = source[start:end]
 assert source.count('    configureBlockingSynchronization();') == 1
 assert source.index('Exactly one visible CUDA GPU required') < source.index('    configureBlockingSynchronization();')

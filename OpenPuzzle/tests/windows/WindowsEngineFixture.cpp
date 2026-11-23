@@ -2,6 +2,7 @@
 #include "openpuzzle/core/WindowsCommandLine.hpp"
 #include "openpuzzle/core/AtomicFile.hpp"
 #include "openpuzzle/runtime/WindowsProcessIdentity.hpp"
+#include "openpuzzle/runtime/VanityRangeProtocol.hpp"
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
@@ -11,6 +12,28 @@ std::string hex(const std::string& text){const char* digits="0123456789abcdef";s
 int wmain(int argc,wchar_t** argv){try{
  if(argc<2)return 2;
  const std::wstring mode=argv[1];
+ if (mode == L"--target-file" && argc == 9) {
+   if (std::wstring(_wgetenv(L"CUDA_VISIBLE_DEVICES") ? _wgetenv(L"CUDA_VISIBLE_DEVICES") : L"") != L"2") return 14;
+   using namespace vanityPreview;
+   const Plan plan(pathUtf8(argv[2]), decimal(pathUtf8(argv[3])), decimal(pathUtf8(argv[4])));
+   const auto workspace = fs::current_path();
+   if (!writePrivateFileAtomically(argv[6], "")) return 15;
+   std::cout << "OPV1 BEGIN " << plan.start << ' ' << plan.count << ' ' << plan.batch << std::endl;
+   const auto first = (std::min)(plan.count, plan.batch);
+   std::cout << "OPV1 PROGRESS " << first << std::endl;
+   if (!writePrivateFileAtomically(workspace / "fixture-vanity-args.txt", plan.start + "\n" + std::to_string(plan.count)))
+     return 16;
+   const auto gate = workspace / "fixture-vanity-finish";
+   const auto deadline = GetTickCount64() + 10000;
+   while (!fs::exists(gate) && GetTickCount64() < deadline) Sleep(10);
+   if (!fs::exists(gate)) return 17;
+   if (fs::exists(workspace / "fixture-invalid-proof")) return 0;
+   if (first < plan.count) {
+     std::cout << "OPV1 PROGRESS " << plan.count << std::endl;
+   }
+   std::cout << "OPV1 COMPLETE " << plan.count << std::endl;
+   return 0;
+ }
  if(mode==L"execution"&&argc==5){
    std::cout<<"GPU fixture 12.50 MKey/s (8 total)"<<std::endl;
    if(!writePrivateFileAtomically(fs::path(argv[3]),"ready"))return 11;

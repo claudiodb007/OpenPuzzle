@@ -65,6 +65,18 @@
 namespace openpuzzle::ui {
 
 namespace {
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+bool windowsVanityAvailable() {
+  return QFileInfo(QDir(QCoreApplication::applicationDirPath()).filePath("engines/vanity-offline.exe")).isFile();
+}
+
+QString windowsVanityTestExecutable() {
+  const QDir directory(QCoreApplication::applicationDirPath());
+  const QFileInfo launcher(directory.filePath("openpuzzle-vanity-cuda-test.exe"));
+  return launcher.isFile() && windowsVanityAvailable() ? launcher.absoluteFilePath() : QString();
+}
+#endif
+
 void hideDesktopConsole(QProcess* process){
 #ifdef _WIN32
  process->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* args){args->flags|=CREATE_NO_WINDOW;});
@@ -310,15 +322,20 @@ MainWindow::MainWindow(QWidget* parent)
   }
   updateSelectionRules();
 #ifdef OPENPUZZLE_DESKTOP_WINDOWS
-  if(selectedRunMode()!=RunMode::BitCrackCuda&&selectedRunMode()!=RunMode::BitCrackOpencl&&selectedRunMode()!=RunMode::KeyHuntCpu)
+  if(selectedRunMode()!=RunMode::BitCrackCuda&&selectedRunMode()!=RunMode::BitCrackOpencl&&selectedRunMode()!=RunMode::KeyHuntCpu&&
+      selectedRunMode()!=RunMode::VanityCuda&&!windowsVanityTestSelected())
     mode_->setCurrentIndex(mode_->findData(static_cast<int>(RunMode::BitCrackCuda)));
   {const QSignalBlocker blocker(autoStart_);autoStart_->setChecked(false);}
   auto* items=qobject_cast<QStandardItemModel*>(mode_->model());
   if(items)for(int i=0;i<mode_->count();++i){const auto m=static_cast<RunMode>(mode_->itemData(i).toInt());
-    if(m!=RunMode::BitCrackCuda&&m!=RunMode::BitCrackOpencl&&m!=RunMode::KeyHuntCpu){items->item(i)->setEnabled(false);items->item(i)->setToolTip(t("windows_unavailable"));}}
+    if(m!=RunMode::BitCrackCuda&&m!=RunMode::BitCrackOpencl&&m!=RunMode::KeyHuntCpu&&m!=RunMode::VanityCuda&&m!=RunMode::VanityCudaLocalTest){items->item(i)->setEnabled(false);items->item(i)->setToolTip(t("windows_unavailable"));}}
   const auto changed=[this]{desktopProfileReady_=false;updateActionAvailability();QTimer::singleShot(0,this,&MainWindow::refreshStatus);};
   connect(mode_,qOverload<int>(&QComboBox::currentIndexChanged),this,changed);
   for(auto* spin:{device_,cpuThreads_})connect(spin,qOverload<int>(&QSpinBox::valueChanged),this,changed);
+  connect(device_, qOverload<int>(&QSpinBox::valueChanged), this, [this] {
+    windowsVanityTestStatus_ = QStringLiteral("windows_vanity_test_help");
+    windowsVanityTestHint_->setText(t(windowsVanityTestStatus_));
+  });
   discoverDesktopDevices(!settings.contains("run/mode"));
 #endif
 
@@ -590,7 +607,14 @@ void MainWindow::buildInterface() {
   mode_->addItem(QString(), static_cast<int>(RunMode::BitCrackCudaOpencl));
   mode_->addItem(QString(), static_cast<int>(RunMode::KeyHuntCpu));
   mode_->addItem(QString(), static_cast<int>(RunMode::KangarooCuda));
-#ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  if (windowsVanityAvailable()) {
+    mode_->addItem(t("windows_vanity_coordinated_mode"), static_cast<int>(RunMode::VanityCuda));
+  }
+  if (!windowsVanityTestExecutable().isEmpty()) {
+    mode_->addItem(t("windows_vanity_test_mode"), static_cast<int>(RunMode::VanityCudaLocalTest));
+  }
+#elif defined(OPENPUZZLE_ENABLE_VANITY_PREVIEW)
   mode_->addItem("Vanity / CUDA",qEnvironmentVariableIsSet("OPENPUZZLE_VANITY_STORE")
       ? 100 : static_cast<int>(RunMode::VanityCuda));
 #endif
@@ -649,6 +673,13 @@ void MainWindow::buildInterface() {
   form->addWidget(rusticlRadeonsi_, 3, 1, 1, 3);
   runLayout->addLayout(form);
   runLayout->addWidget(autoStart_);
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  windowsVanityTestHint_ = new QLabel;
+  windowsVanityTestHint_->setProperty("controlId", "windowsVanityTestHint");
+  windowsVanityTestHint_->setObjectName("HintText");
+  windowsVanityTestHint_->setWordWrap(true);
+  runLayout->addWidget(windowsVanityTestHint_);
+#endif
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
   vanity_=new VanityPanel(cliExecutable(),currentLanguage_,runCard,true);
   vanity_->setVisible(false);
@@ -1065,6 +1096,10 @@ RunMode MainWindow::selectedRunMode() const {
       mode_->currentData().toInt());
 }
 #ifdef OPENPUZZLE_DESKTOP_WINDOWS
+bool MainWindow::windowsVanityTestSelected() const {
+  return selectedRunMode() == RunMode::VanityCudaLocalTest;
+}
+
 QString MainWindow::desktopBackend()const{
  return selectedRunMode()==RunMode::KeyHuntCpu?"cpu":selectedRunMode()==RunMode::BitCrackOpencl?"opencl":"cuda";
 }
@@ -1114,7 +1149,8 @@ void MainWindow::discoverDesktopDevices(bool chooseDefault){
   if(gpuControls_){auto names=desktopDeviceNames_.values();names.removeDuplicates();names.sort();gpuControls_->setDetectedGpus(names);}
   const bool savedGpuUnavailable=desktopBackend()!="cpu"&&
     !desktopDeviceNames_.contains(desktopBackend()+":"+QString::number(device_->value()));
-  if((chooseDefault||(savedGpuUnavailable&&!preferred.isEmpty()))&&selection==desktopSelectionKey()&&!commandProcess_&&!launchPending_&&!active_){
+  if(!windowsVanityTestSelected()&&selectedRunMode()!=RunMode::VanityCuda&&
+     (chooseDefault||(savedGpuUnavailable&&!preferred.isEmpty()))&&selection==desktopSelectionKey()&&!commandProcess_&&!launchPending_&&!active_){
    const auto mode=preferred=="cuda"?RunMode::BitCrackCuda:preferred=="opencl"?RunMode::BitCrackOpencl:RunMode::KeyHuntCpu;
    mode_->setCurrentIndex(mode_->findData(static_cast<int>(mode)));if(mode!=RunMode::KeyHuntCpu)device_->setValue(preferredDevice);
   }
@@ -1200,6 +1236,13 @@ void MainWindow::applyLanguage() {
   puzzleName_->setText(t("puzzle"));
 #ifdef OPENPUZZLE_DESKTOP_WINDOWS
   puzzle_->setToolTip(t("puzzle_auto_hint"));
+  const int vanityIndex = mode_->findData(static_cast<int>(RunMode::VanityCuda));
+  if (vanityIndex >= 0) {
+    mode_->setItemText(vanityIndex, t("windows_vanity_coordinated_mode"));
+  }
+  const int vanityTestIndex = mode_->findData(static_cast<int>(RunMode::VanityCudaLocalTest));
+  if (vanityTestIndex >= 0) mode_->setItemText(vanityTestIndex, t("windows_vanity_test_mode"));
+  windowsVanityTestHint_->setText(t(windowsVanityTestStatus_));
 #endif
   modeName_->setText(t("execution_mode"));
   openclDeviceName_->setText(t("opencl_device"));
@@ -1329,11 +1372,21 @@ void MainWindow::updateActionAvailability() {
 #ifdef OPENPUZZLE_DESKTOP_WINDOWS
   const auto selectedGpu=desktopDeviceNames_.value(desktopBackend()+":"+QString::number(device_->value()));
   const bool knownSelection=desktopBackend()=="cpu"||(!desktopDiscoveryRunning_&&!selectedGpu.isEmpty());
-  start_->setEnabled(canStart&&desktopProfileReady_&&!desktopPreserved_&&knownSelection);
-  benchmark_->setEnabled(canBenchmark&&knownSelection);
+  const bool localWindowsTest = windowsVanityTestSelected();
+  const bool canRunWindowsTest = canBenchmark && knownSelection;
+  start_->setEnabled(localWindowsTest ? canRunWindowsTest
+                                      : canStart&&desktopProfileReady_&&!desktopPreserved_&&knownSelection);
+  benchmark_->setEnabled(!localWindowsTest && canBenchmark&&knownSelection);
+  if (localWindowsTest) {
+    start_->setText(t("windows_vanity_test_start"));
+    selfTest_->setEnabled(false);
+    if (gpuControls_) gpuControls_->setEnabled(!commandProcess_);
+  }
+  if (selectedRunMode() == RunMode::VanityCuda && !RunCommandBuilder::supportsPuzzle(RunMode::VanityCuda, puzzle_->value()))
+    start_->setEnabled(false);
   for(auto* button:{updates_,audit_,installKangaroo_}){button->setEnabled(false);button->setToolTip(t("windows_unavailable"));}
   for(auto* box:{autoStart_,rusticlRadeonsi_}){box->setEnabled(false);box->setToolTip(t("windows_unavailable"));}
-  if(!desktopProfileReady_&&!active_)start_->setToolTip(t("desktop_benchmark_required"));else start_->setToolTip(QString());
+  if(!localWindowsTest&&!desktopProfileReady_&&!active_)start_->setToolTip(t("desktop_benchmark_required"));else start_->setToolTip(QString());
   const auto gpuIssue=desktopDiscoveryIssues_.value(desktopBackend(),t("gpu_discovery_unavailable"));
   device_->setToolTip(selectedGpu.isEmpty()?gpuIssue:selectedGpu);
   deviceName_->setText((desktopBackend()=="opencl"?t("opencl_device"):t("cuda_device"))+"\n"+
@@ -1365,12 +1418,19 @@ void MainWindow::updateSelectionRules() {
   const bool concurrent = mode == RunMode::BitCrackCudaOpencl;
   const bool usesOpencl = openclOnly || concurrent;
 
+  bool showPuzzle = !vanitySelected();
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  const bool localWindowsTest = windowsVanityTestSelected();
+  windowsVanityTestHint_->setVisible(localWindowsTest);
+  showPuzzle = showPuzzle && !localWindowsTest;
+  if (mode == RunMode::VanityCuda && puzzle_->value() == 0) puzzle_->setValue(71);
+#endif
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
   vanity_->setVisible(vanitySelected());
 #endif
-  puzzleName_->setVisible(!vanitySelected());
-  autoStart_->setVisible(!vanitySelected());
-  puzzle_->setVisible(!kangaroo&&!vanitySelected());
+  puzzleName_->setVisible(showPuzzle);
+  autoStart_->setVisible(showPuzzle);
+  puzzle_->setVisible(!kangaroo && showPuzzle);
   kangarooPuzzle_->setVisible(kangaroo);
 
   deviceName_->setVisible(!cpu&&!vanitySelected());
@@ -2206,6 +2266,12 @@ void MainWindow::confirmClearThermalHistory() {
 }
 
 void MainWindow::startExecution() {
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  if (windowsVanityTestSelected()) {
+    startWindowsVanityTest();
+    return;
+  }
+#endif
 #ifdef OPENPUZZLE_ENABLE_VANITY_PREVIEW
   if(vanitySelected()){vanity_->requestRun();return;}
 #endif
@@ -2247,9 +2313,53 @@ void MainWindow::startExecution() {
     return;
   }
 
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  if (selection.mode == RunMode::VanityCuda) arguments << "--duration-minutes" << "5";
+#endif
   if (kangarooPaused_) arguments.push_back("--resume-paused");
   launchExecution(arguments);
 }
+
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+void MainWindow::startWindowsVanityTest() {
+  if (!start_->isEnabled() || commandProcess_ || launchPending_) {
+    return;
+  }
+  const auto executable = windowsVanityTestExecutable();
+  if (executable.isEmpty()) {
+    windowsVanityTestStatus_ = QStringLiteral("windows_vanity_test_failed");
+    windowsVanityTestHint_->setText(t(windowsVanityTestStatus_));
+    showOutput(t("windows_vanity_test_mode"), t("cli_missing"));
+    return;
+  }
+
+  auto* process = new QProcess(this);
+  hideDesktopConsole(process);
+  process->setProcessChannelMode(QProcess::MergedChannels);
+  commandProcess_ = process;
+  windowsVanityTestStatus_ = QStringLiteral("windows_vanity_test_running");
+  windowsVanityTestHint_->setText(t(windowsVanityTestStatus_));
+  updateActionAvailability();
+
+  const auto complete = [this, process](bool passed, const QString& output) {
+    windowsVanityTestStatus_ = passed ? QStringLiteral("windows_vanity_test_passed")
+                                     : QStringLiteral("windows_vanity_test_failed");
+    windowsVanityTestHint_->setText(t(windowsVanityTestStatus_));
+    showOutput(t("windows_vanity_test_mode"), output);
+    releaseCommand(process);
+    process->deleteLater();
+  };
+  connect(process, &QProcess::finished, this, [process, complete](int code, QProcess::ExitStatus status) {
+    complete(code == 0 && status == QProcess::NormalExit, QString::fromUtf8(process->readAll()).trimmed());
+  });
+  connect(process, &QProcess::errorOccurred, this, [process, complete](QProcess::ProcessError error) {
+    if (error == QProcess::FailedToStart) {
+      complete(false, process->errorString());
+    }
+  });
+  process->start(executable, {QString::number(device_->value())});
+}
+#endif
 
 void MainWindow::recoverVanitySlot(
     const QString& slot,
@@ -2260,11 +2370,19 @@ void MainWindow::recoverVanitySlot(
       launchPending_ || commandProcess_ || vanityBusy() ||
       (gpuControls_ && gpuControls_->applying())) return;
   if (QMessageBox::question(this, t("recover"),
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+          t("windows_vanity_resume_question").arg(puzzle).arg(slot),
+#else
           t("vanity_recover_question").arg(puzzle).arg(slot),
+#endif
           QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
   launchExecution({"run", QString::number(puzzle), "--engine", "vanity",
                    "--backend", "cuda", "--device", QString::number(device),
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+                   "--recover-assignment", assignment, "--resume-vanity"}, slot);
+#else
                    "--recover-assignment", assignment, "--recover-expired"}, slot);
+#endif
 }
 
 void MainWindow::launchExecution(
@@ -2430,7 +2548,11 @@ void MainWindow::runBenchmark() {
 #ifdef OPENPUZZLE_DESKTOP_WINDOWS
   backend->addItem("CPU", "cpu");
 #endif
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  const bool vanityBenchmark = false; // The physical CUDA profile is shared with BitCrack.
+#else
   const bool vanityBenchmark = selectedRunMode() == RunMode::VanityCuda;
+#endif
   if (!vanityBenchmark) backend->addItem("OpenCL", "opencl");
   backend->setCurrentIndex(
       backend->findData(selectedRunMode()==RunMode::BitCrackOpencl?"opencl":
@@ -2536,7 +2658,8 @@ void MainWindow::runBenchmark() {
     releaseCommand(process);
     process->deleteLater();
 #ifdef OPENPUZZLE_DESKTOP_WINDOWS
-    if(status==QProcess::NormalExit&&code==0){const auto mode=measuredBackend=="cpu"?RunMode::KeyHuntCpu:measuredBackend=="opencl"?RunMode::BitCrackOpencl:RunMode::BitCrackCuda;
+    if(status==QProcess::NormalExit&&code==0){const auto mode=measuredBackend=="cpu"?RunMode::KeyHuntCpu:measuredBackend=="opencl"?RunMode::BitCrackOpencl:
+        selectedRunMode()==RunMode::VanityCuda?RunMode::VanityCuda:RunMode::BitCrackCuda;
       mode_->setCurrentIndex(mode_->findData(static_cast<int>(mode)));if(mode!=RunMode::KeyHuntCpu)device_->setValue(measuredDevice);else cpuThreads_->setValue(measuredThreads);}
 #else
     Q_UNUSED(measuredBackend);Q_UNUSED(measuredDevice);Q_UNUSED(measuredThreads);
