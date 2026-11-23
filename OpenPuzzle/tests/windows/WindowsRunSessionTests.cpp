@@ -6,6 +6,7 @@
 #include "openpuzzle/core/AtomicFile.hpp"
 #include "openpuzzle/core/LocalPaths.hpp"
 #include "openpuzzle/runtime/VanityRangeProtocol.hpp"
+#include "openpuzzle/runtime/WindowsExecutionState.hpp"
 #include <sstream>
 #include <fstream>
 #include <iostream>
@@ -126,6 +127,7 @@ int wmain(int argc,wchar_t** argv){try{
           "Vanity resumed a rejected lease");
   rejectLease=false;
   resuming=true;
+  resume.push_back("--recover-expired");
   // Safe Stop raised during the resumed working heartbeat waits for completion.
   // The fixture finishes its remaining batch without requesting another range.
   require(WindowsRunSession(d).run(resume,output)==0,"Vanity could not resume the same lease");
@@ -133,6 +135,86 @@ int wmain(int argc,wchar_t** argv){try{
   require(claims==1&&renewals==1&&runningHeartbeats>=2&&completions==1&&!fs::exists(pending)&&
       !Store::load("cuda-7")&&read(workspace/"fixture-vanity-args.txt")==add(begin,batch)+"\n"+std::to_string(batch),
       "Vanity resume did not transfer exactly the unsearched suffix");
+  for(const auto& retiredCode:{"assignment_not_found","assignment_lease_expired"}){
+    const bool leaseExpired=std::string_view(retiredCode)=="assignment_lease_expired";
+    const std::string oldId=leaseExpired?"retired-expired":"retired-missing", newId=oldId+"-replacement";
+    const auto oldWorkspace=workspace.parent_path()/oldId;
+    const auto newWorkspace=workspace.parent_path()/newId;
+    const auto newBegin=add(begin,2*batch), newEnd=add(begin,4*batch-1);
+    const auto statePath=Store::path("cuda-7");
+    int nClaims=0, nCompletions=0;
+    std::string progressError;
+    RunServer retired([&](const auto& request){
+      if(endpoint(request,"/api/range/claim")) {
+        ++nClaims;
+        require(nClaims<=2,"A retired Vanity lease requested extra work");
+        return nClaims==1?assigned(oldId,begin,finish):assigned(newId,newBegin,newEnd);
+      }
+      if(endpoint(request,"/api/range/progress")&&!progressError.empty()&&
+         request.find("\"assignment_id\":\""+oldId+"\"")!=std::string::npos)
+        return "{\"error\":\""+progressError+"\"}";
+      if(endpoint(request,"/api/client/heartbeat")&&request.find("\"status\":\"running\"")!=std::string::npos){
+        if(nClaims==1) {
+          const auto argsFile=oldWorkspace/"fixture-vanity-args.txt";
+          const auto deadline=GetTickCount64()+5000;
+          while(!fs::exists(argsFile)&&GetTickCount64()<deadline)Sleep(10);
+          require(fs::exists(argsFile)&&Control::requestStop("cuda-7"),"Could not preserve the old Vanity checkpoint");
+        }else if(!fs::exists(newWorkspace/"fixture-vanity-finish")) {
+          publish(newWorkspace/"fixture-vanity-finish","");
+        }
+      }
+      if(endpoint(request,"/api/range/complete")) {
+        ++nCompletions;
+        require(request.find("\"assignment_id\":\""+newId+"\"")!=std::string::npos&&
+                request.find("\"keys_checked\":\"524288\"")!=std::string::npos,
+                "Replacement reused progress from the retired assignment");
+      }
+      return std::string("{}");
+    },[&](const auto& request){
+      if(endpoint(request,"/api/range/progress")&&!progressError.empty()&&
+         request.find("\"assignment_id\":\""+oldId+"\"")!=std::string::npos)
+        return progressError=="assignment_not_found"?"404 Not Found":"409 Conflict";
+      return "200 OK";
+    });
+    d.serverUrl=retired.url();
+    d.metadata=[&](int number)->std::optional<PuzzleExecutionMetadata>{
+      auto metadata=deps(fixture,"").metadata(number);
+      if(metadata)metadata->keyspace=begin+":"+newEnd;
+      return metadata;
+    };
+    const auto stoppedCode=WindowsRunSession(d).run(args,output);
+    if(stoppedCode!=130)std::cerr<<output.str();
+    require(stoppedCode==130,"Could not create a stopped Vanity fixture");
+    const auto stopped=Store::load("cuda-7");
+    require(stopped.has_value(),"Stopped Vanity state missing");
+    const auto record=windowsExecutionRecord(*stopped);
+    require(record.has_value(),"Stopped Vanity engine record missing");
+    const auto archive=oldWorkspace/("vanity-retired-"+record->generation);
+    const auto oldLog=oldWorkspace/("engine-"+record->generation)/"engine.log";
+    const auto checkpoint=read(oldLog);
+    const auto savedState=read(statePath), savedClaim=read(pending);
+    auto recover=resume;
+    recover.insert(recover.end(),{"--recover-assignment",oldId});
+    progressError="assignment_client_mismatch";
+    require(WindowsRunSession(d).run(recover,output)==1&&nClaims==1&&
+        read(statePath)==savedState&&read(pending)==savedClaim&&!fs::exists(archive),
+        "A different rejection retired the Vanity checkpoint");
+    if(leaseExpired) {
+      fs::create_directory(archive);
+      publish(archive/"execution.state",savedState);
+      publish(archive/"claim.json",savedClaim);
+      require(fs::remove(pending),"Could not simulate interrupted retirement");
+    }
+    progressError=retiredCode;
+    const auto result=WindowsRunSession(d).run(recover,output);
+    if(result!=0)std::cerr<<output.str();
+    require(result==0,"Retired Vanity recovery could not request a replacement");
+    retired.finish();
+    require(nClaims==2&&nCompletions==1&&!Store::load("cuda-7")&&!fs::exists(pending)&&
+        read(archive/"execution.state")==savedState&&read(archive/"claim.json")==savedClaim&&
+        read(oldLog)==checkpoint&&read(newWorkspace/"fixture-vanity-args.txt")==newBegin+"\n"+std::to_string(2*batch),
+        "Retired Vanity assignment was not preserved before replacing its range");
+  }
   for(const bool proveCompletion:{true,false}){
     const std::string id=proveCompletion?"vanity-safe-stop":"vanity-missing-proof";
     const auto runWorkspace=workspace.parent_path()/id;

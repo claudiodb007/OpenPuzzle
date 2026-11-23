@@ -55,6 +55,36 @@ void verifyVanityReceipt(const std::string& text, const client::ClientExecutionS
      fields.get<std::string>("backend") != "cuda" || fields.get<std::string>("search_mode") != "linear")
    throw std::runtime_error("Vanity assignment differs from the protected claim receipt");
 }
+
+bool retiredVanityAssignment(const std::string& code) {
+ return code == "assignment_lease_expired" || code == "assignment_not_found";
+}
+
+void saveArchivedVanityFile(const fs::path& path, const std::string& contents) {
+ bool missing = false;
+ const auto previous = windowsFile::readPrivate(path, missing, 65536);
+ if (previous && *previous == contents) return;
+ if (!missing || !writePrivateFileAtomically(path, contents))
+   throw std::runtime_error("Could not save the retired Vanity assignment archive");
+}
+
+void archiveRetiredVanity(const fs::path& directory, const std::string& slot,
+                          const fs::path& pending, const std::string& receipt,
+                          bool receiptAlreadyArchived) {
+ bool missing = false;
+ const auto state = windowsFile::readPrivate(Store::path(slot), missing, 65536);
+ if (!state) throw std::runtime_error("Cannot read the Vanity state for archiving");
+ WorkspaceSecurity::prepare(directory);
+ saveArchivedVanityFile(directory / "execution.state", *state);
+ saveArchivedVanityFile(directory / "claim.json", receipt);
+ // If interrupted between removals, recovery can read the archived receipt
+ // while the identical live state still identifies the stopped generation.
+ std::error_code error;
+ if (!receiptAlreadyArchived && (!fs::remove(pending, error) || error))
+   throw std::runtime_error("Cannot retire the archived Vanity claim receipt");
+ if (!Store::remove(slot))
+   throw std::runtime_error("Cannot retire the archived Vanity execution state; retry recovery");
+}
 }
 WindowsRunSession::WindowsRunSession(WindowsRunDependencies d):dependencies_(std::move(d)){}
 fs::path WindowsRunSession::pendingClaimPath(const std::string& slot){
@@ -138,8 +168,16 @@ int WindowsRunSession::runPrepared(RunCommandOptions options,std::ostream& outpu
       const auto workspace = localPaths::dataDirectory() / "assignments" / pathFromUtf8(state.assignmentId);
       if (workspace != pathFromUtf8(state.workspace))
         throw std::runtime_error("Vanity workspace differs from assignment identity");
+      const auto retiredArchive = workspace / ("vanity-retired-" + previous->generation);
       bool absent = false;
-      const auto saved = windowsFile::readPrivate(pending, absent, 16384);
+      auto saved = windowsFile::readPrivate(pending, absent, 16384);
+      const bool receiptAlreadyArchived = absent && options.recoverExpired;
+      if (receiptAlreadyArchived) {
+        const auto live = windowsFile::readPrivate(Store::path(slot), absent, 65536);
+        const auto archived = windowsFile::readPrivate(retiredArchive / "execution.state", absent, 65536);
+        if (live && archived && *live == *archived)
+          saved = windowsFile::readPrivate(retiredArchive / "claim.json", absent, 16384);
+      }
       if (!saved) throw std::runtime_error("Vanity claim receipt is unavailable");
       verifyVanityReceipt(*saved, state, server);
       const auto targets = windowsFile::readPrivate(workspace/"targets.txt", absent, 8192);
@@ -148,33 +186,50 @@ int WindowsRunSession::runPrepared(RunCommandOptions options,std::ostream& outpu
       const auto proof = readWindowsVanityEvidence(state, WindowsEngineProcess::generationPath(workspace, *previous));
       if (!proof || proof->solution)
         throw std::runtime_error("Vanity checkpoint requires review");
+      const auto previousResult = windowsVanityResult(state);
+      const auto outputData = windowsFile::readPrivate(previousResult, absent, 4096);
+      if ((!outputData && !absent) || (outputData && !outputData->empty()))
+        throw std::runtime_error("Native Vanity result requires review before resume");
+      std::string retiredReason;
       if (proof->complete && observed.nativeExitCode == 0) {
         const auto completed = client::ExecutionSyncService().tick(server, slot);
-        if (!completed.completionUploaded || !completed.stateRemoved)
-          throw std::runtime_error("Vanity completion remains pending; report preserved");
-      } else {
-        const auto previousResult = windowsVanityResult(state);
-        const auto outputData = windowsFile::readPrivate(previousResult, absent, 4096);
-        if ((!outputData && !absent) || (outputData && !outputData->empty()))
-          throw std::runtime_error("Native Vanity result requires review before resume");
-        state.vanityResumeOffset += proof->checked;
-        (void)windowsVanityPlan(state);
-        if (!http.progress(state.assignmentId, state.clientId, chosen->speedMKeys, std::to_string(state.vanityResumeOffset)))
-          throw std::runtime_error("Vanity lease refused; checkpoint preserved: " + http.lastError());
-        if (outputData && previousResult == windowsVanityResult(state)) {
-          const auto archive = workspace / ("vanity-empty-" + previous->generation + ".txt");
-          if (!MoveFileExW(previousResult.c_str(), archive.c_str(), 0))
-            throw std::runtime_error("Cannot archive previous empty Vanity result");
+        if (!completed.completionUploaded || !completed.stateRemoved) {
+          retiredReason = client::HttpRangeClient::parseErrorCode(completed.completionError);
+          if (!options.recoverExpired || !retiredVanityAssignment(retiredReason))
+            throw std::runtime_error("Vanity completion remains pending; report preserved: " + completed.completionError);
         }
-        output << "Resuming Vanity assignment: " << state.assignmentId << " from " << state.vanityResumeOffset << " keys\n";
-        const auto result = owner.execute(chosen->executable, {}, state, previous);
-        if (result.status != ClientIterationStatus::Completed || result.exitCode != 0 || present(Store::path(slot))) return result;
+      } else {
+        state.vanityResumeOffset += proof->checked;
+        if (!http.progress(state.assignmentId, state.clientId, chosen->speedMKeys, std::to_string(state.vanityResumeOffset))) {
+          retiredReason = http.lastErrorCode();
+          if (!options.recoverExpired || !retiredVanityAssignment(retiredReason))
+            throw std::runtime_error("Vanity lease refused; checkpoint preserved: " + http.lastError());
+        } else {
+          (void)windowsVanityPlan(state);
+          if (receiptAlreadyArchived && !writePrivateFileAtomically(pending, *saved))
+            throw std::runtime_error("Cannot restore the renewed Vanity claim receipt");
+          if (outputData && previousResult == windowsVanityResult(state)) {
+            const auto archive = workspace / ("vanity-empty-" + previous->generation + ".txt");
+            if (!MoveFileExW(previousResult.c_str(), archive.c_str(), 0))
+              throw std::runtime_error("Cannot archive previous empty Vanity result");
+          }
+          output << "Resuming Vanity assignment: " << state.assignmentId << " from " << state.vanityResumeOffset << " keys\n";
+          const auto result = owner.execute(chosen->executable, {}, state, previous);
+          if (result.status != ClientIterationStatus::Completed || result.exitCode != 0 || present(Store::path(slot))) return result;
+        }
       }
-      std::error_code error;
-      if (!fs::remove(pending, error) || error) throw std::runtime_error("Vanity receipt cleanup failed");
-      return ClientIterationResult(0);
+      if (retiredReason.empty()) {
+        std::error_code error;
+        if (present(pending) && (!fs::remove(pending, error) || error))
+          throw std::runtime_error("Vanity receipt cleanup failed");
+        return ClientIterationResult(0);
+      }
+      archiveRetiredVanity(retiredArchive, slot, pending, *saved, receiptAlreadyArchived);
+      output << "Vanity assignment retired (" << retiredReason << ").\n"
+             << "Checkpoint archive: " << pathUtf8(retiredArchive) << "\n"
+             << "Requesting a new assignment.\n";
     }
-    if(present(pending))throw std::runtime_error("Pending claim publication is occupied; existing data preserved");
+    if(present(pending)||present(Store::path(slot)))throw std::runtime_error("Pending assignment or claim preserved");
     // Retain an intent before the network call: a lost response is not proof that
     // the server did not allocate work. Ambiguous failures never trigger a new claim.
     const auto intent="{\"version\":1,\"status\":\"requesting\",\"client_id\":\""+escapeJsonString(clientId)+"\",\"server\":\""+escapeJsonString(server)+"\",\"puzzle\":"+std::to_string(options.puzzle)+"}\n";

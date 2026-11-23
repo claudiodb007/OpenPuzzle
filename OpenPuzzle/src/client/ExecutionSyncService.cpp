@@ -1111,6 +1111,10 @@ ExecutionSyncService::tick(
         result.completionStatus ==
         AssignmentUploadStatus::
             AssignmentRejected) {
+#ifdef _WIN32
+      // Vanity recovery archives both the execution state and its claim.
+      if (state->engine == "Vanity") return result;
+#endif
       result.stateRemoved =
           ClientStateStore::remove(
           executionSlot);

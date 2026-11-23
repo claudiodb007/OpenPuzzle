@@ -2379,7 +2379,8 @@ void MainWindow::recoverVanitySlot(
   launchExecution({"run", QString::number(puzzle), "--engine", "vanity",
                    "--backend", "cuda", "--device", QString::number(device),
 #ifdef OPENPUZZLE_DESKTOP_WINDOWS
-                   "--recover-assignment", assignment, "--resume-vanity"}, slot);
+                   "--duration-minutes", "5", "--recover-assignment", assignment,
+                   "--resume-vanity", "--recover-expired"}, slot);
 #else
                    "--recover-assignment", assignment, "--recover-expired"}, slot);
 #endif

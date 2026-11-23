@@ -34,6 +34,7 @@ RunCommandOptions RunCommandOptions::parse(const std::vector<std::string>& input
     if(name=="--dry-run"){out.dryRun=true;continue;}
     if(name=="--preflight-only"){out.preflightOnly=true;continue;}
     if(name=="--resume-vanity"){out.resumeVanity=true;continue;}
+    if(name=="--recover-expired"){out.recoverExpired=true;continue;}
     const bool number=name=="--puzzle"||name=="--device"||name=="--blocks"||name=="--threads"||name=="--points"||name=="--duration-minutes";
     if(!number&&name!="--engine"&&name!="--backend"&&name!="--server"&&name!="--profile"&&name!="--recover-assignment")throw std::invalid_argument("Unsupported Windows run option: "+name);
     if(i+1==args.size()||args[i+1].empty()||args[i+1].find('\0')!=std::string::npos)throw std::invalid_argument("Missing or invalid value for "+name);
@@ -65,6 +66,7 @@ RunCommandOptions RunCommandOptions::parse(const std::vector<std::string>& input
     out.backend="cuda";
   }
   if(out.resumeVanity&&out.engine!="vanity")throw std::invalid_argument("Vanity recovery requires --engine vanity");
+  if(out.recoverExpired&&!out.resumeVanity)throw std::invalid_argument("--recover-expired requires --resume-vanity");
   if(!out.resumeVanity&&!out.expectedAssignment.empty())throw std::invalid_argument("Expected assignment applies only to Vanity recovery");
   if(out.backend=="cpu"&&out.gpuOptionsSpecified)throw std::invalid_argument("GPU launch options do not apply to CPU");
   if(out.backend=="cpu"&&!seen.count("--threads"))out.threads=1;
