@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.62 — Vanity recovery on Windows
+
+- Resume the same range while the coordinator accepts its lease.
+- Archive the local checkpoint and request a new range when the coordinator
+  confirms the old assignment has expired or is missing.
+
 ## 1.0.61 — Vanity CUDA on Windows
 
 - Include the Vanity CUDA engine in the Windows installer and portable ZIP.

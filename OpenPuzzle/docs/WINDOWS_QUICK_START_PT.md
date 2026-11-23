@@ -1,16 +1,16 @@
-# OpenPuzzle 1.0.61 para Windows
+# OpenPuzzle 1.0.62 para Windows
 
 Para Windows x64. Instala primeiro o driver AMD ou NVIDIA da tua placa.
 
 ## Instalar ou abrir
 
-- **Instalador EXE:** executa o instalador e abre **OpenPuzzle 1.0.61** no menu
+- **Instalador EXE:** executa o instalador e abre **OpenPuzzle 1.0.62** no menu
   Iniciar. A instalação é feita para o utilizador atual.
 - **ZIP portátil:** extrai todos os ficheiros e abre `Start.cmd` ou
   `openpuzzle-ui.exe` na pasta extraída.
 
 Se estiveres a pesquisar com outra versão, usa **Safe Stop** e espera que o
-trabalho em curso termine antes de abrir a 1.0.61. As duas opções usam os
+trabalho em curso termine antes de abrir a 1.0.62. As duas opções usam os
 perfis e o estado existentes em `%LOCALAPPDATA%\OpenPuzzle`.
 
 ## Fazer uma pesquisa
@@ -39,8 +39,9 @@ em watts quando o driver o reporta. Aplicar alterações pode exigir elevação.
 
 Para interromper já, usa **Parar agora**. **Recuperar** no cartão do range
 retoma a partir do último progresso verificado enquanto a atribuição estiver
-válida. Se a lease tiver expirado, o cliente preserva o checkpoint local e
-mostra o motivo em **Mensagens**.
+válida. Se o servidor confirmar que a atribuição expirou ou já não existe,
+o cliente arquiva o checkpoint e pede um novo range. **Mensagens** mostra
+onde ficou guardado o arquivo.
 
 ## Licenças
 
