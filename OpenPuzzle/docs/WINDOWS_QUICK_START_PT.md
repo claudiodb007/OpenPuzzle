@@ -1,16 +1,16 @@
-# OpenPuzzle 1.0.62 para Windows
+# OpenPuzzle 1.0.63 para Windows
 
 Para Windows x64. Instala primeiro o driver AMD ou NVIDIA da tua placa.
 
 ## Instalar ou abrir
 
-- **Instalador EXE:** executa o instalador e abre **OpenPuzzle 1.0.62** no menu
+- **Instalador EXE:** executa o instalador e abre **OpenPuzzle 1.0.63** no menu
   Iniciar. A instalação é feita para o utilizador atual.
 - **ZIP portátil:** extrai todos os ficheiros e abre `Start.cmd` ou
   `openpuzzle-ui.exe` na pasta extraída.
 
 Se estiveres a pesquisar com outra versão, usa **Safe Stop** e espera que o
-trabalho em curso termine antes de abrir a 1.0.62. As duas opções usam os
+trabalho em curso termine antes de abrir a 1.0.63. As duas opções usam os
 perfis e o estado existentes em `%LOCALAPPDATA%\OpenPuzzle`.
 
 ## Fazer uma pesquisa
@@ -27,8 +27,12 @@ e usa **Atualizar**. Os controlos disponíveis dependem da placa e do driver.
 O limite de potência AMD é um ajuste percentual. O consumo medido aparece
 em watts quando o driver o reporta. Aplicar alterações pode exigir elevação.
 
-**Safe Stop** acaba o range atual e encerra antes de pedir outro. O
-`Diagnostico-GPU.cmd` recolhe um relatório de leitura para diagnóstico.
+**Safe Stop** acaba o range atual e encerra antes de pedir outro.
+
+Em **Mensagens**, usa **Copiar diagnóstico** para copiar a versão, os modelos
+das GPUs, os drivers, o estado da pesquisa e os códigos de erro. O relatório
+omite os registos completos, os caminhos locais e as chaves privadas.
+O `Diagnostico-GPU.cmd` também está disponível na pasta instalada ou extraída.
 
 ## Pesquisar com Vanity numa NVIDIA
 

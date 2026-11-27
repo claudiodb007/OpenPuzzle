@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.63 — Copy a support diagnostic
+
+- Add **Copy diagnostics** to the desktop Messages tab on Linux and Windows.
+- Include GPU models and driver versions, execution status and recent error codes.
+- Keep raw logs, local paths, credentials and private key material out of the report.
+
 ## 1.0.62 — Vanity recovery on Windows
 
 - Resume the same range while the coordinator accepts its lease.

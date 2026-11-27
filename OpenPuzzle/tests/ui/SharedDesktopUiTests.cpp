@@ -4,6 +4,7 @@
 #include "openpuzzle/ui/RunCommandBuilder.hpp"
 #include <QApplication>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QComboBox>
 #include <QDialog>
 #include <QDir>
@@ -41,11 +42,21 @@ int fixture(const QStringList& a){const auto root=qEnvironmentVariable("OPENPUZZ
   if(QFile::exists(root+"/amd-only")){std::cout<<"{\"cuda\":[],\"opencl\":[{\"engine_index\":0,\"platform_index\":0,\"native_index\":0,\"gpu\":true,\"name\":\"gfx1010:xnack-\",\"memory_bytes\":8573157376,\"display_name\":\"AMD Radeon RX 5700 XT\"}]}";return 0;}
   if(QFile::exists(root+"/fail-discovery")){std::cout<<"{\"cuda\":[],\"opencl\":[],\"diagnostics\":{\"opencl\":{\"code\":1,\"message\":\"AMD enumeration failed: synthetic driver error\"}},\"hardware_report\":\"Windows adapter: AMD Radeon RX 5700 XT\"}";return 0;}
   std::cout<<"{\"cuda\":[{\"engine_index\":0,\"name\":\"synthetic CUDA GPU\",\"display_name\":\"NVIDIA RTX 3080 (fixture)\"}],\"opencl\":[{\"engine_index\":7,\"name\":\"gfx1010\",\"display_name\":\"AMD RX 5700 (fixture)\"}]}\n";return 0;}
+ if(command=="devices"){
+  std::cout << "CUDA: DETECTED\nInventory index: 0\nDevice: NVIDIA GeForce RTX 3080\nDriver: CUDA API 12.8\n"
+               "OpenCL: DETECTED\nInventory index: 7\nDevice: gfx1010:xnack-\nDriver: 3652.0 (PAL,LC)\n"
+               "Physical device 7: UUID GPU-private-serial; PCI 0000:09:00.0\n"
+               "Display name: AMD Radeon RX 5700 XT\n"
+               "Windows display adapters: 3\nWindows adapter: AMD Radeon RX 5700 XT\n"
+               "Windows adapter: Intel Arc A380\nWindows device: PCI\\PRIVATE-ID\n"
+               "Windows adapter: NVIDIA RTX token_hidden\n";
+  return 2;
+ }
  if(command=="status"){
   if(QFile::exists(root+"/fail-status"))return 1;
   if(QFile::exists(root+"/active"))std::cout<<"Slot............... primary\nStatus............. running\nAssignment......... synthetic-running\nEngine............. KeyHunt\nBackend............ CPU\nSpeed.............. 2 MKey/s\nKeys checked....... 20\n";
   else std::cout<<"Slot............... primary\nStatus............. idle\n";
-  if(QFile::exists(root+"/preserved"))std::cout<<"Slot............... opencl-7\nStatus............. stopped\nAssignment......... synthetic-preserved\nRecovery available.......... yes\nSynchronization.... pending supervisor\nTemperature.......... 64.0 °C (GPU)\nPower.......... 142.8 W / —\n";
+  if(QFile::exists(root+"/preserved"))std::cout<<"Slot............... opencl-7\nStatus............. stopped\nAssignment......... synthetic-preserved\nPuzzle............. 71\nAssignment number... 857\nRecovery available.......... yes\nSynchronization.... pending supervisor\nTemperature.......... 64.0 °C (GPU)\nPower.......... 142.8 W / —\n";
   std::cout<<"Desktop profile.... "<<(QFile::exists(root+"/measured")?"ready":"missing")<<'\n';return 0;
  }
  if(command=="benchmark"){write(root+"/benchmark-argv",a.mid(1).join('\n').toUtf8());write(root+"/measured","yes");std::cout<<"Synthetic measured profile saved\n";return 0;}
@@ -96,6 +107,27 @@ int main(int argc,char** argv){try{
  }),"Shared status cards omitted visible Windows GPU metrics");
  const auto metricsArtifacts=qEnvironmentVariable("OPENPUZZLE_QT_TEST_ARTIFACTS");
  if(!metricsArtifacts.isEmpty()){QDir().mkpath(metricsArtifacts);check(window.grab().save(metricsArtifacts+"/metrics.png"),"GPU metrics screenshot failed");}
+ auto* diagnostic = control<QPushButton>(window, "copyDiagnostic");
+ auto* messagesOutput = control<QPlainTextEdit>(window, "messagesOutput");
+ messagesOutput->setPlainText(
+     "Windows run refused: Vanity lease refused: {\"error\":\"assignment_not_found\",\"message\":\"private@example.test\"}\n"
+     "Error: authorization Bearer token_hidden; C:\\Users\\Private; https://private.example.test/a\n"
+     "Private key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+ QApplication::clipboard()->clear();
+ diagnostic->click();
+ check(until([&]{return diagnostic->isEnabled() && QApplication::clipboard()->text().contains("Range #857");}),
+       "Windows support report was not copied");
+ const QString report = QApplication::clipboard()->text();
+ for (const QString& expected : QStringList{"Platform: Windows", "Selected mode: KeyHunt", "CPU threads: 4",
+                                 "AMD Radeon RX 5700 XT", "3652.0 (PAL,LC)", "CUDA API 12.8",
+                                 "Intel Arc A380", "stopped", "pending supervisor", "assignment_not_found"}) {
+   if (!report.contains(expected))
+     throw std::runtime_error("Windows support report omitted: " + expected.toStdString());
+ }
+ for (const QString& secret : QStringList{"private@example.test", "token_hidden", "Private", "https://", "synthetic-preserved",
+                               "0123456789abcdef", "GPU-private-serial", "0000:09:00.0", "PCI\\PRIVATE-ID"}) {
+   check(!report.contains(secret), "Windows support report leaked private data");
+ }
  auto* recover=control<QPushButton>(window,"recoverWindowsSlot");check(recover->isEnabled(),"Recovery unavailable");recover->click();check(until([&]{return QFile::exists(temp.filePath("recover-argv"));}),"Recovery not dispatched");
  check(until([&]{return start->isEnabled();}),"Recovered status did not settle");
  write(temp.filePath("fail-status"),"yes");refresh->click();check(until([&]{return !start->isEnabled()&&!benchmark->isEnabled();}),"Failed status allowed a new claim");QFile::remove(temp.filePath("fail-status"));refresh->click();check(until([&]{return start->isEnabled();}),"Status retry failed");

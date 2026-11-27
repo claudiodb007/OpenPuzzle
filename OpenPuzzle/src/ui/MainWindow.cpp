@@ -2,9 +2,11 @@
 #include "VanityPanel.hpp"
 #endif
 #include "MainWindow.hpp"
+#include "SupportDiagnostic.hpp"
 #include <QApplication>
 #include "GpuControlPanel.hpp"
 #include <QCloseEvent>
+#include <QClipboard>
 
 #include "ThermalSettings.hpp"
 #include "openpuzzle/ui/RunCommandBuilder.hpp"
@@ -46,6 +48,7 @@
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QStatusBar>
+#include <QSysInfo>
 #include <QStyle>
 #include <QStringList>
 #include <QTabWidget>
@@ -831,6 +834,20 @@ void MainWindow::buildInterface() {
   detailsTabs_ = new QTabWidget;
   detailsTabs_->setObjectName("DetailsTabs");
 
+  auto* messagesTab = new QWidget;
+  auto* messagesLayout = new QVBoxLayout(messagesTab);
+  messagesLayout->setContentsMargins(0, 0, 0, 0);
+  messagesLayout->setSpacing(8);
+
+  auto* messagesActions = new QHBoxLayout;
+  messagesActions->addStretch();
+  copyDiagnostic_ = new QPushButton;
+  copyDiagnostic_->setProperty("controlId", "copyDiagnostic");
+  copyDiagnostic_->setObjectName("SecondaryButton");
+  messagesActions->addWidget(copyDiagnostic_);
+  messagesLayout->addLayout(messagesActions);
+  connect(copyDiagnostic_, &QPushButton::clicked, this, &MainWindow::copySupportDiagnostic);
+
   output_ = new QPlainTextEdit;
   output_->setProperty("controlId", "messagesOutput");
   output_->setReadOnly(true);
@@ -873,7 +890,8 @@ void MainWindow::buildInterface() {
   thermalHistoryActions->addWidget(clearThermalHistory_);
   thermalHistoryLayout->addLayout(thermalHistoryActions);
 
-  detailsTabs_->addTab(output_, QString());
+  messagesLayout->addWidget(output_);
+  detailsTabs_->addTab(messagesTab, QString());
   detailsTabs_->addTab(statusOutput_, QString());
   detailsTabs_->addTab(runtimeLogOutput_, QString());
   detailsTabs_->addTab(thermalHistoryTab, QString());
@@ -1281,6 +1299,7 @@ void MainWindow::applyLanguage() {
 
   theme_->setItemText(0, t("light"));
   theme_->setItemText(1, t("dark"));
+  copyDiagnostic_->setText(t("copy_diagnostic"));
   output_->setPlaceholderText(t("details_hint"));
   statusOutput_->setPlaceholderText(t("status_hint"));
   runtimeLogOutput_->setPlaceholderText(
@@ -1696,6 +1715,135 @@ void MainWindow::refreshRuntimeLog() {
   setTextPreservingScroll(
       runtimeLogOutput_,
       QString::fromUtf8(contents).trimmed());
+}
+
+void MainWindow::copySupportDiagnostic() {
+  const QString executable = cliExecutable();
+  if (executable.isEmpty()) {
+    putSupportDiagnosticOnClipboard({});
+    return;
+  }
+
+  copyDiagnostic_->setEnabled(false);
+  statusBar()->showMessage(t("copy_diagnostic_pending"));
+  auto* process = new QProcess(this);
+  hideDesktopConsole(process);
+
+  const auto finish = [this, process](const QString& inventory) {
+    putSupportDiagnosticOnClipboard(inventory);
+    copyDiagnostic_->setEnabled(true);
+    process->deleteLater();
+  };
+  connect(process, &QProcess::finished, this,
+          [process, finish](int, QProcess::ExitStatus status) {
+            // An inventory may contain usable devices even when one backend failed.
+            const QByteArray output = process->readAllStandardOutput();
+            finish(status == QProcess::NormalExit ? QString::fromUtf8(output.left(64 * 1024))
+                                                  : QString());
+          });
+  connect(process, &QProcess::errorOccurred, this, [finish](QProcess::ProcessError error) {
+    if (error == QProcess::FailedToStart) {
+      finish({});
+    }
+  });
+  QTimer::singleShot(8000, process, [process] {
+    if (process->state() != QProcess::NotRunning) {
+      process->kill();
+    }
+  });
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  process->start(executable, {"devices"});
+#else
+  process->start(executable, {"doctor", "--offline"});
+#endif
+}
+
+void MainWindow::putSupportDiagnosticOnClipboard(const QString& inventory) {
+  QStringList lines = {QStringLiteral("OpenPuzzle %1").arg(QStringLiteral(OPENPUZZLE_VERSION))};
+#ifdef OPENPUZZLE_DESKTOP_WINDOWS
+  lines << "Platform: Windows " + QSysInfo::currentCpuArchitecture();
+#else
+  lines << "Platform: Linux " + QSysInfo::currentCpuArchitecture();
+#endif
+  const auto mode = selectedRunMode();
+  lines << "Selected mode: " + mode_->currentText();
+  const int puzzle = mode == RunMode::KangarooCuda ? kangarooPuzzle_->currentData().toInt()
+                                                 : puzzle_->value();
+  lines << QStringLiteral("Selected puzzle: %1").arg(puzzle == 0 ? QStringLiteral("automatic")
+                                                                : QString::number(puzzle));
+  if (mode == RunMode::KeyHuntCpu) {
+    lines << QStringLiteral("CPU threads: %1").arg(cpuThreads_->value());
+  } else {
+    lines << QStringLiteral("Selected device: %1").arg(device_->value());
+    if (mode == RunMode::BitCrackCudaOpencl) {
+      lines << QStringLiteral("Selected OpenCL device: %1").arg(openclDevice_->value());
+    }
+  }
+
+  const auto gpus = diagnosticGpus(inventory);
+  lines << QString() << "GPUs and drivers:";
+  lines << (gpus.isEmpty() ? QStringList{"Unavailable"} : gpus);
+
+  static const QRegularExpression publicNumber(R"(^[0-9]{1,19}$)");
+  static const QRegularExpression slotName(R"(^(?:primary|cpu(?:-[0-9]{1,3})?|(?:cuda|opencl)-[0-9]{1,3})$)");
+  static const QStringList states = {
+      "idle", "running", "waiting", "stopped", "paused", "solution found", "identity unavailable"};
+  static const QStringList engines = {"vanity", "kangaroo", "psckangaroo", "keyhunt", "bitcrack"};
+  static const QStringList backends = {"cuda", "opencl", "cpu"};
+  lines << QString() << "Execution status:";
+  if (statusAvailable_) {
+    const auto runtimeSlots = parseRuntimeSlots(statusOutput_->toPlainText());
+    for (const auto& slot : runtimeSlots) {
+      const auto id = slot.fields.value("Slot");
+      const auto state = slot.fields.value("Status").toLower();
+      if (!states.contains(state)) {
+        continue;
+      }
+      QStringList fields;
+      if (slotName.match(id).hasMatch()) {
+        fields << id;
+      }
+      fields << state;
+      const auto engine = slot.fields.value("Engine").toLower();
+      const auto backend = slot.fields.value("Backend").toLower();
+      if (engines.contains(engine)) {
+        fields << engine;
+      }
+      if (backends.contains(backend)) {
+        fields << backend;
+      }
+      const auto puzzleNumber = slot.fields.value("Puzzle");
+      const auto rangeNumber = slot.fields.value("Assignment number");
+      if (publicNumber.match(puzzleNumber).hasMatch()) {
+        fields << "Puzzle " + puzzleNumber;
+      }
+      if (publicNumber.match(rangeNumber).hasMatch()) {
+        fields << "Range #" + rangeNumber;
+      }
+      if (slot.fields.value("Synchronization") == "pending supervisor") {
+        fields << "pending supervisor";
+      }
+      bool hasExitCode = false;
+      const int exitCode = slot.fields.value("Exit code").toInt(&hasExitCode);
+      if (hasExitCode) {
+        fields << QStringLiteral("exit code %1").arg(exitCode);
+      }
+      lines << fields.join(" | ");
+    }
+  } else {
+    lines << (statusIssueKey_.isEmpty() ? QStringLiteral("Unavailable") : statusIssueKey_);
+  }
+
+  QStringList errors = diagnosticErrors(runtimeLogOutput_->toPlainText() + '\n' + output_->toPlainText());
+  for (const auto& error : diagnosticErrors(inventory)) {
+    if (!errors.contains(error) && errors.size() < 6) {
+      errors << error;
+    }
+  }
+  lines << QString() << "Recent diagnostic codes:";
+  lines << (errors.isEmpty() ? QStringList{"None recorded"} : errors);
+  QApplication::clipboard()->setText(lines.join('\n') + '\n');
+  statusBar()->showMessage(t("copy_diagnostic_done"), 5000);
 }
 
 void MainWindow::showSolutionNotice(

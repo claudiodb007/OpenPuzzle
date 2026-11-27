@@ -179,7 +179,7 @@ int WindowsDesktopApplication::run(const std::vector<std::string>& args,std::ost
   if(!any)out<<"No active runtime; existing data retained\n";return ok?0:1;
  }
  if(command=="doctor"){if(args.size()!=1)throw std::invalid_argument("Invalid doctor options");return command_({"doctor","--offline"},out);}
- if(command=="selftest"||command=="gpu-control"||command=="recover"||command=="engine-devices"||command=="telemetry"||command=="version")return command_(args,out);
+ if(command=="devices"||command=="selftest"||command=="gpu-control"||command=="recover"||command=="engine-devices"||command=="telemetry"||command=="version")return command_(args,out);
  throw std::invalid_argument("This command is not available in the Windows desktop");
  }catch(const std::exception& e){out<<"Windows desktop: "<<e.what()<<"\nExisting local data preserved\n";return 1;}}
 }

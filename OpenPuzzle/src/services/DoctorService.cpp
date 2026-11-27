@@ -182,6 +182,9 @@ void printDevices(const std::string &backend,
     if (device.memoryMb > 0) {
       std::cout << "Memory.............. " << device.memoryMb << " MiB\n";
     }
+    if (!device.driverVersion.empty()) {
+      std::cout << "Driver.............. " << device.driverVersion << '\n';
+    }
   }
 }
 

@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDir>
@@ -132,6 +133,9 @@ int main(int argc, char* argv[]) {
       << "printf '%s\\n' \"$*\" >> \"$OPENPUZZLE_TEST_LOG\"\n"
       << "if [[ \"${1:-}\" == run ]]; then\n"
       << "  printf '%s\\n' 'continuous-runtime-output'\n"
+      << "fi\n"
+      << "if [[ \"$*\" == 'doctor --offline' ]]; then\n"
+      << "  printf '%s\\n' 'CUDA devices....... 1' 'Device.............. 0: NVIDIA RTX 4070 SUPER' 'Driver.............. 590.48.01'\n"
       << "fi\n"
       << "if [[ \"${1:-}\" == status ]]; then\n"
       << "  cat \"$OPENPUZZLE_TEST_STATUS\"\n"
@@ -313,6 +317,29 @@ int main(int argc, char* argv[]) {
     }));
     QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
   };
+  readStatus("Slot............... cuda-0\nStatus............. stopped\n"
+             "Assignment......... secret-assignment\nAssignment number... 731\n"
+             "Puzzle............. 71\nEngine............. Vanity\n"
+             "Backend............ CUDA\nWorkspace.......... /home/fixture-user/private\n"
+             "Synchronization.... pending supervisor\n");
+  auto* copyDiagnostic = control<QPushButton>(window, "copyDiagnostic");
+  assert(copyDiagnostic);
+  auto* copyMessages = control<QPlainTextEdit>(window, "messagesOutput");
+  copyMessages->setPlainText("Heartbeat.......... failed\nReason............. curl: (28) "
+                             "https://fixture-user:token@host.test failed\n");
+  QApplication::clipboard()->clear();
+  copyDiagnostic->click();
+  assert(waitUntil([&]() { return copyDiagnostic->isEnabled() &&
+      QApplication::clipboard()->text().contains("Range #731"); }));
+  const auto diagnostic = QApplication::clipboard()->text();
+  for (const QString& expected : QStringList{"Platform: Linux", "NVIDIA RTX 4070 SUPER", "590.48.01",
+                                  "Range #731", "Heartbeat failed", "cURL error 28"}) {
+    assert(diagnostic.contains(expected));
+  }
+  for (const QString& secret : QStringList{"fixture-user", "/home/", "https://", "host.test", "secret-assignment"}) {
+    assert(!diagnostic.contains(secret));
+  }
+
   const auto visibleControls = [&](const char* id) {
     int count = 0;
     for (auto* widget : window.findChildren<QWidget*>()) {

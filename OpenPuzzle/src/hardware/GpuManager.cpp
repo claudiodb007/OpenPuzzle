@@ -241,6 +241,8 @@ GpuManager::parseBitCrackDevices(
 
     if (label == "Name") {
       current.name = value;
+    } else if (label == "Driver" || label == "Driver version" || label == "Driver Version") {
+      current.driverVersion = value;
     } else if (label == "Memory") {
       current.memoryMb =
           parseMemoryMb(value);

@@ -56,6 +56,8 @@ private:
   void updateStatusSummary();
   void updateStatusBadge();
   void refreshRuntimeLog();
+  void copySupportDiagnostic();
+  void putSupportDiagnosticOnClipboard(const QString& inventory);
   void showSolutionNotice(const QString& assignmentId);
   void configureAutomaticStart(bool enabled);
   bool writeAutomaticStartUnit(QString& error);
@@ -159,6 +161,7 @@ private:
   QPushButton* updates_ = nullptr;
   QPushButton* audit_ = nullptr;
   QPushButton* installKangaroo_ = nullptr;
+  QPushButton* copyDiagnostic_ = nullptr;
   QPlainTextEdit* output_ = nullptr;
   QPlainTextEdit* statusOutput_ = nullptr;
   QPlainTextEdit* runtimeLogOutput_ = nullptr;
